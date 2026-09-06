@@ -83,8 +83,8 @@ private class Mote(
     /** 与轮次一起喂 [hash01]，重掷这一趟的起点 / 尺寸 / 摆动相位 */
     val seed: Int,
     /**
-     * 一个 phase 周期跑几趟。**必须是整数**：phase 从 1f 绕回 0f 时
-     * `phase * rounds` 从 rounds 跳回 0，小数部分不变，位置就是连续的。
+     * 一个行程周期（travelPhase）跑几趟。**必须是整数**：travelPhase 从 1f 绕回 0f 时
+     * `travelPhase * rounds` 从 rounds 跳回 0，小数部分不变，位置就是连续的。
      */
     val rounds: Int,
     /** 起点相位 0f..1f。按序号均分再抖一点，同一群不会挤成一列 */
@@ -110,9 +110,10 @@ private class Mote(
 /**
  * 个体的行程。整数部分是「第几趟」，小数部分是这一趟走了多少。
  *
- * 见 [Mote.rounds]：整数圈数保证位置在 phase 接缝上连续。
+ * 见 [Mote.rounds]：整数圈数保证位置在 travelPhase 接缝上连续。
  */
-private fun travelOf(mote: Mote, phase: Float): Float = phase * mote.rounds + mote.offset
+private fun travelOf(mote: Mote, travelPhase: Float): Float =
+    travelPhase * mote.rounds + mote.offset
 
 /**
  * 这一趟的轮次编号，用来喂 [hash01]。
@@ -227,8 +228,10 @@ private fun buildSwarms(lowRam: Boolean): Swarms = Swarms(
  * @param outgoing 换张时的旧专辑索引；不在换张中时与 [incoming] 相同
  * @param incoming 换张后的新专辑索引
  * @param crossfade 0f = 全 outgoing，1f = 全 incoming
- * @param phase 0f..1f 循环相位。**周期请给 11–14 秒**：一个个体一周期跑 2–6 趟，
- *   给短了枫叶就像被吹风机吹。低端机可以恒喂 0f 把整层定住（同 `SwiftieEraCard`）
+ * @param phase 0f..1f 节拍相位：翻面 / 扑翼 / 闪烁 / 自转的快慢，周期 12s
+ * @param travelPhase 0f..1f 行程相位：进出画面与横向游走的快慢，周期越长落得越慢
+ *   （调用方给 30s，比节拍慢 2.5 倍）。低端机可以两个相位都恒喂 0f 把整层定住
+ *   （同 `SwiftieEraCard`）
  * @param lowRam true 时每群个体数减半，保底 2 个
  */
 @Composable
@@ -237,6 +240,7 @@ fun SwiftieEraParticleLayer(
     incoming: () -> Int,
     crossfade: () -> Float,
     phase: () -> Float,
+    travelPhase: () -> Float,
     lowRam: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -262,13 +266,14 @@ fun SwiftieEraParticleLayer(
                 val to = incoming()
                 val fade = crossfade().coerceIn(0f, 1f)
                 val t = phase()
+                val tp = travelPhase()
                 if (from == to) {
                     // 不在换张中：只画一层。同一群画两遍会叠出半透明重影
-                    drawEraParticles(to, 1f, t, swarms, scratch, heart, glow)
+                    drawEraParticles(to, 1f, t, tp, swarms, scratch, heart, glow)
                     return@drawBehind
                 }
-                if (fade < 1f) drawEraParticles(from, 1f - fade, t, swarms, scratch, heart, glow)
-                if (fade > 0f) drawEraParticles(to, fade, t, swarms, scratch, heart, glow)
+                if (fade < 1f) drawEraParticles(from, 1f - fade, t, tp, swarms, scratch, heart, glow)
+                if (fade > 0f) drawEraParticles(to, fade, t, tp, swarms, scratch, heart, glow)
             }
     )
 }
@@ -284,6 +289,7 @@ private fun DrawScope.drawEraParticles(
     index: Int,
     layerAlpha: Float,
     phase: Float,
+    travelPhase: Float,
     swarms: Swarms,
     scratch: Path,
     heart: Path,
@@ -298,36 +304,36 @@ private fun DrawScope.drawEraParticles(
     val deep = stage.backdropColors.last()
     when (particle) {
         SwiftieEraParticle.FIREFLY ->
-            drawFireflies(motes, phase, layerAlpha * 0.92f, glow, FIREFLY_BODY)
+            drawFireflies(motes, phase, travelPhase, layerAlpha * 0.92f, glow, FIREFLY_BODY)
 
         SwiftieEraParticle.GOLD_FLAKE ->
-            drawGoldFlakes(motes, phase, layerAlpha * 0.78f, scratch, main, lit, deep)
+            drawGoldFlakes(motes, phase, travelPhase, layerAlpha * 0.78f, scratch, main, lit, deep)
 
         SwiftieEraParticle.AUTUMN_LEAF ->
-            drawAutumnLeaves(motes, phase, layerAlpha * 0.58f, scratch, main, LEAF_BACK, deep)
+            drawAutumnLeaves(motes, phase, travelPhase, layerAlpha * 0.58f, scratch, main, LEAF_BACK, deep)
 
         SwiftieEraParticle.SEAGULL ->
-            drawSeagulls(motes, phase, layerAlpha * 0.68f, scratch, lit, deep)
+            drawSeagulls(motes, phase, travelPhase, layerAlpha * 0.68f, scratch, lit, deep)
 
         SwiftieEraParticle.HEART_BUTTERFLY -> drawHeartsAndButterflies(
-            motes, swarms.butterflies, phase, layerAlpha, scratch, heart, main, deep
+            motes, swarms.butterflies, phase, travelPhase, layerAlpha, scratch, heart, main, deep
         )
 
         SwiftieEraParticle.PINE_NEEDLE ->
-            drawPineNeedles(motes, phase, layerAlpha * 0.62f, scratch, deep, NEEDLE_MOSS)
+            drawPineNeedles(motes, phase, travelPhase, layerAlpha * 0.62f, scratch, deep, NEEDLE_MOSS)
 
         SwiftieEraParticle.DRY_LEAF ->
-            drawDryLeaves(motes, phase, layerAlpha * 0.56f, scratch, deep, main, lit)
+            drawDryLeaves(motes, phase, travelPhase, layerAlpha * 0.56f, scratch, deep, main, lit)
 
         SwiftieEraParticle.PURPLE_GLITTER ->
-            drawPurpleGlitter(motes, phase, layerAlpha * 0.80f, SwiftiePalette.Lavender)
+            drawPurpleGlitter(motes, phase, travelPhase, layerAlpha * 0.80f, SwiftiePalette.Lavender)
 
         SwiftieEraParticle.PAPER_SCRAP ->
-            drawPaperScraps(motes, phase, layerAlpha * 0.54f, scratch, lit, deep, era.textColor)
+            drawPaperScraps(motes, phase, travelPhase, layerAlpha * 0.54f, scratch, lit, deep, era.textColor)
 
         // 橙金 + 金高光：主色 #E8620F 打底，PeachYellow 当羽轴上那一道反光
         SwiftieEraParticle.FEATHER ->
-            drawFeathers(motes, phase, layerAlpha * 0.64f, scratch, main, deep, SwiftiePalette.PeachYellow)
+            drawFeathers(motes, phase, travelPhase, layerAlpha * 0.64f, scratch, main, deep, SwiftiePalette.PeachYellow)
     }
 }
 
@@ -340,12 +346,13 @@ private fun DrawScope.drawEraParticles(
 private fun DrawScope.drawFireflies(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     glow: Brush,
     body: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.14f)
@@ -391,6 +398,7 @@ private fun DrawScope.drawFireflies(
 private fun DrawScope.drawGoldFlakes(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     face: Color,
@@ -398,7 +406,7 @@ private fun DrawScope.drawGoldFlakes(
     edge: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.10f)
@@ -489,6 +497,7 @@ internal fun mapleInto(path: Path, half: Float, seed: Int, round: Int) {
 private fun DrawScope.drawAutumnLeaves(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     front: Color,
@@ -496,7 +505,7 @@ private fun DrawScope.drawAutumnLeaves(
     vein: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.12f)
@@ -552,13 +561,14 @@ private fun DrawScope.drawAutumnLeaves(
 private fun DrawScope.drawSeagulls(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     plumage: Color,
     wingTip: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.10f)
@@ -630,6 +640,7 @@ private fun DrawScope.drawHeartsAndButterflies(
     hearts: List<Mote>,
     butterflies: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     heart: Path,
@@ -637,7 +648,7 @@ private fun DrawScope.drawHeartsAndButterflies(
     sky: Color
 ) {
     hearts.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         // 上浮到顶一路淡出，不是在上缘硬切
@@ -657,20 +668,21 @@ private fun DrawScope.drawHeartsAndButterflies(
             drawPath(path = heart, color = SwiftiePalette.Glitter, alpha = a)
         }
     }
-    drawButterflies(butterflies, phase, alpha * 0.62f, path, pink, sky)
+    drawButterflies(butterflies, phase, travelPhase, alpha * 0.62f, path, pink, sky)
 }
 
 /** 蝴蝶本体。拆出来只是因为它和心共用不了任何一行 mover。 */
 private fun DrawScope.drawButterflies(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     pink: Color,
     sky: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.10f)
@@ -730,13 +742,14 @@ private fun DrawScope.drawButterflies(
 private fun DrawScope.drawPineNeedles(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     dark: Color,
     moss: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.12f)
@@ -798,6 +811,7 @@ private fun dryLeafInto(path: Path, half: Float, curl: Float) {
 private fun DrawScope.drawDryLeaves(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     body: Color,
@@ -805,7 +819,7 @@ private fun DrawScope.drawDryLeaves(
     vein: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.12f)
@@ -867,11 +881,12 @@ private fun DrawScope.drawDryLeaves(
 private fun DrawScope.drawPurpleGlitter(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     color: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val twinkle = 0.30f + 0.70f * (0.5f + 0.5f * sin((phase * mote.beat + mote.beatOffset) * TAU))
@@ -926,6 +941,7 @@ private fun paperInto(path: Path, halfW: Float, halfH: Float, bow: Float) {
 private fun DrawScope.drawPaperScraps(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     face: Color,
@@ -933,7 +949,7 @@ private fun DrawScope.drawPaperScraps(
     ink: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.12f)
@@ -1026,6 +1042,7 @@ private fun barbsInto(path: Path, len: Float, count: Int, sweep: Float) {
 private fun DrawScope.drawFeathers(
     motes: List<Mote>,
     phase: Float,
+    travelPhase: Float,
     alpha: Float,
     path: Path,
     barb: Color,
@@ -1033,7 +1050,7 @@ private fun DrawScope.drawFeathers(
     sheen: Color
 ) {
     motes.forEach { mote ->
-        val travel = travelOf(mote, phase)
+        val travel = travelOf(mote, travelPhase)
         val round = roundOf(mote, travel)
         val t = travel - floor(travel)
         val a = alpha * edgeFade(t, 0.14f)
