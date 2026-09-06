@@ -3,6 +3,8 @@ package com.tracktosearch.ui.component
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,8 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,15 +33,18 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.tracktosearch.data.remote.ImageDownloadProgress
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import me.saket.telephoto.zoomable.ZoomableImageState
 
 /**
  * 渐进底图的候选尺寸段，按「越大越清晰」排序。
- * 详情页头部海报与剧照缩略图用 w780，人物图缩略图用 h632。
+ * 详情页头部海报与剧照缩略图用 w780，人物图缩略图用 h632，列表卡片与详情页兜底海报用 w342。
+ * w300 只有剧照列表的 loading 垫图在用——「刚滚到那张剧照、w780 还没解码完就点开」的
+ * 窗口期里缓存中只有 w300，少了这个候选那一瞬会退成白屏转圈。
  */
-private val UNDERLAY_SIZES = listOf("w780", "h632", "w500", "w342")
+private val UNDERLAY_SIZES = listOf("w780", "h632", "w500", "w342", "w300")
 
 /**
  * 全屏大图的渐进底图 key：在 Coil 内存缓存里挑一张同图的更小尺寸位图，交给 telephoto 的原生
@@ -64,7 +72,8 @@ internal fun progressiveUnderlay(context: Context, model: Any?): String? {
  * 全屏大图请求：original 大图 + 内存缓存里的小尺寸底图作占位。
  *
  * telephoto 的 Coil 集成会把占位 drawable 画在同一位置（同一 ContentScale/构图），
- * 大图到位后原地替换，全程只有一个绘制节点——替代旧实现的两层 AsyncImage 叠加
+ * 大图到位后以 crossfade 淡入覆盖在占位之上（占位保持可见、大图 alpha 0→1），
+ * 全程只有一个绘制节点——替代旧实现的两层 AsyncImage 叠加
  * （旧方案在共享元素转场期间双层绘制、尺寸不一致，是打开卡顿的根因之一）。
  *
  * 请求尺寸不指定 .size(1080)：telephoto 需要原图落盘后做子采样分块解码，
@@ -78,7 +87,9 @@ internal fun progressiveUnderlay(context: Context, model: Any?): String? {
 internal fun fullscreenImageRequest(context: Context, model: Any, underlayUrl: String?): ImageRequest {
     val builder = ImageRequest.Builder(context)
         .data(model)
-        .crossfade(false)
+        // 250ms 的「逐渐清晰」淡入：telephoto 读出 Coil CrossfadeTransition 的时长，
+        // 用 animateFloatAsState 在占位小图之上淡入高清大图（占位保持可见）。
+        .crossfade(250)
         .memoryCachePolicy(CachePolicy.READ_ONLY)
     if (underlayUrl != null) {
         builder.placeholderMemoryCacheKey(underlayUrl)
@@ -103,6 +114,12 @@ private fun rememberUnderlayPainter(model: Any): BitmapPainter? {
     }
 }
 
+/** 无底图时的出场延迟：本地解码、缓存命中的快加载在这段时间内就完成，环来不及闪。 */
+private const val RingAppearDelayMs = 200L
+
+/** 有底图时的兜底超时：画面已经能看，正常网络下环不该出现；慢网超时才浮出小环，免得像卡死。 */
+private const val RingUnderlayTimeoutMs = 2_000L
+
 /**
  * 加载进度环。
  *
@@ -110,9 +127,12 @@ private fun rememberUnderlayPainter(model: Any): BitmapPainter? {
  * 关在这个叶子作用域里。原先它们直接读在 [ProgressiveFullscreenImage] 的函数体内，
  * 于是每来一个进度包就要重组整个 Box —— 里面装着 telephoto，而进度包在大图下载期间每几十毫秒一个。
  *
+ * 出场时机分两档：无底图 200ms 后出现（顶替整片空白），有底图 2s 兜底超时后才出现——
+ * 有底图时画面已经能看（小图渐清晰淡入中），环只会是打扰。
+ *
  * @param visible 为 false 时整体不画。转场期延迟挂载 telephoto 那一程要传 false：
  *   那时 telephoto 还没挂上，[ZoomableImageState.isImageDisplayed] 恒为 false，
- *   不关掉就会在飞行中的图片上叠一个转圈。
+ *   不关掉就会在飞行中的图片上叠一个转圈。倒计时也从本组合（telephoto 实际挂载）起算。
  */
 @Composable
 private fun BoxScope.FullscreenImageProgressRing(
@@ -121,9 +141,18 @@ private fun BoxScope.FullscreenImageProgressRing(
     visible: Boolean,
 ) {
     if (!visible || state.isImageDisplayed) return
+    val hasUnderlay = state.isPlaceholderDisplayed
+    var showRing by remember { mutableStateOf(false) }
+    LaunchedEffect(hasUnderlay) {
+        if (!showRing) {
+            delay(if (hasUnderlay) RingUnderlayTimeoutMs else RingAppearDelayMs)
+            showRing = true
+        }
+    }
+    if (!showRing) return
     val progress by progressFlow.collectAsStateWithLifecycle()
     // 有底图时进度环缩小到底部，不挡住已经能看的画面；无底图时居中，替代整片空白
-    val ringModifier = if (state.isPlaceholderDisplayed) {
+    val ringModifier = if (hasUnderlay) {
         Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).size(26.dp)
     } else {
         Modifier.align(Alignment.Center).size(44.dp)
@@ -151,11 +180,11 @@ private fun BoxScope.FullscreenImageProgressRing(
  * 1. 内存缓存里的小尺寸底图作为占位立刻可见（若有）；
  * 2. original 大图加载完成原地覆盖；
  * 3. 加载期间的进度环——有 Content-Length 时为确定性进度（original 剧照常 2-5MB），
- *    拿不到长度时退化为不确定 spinner。
+ *    拿不到长度时退化为不确定 spinner。出场按底图分档：无底图 200ms 后居中出现，
+ *    有底图则平时完全不出现（画面已能看、淡入自会揭示进度），慢网超 2s 才缩在底部兜底。
  *
- * 进度环位置按 telephoto 的 [ZoomableImageState.isPlaceholderDisplayed] 决定：底图真的画出来了
- * 就把环缩到底部不挡画面，没底图才居中顶替整片空白。原来靠「底图 URL 是否非空」猜，
- * 猜中与否和实际有没有画出来无关。
+ * 出场分档依据 telephoto 的 [ZoomableImageState.isPlaceholderDisplayed]：底图真的画出来了
+ * 才算「有底图」。原来靠「底图 URL 是否非空」猜，猜中与否和实际有没有画出来无关。
  *
  * 共享元素与手势修饰符由调用方挂在 [modifier] 上；
  * 关闭协议参数（[onRequestDismiss]/[backHandlerEnabled]）原样透传 [ZoomableFullscreenImage]。
@@ -165,6 +194,13 @@ private fun BoxScope.FullscreenImageProgressRing(
  *   一次打开动画能触发几十轮重新分块解码，正是「点开大图卡一下」的主因。
  *   只在打开这一程传 true，且缓存里真有底图时才生效；没有底图时按原路挂 telephoto，
  *   否则转场期会是一片空白，比卡顿更糟。
+ *   底图不随转场结束撤走：telephoto 挂载后它自己的占位图要到 Coil 异步解析 + 下一轮
+ *   重组才真正画出来（实测有 200ms+ 空窗），期间底图垫在 telephoto 下面兜住画面，
+ *   直到 [ZoomableImageState.isImageDisplayed] 才撤。
+ * @param transitionRunning 开合转场仍在进行（两个方向都算）。此间 telephoto 的手势被
+ *   禁用，而它的单击也跟着 gestures=None 一起失效——没有兜底的话，打开动画还没收尾
+ *   就点屏幕想关闭，这一下会被吞掉。转场期在容器上补一个无涟漪 clickable 接住单击
+ *   直接关闭（转场中不可能处于放大态，无需走「先复位」协议）。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -175,6 +211,7 @@ internal fun ProgressiveFullscreenImage(
     state: ZoomableImageState = rememberFullscreenZoomableImageState(),
     gesturesEnabled: Boolean = true,
     deferZoomable: Boolean = false,
+    transitionRunning: Boolean = false,
     onRequestDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = false,
 ) {
@@ -191,19 +228,26 @@ internal fun ProgressiveFullscreenImage(
     val deferred = deferZoomable && underlayPainter != null
 
     Box(modifier = modifier) {
-        if (deferred && underlayPainter != null) {
+        if (deferred) {
             // telephoto 未挂载的这一程它自己的返回键也没挂，这里补一个：
             // 转场期缩放必然在原位，reset 与 dismiss 等价，直接 dismiss。
             if (backHandlerEnabled && onRequestDismiss != null) {
                 BackHandler { onRequestDismiss() }
             }
+        }
+        // 静态底图不能只在转场期存在：telephoto 挂载后，它的占位图从 Coil 异步解析
+        // 到真正画出来之间有实测 200ms+ 的空窗（此期间 resolved.placeholder 已写入
+        // 但重组迟迟不来），若底图在交接点撤走，这一段就露出遮罩下的页面——「闪一下」。
+        // 垫在 telephoto 下面，直到大图真正显示（isImageDisplayed）才撤。
+        if (underlayPainter != null && (deferred || !state.isImageDisplayed)) {
             Image(
                 painter = underlayPainter,
-                contentDescription = contentDescription,
+                contentDescription = null,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
+        }
+        if (!deferred) {
             ZoomableFullscreenImage(
                 model = model,
                 contentScale = contentScale,
@@ -220,5 +264,20 @@ internal fun ProgressiveFullscreenImage(
             progressFlow = progressFlow,
             visible = !deferred
         )
+        // 转场期单击兜底：telephoto 手势被禁(gestures=None)时连单击也不放行，而它
+        // 挂着的 pointerInput 已把事件吃掉，父级 clickable 收不到冒泡——只能盖在
+        // 它上面先接。转场结束覆盖层移除，telephoto 正常接管单击/双击/缩放。
+        // 转场中不可能处于放大态，直接关闭，无需走「先复位」协议。
+        if (transitionRunning && onRequestDismiss != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onRequestDismiss
+                    )
+            )
+        }
     }
 }

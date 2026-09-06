@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.swiftie.SwiftieEggScreen
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.theme.TraktoSearchTheme
+import dagger.hilt.android.AndroidEntryPoint
 
 private const val TAG = "SwiftieEggPreview"
 
@@ -39,16 +40,15 @@ private const val TAG = "SwiftieEggPreview"
  * 正式包里那条路走不通 —— 彩蛋压在一道算术题（`X + 87 = 100`）之后，且只能从头顺序播，
  * 想看第 9 张专辑卡片要等 60 多秒。改一处视觉细节要几分钟才看得到结果。
  *
- * **刻意不挂 `@AndroidEntryPoint`**：`SwiftieEggScreen` 整棵子树一个注入点都没有
- * （只读 LocalContext / LocalView / LocalDensity / LocalActivity 这类标准 CompositionLocal），
- * 给宿主挂上 Hilt 只会把这个调试工具绑到主 app 的依赖图上 —— 那条图哪天改坏了，
- * 连截图都跟着做不了。Application 仍是 TraktSearchApp（清单合并保留），
- * Hilt 图照样会建起来，但这一页不碰它。
+ * 预览宿主挂 `@AndroidEntryPoint`：彩蛋页会通过 `hiltViewModel()` 获取昵称 ViewModel，
+ * 如果宿主不接入 Hilt，页面在首次组合时会直接崩溃，连视觉预览都进不去。
+ * 预览页本身不注入业务对象，只复用正式 Application 的 Hilt 容器。
  *
  * 主题用的是 app 自己的 [TraktoSearchTheme] 而不是裸 `MaterialTheme`：它一个参数都不需要注入
  * （全带默认值），而彩蛋的底色、mesh 星云的取色都来自 `colorScheme`，
  * 换成 M3 基线配色截出来的颜色就不是用户看到的那份，截图迭代也就失去了意义。
  */
+@AndroidEntryPoint
 class SwiftieEggPreviewActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -91,7 +91,7 @@ internal data class SplashPalette(
      *
      * 明色 1.60:1、暗色 2.23:1，都远在可读线之下——这是线的颜色，不是字的颜色。
      * 日签页拿它画撕口虚线和日历格线，为了某一行字把它压深，那一屏的细线会立刻变成描边；
-     * 台词层顶部那行日期要够 3:1，是在 SplashQuoteOverlay 里按 [ink] 另兑的，没走这里。
+     * 台词层印章下那行年份要够 3:1，是在 SplashQuoteOverlay 里按 [ink] 另兑的，没走这里。
      */
     val inkFaint: Color,
     /**
@@ -157,7 +157,7 @@ internal data class SplashPalette(
 }
 
 /**
- * 台词层的时间轴，单位毫秒，与 docs/previews/splash-daily-quote.html 的 T 常量同源。
+ * 台词层的时间轴，单位毫秒。版面本身另有一份网页原型：docs/previews/splash-quote-visual.html。
  *
  * 停留时长按「今天是不是第一次看」分两档，见 [stay]：原型里只有一个 2000，实测四行台词读不完，
  * 提到 3000 也只够「已经读过、再扫一眼」。当天第一次看的人得先认海报再从头念，给 5000 才读得完整层；

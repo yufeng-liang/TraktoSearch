@@ -366,7 +366,7 @@ fun ActivationLoginScreen(
                     onClick = {
                         showWhatIsTraktDialog = false
                         CustomTabsIntent.Builder().build()
-                            .launchUrl(context, Uri.parse("https://trakt.tv/auth/join"))
+                            .launchUrl(context, Uri.parse("https://api2.trakt.tv/auth/signup_method"))
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = LoginTitleInk,

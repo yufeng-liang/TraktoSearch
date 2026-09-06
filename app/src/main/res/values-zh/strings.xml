@@ -562,6 +562,7 @@
 
     <!-- 日签 -->
     <string name="daily_stamp_title">日签</string>
+    <string name="daily_stamp_splash_quote_settings">每日台词设置</string>
     <string name="daily_stamp_previous_month">上个月</string>
     <string name="daily_stamp_next_month">下个月</string>
     <plurals name="daily_stamp_day_count">

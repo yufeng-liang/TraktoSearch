@@ -1397,7 +1397,7 @@ private fun scrimColor(palette: SplashPalette): Color =
  * 3.71:1 / 3.53:1，过了非正文文字那条 3:1 的线，又还比出处弱一档。
  *
  * 兑在这个文件里而不是往共享色板加一档：inkFaint 同时是撕口虚线、日历格线和禁用图标的
- * 颜色，为了这一行把它压深，那几处细线会立刻变成描边。开屏台词层顶部那行日期是同样的
+ * 颜色，为了这一行把它压深，那几处细线会立刻变成描边。开屏台词层印章下那行年份是同样的
  * 处理，两边各自兑，色板不动。
  */
 private fun dateInk(palette: SplashPalette): Color =

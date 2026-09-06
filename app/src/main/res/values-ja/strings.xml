@@ -318,6 +318,7 @@
 
     <!-- 日めくり -->
     <string name="daily_stamp_title">日めくり</string>
+    <string name="daily_stamp_splash_quote_settings">今日の台詞の設定</string>
     <string name="daily_stamp_previous_month">前の月</string>
     <string name="daily_stamp_next_month">次の月</string>
     <plurals name="daily_stamp_day_count">

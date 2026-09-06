@@ -149,6 +149,7 @@ internal fun ZoomableImageOverlay(
                     contentDescription = stringResource(R.string.cd_image_page, page + 1, images.size),
                     gesturesEnabled = !phase.running,
                     deferZoomable = phase.opening,
+                    transitionRunning = phase.running,
                     onRequestDismiss = onDismiss,
                     // 每页各自接管返回键：仅当前页组合，不会重复注册
                     backHandlerEnabled = true,
@@ -164,7 +165,9 @@ internal fun ZoomableImageOverlay(
             // 顶部操作栏（在图片之上，必须自己吃掉单击，否则空白处的点击会穿到下面的图片节点触发退出）
             // 不参与配对：缩略图那一侧没有对应物。改为等图片基本落位再淡入，并抬进转场 overlay ——
             // 转场期图片是画在 overlay 里的，普通兄弟节点会被它整块盖住。
-            Row(
+            // if(visible)：chrome 抬进转场 overlay 后吃不到 AnimatedVisibility 的 fadeOut，
+            // 退场动画形同虚设（关图时与页面按钮整段重叠）；关闭瞬间直接离开组合。
+            if (visible) Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)

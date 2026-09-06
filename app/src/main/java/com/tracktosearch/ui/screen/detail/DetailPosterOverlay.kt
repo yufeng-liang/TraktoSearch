@@ -146,6 +146,7 @@ internal fun PosterFullscreenOverlay(
                 // 转场动画期间锁手势，避免与共享元素转场互相打架
                 gesturesEnabled = !phase.running,
                 deferZoomable = phase.opening,
+                transitionRunning = phase.running,
                 onRequestDismiss = onDismiss,
                 backHandlerEnabled = true
             )
@@ -153,7 +154,10 @@ internal fun PosterFullscreenOverlay(
             // 顶部操作栏（在图片之上，也需要拦截点击）
             // 原 Haze 毛玻璃已移除以降低持续渲染开销，改用半透明黑色背景
             // 不参与配对：等海报基本落位再淡入，并抬进转场 overlay，否则会被飞行中的海报盖住
-            Row(
+            // 用 if(visible) 而非退场动画：chrome 被抬进转场 overlay 后吃不到 AnimatedVisibility
+            // 的 fadeOut，退场动画形同虚设——关图时会与页面返回/分享按钮整段重叠。
+            // 关闭瞬间直接离开组合；打开时的延迟淡入由 appSharedOverlayChrome 负责。
+            if (visible) Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)

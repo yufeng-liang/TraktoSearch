@@ -13,15 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -31,11 +25,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
-import com.tracktosearch.ui.screen.swiftie.unitHeartPath
 import java.util.Locale
-import kotlin.math.PI
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 /** 卡片长出用 400ms，曲目从第 400ms 起逐行点亮。 */
 const val TRACK_REVEAL_START_MS: Long = 400L
@@ -52,14 +43,11 @@ private const val TRACK_FADE_MS: Float = 220f
 /** 描金色。金箔的那种黄，不是 Fearless 的主色（数值撞上了，含义无关）。 */
 private val GILD_GOLD = Color(0xFFD4AF37)
 
-/** 描金那一行的暖色横条。只提亮不压暗，所以不进对比度模型。 */
-private val GILD_TINT = Color(0xFFFFE7B0)
+/** 描金那一行那道金线：该行点亮之后再等 300ms 才扫出来，不跟逐行点亮抢注意力。 */
+private const val GILD_RULE_DELAY_MS: Long = 300L
 
-/** 描金那一行的爱心：该行点亮之后再等 300ms 才起，不跟逐行点亮抢注意力。 */
-private const val HEART_DELAY_MS: Long = 300L
-
-/** 描边 → 自下而上灌满 → 一次呼吸，共 900ms。卡片停留 5.6s，够看清。 */
-private const val HEART_MS: Float = 900f
+/** 金线扫完 420ms。比一行的淡入（220ms）慢一点：扫得出来才读作一笔写过去。 */
+private const val GILD_RULE_MS: Float = 420f
 
 /** 卷收：逐行错开 70ms，**自下而上**。 */
 private const val COLLAPSE_ROW_STAGGER_MS: Float = 70f
@@ -78,7 +66,7 @@ private const val COLLAPSE_WINDOW_MS: Float = 1_500f
  * 这张专辑要描金的那一行；-1 = 这张没有。
  *
  * 只有 Lover 有：**第 7 张专辑的第 3 首**。数字对上了一个私人纪念日，
- * 所以只用一点金色和一颗心暗示 —— 一旦写成字就不是彩蛋了，
+ * 所以只用一道金线暗示 —— 一旦写成字就不是彩蛋了，
  * 而且任何日期措辞都有时效风险（a11y 描述也刻意不提）。
  */
 private fun gildedRowIndex(eraIndex: Int): Int =
@@ -135,24 +123,6 @@ internal fun SwiftieEraTracklist(
     val titleStyle = remember(textColors, rowHeight, density) {
         TextStyle(fontSize = with(density) { (rowHeight * 0.75f).toSp() }, color = textColors.body)
     }
-    val gildedNumberStyle = remember(numberStyle, era, density) {
-        // 金印在白卡上只有 1.9:1，11sp 的「03」会糊成一团。这里保住金的色相，
-        // 靠一圈压到 AA 的深金描边把字缘顶出来 —— 金箔字本来就带暗边，
-        // 这不是给对比度打的补丁，是它该有的样子
-        val keyline = SwiftieEraContrast.readable(
-            color = GILD_GOLD,
-            background = SwiftieEraContrast.cardBackground(era.mainColor)
-        )
-        numberStyle.copy(
-            color = GILD_GOLD,
-            shadow = Shadow(
-                color = keyline,
-                offset = with(density) { Offset(0.5.dp.toPx(), 0.5.dp.toPx()) },
-                blurRadius = with(density) { 0.8.dp.toPx() }
-            )
-        )
-    }
-
     // derivedStateOf：布尔量不变就不通知读者，所以卷收之前这一列的**布局**一帧都不失效。
     // 直接在 layout 里读 collapseProgress() 会让整段 96 秒每帧重测一遍所有行
     val collapsing = remember(collapseProgress) {
@@ -196,7 +166,7 @@ internal fun SwiftieEraTracklist(
                     .then(
                         if (gilded) {
                             Modifier.gildedRow(
-                                startMs = appearAt + HEART_DELAY_MS,
+                                startMs = appearAt + GILD_RULE_DELAY_MS,
                                 elapsedInCard = elapsedInCard
                             )
                         } else {
@@ -208,7 +178,7 @@ internal fun SwiftieEraTracklist(
                 Text(
                     // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
                     text = String.format(Locale.US, "%02d", index + 1),
-                    style = if (gilded) gildedNumberStyle else numberStyle,
+                    style = numberStyle,
                     // 列宽是定死的 rowHeight×1.375，不禁止折行的话
                     // 「01」会在放大档位折成两行、被行高裁掉下半截
                     maxLines = 1,
@@ -255,97 +225,46 @@ private fun Modifier.collapsingRow(
 }
 
 /**
- * 描金那一行：一条很淡的暖色横条 + 行尾一颗点亮的爱心。
+ * 描金那一行：一条自左往右扫出来的细金线。
  *
- * 心形轮廓来自 `unitHeartPath()`（灯箱上浮的心、Lover 母题、雪景球共用同一条）——
- * 这里不再手写第二份；也不用 emoji：emoji 字形跟着系统字体走，换个 ROM 就是另一颗心。
+ * 最早这一行铺的是一条暖黄横条（`#FFE7B0`，两端淡出）。被点名「太丑了」—— 一条通栏的
+ * 黄底在浅色卡片上读作「这一行被选中 / 被高亮了」，是控件状态而不是题字，而且那个黄与
+ * 卡片主色系没有关系。换成**一条 0.7dp 的细金线**：从左往右扫出来，两端用渐变淡掉。
+ * 金线是题字的笔迹，横条是控件背景 —— 差别全在这里。
  *
- * 三段动画接在一起：描边（0–42%）→ 自下而上灌满（30–75%）→ 一次呼吸
- * `1.0 → 1.15 → 1.0` 加外圈光晕（75–100%）。三段刻意有重叠，
- * 中间不留空档才连得上。
+ * 行尾原先还有一颗被箭钉住的金心、`The Archer` 那一行还有一把小弓，两样都撤了：
+ * 12dp 的行高画不出一把像样的弓，而这一箭真正要射中的是**页面背景彩虹上那颗心**
+ * （见 `SwiftieLoverArrowFlight`）—— 弓因此搬到卡片右侧的道具位，那里有一百多 dp 见方。
+ * 序号也不再描金：金字压在白卡上只有 1.9:1，要靠一圈深金描边才够对比，
+ * 而那圈描边在 11sp 上糊成一小块黄底。
  *
- * 心形与它的 `PathMeasure` 在 `drawWithCache` 里建好：描边每帧只做一次
- * `getSegment`，不重建路径。
+ * 这一行为什么被挑出来，见 [gildedRowIndex]。
  */
 private fun Modifier.gildedRow(
     startMs: Long,
     elapsedInCard: () -> Long
 ): Modifier = drawWithCache {
-    val heart = unitHeartPath()
-    val measure = PathMeasure().apply { setPath(heart, true) }
-    val traced = Path()
-    val side = size.height * 0.74f
-    val left = size.width - side * 1.10f
-    val top = (size.height - side) / 2f
-    val center = Offset(left + side / 2f, top + side / 2f)
-    val strokePx = 1.1.dp.toPx()
-    // 两端淡出，不然这条暖色横条读起来是「这一行被选中了」
-    val tint = Brush.horizontalGradient(
+    val ruleTop = size.height - 1.6.dp.toPx()
+    val ruleHeight = 0.7.dp.toPx()
+    val ruleWidth = (size.width - 2.dp.toPx()).coerceAtLeast(1f)
+    // Brush 在 drawWithCache 里建一次。draw lambda 里 new 一个就是每帧一个原生 Shader
+    val rule = Brush.horizontalGradient(
         colors = listOf(
             Color.Transparent,
-            GILD_TINT.copy(alpha = 0.55f),
-            GILD_TINT.copy(alpha = 0.30f),
+            GILD_GOLD.copy(alpha = 0.62f),
+            GILD_GOLD.copy(alpha = 0.62f),
             Color.Transparent
-        )
+        ),
+        startX = 0f,
+        endX = ruleWidth
     )
     onDrawBehind {
-        drawRect(brush = tint)
-        val p = ((elapsedInCard() - startMs) / HEART_MS).coerceIn(0f, 1f)
-        if (p <= 0f) return@onDrawBehind
-        drawGildedHeart(heart, measure, traced, p, side, left, top, center, strokePx)
-    }
-}
-
-/**
- * 画那颗心。[progress] 是 0f..1f 的整段进度，三段动画都从它推出来。
- *
- * 单位心（0..1 方框）被 `withTransform` 一次映射到位，所以下面所有坐标都是
- * **单位空间**的数 —— 包括 `clipRect` 的四个边（`size` 在变换里仍然是整行的尺寸，
- * 靠默认值会一路裁到行宽上去）。描边宽度反过来要除掉缩放，不然心一呼吸线也跟着粗。
- */
-private fun DrawScope.drawGildedHeart(
-    heart: Path,
-    measure: PathMeasure,
-    traced: Path,
-    progress: Float,
-    side: Float,
-    left: Float,
-    top: Float,
-    center: Offset,
-    strokePx: Float
-) {
-    val trace = (progress / 0.42f).coerceIn(0f, 1f)
-    val fill = ((progress - 0.30f) / 0.45f).coerceIn(0f, 1f)
-    val pulse = sin(((progress - 0.75f) / 0.25f).coerceIn(0f, 1f) * PI).toFloat()
-    val breathe = 1f + 0.15f * pulse
-    // 光晕：灌满的过程里就淡淡亮着，呼吸那一下最亮
-    val glow = maxOf(fill * 0.35f, pulse)
-    if (glow > 0.01f) {
-        val radius = side * (0.85f + 0.25f * glow)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(GILD_GOLD.copy(alpha = 0.55f * glow), Color.Transparent),
-                center = center,
-                radius = radius
-            ),
-            radius = radius,
-            center = center
+        val sweep = ((elapsedInCard() - startMs) / GILD_RULE_MS).coerceIn(0f, 1f)
+        if (sweep <= 0f) return@onDrawBehind
+        drawRect(
+            brush = rule,
+            topLeft = Offset(0f, ruleTop),
+            size = Size(ruleWidth * sweep, ruleHeight)
         )
-    }
-    val scaled = side * breathe
-    withTransform({
-        // 先声明的变换最后作用到几何上：先把单位心放到位，再绕它自己的中心呼吸
-        scale(breathe, breathe, pivot = center)
-        translate(left, top)
-        scale(side, side, pivot = Offset.Zero)
-    }) {
-        if (fill > 0f) {
-            clipRect(left = -0.5f, top = 1f - fill * 1.1f, right = 1.5f, bottom = 1.5f) {
-                drawPath(heart, GILD_GOLD, alpha = 0.92f)
-            }
-        }
-        traced.rewind()
-        measure.getSegment(0f, measure.length * trace, traced, true)
-        drawPath(traced, GILD_GOLD, style = Stroke(width = strokePx / scaled))
     }
 }

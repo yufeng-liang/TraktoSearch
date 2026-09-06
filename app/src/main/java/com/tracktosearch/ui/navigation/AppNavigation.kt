@@ -1331,7 +1331,7 @@ fun AppNavigation(
 
                 composable(Routes.SPLASH_QUOTE) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        com.tracktosearch.ui.screen.splashquote.SplashQuoteScreen(
+                        com.tracktosearch.ui.screen.dailystamp.DailyStampScreen(
                             onBack = { navController.popBackStack() },
                             // mediaType 由台词库给（movie/show），两个命名空间的 tmdbId 各自编号；
                             // traktId 传 0，详情页按 tmdbId 自己去查

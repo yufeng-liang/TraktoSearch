@@ -67,9 +67,13 @@ private fun activeEraIndexAt(elapsedMs: Long): Int =
  * （它才是收全屏触摸的那一层）。本层只在拖动播放头时把 `frozen` 翻真。
  *
  * @param frozen 拖过播放头之后的定格状态，由 `SwiftieEggScreen` 持有
- * @param onCardBoundsChange **只有 TTPD 那一张**会回报：卡片在根坐标里的边框（px）。
- *   背景那台打字机按它把出纸口坐到纸的上缘、把立纸对齐纸宽 —— 31 首的卡片高度按屏高
- *   派生、宽度在平板上封顶 480dp，写死比例换台设备机器就会浮在纸上方或比纸宽出一截
+ * @param onCardBoundsChange 卡片在根坐标里的边框（px）。**只有 TTPD 与 Lover 两张回报**：
+ *   背景那台打字机按它把出纸口坐到纸的上缘、把立纸对齐纸宽（31 首的卡片高度按屏高派生、
+ *   宽度在平板上封顶 480dp，写死比例换台设备机器就会浮在纸上方或比纸宽出一截）；
+ *   Lover 那一箭则要按它算出弓在根坐标里的位置。
+ *
+ *   倒滑起点之后**不再回报** —— 那之后卡片一边卷收一边进玻璃球，量到的边框越来越小，
+ *   已经不代表那张卡了；消费方留着最后一次完整测量，箭才不会跟着缩成一根牙签
  */
 @Composable
 fun SwiftieErasStage(
@@ -77,6 +81,7 @@ fun SwiftieErasStage(
     frozen: Boolean,
     onFrozenChange: (Boolean) -> Unit,
     onCardBoundsChange: (Rect) -> Unit = {},
+    loverAimAngle: () -> Float = { LOVER_FALLBACK_AIM_ANGLE },
     modifier: Modifier = Modifier
 ) {
     // 每帧变的量只在 draw lambda 里读；组合里只读这一个「翻转 12 次」的派生量
@@ -128,7 +133,7 @@ fun SwiftieErasStage(
     }
 
     /**
-     * 卷收进度：18 行曲目自下而上逐行收起，只留专辑名 + 日期 + 第 3 首 + 爱心。
+     * 卷收进度：18 行曲目自下而上逐行收起，只留专辑名 + 日期 + 描金那一行。
      *
      * **刻意线性**，不加缓动 —— 卡片内部按它折算每一行的错开时刻（70ms/行 × 18 = 1260ms），
      * 缓动会让最后几行挤在一起收完，读起来不像卷纸像抽断。
@@ -161,6 +166,24 @@ fun SwiftieErasStage(
     val globeMounted by remember {
         derivedStateOf { clock.elapsedMs >= SwiftieTimeline.LOVER_BLOOM_START }
     }
+
+    /**
+     * 还该不该回报卡片边框。
+     *
+     * 倒滑一起就停：那之后卡片逐行卷收、再缩进玻璃球，`boundsInRoot` 量到的是一个
+     * 每帧都在变小的框。消费方（打字机、彩虹上那支箭）要的是「这张卡完整时占哪」，
+     * 所以停在最后一次完整测量上。`derivedStateOf` 保证这一路只翻一次。
+     */
+    val cardBoundsLive by remember {
+        derivedStateOf { clock.elapsedMs < SwiftieTimeline.REWIND_START }
+    }
+
+    /**
+     * 要回报边框的两张：TTPD（背景那台打字机对齐纸）与 Lover（那一箭从卡片里的弓起飞）。
+     * 其余 10 张不挂 `onGloballyPositioned`，一次布局回调都不多做。
+     */
+    val reportsBounds = cardBoundsLive &&
+        (activeIndex == SwiftieTimeline.TTPD_INDEX || activeIndex == SwiftieErasData.LOVER_INDEX)
 
     Box(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -200,12 +223,13 @@ fun SwiftieErasStage(
                             } else {
                                 { elapsedInCard().toFloat() / CARD_FEED_MS }
                             },
-                            modifier = if (prerollMs == 0L) {
-                                cardModifier
-                            } else {
+                            loverAimAngle = loverAimAngle,
+                            modifier = if (reportsBounds) {
                                 cardModifier.onGloballyPositioned {
                                     onCardBoundsChange(it.boundsInRoot())
                                 }
+                            } else {
+                                cardModifier
                             }
                         )
                     }

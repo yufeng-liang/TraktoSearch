@@ -24,14 +24,15 @@ enum class SwiftieEraMotif {
     /** 6 · reputation：盘绕的黑鳞蛇 + 蛇戒 */
     COILED_SNAKE,
     /**
-     * 7 · Lover：两只互锁的彩纸环（*Paper Rings*）+ 一只蝴蝶。
+     * 7 · Lover：一把上了弦的弓 + 一只蝴蝶。
      *
      * 原来这里是 Lover House 小屋。**背景那一层已经有一栋大屋**（`PASTEL_RAINBOW_HOUSE`：
      * 彩虹 + 小屋），终局的雪景球里还有第三栋 —— 同一件道具同屏画两遍，正是用户对 Red
-     * 那条围巾提过的问题（「不和卡片的围巾重复」）。屋子留在背景（面积大、又是雪景球那一幕
-     * 的伏笔），卡片换成 Lover 第 8 首的纸环：小、好认、且这一张里别处没有。
+     * 那条围巾提过的问题（「不和卡片的围巾重复」）。屋子留在背景，卡片先换成了 Lover
+     * 第 8 首的纸环，再换成这把弓：这一张真正要发生的事是「箭射中背景彩虹上那颗心」
+     * （见 `SwiftieLoverArcher`），而弓是那件事的起点，得占着道具位才画得开。
      */
-    PAPER_RINGS,
+    LOVER_ARCHER,
     /** 8 · folklore：开衫挂在木椅背上 + 松枝 */
     CARDIGAN_CHAIR,
     /** 9 · evermore：三股辫 + 橙棕格纹布角 */
@@ -73,7 +74,7 @@ enum class SwiftieEraBackdrop {
     MIDNIGHT_CLOCK,
     /** 11 · 打字机（键盘 + 压纸卷筒 + 卷纸）+ 散落手稿页 + 台灯光锥 */
     TYPEWRITER_DESK,
-    /** 12 · 剧院舞台（红丝绒帷幕 + 化妆镜灯泡排）+ 聚光灯锥 + 浴缸剪影 + marquee 灯牌 */
+    /** 12 · 剧院舞台（红丝绒帷幕 + 桁架灯）+ 聚光灯锥 + 中央舞女剪影 */
     THEATRE_STAGE
 }
 
@@ -317,7 +318,7 @@ object SwiftieErasData {
         mainColor = Color(0xFFF7A8C4),
         textColor = Color(0xFFF7A8C4),
         fontResId = R.font.era_lover,
-        motif = SwiftieEraMotif.PAPER_RINGS,
+        motif = SwiftieEraMotif.LOVER_ARCHER,
         tracks = listOf(
             "I Forgot That You Existed",
             "Cruel Summer",

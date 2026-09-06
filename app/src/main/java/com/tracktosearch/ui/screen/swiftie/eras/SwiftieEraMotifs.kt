@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -69,7 +70,7 @@ private const val PROP_MASK_ALPHA = 0.78f
  * 比谁都亮的白剪影：本来要藏起来的东西反而成了最扎眼的。写成相对 [PROP_ALPHA] 的
  * 倍数，垫白就和它盖住的、以及盖在它上面的东西同步淡出。
  */
-private const val PROP_MASK = PROP_MASK_ALPHA / PROP_ALPHA
+internal const val PROP_MASK = PROP_MASK_ALPHA / PROP_ALPHA
 
 /**
  * 长歌名让位时 `columnFade` 的下限：`0.35 × 0.514 ≈ 0.18`。
@@ -77,9 +78,6 @@ private const val PROP_MASK = PROP_MASK_ALPHA / PROP_ALPHA
  * 卡片那边只管在 1f 与这个值之间插值，「0.18」这个数字不重复写第二遍。
  */
 internal const val COLUMN_FADE_MIN = 0.514f
-
-/** 道具列占卡片宽度的比例。 */
-private const val COLUMN_FRACTION = 0.32f
 
 /**
  * 金饰件的固定色。
@@ -109,13 +107,18 @@ private val PROP_WARM = Color(0xFFFFE7A8)
  *   低端分支干净得多；这里剩下的 lowRam 只是顺手把一次性的点数也压掉
  * @param columnFade 右侧道具的亮度系数。1f = 全亮；[COLUMN_FADE_MIN] = 让位给长歌名
  *   （见 `SwiftieEraCard` 里的算法）。**只乘道具** —— 底纹跟着一起明暗会整张卡片闪
+ * @param eraElapsedMs 本段已过的毫秒。**只有 Lover 那把弓读它** —— 拉弓 / 撒放是一次性的
+ *   动作，[phase] 那条 3.6s 的锯齿波编不出「只发生一次」。负数 = 低配机那一档定格，
+ *   弓永远停在松弦上着箭的静态（`drawLoverBow`）
  */
 fun DrawScope.drawEraMotif(
     motif: SwiftieEraMotif,
     color: Color,
     phase: Float,
     lowRam: Boolean,
-    columnFade: Float
+    columnFade: Float,
+    eraElapsedMs: Long,
+    loverAimAngle: Float = LOVER_FALLBACK_AIM_ANGLE
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
@@ -125,7 +128,8 @@ fun DrawScope.drawEraMotif(
         SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha)
         SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
-        SwiftieEraMotif.PAPER_RINGS -> drawPaperRings(color, phase, alpha)
+        SwiftieEraMotif.LOVER_ARCHER ->
+            drawLoverArcher(color, phase, alpha, eraElapsedMs, loverAimAngle)
         SwiftieEraMotif.CARDIGAN_CHAIR -> drawCardiganChair(color, phase, alpha)
         SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha)
         SwiftieEraMotif.LIGHTER_STARS -> drawLighterStars(color, phase, alpha)
@@ -141,19 +145,10 @@ fun DrawScope.drawEraMotif(
 /**
  * 右侧道具列的框。
  *
- * 高度按**框宽**定（1.55 倍）而不是跟着卡片高度拉满：TTPD 有 31 首、卡片高过
- * 400dp，跟着拉长会把吉他和打火机抽成竹竿。上缘再夹到卡片 34% 以下，
- * 让开标题与日期那一段（`CARD_CHROME_HEIGHT`）与前几行曲目。
- *
- * 右边留 2.5% 而不是贴边：道具被卡片圆角切一刀比留白更显廉价。
+ * 式子在 [swiftiePropBox] 里 —— 弓画在卡片这一层、飞行中的箭画在页面最上层、
+ * 插住的箭画在背景层，三处必须从同一个式子推出发点（见 `SwiftieLoverArcher`）。
  */
-private fun DrawScope.propBox(): Rect {
-    val boxWidth = size.width * COLUMN_FRACTION
-    val left = size.width * (0.975f - COLUMN_FRACTION)
-    val bottom = size.height * 0.94f
-    val top = maxOf(size.height * 0.34f, bottom - boxWidth * 1.55f)
-    return Rect(left, top, left + boxWidth, bottom)
-}
+private fun DrawScope.propBox(): Rect = swiftiePropBox(size)
 
 /**
  * 矩形周长上 [t]（0f..1f，从左上角起顺时针）处的点。
@@ -925,7 +920,7 @@ private fun DrawScope.drawCurtainRope(phase: Float, alpha: Float, w: Float, h: F
  *
  * 所以这一版是一整个剪影，而且**只是剪影**：一块纯色的形，不画脸、不画手指、不打高光。
  * 加了五官它立刻从「一个时代的符号」变成「某个人的画像」——
- * `SwiftieEraBackdrop` 里 Showgirl 那张舞台也是同一条规矩（不画人形）。
+ * `SwiftieEraBackdrop` 里 Showgirl 那张舞台把人物留给中央原创舞女剪影，这里只画卡片道具。
  *
  * 比例按时装插画的 9 头身而不是真人的 7.5：礼服的重点在裙，腿的长度让给裙摆。
  * 但**只拉长腿、不缩小头** —— 头一小于 1/10 身高，整个剪影就从「一个人」退回「一枚别针」。
@@ -1856,114 +1851,41 @@ private fun DrawScope.drawSnakeRing(color: Color, alpha: Float, w: Float, h: Flo
 }
 
 /**
- * 7 · Lover：两只互锁的彩纸环 + 一只蝴蝶。
+ * 7 · Lover：一把上了弦的弓 + 一只蝴蝶。
  *
- * *Paper Rings* 是 Lover 的第 8 首，纸环也是这一张里唯一**别处没有**的道具：
- * 小屋在背景那一层（`PASTEL_RAINBOW_HOUSE` 的彩虹 + 大屋），终局的雪景球里还有一栋，
- * 卡片再画一栋就是同一件道具同屏三遍 —— 用户对 Red 那条围巾提过同样的问题。
+ * 原来这里是两只互锁的彩纸环（*Paper Rings* 是 Lover 的第 8 首）。换成弓是需求方定的：
+ * 这一张真正要发生的事是「箭射中背景彩虹上那颗心」，而弓是那件事的起点 ——
+ * 起点不该藏在 12dp 的曲目行末尾（上一版），它得在道具位上，有一百多 dp 见方
+ * 才画得出弓臂的收势、握把的缠绳与三片尾羽。几何与时间线都在 `SwiftieLoverArcher` 里。
  *
- * 「互锁」靠一次补画实现：两环各自描完之后，把左环右侧那一段弧**再描一遍**压在右环上。
- * 少了这一步两只环只是叠在一起的两个圈，读作奥运标志的一角而不是套起来的纸环。
+ * 小屋没有搬进来：它在背景那一层（`PASTEL_RAINBOW_HOUSE` 的彩虹 + 大屋），终局的雪景球里
+ * 还有一栋，卡片再画一栋就是同一件道具同屏三遍 —— 用户对 Red 那条围巾提过同样的问题。
  */
-private fun DrawScope.drawPaperRings(color: Color, phase: Float, alpha: Float) {
+private fun DrawScope.drawLoverArcher(
+    color: Color,
+    phase: Float,
+    alpha: Float,
+    eraElapsedMs: Long,
+    loverAimAngle: Float
+) {
     pastelCloudTexture(color, phase)
     val box = propBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
-    translate(left = box.left, top = box.top) {
-        val strip = u * 0.075f
-        val arx = w * 0.26f
-        val ary = w * 0.30f
-        val acx = w * 0.34f
-        val acy = h * 0.58f
-        val brx = w * 0.24f
-        val bry = w * 0.28f
-        val bcx = w * 0.68f
-        val bcy = h * 0.51f
-        // 呼吸：两环被风吹着轻轻转，右环幅度大一点 —— 它是挂在左环上的那一只
-        val tilt = sin(phase * TAU) * 3.0f
-        val aDeg = 8f + tilt * 0.4f
-        rotate(degrees = aDeg, pivot = Offset(acx, acy)) {
-            paperRing(acx, acy, arx, ary, strip, color, alpha, u)
-        }
-        rotate(degrees = -24f + tilt, pivot = Offset(bcx, bcy)) {
-            paperRing(bcx, bcy, brx, bry, strip, color, alpha, u)
-        }
-        // 互锁：左环右侧那一段压回右环上面。右环在左环的右上方，
-        // 两环相交的那段弧大致落在 -60°..10°，所以压回去的是它的下半段
-        rotate(degrees = aDeg, pivot = Offset(acx, acy)) {
-            // 补画的这一段同样要垫白，否则右环从左环的纸条里透出来，
-            // 「压回去」这一步就白做了
-            drawArc(
-                color = Color.White,
-                startAngle = -30f,
-                sweepAngle = 44f,
-                useCenter = false,
-                topLeft = Offset(acx - arx, acy - ary),
-                size = Size(arx * 2f, ary * 2f),
-                alpha = alpha * PROP_MASK,
-                style = Stroke(width = strip)
-            )
-            drawArc(
-                color = color,
-                startAngle = -30f,
-                sweepAngle = 44f,
-                useCenter = false,
-                topLeft = Offset(acx - arx, acy - ary),
-                size = Size(arx * 2f, ary * 2f),
-                alpha = alpha * 1.15f,
-                style = Stroke(width = strip)
-            )
-        }
-        drawButterfly(color, phase, alpha, w, h, u)
-    }
-}
-
-/** 一只纸环：环身 + 内缘高光 + 环底那一道粘缝。 */
-private fun DrawScope.paperRing(
-    cx: Float,
-    cy: Float,
-    rx: Float,
-    ry: Float,
-    strip: Float,
-    color: Color,
-    alpha: Float,
-    u: Float
-) {
-    // 垫白：两只环相交那一段，后画的那只要真的挡住先画的。
-    // 都是半透明描边的话相交处两条纸都在，读作两个叠印的圈
-    drawOval(
-        color = Color.White,
-        topLeft = Offset(cx - rx, cy - ry),
-        size = Size(rx * 2f, ry * 2f),
-        alpha = alpha * PROP_MASK,
-        style = Stroke(width = strip)
-    )
-    drawOval(
+    drawLoverBow(box, alpha, eraElapsedMs, loverAimAngle)
+    // 蝴蝶挪出道具框、飞到卡片右上角：留在框里它就压在弓臂上，两件道具争同一块地方。
+    //
+    // 竖向锚点用 dp 而不是卡片高度的比例 —— 顶上那条标题带（16dp 内边距 + 34dp 专辑名
+    // + 11dp 日期）是 dp 预算（`CARD_CHROME_HEIGHT`），按比例算会让 31 首的 TTPD 与
+    // 14 首的 Lover 落在完全不同的地方。48dp 处蝴蝶上下缘约在 26dp..75dp，
+    // 正好在标题带里、压不到第一行曲目。
+    //
+    // 横向 84.5%：专辑名「Lover」5 个字母在 34dp 下约占 93dp，撞不上；右缘还留下
+    // 20dp 出头，不会被 20dp 的圆角切掉一只翅膀。尺寸不变，仍按道具列宽算
+    drawButterfly(
         color = color,
-        topLeft = Offset(cx - rx, cy - ry),
-        size = Size(rx * 2f, ry * 2f),
-        alpha = alpha * 1.15f,
-        style = Stroke(width = strip)
-    )
-    // 内缘高光：纸条的里侧受光。少了它环身是一根宽度均匀的粗线，读作橡皮圈
-    val ix = rx - strip * 0.34f
-    val iy = ry - strip * 0.34f
-    drawOval(
-        color = PROP_WARM,
-        topLeft = Offset(cx - ix, cy - iy),
-        size = Size(ix * 2f, iy * 2f),
-        alpha = 0.42f,
-        style = Stroke(width = strip * 0.26f)
-    )
-    // 粘缝：一条纸粘成环，接缝就在环底。这一道是「纸」环而不是金属环的唯一说明
-    drawLine(
-        color = color,
-        start = Offset(cx - strip * 0.10f, cy + ry - strip * 0.55f),
-        end = Offset(cx + strip * 0.10f, cy + ry + strip * 0.55f),
-        strokeWidth = (u * 0.008f).coerceAtLeast(1f),
-        alpha = alpha * 1.6f
+        phase = phase,
+        alpha = alpha,
+        center = Offset(size.width * 0.845f, 48.dp.toPx()),
+        u = box.width
     )
 }
 
@@ -1972,10 +1894,20 @@ private fun DrawScope.paperRing(
  *
  * 右半边靠 `scale(-1)` 把左半边镜像过去 —— 手写两遍几何必然有一天只改了一边。
  * 扑翼只压翼展的 x（[flap]），不动 y：蝴蝶扇翅膀时看到的正是投影变窄。
+ *
+ * @param center 身子的位置（卡片坐标）。收绝对坐标而不是「一个框 + 框内比例」：
+ *   这只蝴蝶要落在卡片右上角，而它旁边的弓在右下的道具框里，两者早已不共用一个框
+ * @param u 尺度单位，翼展取 `0.30f * u`，笔宽与身子也都从它派生
  */
-private fun DrawScope.drawButterfly(color: Color, phase: Float, alpha: Float, w: Float, h: Float, u: Float) {
-    val bx = w * 0.26f
-    val by = h * 0.12f
+private fun DrawScope.drawButterfly(
+    color: Color,
+    phase: Float,
+    alpha: Float,
+    center: Offset,
+    u: Float
+) {
+    val bx = center.x
+    val by = center.y
     val span = u * 0.30f
     val flap = 0.42f + 0.58f * abs(sin(phase * TAU * 1.5f))
     val fore = Path()
@@ -2012,10 +1944,16 @@ private fun DrawScope.drawButterfly(color: Color, phase: Float, alpha: Float, w:
     drawCircle(color, u * 0.008f, Offset(bx + span * 0.20f, by - span * 0.34f), alpha = alpha * 1.8f)
 }
 
-/** 蝴蝶的一半：前翼实心、后翼淡一档、前翼再描一圈亮边（翼脉的意思）。 */
+/**
+ * 蝴蝶的一半：前翼实心、后翼淡一档、前翼再描一圈亮边（翼脉的意思）。
+ *
+ * alpha 系数比多数道具高（1.9 / 1.5）：这只蝴蝶搬到卡片右上角之后是那一块唯一的图形，
+ * 压在白纸上按 1.5 / 1.2 画只剩一团淡影。上限是 [PROP_MASK]（≈2.23），垫白那一层
+ * 就是按它算的。
+ */
 private fun DrawScope.butterflyHalf(fore: Path, hind: Path, color: Color, alpha: Float, u: Float) {
-    drawPath(fore, color, alpha = alpha * 1.5f)
-    drawPath(hind, color, alpha = alpha * 1.2f)
+    drawPath(fore, color, alpha = alpha * 1.9f)
+    drawPath(hind, color, alpha = alpha * 1.5f)
     drawPath(fore, Color.White, alpha = alpha, style = Stroke(width = u * 0.006f))
 }
 

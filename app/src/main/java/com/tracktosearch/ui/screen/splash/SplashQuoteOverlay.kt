@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -48,7 +49,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -59,6 +62,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -74,7 +79,6 @@ import com.tracktosearch.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.Random
 import kotlin.math.PI
@@ -90,7 +94,7 @@ import kotlin.math.min
  * 所以视觉上是同一块画面继续往下演，而不是两段动画拼接。
  *
  * 节奏见 [SplashQuoteTiming]：光晕扩散 → 海报浮起 → 台词逐行升起 → 出处淡入 →
- * 停留 5 秒 → 光晕散开同时整层淡出，露出下面已经组合好的主界面。
+ * 印章压下、日期跟着落下 → 停留 5 秒 → 光晕散开同时整层淡出，露出下面已经组合好的主界面。
  * 任意时刻轻触屏幕直接跳到散开阶段。
  *
  * 逐步浮现只演给当天第一次看的人。同一天再进 App 时整页一次摊开：海报、台词、出处、
@@ -235,11 +239,6 @@ fun SplashQuoteOverlay(
         animationSpec = tween(durationMillis = 480),
         label = "splashVignetteAlpha"
     )
-    val chromeAlpha by animateFloatAsState(
-        targetValue = if (bloom && !exiting) 1f else 0f,
-        animationSpec = tween(durationMillis = 520),
-        label = "splashChromeAlpha"
-    )
     val skipAlpha by animateFloatAsState(
         targetValue = if (skipVisible && !exiting) 1f else 0f,
         animationSpec = tween(durationMillis = 600),
@@ -254,11 +253,7 @@ fun SplashQuoteOverlay(
         label = "splashBackground"
     )
 
-    val today = remember {
-        // 固定 Locale.US：日期只是「2026.08.28」这样的装饰性刻度，
-        // 跟随系统 Locale 会在部分语言下渲染成非阿拉伯数字，破坏等宽刻度感。
-        LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.US))
-    }
+    val today = remember { LocalDate.now() }
     val interactionSource = remember { MutableInteractionSource() }
 
     Box(
@@ -285,32 +280,28 @@ fun SplashQuoteOverlay(
             drift = !reduceMotion
         )
 
-        Text(
-            text = today,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 82.dp)
-                .alpha(chromeAlpha),
-            color = dateInk(palette),
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 0.42.em,
-            textAlign = TextAlign.Center
-        )
-
-        // 海报、台词、出处、印章同在这一列里从上往下排，中间垫着 spacer，
-        // 所以文字永远不会压在海报上——海报放大到 176×264 也不改变这一点，
-        // 不需要再给文字单独垫一块局部衬底。而且海报是在日期之后画的、本身不透明，
-        // 万一被极端字号顶到日期那一带，结果是日期被海报盖住，不会出现「深褐字压在海报亮部上」。
+        // 海报、台词、出处、印章在这一列里从上往下排，中间垫着 spacer，
+        // 所以文字永远不会压在海报上——海报放大到 238×356 也不改变这一点。
+        //
+        // 日期块不在这一列里，它钉在底部（见下面那一段）。这一列于是要在底部让出
+        // [DATE_RESERVE_DP]，并留一道顶部安全边：状态栏就压在这一层上面，
+        // 少了这道边，矮屏上海报的上沿会钻到时钟底下去。
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 34.dp),
+                .statusBarsPadding()
+                .padding(horizontal = 34.dp)
+                .padding(top = 12.dp, bottom = DATE_RESERVE_DP),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            QuotePoster(poster = quote.poster, palette = palette, visible = posterVisible)
-            Spacer(Modifier.height(24.dp))
+            QuotePoster(
+                poster = quote.poster,
+                palette = palette,
+                visible = posterVisible,
+                lineCount = lineCount,
+            )
+            Spacer(Modifier.height(20.dp))
             quote.lines.forEachIndexed { index, line ->
                 QuoteLine(
                     text = line,
@@ -320,17 +311,41 @@ fun SplashQuoteOverlay(
                     lineCount = lineCount
                 )
             }
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(18.dp))
             QuoteSource(quote = quote, palette = palette, visible = sourceVisible)
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(20.dp))
             StampedSeal(quote = quote, palette = palette, visible = sealVisible)
         }
+
+        // 日期和撕口虚线都钉在屏幕底部，日期贴着虚线上方 16dp。
+        //
+        // 不跟着上面那一列流下来：那一列是居中的，多一行台词、换一台屏幕，它的底边就挪一截，
+        // 日期跟着走，和虚线的距离每台机器都不一样。钉住之后这个距离是定的，
+        // 而余量的伸缩全落在印章与日期之间那一段——那里本来就是留白。
+        DateStamp(
+            date = today,
+            palette = palette,
+            visible = sealVisible,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = DATE_BOTTOM_DP)
+        )
+
+        // 撕口虚线：日签卡片的撕口用同一档 inkFaint 画。它把跳过提示圈成票根的下半截，
+        // 顺便给「这一层还有底」一个交代——海报放大之后下半屏本来空得没有边界。
+        TearLine(
+            palette = palette,
+            alpha = vignetteAlpha,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = TEAR_BOTTOM_DP, start = 26.dp, end = 26.dp)
+        )
 
         Text(
             text = stringResource(R.string.splash_quote_skip),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 56.dp)
+                .padding(bottom = SKIP_ROW_DP)
                 .alpha(skipAlpha),
             // 这行不是装饰而是操作提示：找不到它的用户只能干等着，所以按正文的对比度要求给色，
             // 见 hintInk——画线用的 inkFaint（1.6:1 / 2.2:1）在这里是不合格的
@@ -483,14 +498,122 @@ private fun StampedSeal(
 }
 
 /**
+ * 印章底下的日期：月日一行大字，年份小字垫在下面。
+ *
+ * 原先它是顶部一行 11sp 的等宽小字。那个位置上它只是页边的一道刻度，而海报放大之后
+ * 上半屏更挤，它反倒成了第一个被顶掉的东西。挪到印章之下、放成大字，日期于是和印章
+ * 一起变成这一页的落款——先有画面和台词，再盖章，最后记下是哪一天。
+ *
+ * 月日用衬线实心墨（纸上 5.87:1），斜杠单独退到 [SLASH_INK]：它是分隔符不是信息，
+ * 和数字同一个浓度会读成三段等重的字符。年份走 [dateInk]，也就是原来顶部那行的墨，
+ * 加上同一档 0.42em 字距——那点刻度感是从上面搬下来的，不该在搬家的路上丢掉。
+ *
+ * 固定 [Locale.US]：跟随系统 Locale 会在部分语言下渲染成非阿拉伯数字，等宽刻度感就没了。
+ *
+ * 整块合成一个语义节点：逐个字符念出来是「零九 斜杠 零五 二零二六」，
+ * 而这里要说的只是一个日期。
+ */
+@Composable
+private fun DateStamp(
+    date: LocalDate,
+    palette: SplashPalette,
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "quoteDateAlpha"
+    )
+    val riseDp by animateFloatAsState(
+        targetValue = if (visible) 0f else 6f,
+        animationSpec = tween(durationMillis = 300, easing = RiseEasing),
+        label = "quoteDateRise"
+    )
+    val spoken = remember(date) {
+        String.format(Locale.US, "%d-%02d-%02d", date.year, date.monthValue, date.dayOfMonth)
+    }
+    val monthDay = remember(date) {
+        buildAnnotatedString {
+            append(String.format(Locale.US, "%02d", date.monthValue))
+            withStyle(
+                SpanStyle(
+                    color = palette.ink.copy(alpha = SLASH_INK),
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Normal,
+                )
+            ) {
+                append(DATE_SLASH)
+            }
+            append(String.format(Locale.US, "%02d", date.dayOfMonth))
+        }
+    }
+    Column(
+        modifier = modifier
+            .graphicsLayer {
+                this.alpha = alpha
+                translationY = riseDp.dp.toPx()
+            }
+            .clearAndSetSemantics { contentDescription = spoken },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = monthDay,
+            color = palette.ink,
+            fontSize = 38.sp,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = date.year.toString(),
+            modifier = Modifier.padding(top = 5.dp),
+            color = dateInk(palette),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.42.em,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * 跳过提示上方那道撕口虚线。
+ *
+ * 和日签卡片的撕口同一档墨（[SplashPalette.inkFaint]，画线用的那一档）：两屏的撕口
+ * 必须是同一条线，否则从开屏走到日签会看出换了张纸。
+ *
+ * 跟着四角压暗一起淡入，理由同 [FilmRails]：它们都是「这张纸的边界」。
+ */
+@Composable
+private fun TearLine(palette: SplashPalette, alpha: Float, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.fillMaxWidth().height(1.dp)) {
+        if (alpha <= EPSILON || size.width <= 0f) return@Canvas
+        val dash = TEAR_DASH.toPx()
+        drawLine(
+            color = palette.inkFaint,
+            start = Offset(0f, size.height / 2f),
+            end = Offset(size.width, size.height / 2f),
+            strokeWidth = size.height,
+            cap = StrokeCap.Round,
+            alpha = alpha,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash * 1.6f)),
+        )
+    }
+}
+
+/**
  * 海报，做成相纸装裱的样子：外层一圈奶油色卡纸 + 投影，内层图片压一层纸色。
  *
  * 压色是必要的：未处理的彩色海报直接贴在暖纸背景上，看起来像硬插进来的一块图，
  * 压掉一点饱和度之后它才像原本就印在这张纸上。
  *
- * 尺寸看屏幕高度而不是宽度：这一层是一整列竖排——日期、海报、台词、出处、印章挨着往下摆，
- * 挤的从来是纵向。窄屏横向本就留着 34dp 的页边距，真会把印章顶出屏幕、把日期顶到海报底下的是矮屏。
+ * 尺寸看屏幕高度而不是宽度：这一层是一整列竖排——海报、台词、出处、印章、日期挨着往下摆，
+ * 挤的从来是纵向。窄屏横向本就留着 34dp 的页边距，真会把印章顶出屏幕的是矮屏。
  * 超大字号一并按矮屏算：字号翻上去等于把四行台词的行高整段拉长，占的还是纵向那点余量。
+ *
+ * 高屏 238×356，矮屏回落到 176×264。矮屏那一档没有跟着按同一个比例放大：760dp 上
+ * 200×300 只剩 6dp 余量，日期块会压到跳过提示；176×264 还剩 25dp。
  *
  * [poster] 为 null 时整块不渲染，而不是画一个占位框——开屏宁可少一样东西，
  * 也不要出现「这里本该有张图」的破洞感。
@@ -500,6 +623,7 @@ private fun QuotePoster(
     poster: ImageBitmap?,
     palette: SplashPalette,
     visible: Boolean,
+    lineCount: Int,
 ) {
     if (poster == null) return
     val alpha by animateFloatAsState(
@@ -519,8 +643,11 @@ private fun QuotePoster(
     )
     val compact = LocalConfiguration.current.screenHeightDp < POSTER_COMPACT_HEIGHT_DP ||
         LocalDensity.current.fontScale > POSTER_COMPACT_FONT_SCALE
-    val posterWidth = if (compact) 148.dp else 176.dp
-    val posterHeight = if (compact) 222.dp else 264.dp
+    // 四行台词的行高比三行多吃三十来 dp，海报跟着收一档，省下的那点全给顶部安全边。
+    // 收的是海报而不是字：字号是内容，海报是画面的尺寸，两者之中先让的该是后者。
+    val squeeze = if (!compact && lineCount >= POSTER_SQUEEZE_LINES) POSTER_SQUEEZE else 1f
+    val posterWidth = if (compact) 176.dp else 238.dp * squeeze
+    val posterHeight = if (compact) 264.dp else 356.dp * squeeze
     val tintColor = if (palette.isDark) Color(0xFF16100B) else palette.paper
     val tintAlpha = if (palette.isDark) 0.22f else 0.14f
     Box(
@@ -535,8 +662,10 @@ private fun QuotePoster(
             .shadow(elevation = 18.dp, shape = RoundedCornerShape(9.dp), clip = false)
             .clip(RoundedCornerShape(9.dp))
             .background(palette.cream)
-            // 卡纸边距：海报放大之后 5dp 看着像图印歪了没留边，7dp 才是装裱的一圈白
-            .padding(7.dp)
+            // 卡纸边：三面 7dp，底边 15dp。相纸的白边从来不是四边等宽——下边宽出来的那一截
+            // 是留给手拿的地方，也让海报在这一列里读起来是「装裱好的一张」，不是一块贴纸。
+            // 7dp 是放大之后的下限：5dp 看着像图印歪了没留边。
+            .padding(start = 7.dp, top = 7.dp, end = 7.dp, bottom = 15.dp)
     ) {
         Image(
             bitmap = poster,
@@ -700,11 +829,11 @@ private fun dustDrift(enabled: Boolean): Float {
  * 柔的东西堆再多也只是雾；要有一样东西边缘是清楚的、有节奏的、重复的，画面才立得住。
  * 取齿孔而不是别的图形，是因为日签卡片撕口两端就是齿孔——同一套语言，两屏才像一件东西。
  *
- * 墨色只给 5%（暗色 7%）：它是纸上压出来的孔，不是画上去的图案。孔列按屏高排满并整列居中，
- * 上下各留半个间距，任何屏幕上都不会出现顶头半个孔的样子。
+ * 墨色明色 15%、暗色 11%（见 [RAIL_INK_LIGHT]）：它是纸上压出来的孔，不是画上去的图案。
+ * 孔列按屏高排满并整列居中，上下各留半个间距，任何屏幕上都不会出现顶头半个孔的样子。
  *
  * 不会压到内容：台词那一列有 34dp 横向内边距，齿孔连边线一起只占到边上 [RAIL_INSET] 加
- * 孔宽那一小段；日期和跳过提示都是居中的。
+ * 孔宽那一小段；跳过提示是居中的。
  */
 @Composable
 private fun FilmRails(palette: SplashPalette, alpha: Float) {
@@ -737,7 +866,7 @@ private fun DrawScope.drawFilmRails(palette: SplashPalette, alpha: Float) {
             )
         }
     }
-    val lineAlpha = RAIL_LINE_INK * alpha
+    val lineAlpha = (if (palette.isDark) RAIL_LINE_INK_DARK else RAIL_LINE_INK_LIGHT) * alpha
     val lineGap = RAIL_LINE_GAP.toPx()
     listOf(inset + holeW + lineGap, size.width - inset - holeW - lineGap).forEach { x ->
         drawLine(
@@ -759,7 +888,7 @@ private fun DrawScope.drawFilmRails(palette: SplashPalette, alpha: Float) {
  * 明色下光锥本身已经是「把锥外压暗一档」，而锥外正是右上和左下那两个角，四角压暗压的也是它们。
  * 同一处叠两遍，纸会沉成土色。
  *
- * 起手 0.44 倍半径才开始压：顶部那行日期落在 0.45 附近，压到它头上等于拿它的对比度换气质。
+ * 起手 0.44 倍半径才开始压：那一圈之内是海报和台词，压到它们头上等于拿内容的对比度换气质。
  */
 @Composable
 private fun Vignette(palette: SplashPalette, alpha: Float) {
@@ -789,15 +918,16 @@ private fun DrawScope.drawVignette(palette: SplashPalette, alpha: Float) {
 }
 
 /**
- * 顶部日期那一行的淡墨。
+ * 日期那一行的淡墨：[DateStamp] 里印章底下的年份。
  *
  * 日期是装饰性刻度，按 WCAG 只需要 3:1，可以比正文淡；但不能淡到看不见——
  * [SplashPalette.inkFaint]（0.32 倍墨）在纸上只有 1.60:1（暗色 2.23:1），等于没印上去。
  * 这里按正文墨另兑一档：明色 0.82 在纸上是 4.00:1，暗色 0.44 是 3.64:1，两套的淡法看上去一致。
  *
- * 明色那一档留的余量是给背景的：日期落在屏幕顶部偏中，那一带在光锥的压暗区里
+ * 明色那一档留的余量是给背景的：这一行原先落在屏幕顶部偏中，那一带在光锥的压暗区里
  * （光是从左上斜下来的，右上本来就该暗），再叠上颗粒，实测掉到 3.18:1。
- * 0.76 是原来的值，同样的背景下只有 2.89:1——不够。
+ * 0.76 是原来的值，同样的背景下只有 2.89:1——不够。搬到印章之下以后背景更亮一档，
+ * 这个值于是只多不少，不必回调。
  *
  * 不去改 inkFaint 本身，是因为日签页拿它画撕口虚线和日历格线：
  * 为了这一行日期把它压深，那一屏的细线会立刻变成描边。
@@ -1126,9 +1256,50 @@ private val RAIL_HOLE_GAP: Dp = 11.dp
 /** 片边线离齿孔多远、多粗 */
 private val RAIL_LINE_GAP: Dp = 5.dp
 private val RAIL_LINE_W: Dp = 0.8.dp
-private const val RAIL_INK_LIGHT = 0.05f
-private const val RAIL_INK_DARK = 0.07f
-private const val RAIL_LINE_INK = 0.04f
+/**
+ * 齿孔和片边线的墨，明暗各一档。
+ *
+ * 明色这两档是从 0.05 / 0.04 提上来的。那两个值是照着暗色定的：暗底上 0.07 的奶色墨
+ * 已经能看出一排孔，而亮纸上 0.05 的褐墨在 #F7EFE2 上只有 1.08:1——不是「淡」，是没画。
+ * 齿孔是整屏唯一的硬边元素，看不见就等于背景只剩一团光和一层颗粒，画面立不住。
+ *
+ * 0.15 / 0.10 是「看得出是压在纸上的孔，又不至于成为一排图案」的一档：孔在纸上约 1.3:1,
+ * 边线更淡一档，两者仍在正文可读线之下——它们是纸的边界，不是要读的东西。
+ */
+private const val RAIL_INK_LIGHT = 0.15f
+private const val RAIL_INK_DARK = 0.11f
+private const val RAIL_LINE_INK_LIGHT = 0.10f
+private const val RAIL_LINE_INK_DARK = 0.07f
+
+/** 撕口虚线的实线段长，空档取它的 1.6 倍——虚线要看得出是「断开的」，不是一条点线 */
+private val TEAR_DASH: Dp = 3.dp
+
+/**
+ * 底部「轻触跳过」离屏幕底边多远。
+ *
+ * 56dp 收到 44dp 是给上面那一列腾地方：海报放大一圈、印章下面又多一块日期之后，
+ * 纵向余量本来就不够。
+ */
+private val SKIP_ROW_DP: Dp = 44.dp
+
+/**
+ * 撕口虚线和日期块离屏幕底边多远，以及台词那一列为它们在底部让出多少。
+ *
+ * 两者都钉在底部，不跟着上面那一列流下来：那一列是居中的，多一行台词、换一台屏幕，
+ * 它的底边就挪一截，日期跟着走，和虚线的距离每台机器都不一样。钉住之后
+ * 「日期贴在虚线上方 16dp」在任何屏幕上都是同一个数，余量的伸缩全落在印章与日期
+ * 之间那一段——那里本来就是留白，差十几 dp 看不出来。
+ *
+ * [DATE_RESERVE_DP] 是日期块自己那 66dp 加上离印章至少 8dp 的空。让出这一块之后，
+ * 844dp 屏上四行台词仍剩 25dp，760dp 矮屏（海报回落一档）剩 16dp。
+ */
+private val TEAR_BOTTOM_DP: Dp = SKIP_ROW_DP + 36.dp
+private val DATE_BOTTOM_DP: Dp = TEAR_BOTTOM_DP + 16.dp
+private val DATE_RESERVE_DP: Dp = DATE_BOTTOM_DP + 74.dp
+
+/** 日期块里月日之间那道斜杠，以及它比数字淡多少——它是分隔符，不是信息 */
+private const val DATE_SLASH = " ⁄ "
+private const val SLASH_INK = 0.5f
 
 /**
  * 海报回落小尺寸的屏高阈值，单位 dp。
@@ -1141,10 +1312,19 @@ private const val POSTER_COMPACT_HEIGHT_DP = 760
 /**
  * 超过这个字体缩放倍数也按矮屏算。
  *
- * 1.15 之上四行台词就要多吃掉三四十 dp，够把海报顶进顶部日期那一带。
+ * 1.15 之上四行台词就要多吃掉三四十 dp，够把海报连着底下那一列一起顶出屏幕。
  * 系统的字体放大是用户明确要求的，压的应该是海报，不是字。
  */
 private const val POSTER_COMPACT_FONT_SCALE = 1.15f
+
+/**
+ * 台词到几行开始把海报收一档，以及收多少。
+ *
+ * 四行台词的行高整段比三行多三十来 dp，而这一层的纵向余量在 844dp 屏上只剩二十几。
+ * 0.92（238×356 → 219×328）省下 28dp，正好把顶部安全边保住。
+ */
+private const val POSTER_SQUEEZE_LINES = 4
+private const val POSTER_SQUEEZE = 0.92f
 
 /**
  * 后来才盖上来时整层的淡入时长。
