@@ -506,15 +506,6 @@ internal fun PersonHeaderContent(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = stringResource(R.string.detail_overview_label),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    // 标题水平居中，正文仍左对齐
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
                 if (displayBiography.isNotEmpty()) {
                     // 简介正文：折叠为 4 行，溢出时在下方独立一行显示右对齐的「展开/收起」
                     ExpandableText(

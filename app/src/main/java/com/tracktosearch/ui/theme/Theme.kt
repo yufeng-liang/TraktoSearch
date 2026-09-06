@@ -36,7 +36,10 @@ private val AppHazeDefaultBlurStyle = HazeBlurStyle {
 fun appSwitchColors(): SwitchColors = SwitchDefaults.colors(
     uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
     uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+    // 选中态 thumb 固定 surface 白：不跟 onPrimary（onColorFor 按亮度可给纯黑，
+    // 粉色系主题上黑圆观感突兀，白圆在 primary 轨道上对比度仍够用）。
+    checkedThumbColor = MaterialTheme.colorScheme.surface
 )
 
 /**
@@ -158,10 +161,10 @@ internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mate
     val seedArgb = seed.toArgb()
     val seedHue = com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue
     val tonal = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromInt(seedArgb)
-    // 6.0 / 8.0 是 MCU TonalSpot 的标准中性彩度。原先两个都写 4.0（复制粘贴），
-    // 结果 surfaceVariant 和 surface 阶梯同彩度、分不开 —— 卡片压在页面上看不出边界。
+    // neutral 染彩度 4.0（标准 6.0）：只管 background/surface/容器底，用户要求子页面底色染色更淡。
+    // neutralVariant 保持 8.0：surfaceVariant（卡片/对话框）不变，且与 neutral 拉开彩度差。
     val neutral = com.tracktosearch.data.util.mcu.palettes.TonalPalette
-        .fromHueAndChroma(seedHue, 6.0)
+        .fromHueAndChroma(seedHue, 4.0)
     val neutralVariant = com.tracktosearch.data.util.mcu.palettes.TonalPalette
         .fromHueAndChroma(seedHue, 8.0)
 
