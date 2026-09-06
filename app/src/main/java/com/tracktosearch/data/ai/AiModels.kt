@@ -472,8 +472,23 @@ object AiDailyKnowledgeContract {
     const val DEFAULT_LOCALE = "zh-CN"
     const val CACHE_SCHEMA_VERSION = "unit-v1"
 
+    /** 本地历史是新存储键；版本不匹配时不读取也不覆盖，避免未来结构被旧版本写坏。 */
+    const val HISTORY_SCHEMA_VERSION = 1
+    const val HISTORY_RETENTION_DAYS = 30
+    const val HISTORY_MAX_ENTRIES = 50
+
     /** P0 只开放四种内容语言，其他值由 Repository 在请求和缓存前拦截。 */
     val SUPPORTED_LOCALES = setOf("zh-CN", "en-US", "ja-JP", "ko-KR")
+}
+
+/** 知识内容反馈：对应设计中的“有帮助 / 太泛 / 关系弱 / 太难 / 片透多”。 */
+@Serializable
+enum class AiDailyKnowledgeContentFeedback {
+    HELPFUL,
+    TOO_BROAD,
+    WEAK_RELATION,
+    TOO_HARD,
+    TOO_MUCH_SPOILER
 }
 
 @Serializable
@@ -608,6 +623,39 @@ data class AiDailyKnowledge(
     val filmEvidence: String
         get() = filmEvidenceValue.ifBlank { fact }
 }
+
+@Serializable
+data class AiDailyKnowledgeQuestionResult(
+    val selectedOptionIds: List<String> = emptyList(),
+    val correct: Boolean = false,
+    val answeredAt: Long = 0L
+)
+
+@Serializable
+data class AiDailyKnowledgeHistoryRecord(
+    val unitId: String,
+    val shownDate: String,
+    val locale: String,
+    val relatedMedia: AiDailyRelatedMedia? = null,
+    val subject: String? = null,
+    val concept: String? = null,
+    // 完整内容随历史落盘，历史页和当天离线回看都不需要再请求网络。
+    val knowledge: AiDailyKnowledge,
+    val questionCompleted: Boolean = false,
+    val questionResult: AiDailyKnowledgeQuestionResult? = null,
+    val contentFeedback: AiDailyKnowledgeContentFeedback? = null,
+    val difficultyFeedback: AiQuizDifficulty? = null,
+    // 毫秒时间戳可能相同；单调序列保证同一天多次展示时能稳定判断“最近展示”。
+    val sequence: Long = 0L,
+    val shownAt: Long = 0L,
+    val updatedAt: Long = shownAt
+)
+
+@Serializable
+data class AiDailyKnowledgeHistory(
+    val schemaVersion: Int = AiDailyKnowledgeContract.HISTORY_SCHEMA_VERSION,
+    val records: List<AiDailyKnowledgeHistoryRecord> = emptyList()
+)
 
 @Serializable
 enum class AiTtsScene {

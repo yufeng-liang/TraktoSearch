@@ -1,14 +1,21 @@
 package com.tracktosearch.ui.screen.ai
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.ai.AiDailyCheckQuestion
 import com.tracktosearch.data.ai.AiDailyKnowledge
+import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
+import com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord
+import com.tracktosearch.data.ai.AiDailyKnowledgeQuestionResult
 import com.tracktosearch.data.ai.AiGreeting
 import com.tracktosearch.data.ai.AiQuiz
+import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiQuizHistory
 import com.tracktosearch.data.ai.AiQuizResult
 import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiRepository
+import com.tracktosearch.data.ai.AiQuizOption
 import com.tracktosearch.data.ai.AiQuizRequest
 import com.tracktosearch.data.ai.AiTasteAnalysis
 import com.tracktosearch.data.ai.AiVoiceCapture
@@ -27,6 +34,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -48,6 +56,7 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
+import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiSpriteViewModelTest {
@@ -89,7 +98,8 @@ class AiSpriteViewModelTest {
         val expectedQuota = quota(sessionUsed = 5, dailyUsed = 22)
         val daily = dailyKnowledge(expectedQuota)
         val viewModel = viewModel()
-        coEvery { aiRepository.getDailyKnowledge("friend-a", false) } returns Result.success(daily)
+        coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
+        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(daily)
 
         viewModel.openFeature(AiFeature.DAILY)
         advanceUntilIdle()
@@ -104,19 +114,139 @@ class AiSpriteViewModelTest {
             networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.OFFLINE)
         )
 
-        listOf(AiFeature.GREETING, AiFeature.TASTE, AiFeature.QUIZ, AiFeature.DAILY)
+        listOf(AiFeature.GREETING, AiFeature.TASTE, AiFeature.QUIZ)
             .forEach(viewModel::openFeature)
         advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value.activeFeature).isEqualTo(AiFeature.DAILY)
+        assertThat(viewModel.uiState.value.activeFeature).isEqualTo(AiFeature.QUIZ)
         assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
         assertThat(viewModel.uiState.value.isLoading).isFalse()
         coVerify(exactly = 0) { aiRepository.getGreeting(any(), any(), any()) }
         coVerify(exactly = 0) { aiRepository.getTaste(any(), any(), any()) }
         coVerify(exactly = 0) { aiRepository.getQuiz(any(), any(), any()) }
-        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllShowHistory(any(), any()) }
+    }
+
+    @Test
+    fun offlineDailyKnowledge_readsCachedUnitWithoutSettingErrorState() = runTest {
+        val daily = dailyKnowledge()
+        val viewModel = viewModel(
+            authState = MutableStateFlow(AuthState.OFFLINE),
+            networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.OFFLINE)
+        )
+        coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
+        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(daily)
+
+        viewModel.openFeature(AiFeature.DAILY)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { aiRepository.readDailyKnowledgeHistory("friend-a") }
+        coVerify(exactly = 1) { aiRepository.getDailyKnowledge(any(), any(), any(), any()) }
+        assertThat(viewModel.uiState.value.dailyKnowledge).isEqualTo(daily)
+        assertThat(viewModel.uiState.value.errorCode).isNull()
+        assertThat(viewModel.uiState.value.isLoading).isFalse()
+    }
+
+    @Test
+    fun loadDaily_usesAppLanguageLocale() = runTest {
+        val localeSlot = slot<String>()
+        val viewModel = viewModel(
+            language = MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
+        )
+        coEvery {
+            aiRepository.getDailyKnowledge(any(), any(), any(), capture(localeSlot))
+        } returns Result.success(dailyKnowledge())
+
+        viewModel.openFeature(AiFeature.DAILY)
+        advanceUntilIdle()
+
+        assertThat(localeSlot.captured).isEqualTo("en-US")
+    }
+
+    @Test
+    fun refreshDaily_countsUserInitiatedChangeAndResetsInteractionState() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState {
+            it.copy(
+                activeFeature = AiFeature.DAILY,
+                dailyKnowledge = structuredDailyKnowledge(),
+                dailyKnowledgeChangeCount = 0,
+                dailyQuestionSelectedOptionId = "a",
+                dailyKnowledgeFeedback = AiDailyKnowledgeContentFeedback.HELPFUL,
+                dailyKnowledgeDifficultyFeedback = AiQuizDifficulty.EASY
+            )
+        }
+        coEvery {
+            aiRepository.getDailyKnowledge(any(), true, any(), any())
+        } returns Result.success(structuredDailyKnowledge())
+
+        viewModel.refreshFeature()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.dailyKnowledgeChangeCount).isEqualTo(1)
+        assertThat(state.dailyQuestionSelectedOptionId).isNull()
+        assertThat(state.dailyKnowledgeFeedback).isNull()
+        assertThat(state.dailyKnowledgeDifficultyFeedback).isNull()
+    }
+
+    @Test
+    fun dailyKnowledgeChangeBoundary_resetsWhenRestoredDayIsDifferent() = runTest {
+        val savedStateHandle = SavedStateHandle(
+            mapOf(
+                "daily_knowledge_change_day" to "2000-01-01",
+                "daily_knowledge_change_count" to 2
+            )
+        )
+        val viewModel = viewModel(savedStateHandle = savedStateHandle)
+
+        assertThat(viewModel.uiState.value.dailyKnowledgeChangeCount).isEqualTo(0)
+    }
+
+    @Test
+    fun refreshDaily_stopsAfterTwoUserInitiatedChanges() = runTest {
+        val viewModel = viewModel(
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "daily_knowledge_change_day" to LocalDate.now().toString(),
+                    "daily_knowledge_change_count" to 2
+                )
+            )
+        )
+        viewModel.seedState {
+            it.copy(
+                activeFeature = AiFeature.DAILY,
+                dailyKnowledge = dailyKnowledge(),
+                dailyKnowledgeChangeCount = 2
+            )
+        }
+
+        viewModel.refreshFeature()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.dailyKnowledgeChangeCount).isEqualTo(2)
+        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun dailyQuestionAndFeedback_areLocalAndOneShot() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState {
+            it.copy(activeFeature = AiFeature.DAILY, dailyKnowledge = structuredDailyKnowledge())
+        }
+
+        viewModel.selectDailyKnowledgeQuestionOption("b")
+        viewModel.selectDailyKnowledgeQuestionOption("a")
+        viewModel.recordDailyKnowledgeFeedback(AiDailyKnowledgeContentFeedback.TOO_BROAD)
+        viewModel.recordDailyKnowledgeFeedback(AiDailyKnowledgeContentFeedback.HELPFUL)
+        viewModel.recordDailyKnowledgeDifficultyFeedback(AiQuizDifficulty.JUST_RIGHT)
+        viewModel.recordDailyKnowledgeDifficultyFeedback(AiQuizDifficulty.HARD)
+
+        val state = viewModel.uiState.value
+        assertThat(state.dailyQuestionSelectedOptionId).isEqualTo("b")
+        assertThat(state.dailyKnowledgeFeedback).isEqualTo(AiDailyKnowledgeContentFeedback.TOO_BROAD)
+        assertThat(state.dailyKnowledgeDifficultyFeedback).isEqualTo(AiQuizDifficulty.JUST_RIGHT)
+        coVerify(exactly = 0) { aiRepository.submitQuizDifficulty(any(), any()) }
     }
 
     @Test
@@ -130,7 +260,7 @@ class AiSpriteViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUTH_REQUIRED")
-        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any(), any(), any()) }
     }
 
     @Test
@@ -196,7 +326,7 @@ class AiSpriteViewModelTest {
             withContext(NonCancellable) { releaseOldRequest.await() }
             Result.success(greeting())
         }
-        coEvery { aiRepository.getDailyKnowledge("friend-a", false) } coAnswers {
+        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } coAnswers {
             newRequestStarted.complete(Unit)
             releaseNewRequest.await()
             Result.success(dailyKnowledge())
@@ -1031,7 +1161,8 @@ class AiSpriteViewModelTest {
         context: Context = mockk(relaxed = true) {
             every { assets.open(any()) } throws FileNotFoundException("no bundled audition")
         },
-        voiceCapture: AiVoiceCapture = FakeVoiceCapture()
+        voiceCapture: AiVoiceCapture = FakeVoiceCapture(),
+        savedStateHandle: SavedStateHandle = SavedStateHandle()
     ): AiSpriteViewModel {
         every { authManager.authState } returns authState
         every { authManager.nickname } returns MutableStateFlow("鏈嬪弸")
@@ -1053,7 +1184,8 @@ class AiSpriteViewModelTest {
             overlayStorage,
             aiTasteStorage,
             voiceCapture,
-            context
+            context,
+            savedStateHandle
         )
     }
 
@@ -1172,6 +1304,37 @@ class AiSpriteViewModelTest {
         dimensionScores = emptyMap(),
         questionResults = emptyList(),
         quota = quota
+    )
+
+    private fun structuredDailyKnowledge(quota: AiQuota? = null) = AiDailyKnowledge(
+        id = "daily-structured",
+        unitId = "unit-1",
+        title = "为什么第一个异议很重要？",
+        fact = "第一个表达异议的人会降低其他人的心理成本。",
+        explanation = "群体共识会放大沉默压力。",
+        sourceName = "来源",
+        sourceUrl = "https://example.com",
+        publishedAt = null,
+        characterLine = null,
+        quota = quota,
+        relationType = "direct_watch",
+        evidenceMode = "viewing_interpretation",
+        subjectGroup = "people_and_mind",
+        subject = "社会心理学",
+        concept = "从众压力",
+        realWorldExample = "会议里第一个提出不同意见的人。",
+        boundary = "这是入门解读，不是临床诊断。",
+        difficulty = "medium",
+        spoilerLevel = "light",
+        checkQuestion = AiDailyCheckQuestion(
+            prompt = "这道题考察什么？",
+            options = listOf(
+                AiQuizOption("a", "从众压力"),
+                AiQuizOption("b", "投票规则")
+            ),
+            correctOptionIds = listOf("a"),
+            explanation = "影片证据指向群体压力，不是程序规则。"
+        )
     )
 
     private fun dailyKnowledge(quota: AiQuota? = null) = AiDailyKnowledge(

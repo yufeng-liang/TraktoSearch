@@ -3,9 +3,11 @@ package com.tracktosearch.ui.screen.ai
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiDailyCheckQuestion
 import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizOption
 import com.tracktosearch.data.ai.AiQuizQuestion
@@ -526,6 +528,52 @@ class AiUiLogicTest {
         )
 
         assertThat(quizCorrectAnswerText(question, result)).isEqualTo("答案 A")
+    }
+
+
+    @Test
+    fun dailyKnowledgeLocaleFollowsAppLanguageAndSafeSystemFallback() {
+        assertThat(dailyKnowledgeLocale(LanguageStorage.LANGUAGE_ENGLISH, "zh")).isEqualTo("en-US")
+        assertThat(dailyKnowledgeLocale(LanguageStorage.LANGUAGE_SYSTEM, "ja")).isEqualTo("ja-JP")
+        assertThat(dailyKnowledgeLocale(LanguageStorage.LANGUAGE_SYSTEM, "fr")).isEqualTo("zh-CN")
+        assertThat(dailyKnowledgeLocale("unknown", "ko")).isEqualTo("zh-CN")
+    }
+
+    @Test
+    fun dailyKnowledgeLabelsOnlyAcceptControlledEnums() {
+        assertThat(dailyKnowledgeRelationLabelRes("direct_watch"))
+            .isEqualTo(R.string.ai_daily_relation_direct_watch)
+        assertThat(dailyKnowledgeEvidenceModeLabelRes("external_fact"))
+            .isEqualTo(R.string.ai_daily_evidence_external_fact)
+        assertThat(dailyKnowledgeSubjectGroupLabelRes("science_and_nature"))
+            .isEqualTo(R.string.ai_daily_subject_science_and_nature)
+        assertThat(dailyKnowledgeRelationLabelRes("unknown")).isNull()
+        assertThat(dailyKnowledgeEvidenceModeLabelRes(null)).isNull()
+        assertThat(dailyKnowledgeSubjectGroupLabelRes("subject")).isNull()
+    }
+
+    @Test
+    fun dailyKnowledgeAllowsAtMostTwoUserInitiatedChanges() {
+        assertThat(canChangeDailyKnowledge(0)).isTrue()
+        assertThat(canChangeDailyKnowledge(1)).isTrue()
+        assertThat(canChangeDailyKnowledge(2)).isFalse()
+        assertThat(remainingDailyKnowledgeChanges(0)).isEqualTo(2)
+        assertThat(remainingDailyKnowledgeChanges(3)).isEqualTo(0)
+    }
+
+    @Test
+    fun dailyCheckQuestionRequiresUniqueOptionsAndSingleBestAnswer() {
+        val valid = AiDailyCheckQuestion(
+            prompt = "这道题考察现实例子",
+            options = listOf(AiQuizOption("a", "例子 A"), AiQuizOption("b", "例子 B")),
+            correctOptionIds = listOf("a"),
+            explanation = "解析回到影视证据和概念。"
+        )
+        assertThat(dailyCheckQuestionIsValid(valid)).isTrue()
+        assertThat(dailyCheckQuestionIsValid(valid.copy(correctOptionIds = listOf("a", "b")))).isFalse()
+        assertThat(dailyCheckQuestionIsValid(valid.copy(options = valid.options + AiQuizOption("a", "重复 ID")))).isFalse()
+        assertThat(dailyCheckQuestionIsValid(valid.copy(prompt = " "))).isFalse()
+        assertThat(dailyCheckQuestionIsValid(null)).isFalse()
     }
 
 }

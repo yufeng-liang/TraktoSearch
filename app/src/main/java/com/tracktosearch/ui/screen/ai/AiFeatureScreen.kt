@@ -1,10 +1,19 @@
 package com.tracktosearch.ui.screen.ai
 
+import android.content.Context
+import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -27,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -36,7 +47,10 @@ import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,21 +66,29 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.ConnectivityObserver
@@ -74,6 +96,8 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiDailyKnowledge
+import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
+import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiGreeting
 import com.tracktosearch.data.ai.AiNameSignal
 import com.tracktosearch.data.ai.AiRecommendation
@@ -109,6 +133,9 @@ fun AiFeatureScreen(
     var discardQuizConfirmVisible by remember(feature) { mutableStateOf(false) }
     // 答题进行中点刷新等于放弃这一轮：必须先确认，不能手滑就把 13 题作答清空
     val refreshNeedsConfirm = feature == AiFeature.QUIZ && hasQuizInProgress(state)
+    val dailyChangeLimitReached = feature == AiFeature.DAILY &&
+        !canChangeDailyKnowledge(state.dailyKnowledgeChangeCount)
+    val reducedMotion = rememberAiReducedMotion()
     // OFFLINE 错误码可能先于 ConnectivityObserver 到达，UI 统一按不可用态处理，避免
     // 加载条、确认框或场景动画在离线说明上方短暂闪现。
     val offlineUi = state.networkStatus == ConnectivityObserver.NetworkStatus.OFFLINE ||
@@ -141,11 +168,15 @@ fun AiFeatureScreen(
         }
         AiFeature.DAILY -> state.dailyKnowledge?.let {
             it.title.isNotBlank() ||
+                it.takeaway.isNotBlank() ||
                 it.fact.isNotBlank() ||
                 it.explanation.isNotBlank() ||
                 it.characterLine.orEmpty().isNotBlank() ||
                 it.relatedMediaTitle.orEmpty().isNotBlank() ||
-                it.sourceName.isNotBlank()
+                it.relatedMedia?.title.orEmpty().isNotBlank() ||
+                it.filmEvidence.isNotBlank() ||
+                it.sourceName.isNotBlank() ||
+                it.source?.name.orEmpty().isNotBlank()
         } == true
     }
     // 首次请求还没有内容时显示专用加载态，不把“离线不可用”误当成加载结果。
@@ -222,11 +253,17 @@ fun AiFeatureScreen(
                         onClick = {
                             if (refreshNeedsConfirm) discardQuizConfirmVisible = true else onRefresh()
                         },
-                        enabled = !state.isLoading && !offlineUi
+                        enabled = !state.isLoading && !offlineUi && !dailyChangeLimitReached
                     ) {
                         Icon(
                             Icons.Rounded.Refresh,
-                            contentDescription = stringResource(R.string.ai_feature_refresh)
+                            contentDescription = stringResource(
+                                if (dailyChangeLimitReached) {
+                                    R.string.ai_daily_change_limit_description
+                                } else {
+                                    R.string.ai_feature_refresh
+                                }
+                            )
                         )
                     }
                 },
@@ -252,9 +289,17 @@ fun AiFeatureScreen(
                         .padding(top = if (showLoadingBanner) 52.dp else 0.dp)
                 ) {
                     if (offlineUi && !hasFeatureContent) {
-                        FeatureUnavailable()
+                        if (feature == AiFeature.DAILY) {
+                            DailyOfflinePlaceholder()
+                        } else {
+                            FeatureUnavailable()
+                        }
                     } else if (showLoadingPlaceholder) {
-                        FeatureLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
+                        if (feature == AiFeature.DAILY) {
+                            DailyLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
+                        } else {
+                            FeatureLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
+                        }
                     } else if (!hasFeatureContent) {
                         // 没有请求、错误或离线状态时保持空白，避免把取消/尚未开始误报为离线。
                         Spacer(Modifier.fillMaxSize())
@@ -276,7 +321,14 @@ fun AiFeatureScreen(
                                         viewModel = viewModel,
                                         onResultAnchorBoundsChanged = { featureAnchorBounds = it }
                                     )
-                                    AiFeature.DAILY -> DailyFeature(daily = state.dailyKnowledge)
+                                    AiFeature.DAILY -> state.dailyKnowledge?.let { daily ->
+                                        DailyFeature(
+                                            daily = daily,
+                                            state = state,
+                                            viewModel = viewModel,
+                                            reducedMotion = reducedMotion
+                                        )
+                                    } ?: FeatureUnavailable()
                                 }
                             }
                         }
@@ -883,24 +935,70 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
 }
 
 @Composable
-private fun DailyFeature(daily: AiDailyKnowledge?) {
-    if (daily == null) {
-        FeatureUnavailable()
-        return
+private fun DailyFeature(
+    daily: AiDailyKnowledge,
+    state: AiSpriteUiState,
+    viewModel: AiSpriteViewModel,
+    reducedMotion: Boolean
+) {
+    val historyKey = daily.unitId?.trim()?.takeIf { it.isNotEmpty() } ?: daily.id
+    // 进入首帧后才写历史，避免把网络成功误当成用户已经阅读。
+    LaunchedEffect(historyKey, daily.locale) {
+        viewModel.markDailyKnowledgeShown(daily)
     }
-    val relatedTitle = daily.relatedMediaTitle?.trim().orEmpty()
-    val source = daily.sourceName.trim().takeIf { it.isNotBlank() }
-        ?: daily.sourceUrl.trim().takeIf { it.isNotBlank() }
-    val sourceAndDate = listOfNotNull(
-        source?.let {
-            stringResource(R.string.ai_daily_source_format, it)
-        },
-        daily.publishedAt?.let { publishedAt ->
-            stringResource(R.string.ai_daily_published_at_format, formatDailyPublishedAt(publishedAt))
+    val relatedTitle = daily.relatedMedia?.title?.trim().orEmpty()
+        .ifBlank { daily.relatedMediaTitle?.trim().orEmpty() }
+    val relationRes = dailyKnowledgeRelationLabelRes(daily.relationType)
+    val evidenceModeRes = dailyKnowledgeEvidenceModeLabelRes(daily.evidenceMode)
+    val subjectGroupRes = dailyKnowledgeSubjectGroupLabelRes(daily.subjectGroup)
+    val sourceName = daily.source?.name?.trim().orEmpty()
+        .ifBlank { daily.sourceName.trim() }
+    val sourceUrl = daily.source?.url?.trim().orEmpty()
+        .ifBlank { daily.sourceUrl.trim() }
+    val sourceEvidence = daily.source?.evidence?.trim().orEmpty()
+    val hasSpoilerMarker = daily.containsSpoiler ||
+        daily.spoilerLevel == "light" ||
+        daily.spoilerLevel == "heavy"
+
+    val question = daily.checkQuestion
+    val questionValid = dailyCheckQuestionIsValid(question)
+    val selectedOptionId = state.dailyQuestionSelectedOptionId
+    val selectedOption = question?.options?.firstOrNull { it.id == selectedOptionId }
+    val correctOptionId = question?.correctOptionIds?.firstOrNull()
+    val correctOption = question?.options?.firstOrNull { it.id == correctOptionId }
+    val answered = selectedOption != null && correctOption != null
+    val answerIsCorrect = answered && selectedOption?.id == correctOption?.id
+
+    val realWorldExample = daily.realWorldExample?.trim().orEmpty()
+    val boundary = daily.boundary?.trim().orEmpty()
+    val hasConceptDetails = realWorldExample.isNotBlank() || boundary.isNotBlank()
+    val conceptKey = daily.unitId?.takeIf { it.isNotBlank() } ?: daily.id
+    var conceptExpanded by rememberSaveable(conceptKey) { mutableStateOf(false) }
+
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val hasEvidenceSection = relatedTitle.isNotBlank() ||
+        daily.filmEvidence.isNotBlank() ||
+        relationRes != null ||
+        evidenceModeRes != null ||
+        subjectGroupRes != null
+    val hasConceptSection = daily.explanation.isNotBlank() || hasConceptDetails
+    val questionItemIndex = 1 +
+        (if (hasSpoilerMarker) 1 else 0) +
+        (if (hasEvidenceSection) 1 else 0) +
+        (if (hasConceptSection) 1 else 0)
+    val scrollToQuestion: () -> Unit = {
+        scope.launch {
+            if (reducedMotion) {
+                listState.scrollToItem(questionItemIndex)
+            } else {
+                listState.animateScrollToItem(questionItemIndex)
+            }
         }
-    ).joinToString(stringResource(R.string.ai_daily_metadata_separator))
-    val hasSpoilerMarker = daily.containsSpoiler
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -909,27 +1007,29 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(26.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                tonalElevation = 2.dp
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        stringResource(R.string.ai_daily_title),
+                        text = daily.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.ai_daily_takeaway),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Text(daily.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                    if (relatedTitle.isNotBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            stringResource(R.string.ai_daily_related_media_format, relatedTitle),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(
+                        text = daily.takeaway,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
             }
         }
+
         if (hasSpoilerMarker) {
             item {
                 Surface(
@@ -938,7 +1038,7 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
                     color = MaterialTheme.colorScheme.errorContainer
                 ) {
                     Text(
-                        stringResource(R.string.ai_daily_spoiler_warning),
+                        text = stringResource(R.string.ai_daily_spoiler_warning),
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer
@@ -946,21 +1046,262 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
                 }
             }
         }
-        item {
-            MeaningSection(
-                title = stringResource(R.string.ai_daily_fact),
-                text = daily.fact,
-                reveal = AiTextReveal.TYPEWRITER
-            )
+
+        if (hasEvidenceSection) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 1.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 64.dp, height = 88.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // P1 只做影视依据占位，真实剧照与概念插图留给 P2。
+                            Icon(
+                                imageVector = Icons.Rounded.Movie,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                relationRes?.let { DailyLabelPill(stringResource(it)) }
+                                evidenceModeRes?.let { DailyLabelPill(stringResource(it)) }
+                                subjectGroupRes?.let { DailyLabelPill(stringResource(it)) }
+                            }
+                            if (relatedTitle.isNotBlank()) {
+                                Text(
+                                    text = relatedTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (daily.filmEvidence.isNotBlank()) {
+                                Text(
+                                    text = daily.filmEvidence,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
-        item {
-            MeaningSection(
-                title = stringResource(R.string.ai_daily_explanation),
-                text = daily.explanation,
-                reveal = AiTextReveal.FADE_IN,
-                revealDelayMillis = 150L
-            )
+
+        if (hasConceptSection) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.ai_daily_concept_section_title),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (daily.explanation.isNotBlank()) {
+                            Text(
+                                text = daily.explanation,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        if (hasConceptDetails) {
+                            TextButton(onClick = { conceptExpanded = !conceptExpanded }) {
+                                Icon(
+                                    imageVector = if (conceptExpanded) {
+                                        Icons.Rounded.ExpandLess
+                                    } else {
+                                        Icons.Rounded.ExpandMore
+                                    },
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(
+                                        if (conceptExpanded) {
+                                            R.string.ai_daily_concept_collapse
+                                        } else {
+                                            R.string.ai_daily_concept_expand
+                                        }
+                                    )
+                                )
+                            }
+                            // 减少动态效果时直接显示终态；未开启时只用 150ms 轻微淡入。
+                            AnimatedVisibility(
+                                visible = conceptExpanded,
+                                enter = if (reducedMotion) {
+                                    EnterTransition.None
+                                } else {
+                                    fadeIn(androidx.compose.animation.core.tween(durationMillis = 150))
+                                },
+                                exit = if (reducedMotion) {
+                                    ExitTransition.None
+                                } else {
+                                    fadeOut(androidx.compose.animation.core.tween(durationMillis = 120))
+                                }
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (realWorldExample.isNotBlank()) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.ai_daily_real_world_example_format,
+                                                realWorldExample
+                                            ),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    if (boundary.isNotBlank()) {
+                                        Text(
+                                            text = stringResource(R.string.ai_daily_boundary, boundary),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
+
+        if (questionValid && question != null && correctOption != null) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 1.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.ai_daily_question_section_title),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = question.prompt,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = stringResource(R.string.ai_daily_question_hint),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        question.options.forEach { option ->
+                            val isSelected = option.id == selectedOptionId
+                            val isCorrectOption = answered && option.id == correctOption.id
+                            val optionStateDescription = when {
+                                !answered -> null
+                                isCorrectOption -> stringResource(R.string.ai_daily_option_correct)
+                                isSelected -> stringResource(R.string.ai_daily_option_wrong)
+                                else -> null
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(enabled = !answered) {
+                                        viewModel.selectDailyKnowledgeQuestionOption(option.id)
+                                    }
+                                    .padding(vertical = 4.dp)
+                                    .semantics {
+                                        optionStateDescription?.let { stateDescription = it }
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = null,
+                                    enabled = !answered
+                                )
+                                Text(
+                                    text = option.text,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                if (answered && isCorrectOption) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.CheckCircle,
+                                        contentDescription = stringResource(R.string.ai_daily_option_correct),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                if (answered && isSelected && !isCorrectOption) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Cancel,
+                                        contentDescription = stringResource(R.string.ai_daily_option_wrong),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+
+                        if (answered) {
+                            Text(
+                                text = stringResource(
+                                    if (answerIsCorrect) {
+                                        R.string.ai_daily_question_result_correct
+                                    } else {
+                                        R.string.ai_daily_question_result_wrong
+                                    }
+                                ),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (answerIsCorrect) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                }
+                            )
+                            Text(
+                                text = stringResource(
+                                    R.string.ai_daily_question_correct_answer_format,
+                                    correctOption.text
+                                ),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = stringResource(R.string.ai_daily_question_explanation),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = question.explanation,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if (!daily.characterLine.isNullOrBlank()) {
             item {
                 Surface(
@@ -973,9 +1314,13 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Text(
-                            daily.characterLine.orEmpty(),
+                            text = daily.characterLine.orEmpty(),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold
@@ -984,18 +1329,425 @@ private fun DailyFeature(daily: AiDailyKnowledge?) {
                 }
             }
         }
-        if (sourceAndDate.isNotBlank()) {
+
+        if (sourceEvidence.isNotBlank()) {
             item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = stringResource(R.string.ai_daily_source_evidence_format, sourceEvidence),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        item {
+            DailyFeedbackSection(
+                selectedContentFeedback = state.dailyKnowledgeFeedback,
+                selectedDifficultyFeedback = state.dailyKnowledgeDifficultyFeedback,
+                showDifficultyFeedback = answered,
+                onContentFeedback = viewModel::recordDailyKnowledgeFeedback,
+                onDifficultyFeedback = viewModel::recordDailyKnowledgeDifficultyFeedback
+            )
+        }
+
+        item {
+            val canChange = canChangeDailyKnowledge(state.dailyKnowledgeChangeCount)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (questionValid) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (answered) {
+                                Button(
+                                    onClick = scrollToQuestion,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.ai_daily_view_explanation),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.openFeature(AiFeature.QUIZ) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.ai_daily_enter_quiz),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                Button(
+                                    onClick = scrollToQuestion,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.ai_daily_start_question),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = viewModel::refreshFeature,
+                                    enabled = canChange,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.ai_daily_change),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = viewModel::refreshFeature,
+                            enabled = canChange,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.ai_daily_change),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(
+                            R.string.ai_daily_change_remaining_format,
+                            remainingDailyKnowledgeChanges(state.dailyKnowledgeChangeCount)
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (sourceName.isNotBlank() || sourceUrl.isNotBlank() || daily.publishedAt != null) {
+            item {
+                val sourceAndDate = listOfNotNull(
+                    sourceName.takeIf { it.isNotBlank() }
+                        ?.let { stringResource(R.string.ai_daily_source_format, it) },
+                    sourceUrl.takeIf { it.isNotBlank() },
+                    daily.publishedAt?.let { publishedAt ->
+                        stringResource(
+                            R.string.ai_daily_published_at_format,
+                            formatDailyPublishedAt(publishedAt)
+                        )
+                    }
+                ).joinToString(stringResource(R.string.ai_daily_metadata_separator))
                 Text(
-                    sourceAndDate,
+                    text = sourceAndDate,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
+}
+
+@Composable
+private fun DailyLabelPill(text: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DailyFeedbackSection(
+    selectedContentFeedback: AiDailyKnowledgeContentFeedback?,
+    selectedDifficultyFeedback: AiQuizDifficulty?,
+    showDifficultyFeedback: Boolean,
+    onContentFeedback: (AiDailyKnowledgeContentFeedback) -> Unit,
+    onDifficultyFeedback: (AiQuizDifficulty) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.ai_daily_content_feedback_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DailyFeedbackOption(
+                    label = stringResource(R.string.ai_daily_feedback_helpful),
+                    selected = selectedContentFeedback == AiDailyKnowledgeContentFeedback.HELPFUL,
+                    enabled = selectedContentFeedback == null,
+                    onClick = { onContentFeedback(AiDailyKnowledgeContentFeedback.HELPFUL) }
+                )
+                DailyFeedbackOption(
+                    label = stringResource(R.string.ai_daily_feedback_too_broad),
+                    selected = selectedContentFeedback == AiDailyKnowledgeContentFeedback.TOO_BROAD,
+                    enabled = selectedContentFeedback == null,
+                    onClick = { onContentFeedback(AiDailyKnowledgeContentFeedback.TOO_BROAD) }
+                )
+                DailyFeedbackOption(
+                    label = stringResource(R.string.ai_daily_feedback_weak_relation),
+                    selected = selectedContentFeedback == AiDailyKnowledgeContentFeedback.WEAK_RELATION,
+                    enabled = selectedContentFeedback == null,
+                    onClick = { onContentFeedback(AiDailyKnowledgeContentFeedback.WEAK_RELATION) }
+                )
+                DailyFeedbackOption(
+                    label = stringResource(R.string.ai_daily_feedback_too_hard),
+                    selected = selectedContentFeedback == AiDailyKnowledgeContentFeedback.TOO_HARD,
+                    enabled = selectedContentFeedback == null,
+                    onClick = { onContentFeedback(AiDailyKnowledgeContentFeedback.TOO_HARD) }
+                )
+                DailyFeedbackOption(
+                    label = stringResource(R.string.ai_daily_feedback_too_many_spoilers),
+                    selected = selectedContentFeedback == AiDailyKnowledgeContentFeedback.TOO_MUCH_SPOILER,
+                    enabled = selectedContentFeedback == null,
+                    onClick = { onContentFeedback(AiDailyKnowledgeContentFeedback.TOO_MUCH_SPOILER) }
+                )
+            }
+            if (selectedContentFeedback != null) {
+                Text(
+                    text = stringResource(R.string.ai_daily_feedback_done),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (showDifficultyFeedback) {
+                Text(
+                    text = stringResource(R.string.ai_daily_difficulty_feedback_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (showDifficultyFeedback) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DailyFeedbackOption(
+                        label = stringResource(R.string.ai_quiz_feedback_easy),
+                        selected = selectedDifficultyFeedback == AiQuizDifficulty.EASY,
+                        enabled = selectedDifficultyFeedback == null,
+                        onClick = { onDifficultyFeedback(AiQuizDifficulty.EASY) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    DailyFeedbackOption(
+                        label = stringResource(R.string.ai_quiz_feedback_just_right),
+                        selected = selectedDifficultyFeedback == AiQuizDifficulty.JUST_RIGHT,
+                        enabled = selectedDifficultyFeedback == null,
+                        onClick = { onDifficultyFeedback(AiQuizDifficulty.JUST_RIGHT) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    DailyFeedbackOption(
+                        label = stringResource(R.string.ai_quiz_feedback_hard),
+                        selected = selectedDifficultyFeedback == AiQuizDifficulty.HARD,
+                        enabled = selectedDifficultyFeedback == null,
+                        onClick = { onDifficultyFeedback(AiQuizDifficulty.HARD) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            if (showDifficultyFeedback && selectedDifficultyFeedback != null) {
+                Text(
+                    text = stringResource(R.string.ai_daily_feedback_done),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyFeedbackOption(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (selected) {
+        Button(onClick = {}, modifier = modifier) {
+            Text(text = label, textAlign = TextAlign.Center)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+            Text(text = label, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun DailyLoadingPlaceholder(onCancel: () -> Unit) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Text(
+                text = stringResource(R.string.ai_daily_loading),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    DailySkeletonLine(widthFraction = 0.72f)
+                    DailySkeletonLine(widthFraction = 0.94f)
+                    DailySkeletonLine(widthFraction = 0.66f)
+                }
+            }
+        }
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 64.dp, height = 88.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        DailySkeletonLine(widthFraction = 0.42f)
+                        DailySkeletonLine(widthFraction = 0.88f)
+                        DailySkeletonLine(widthFraction = 0.62f)
+                    }
+                }
+            }
+        }
+        item {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    DailySkeletonLine(widthFraction = 0.36f)
+                    DailySkeletonLine(widthFraction = 0.92f)
+                    DailySkeletonLine(widthFraction = 0.78f)
+                }
+            }
+        }
+        item {
+            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                Text(text = stringResource(R.string.ai_feature_cancel))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailySkeletonLine(widthFraction: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(widthFraction)
+            .height(14.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f))
+    )
+}
+
+@Composable
+private fun DailyOfflinePlaceholder() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.ai_daily_offline_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = stringResource(R.string.ai_daily_offline_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** 非公开的无障碍开关键名。读不到就按未开启处理。 */
+private const val KEY_A11Y_ANIMATION_DISABLED = "accessibility_display_animation_disabled"
+
+/**
+ * 今日影视知识只在解释展开和滚动定位使用轻动效；系统要求减少动效时全部取终态。
+ */
+@Composable
+private fun rememberAiReducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) { readAiReducedMotion(context) }
+}
+
+private fun readAiReducedMotion(context: Context): Boolean {
+    val animatorScale = runCatching {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        )
+    }.getOrDefault(1f)
+    val a11yDisabled = runCatching {
+        Settings.Global.getInt(
+            context.contentResolver,
+            KEY_A11Y_ANIMATION_DISABLED,
+            0
+        )
+    }.getOrDefault(0)
+    return animatorScale == 0f || a11yDisabled == 1
 }
 
 private fun formatDailyPublishedAt(timestamp: Long): String {

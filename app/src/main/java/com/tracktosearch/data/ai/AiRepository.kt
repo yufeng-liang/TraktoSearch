@@ -7,6 +7,8 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterConstants
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
@@ -14,10 +16,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.IOException
 import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Locale
-import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -453,6 +454,159 @@ class AiRepository @Inject constructor(
         }
     }
 
+    /**
+     * 记录一条真正展示过的今日知识。
+     *
+     * 只有 UI 确认内容已经渲染后才调用；这里不把“网络请求成功”偷换成“用户看过”。
+     * 同一 locale、同一天、同一学习单元重复展示时首条记录生效，不覆盖正文和小题，保证当天回看稳定。
+     */
+    suspend fun markDailyKnowledgeShown(
+        friendId: String,
+        knowledge: AiDailyKnowledge,
+        shownDate: LocalDate = currentDailyKnowledgeDate()
+    ): AiDailyKnowledgeHistoryRecord? = dailyKnowledgeHistoryMutex.withLock {
+        val normalizedFriendId = friendId.trim()
+        if (normalizedFriendId.isEmpty()) return@withLock null
+        val unitId = knowledge.stableHistoryUnitId() ?: return@withLock null
+        val locale = knowledge.locale.trim().ifEmpty { AiDailyKnowledgeContract.DEFAULT_LOCALE }
+        if (locale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) return null
+
+        val history = readDailyKnowledgeHistoryContainer(normalizedFriendId) ?: return null
+        val shownDateText = shownDate.toString()
+        history.records
+            .firstOrNull { it.matchesDailyHistory(shownDateText, locale, unitId) }
+            ?.let { return it }
+
+        val now = System.currentTimeMillis()
+        val nextSequence = (history.records.maxOfOrNull { it.sequence } ?: 0L) + 1L
+        val record = AiDailyKnowledgeHistoryRecord(
+            unitId = unitId,
+            shownDate = shownDateText,
+            locale = locale,
+            relatedMedia = knowledge.historyRelatedMedia(),
+            subject = knowledge.subject?.trim()?.takeIf { it.isNotEmpty() },
+            concept = knowledge.concept?.trim()?.takeIf { it.isNotEmpty() },
+            knowledge = knowledge,
+            sequence = nextSequence,
+            shownAt = now,
+            updatedAt = now
+        )
+        val records = pruneDailyKnowledgeHistory(
+            records = history.records + record,
+            referenceDate = dailyHistoryReferenceDate(history.records, shownDate)
+        )
+        return@withLock writeDailyKnowledgeHistory(normalizedFriendId, records, record)
+    }
+
+    /** 离线读取本地知识历史，按展示日期和展示序列倒序。 */
+    suspend fun readDailyKnowledgeHistory(friendId: String): List<AiDailyKnowledgeHistoryRecord> {
+        val normalizedFriendId = friendId.trim()
+        if (normalizedFriendId.isEmpty()) return emptyList()
+        val history = readDailyKnowledgeHistoryContainer(normalizedFriendId) ?: return emptyList()
+        return sortDailyKnowledgeHistoryRecords(history.records)
+    }
+
+    /** 离线读取某天、某种语言正在展示的知识；同天多次换题时返回最近展示的一条。 */
+    suspend fun readDailyKnowledgeForDate(
+        friendId: String,
+        shownDate: LocalDate,
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+    ): AiDailyKnowledge? {
+        val normalizedLocale = locale.trim()
+        if (normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) return null
+        return readDailyKnowledgeHistory(friendId)
+            .firstOrNull { it.shownDate == shownDate.toString() && it.locale == normalizedLocale }
+            ?.knowledge
+    }
+
+    /**
+     * 记录即时小题的首答结果。
+     *
+     * 正确性用记录里缓存的小题答案判断，调用方不能把错误结果写成正确。
+     * 已有答案时直接返回旧记录，不覆盖首答。
+     */
+    suspend fun recordDailyKnowledgeQuestionAnswer(
+        friendId: String,
+        unitId: String,
+        selectedOptionIds: List<String>,
+        shownDate: LocalDate = currentDailyKnowledgeDate(),
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+    ): AiDailyKnowledgeHistoryRecord? {
+        val normalizedUnitId = unitId.trim()
+        if (normalizedUnitId.isEmpty()) return null
+        return updateDailyKnowledgeHistoryRecord(
+            friendId = friendId,
+            unitId = normalizedUnitId,
+            shownDate = shownDate,
+            locale = locale
+        ) { record ->
+            if (record.questionCompleted && record.questionResult != null) {
+                return@updateDailyKnowledgeHistoryRecord record
+            }
+            val question = record.knowledge.checkQuestion
+                ?: return@updateDailyKnowledgeHistoryRecord null
+            val selected = selectedOptionIds.map { it.trim() }.filter { it.isNotEmpty() }
+            AiDailyKnowledgeHistoryRecord(
+                unitId = record.unitId,
+                shownDate = record.shownDate,
+                locale = record.locale,
+                relatedMedia = record.relatedMedia,
+                subject = record.subject,
+                concept = record.concept,
+                knowledge = record.knowledge,
+                questionCompleted = true,
+                questionResult = AiDailyKnowledgeQuestionResult(
+                    selectedOptionIds = selected,
+                    correct = selected.toSet() == question.correctOptionIds.toSet(),
+                    answeredAt = System.currentTimeMillis()
+                ),
+                contentFeedback = record.contentFeedback,
+                difficultyFeedback = record.difficultyFeedback,
+                sequence = record.sequence,
+                shownAt = record.shownAt,
+                updatedAt = System.currentTimeMillis()
+            )
+        }
+    }
+
+    /** 保存知识内容反馈（有帮助 / 太泛 / 关系弱 / 太难 / 片透多）。 */
+    suspend fun saveDailyKnowledgeContentFeedback(
+        friendId: String,
+        unitId: String,
+        feedback: AiDailyKnowledgeContentFeedback,
+        shownDate: LocalDate = currentDailyKnowledgeDate(),
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+    ): AiDailyKnowledgeHistoryRecord? = updateDailyKnowledgeHistoryRecord(
+        friendId = friendId,
+        unitId = unitId,
+        shownDate = shownDate,
+        locale = locale
+    ) { record ->
+        record.copy(
+            contentFeedback = feedback,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    /** 保存即时小题难度反馈（太简单 / 刚刚好 / 有点难）。 */
+    suspend fun saveDailyKnowledgeDifficultyFeedback(
+        friendId: String,
+        unitId: String,
+        difficulty: AiQuizDifficulty,
+        shownDate: LocalDate = currentDailyKnowledgeDate(),
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+    ): AiDailyKnowledgeHistoryRecord? = updateDailyKnowledgeHistoryRecord(
+        friendId = friendId,
+        unitId = unitId,
+        shownDate = shownDate,
+        locale = locale
+    ) { record ->
+        record.copy(
+            difficultyFeedback = difficulty,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
     /** 读取闯关历史（离线可浏览最近/最高成绩）。 */
     suspend fun readQuizHistory(friendId: String): AiQuizHistory? = runCatching {
         storage.read(friendId, AiCacheFeature.QUIZ_RESULT)?.let { raw ->
@@ -637,6 +791,9 @@ class AiRepository @Inject constructor(
 
     private val spriteSessions = ConcurrentHashMap<String, String>()
 
+    /** 本地历史是读改写存储，串行化避免并发追加时互相覆盖。 */
+    private val dailyKnowledgeHistoryMutex = Mutex()
+
     private fun sessionIdFor(friendId: String, requestedSessionId: String? = null): String {
         val requested = requestedSessionId?.trim()
         if (!requested.isNullOrBlank() && requested !in DEFAULT_SESSION_IDS) {
@@ -673,13 +830,151 @@ class AiRepository @Inject constructor(
     private fun legacyDailyCacheSuffix(watched: List<AiWatchedTitleDto>): String =
         currentCacheDate() + if (watched.isEmpty()) "" else ":" + watchedDigest(watched)
 
-    // 每日冷知识按东八区自然日切换缓存，避免 UTC 换日在本地中午/下午提前翻篇
-    private fun currentCacheDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("GMT+8")
-    }.format(Date())
+    // 每日知识按东八区自然日切换缓存，避免 UTC 换日在本地中午/下午提前翻篇
+    private fun currentDailyKnowledgeDate(): LocalDate = LocalDate.now(BEIJING_ZONE)
+
+    private fun currentCacheDate(): String = currentDailyKnowledgeDate().toString()
+
+    private suspend fun readDailyKnowledgeHistoryContainer(
+        friendId: String
+    ): AiDailyKnowledgeHistory? {
+        val raw = try {
+            storage.read(friendId, AiCacheFeature.DAILY_KNOWLEDGE_HISTORY)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return null
+        } ?: return AiDailyKnowledgeHistory()
+
+        val history = try {
+            json.decodeFromJsonElement(
+                AiDailyKnowledgeHistory.serializer(),
+                json.parseToJsonElement(raw)
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return null
+        }
+        // 版本不认识的旧数据一律不返回，也不允许后续写入覆盖。
+        return history.takeIf {
+            it.schemaVersion == AiDailyKnowledgeContract.HISTORY_SCHEMA_VERSION
+        }
+    }
+
+    private suspend fun updateDailyKnowledgeHistoryRecord(
+        friendId: String,
+        unitId: String,
+        shownDate: LocalDate,
+        locale: String,
+        transform: (AiDailyKnowledgeHistoryRecord) -> AiDailyKnowledgeHistoryRecord?
+    ): AiDailyKnowledgeHistoryRecord? = dailyKnowledgeHistoryMutex.withLock {
+        val normalizedFriendId = friendId.trim()
+        val normalizedUnitId = unitId.trim()
+        val normalizedLocale = locale.trim()
+        if (
+            normalizedFriendId.isEmpty() ||
+            normalizedUnitId.isEmpty() ||
+            normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES
+        ) {
+            return null
+        }
+
+        val history = readDailyKnowledgeHistoryContainer(normalizedFriendId) ?: return null
+        val index = history.records.indexOfFirst {
+            it.matchesDailyHistory(shownDate.toString(), normalizedLocale, normalizedUnitId)
+        }
+        if (index < 0) return null
+
+        val updated = transform(history.records[index]) ?: return@withLock null
+        val records = history.records.toMutableList()
+        records[index] = updated
+        val pruned = pruneDailyKnowledgeHistory(
+            records = records,
+            referenceDate = dailyHistoryReferenceDate(records, shownDate)
+        )
+        return@withLock writeDailyKnowledgeHistory(normalizedFriendId, pruned, updated)
+    }
+
+    private suspend fun writeDailyKnowledgeHistory(
+        friendId: String,
+        records: List<AiDailyKnowledgeHistoryRecord>,
+        expectedRecord: AiDailyKnowledgeHistoryRecord
+    ): AiDailyKnowledgeHistoryRecord? {
+        val history = AiDailyKnowledgeHistory(
+            schemaVersion = AiDailyKnowledgeContract.HISTORY_SCHEMA_VERSION,
+            records = records
+        )
+        return try {
+            storage.write(
+                friendId,
+                AiCacheFeature.DAILY_KNOWLEDGE_HISTORY,
+                json.encodeToString(AiDailyKnowledgeHistory.serializer(), history)
+            )
+            expectedRecord
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun dailyHistoryReferenceDate(
+        records: List<AiDailyKnowledgeHistoryRecord>,
+        shownDate: LocalDate
+    ): LocalDate {
+        val dates = records.mapNotNull { it.shownDate.toLocalDateOrNull() } + shownDate
+        return dates.maxOrNull() ?: shownDate
+    }
+
+    private fun pruneDailyKnowledgeHistory(
+        records: List<AiDailyKnowledgeHistoryRecord>,
+        referenceDate: LocalDate
+    ): List<AiDailyKnowledgeHistoryRecord> {
+        val cutoff = referenceDate.minusDays(AiDailyKnowledgeContract.HISTORY_RETENTION_DAYS - 1L)
+        return records
+            .mapNotNull { record -> record.shownDate.toLocalDateOrNull()?.let { record to it } }
+            .filter { (_, date) -> !date.isBefore(cutoff) }
+            .sortedWith(
+                compareByDescending<Pair<AiDailyKnowledgeHistoryRecord, LocalDate>> { it.second.toEpochDay() }
+                    .thenByDescending { it.first.sequence }
+                    .thenBy { it.first.unitId }
+            )
+            .take(AiDailyKnowledgeContract.HISTORY_MAX_ENTRIES)
+            .map { it.first }
+    }
+
+    private fun sortDailyKnowledgeHistoryRecords(
+        records: List<AiDailyKnowledgeHistoryRecord>
+    ): List<AiDailyKnowledgeHistoryRecord> = records.sortedWith(
+        compareByDescending<AiDailyKnowledgeHistoryRecord> {
+            it.shownDate.toLocalDateOrNull()?.toEpochDay() ?: Long.MIN_VALUE
+        }
+            .thenByDescending { it.sequence }
+            .thenBy { it.unitId }
+    )
+
+    private fun AiDailyKnowledgeHistoryRecord.matchesDailyHistory(
+        shownDate: String,
+        locale: String,
+        unitId: String
+    ): Boolean = this.shownDate == shownDate && this.locale == locale && this.unitId == unitId
+
+    private fun AiDailyKnowledge.stableHistoryUnitId(): String? =
+        unitId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: id.trim().takeIf { it.isNotEmpty() }
+
+    private fun AiDailyKnowledge.historyRelatedMedia(): AiDailyRelatedMedia? =
+        relatedMedia ?: relatedMediaTitle?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            AiDailyRelatedMedia(title = it)
+        }
+
+    private fun String.toLocalDateOrNull(): LocalDate? =
+        runCatching { LocalDate.parse(this) }.getOrNull()
 
     private companion object {
         const val MAX_WATCHED_ITEMS = 60
+        val BEIJING_ZONE = ZoneId.of("GMT+8")
 
         /** 口味推荐缓存结构版本：v2 = TMDB 核验 + 补齐后的成品（旧缓存 key 不含该前缀，不命中） */
         const val TASTE_CACHE_VERSION = "v2"
