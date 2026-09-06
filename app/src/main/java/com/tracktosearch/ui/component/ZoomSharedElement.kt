@@ -5,7 +5,11 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -39,6 +43,18 @@ import androidx.compose.ui.unit.Dp
 internal data class ZoomTransitionPhase(val running: Boolean, val opening: Boolean)
 
 /**
+ * 页内查看器（大图开合）转场进行中的层数。
+ *
+ * [SharedTransitionScope.isTransitionActive] 分不清「查看器开合」和「页面导航」两类共享转场，
+ * 而详情页只在导航转场期需要冻结正文（避免新旧页同帧叠加）；查看器开合时页面本身静止、
+ * 且被查看器的遮罩盖着，冻结只会让评分区以下的正文凭空消失一整个转场时长。
+ * 详情页读这个计数把查看器转场从冻结条件里排除。
+ */
+internal object ZoomViewerTransition {
+    var depth by mutableStateOf(0)
+}
+
+/**
  * 读出查看器开合动画的阶段。
  *
  * 两个信号取并集，任一还在跑就算转场中：
@@ -53,6 +69,10 @@ internal data class ZoomTransitionPhase(val running: Boolean, val opening: Boole
 internal fun zoomTransitionPhase(animatedVisibilityScope: AnimatedVisibilityScope): ZoomTransitionPhase {
     val transition = animatedVisibilityScope.transition
     val running = isAppSharedTransitionActive() || transition.currentState != transition.targetState
+    DisposableEffect(running) {
+        if (running) ZoomViewerTransition.depth++
+        onDispose { if (running) ZoomViewerTransition.depth-- }
+    }
     return ZoomTransitionPhase(
         running = running,
         opening = running && transition.targetState == EnterExitState.Visible,
