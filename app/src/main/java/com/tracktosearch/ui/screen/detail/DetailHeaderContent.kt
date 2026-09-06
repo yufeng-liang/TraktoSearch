@@ -425,9 +425,9 @@ internal fun DetailHeaderContent(
 
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
-        if (contentReady) {
         // 演职员/预告片/简介三处骨架共享一份 shimmer 动画，避免各跑一条无限动画
         val headerShimmer = rememberShimmer()
+        if (contentReady) {
         Column(modifier = Modifier.alpha(contentAlpha)) {
         // 纯豆瓣条目(tmdbId=0)没有 TMDB 演职员数据(cast/crew 只来自 TMDB),直接隐藏整栏,
         // 否则骨架卡与「全部」按钮永远等不到内容,永久空挂

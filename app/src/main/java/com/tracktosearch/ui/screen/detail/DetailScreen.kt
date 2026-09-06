@@ -308,10 +308,32 @@ fun DetailScreen(
         withFrameNanos { }
         contentReady = true
     }
+    // NavHost 进入/返回时旧页与新页会短暂同时绘制。详情页在这段窗口内暂停
+    // 非首屏内容与 Haze source，避免正文、图片和模糊采样与共享海报叠加到同一帧。
+    // 不读取 isRunning：它随动画每帧变化，会让详情正文整棵树反复重组。
+    // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
+    // 共享海报的边界动画比页面淡入更长，只看页面转场端点会在海报还在飞的时候放开正文与
+    // Haze 采样。两个信号取或，任一还在跑就继续冻结。
+    // isAppSharedTransitionActive 同样只在转场起止翻转，读进 contentAlpha 的 target
+    // 不会引发每帧重组。
+    val navEndpointChanging = LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
+        transition.currentState != transition.targetState
+    } == true
+    val isNavigationTransitionRunning = isAppSharedTransitionActive() || navEndpointChanging
+
+    // 正文（头部各段 + LazyColumn Tab 内容）的组合门控：只认 NavHost 端点变化。
+    // 查看器开合触发的共享转场不在此列——关图转场要靠剧照缩略图源持续提供终点边界，
+    // Tab 内容塌缩还会让 LazyColumn 滚动钳位回顶（回落点错位 + 评分区以下空白 +
+    // 转场结束正文硬切，三个症状同源）。实测恒组合不翻转不会杀死海报/剧照配对，
+    // 当年「关图正文组合=配对死」的结论只在「解冻→组合」的翻转场景成立。
+    val contentVisible = contentReady && !navEndpointChanging
+
     // 头部下方内容淡入：animateFloatAsState 做真实渐显（0→1 约 220ms），
-    // 旧实现是 derivedStateOf 的 0/1 直切，注释宣称淡入但实际没有过渡
+    // 旧实现是 derivedStateOf 的 0/1 直切，注释宣称淡入但实际没有过渡。
+    // target 用 contentVisible：导航转场结束时 target 0→1 翻转，重新组合的正文走
+    // 同一份 220ms 淡入，替代原先的瞬间硬切。
     val contentAlpha by animateFloatAsState(
-        targetValue = if (contentReady) 1f else 0f,
+        targetValue = if (contentVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 220),
         label = "detailContentAlpha"
     )
@@ -404,17 +426,6 @@ fun DetailScreen(
         ).count { it },
         loadingItemWeight = 4
     )
-    // NavHost 进入/返回时旧页与新页会短暂同时绘制。详情页在这段窗口内暂停
-    // 非首屏内容与 Haze source，避免正文、图片和模糊采样与共享海报叠加到同一帧。
-    // 不读取 isRunning：它随动画每帧变化，会让详情正文整棵树反复重组。
-    // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
-    // 共享海报的边界动画比页面淡入更长，只看页面转场端点会在海报还在飞的时候放开正文与
-    // Haze 采样。两个信号取或，任一还在跑就继续冻结。
-    val isNavigationTransitionRunning = isAppSharedTransitionActive() ||
-        LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
-            transition.currentState != transition.targetState
-        } == true
-    val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
 
 
     // 顶栏与吸顶 Tab 栏共用一条实色底（取色见 DetailVisuals.detailBarColor）。
@@ -568,17 +579,20 @@ fun DetailScreen(
                         posterColorExtractor = viewModel.posterColorExtractor,
                         onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible,
-                        contentReady = contentReadyForTransition,
+                        contentReady = contentVisible,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
-                        contentAlpha = if (contentReadyForTransition) contentAlpha else 0f,
+                        // 导航转场进行中瞬变归零（防与飞行海报叠加到同一帧）；
+                        // 查看器开合转场保持显示，页面本来就在全屏遮罩下面
+                        contentAlpha = if (navEndpointChanging) 0f else contentAlpha,
                         onHeaderAnchorBoundsChanged = { detailHeaderBounds = it }
                     )
                 }
 
-                // 转场期间(contentReady=false)跳过 Tab 行和所有 Tab 内容组合,
+                // 转场期间(contentVisible=false)跳过 Tab 行和所有 Tab 内容组合,
                 // 首帧只组合 header(海报+标题+按钮),大幅降低转场期间首帧工作量。
-                // contentReady 由 posterDominantColor 就绪或 400ms 兜底触发,转场结束后即 true。
-                if (contentReadyForTransition) {
+                // 只在导航转场冻结：查看器开合的共享转场期保持组合，否则 Tab 内容塌缩
+                // 会触发 LazyColumn 滚动钳位回顶（关图回落点错位 + 正文硬切同源）。
+                if (contentVisible) {
                 // 顶栏 + Tab 行（吸顶，共用同一个）
                 stickyHeader(key = "tab_row") {
                     // 标题行与 Tab 行同在一个 Column 里、共用一次铺底、中间不加分隔线，

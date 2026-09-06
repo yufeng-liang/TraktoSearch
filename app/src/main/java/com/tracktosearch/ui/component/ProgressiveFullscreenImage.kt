@@ -3,6 +3,8 @@ package com.tracktosearch.ui.component
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -195,6 +197,10 @@ private fun BoxScope.FullscreenImageProgressRing(
  *   底图不随转场结束撤走：telephoto 挂载后它自己的占位图要到 Coil 异步解析 + 下一轮
  *   重组才真正画出来（实测有 200ms+ 空窗），期间底图垫在 telephoto 下面兜住画面，
  *   直到 [ZoomableImageState.isImageDisplayed] 才撤。
+ * @param transitionRunning 开合转场仍在进行（两个方向都算）。此间 telephoto 的手势被
+ *   禁用，而它的单击也跟着 gestures=None 一起失效——没有兜底的话，打开动画还没收尾
+ *   就点屏幕想关闭，这一下会被吞掉。转场期在容器上补一个无涟漪 clickable 接住单击
+ *   直接关闭（转场中不可能处于放大态，无需走「先复位」协议）。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -205,6 +211,7 @@ internal fun ProgressiveFullscreenImage(
     state: ZoomableImageState = rememberFullscreenZoomableImageState(),
     gesturesEnabled: Boolean = true,
     deferZoomable: Boolean = false,
+    transitionRunning: Boolean = false,
     onRequestDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = false,
 ) {
@@ -257,5 +264,20 @@ internal fun ProgressiveFullscreenImage(
             progressFlow = progressFlow,
             visible = !deferred
         )
+        // 转场期单击兜底：telephoto 手势被禁(gestures=None)时连单击也不放行，而它
+        // 挂着的 pointerInput 已把事件吃掉，父级 clickable 收不到冒泡——只能盖在
+        // 它上面先接。转场结束覆盖层移除，telephoto 正常接管单击/双击/缩放。
+        // 转场中不可能处于放大态，直接关闭，无需走「先复位」协议。
+        if (transitionRunning && onRequestDismiss != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onRequestDismiss
+                    )
+            )
+        }
     }
 }
