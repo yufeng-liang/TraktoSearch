@@ -40,6 +40,11 @@ class OfflineCacheManager @Inject constructor(
         mediaItemDao.replaceByType(type, items)
     }
 
+    /** 单条 upsert（主键 traktId+type，REPLACE 语义），供详情页标记变更直写缓存。 */
+    suspend fun saveMediaItem(type: String, item: MediaItemEntity) {
+        mediaItemDao.insert(item)
+    }
+
     suspend fun getMediaItems(type: String): List<MediaItemEntity> {
         return mediaItemDao.getByTypeList(type)
     }

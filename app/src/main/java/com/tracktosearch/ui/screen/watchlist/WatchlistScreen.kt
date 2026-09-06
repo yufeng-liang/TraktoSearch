@@ -2627,11 +2627,11 @@ private fun applyFilterAndSort(
         val rating = item.traktRating.toFloat()
         rating >= filter.ratingRange.start && rating <= filter.ratingRange.endInclusive
     }
-    // 标记时间排序（ISO 字符串天然有序）
+    // 标记时间排序（listedAt 降序/升序，平局用 selectionKey 固定次序，与 ViewModel 的缓存帧/网络帧保持同序）
     return if (filter.markedTimeOrder == SortOrder.DESC) {
-        filtered.sortedByDescending { it.listedAt }
+        filtered.sortedWith(watchlistListedAtComparator())
     } else {
-        filtered.sortedBy { it.listedAt }
+        filtered.sortedWith(watchlistListedAtComparator().reversed())
     }
 }
 

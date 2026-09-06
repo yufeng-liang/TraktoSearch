@@ -100,6 +100,16 @@ data class MediaUiItem(
 enum class MarkedTimePreset { SEVEN_DAYS, THIRTY_DAYS, ALL }
 enum class SortOrder { ASC, DESC }
 
+/**
+ * 列表排序比较器：listedAt 降序 + selectionKey 平局键。
+ *
+ * 批量导入的条目 listedAt 常完全相同（同一秒入库），纯时间排序的平局次序由输入顺序决定，
+ * 而缓存帧与网络帧的平局组顺序并不一致（Trakt 对同 listed_at 条目跨请求返回顺序不稳定），
+ * 冷启动首帧到网络落地会出现平局组内重排。固定平局键保证任意来源的同集合列表同序。
+ */
+fun watchlistListedAtComparator(): Comparator<MediaUiItem> =
+    compareByDescending<MediaUiItem> { it.listedAt }.thenBy { it.selectionKey }
+
 @Immutable
 data class FilterState(
     val selectedGenres: Set<String> = emptySet(),
@@ -420,6 +430,7 @@ class WatchlistViewModel @Inject constructor(
             traktRepository.watchlistMutations.collect { mutation ->
                 pendingWatchlistMutations += mutation
                 applyPendingWatchlistMutations()
+                syncWatchlistCacheWithMutation(mutation)
             }
         }
         // 监听豆瓣同步进度：横幅 5 秒后隐藏，但结果保留到用户关闭对话框。
@@ -640,7 +651,7 @@ class WatchlistViewModel @Inject constructor(
                     uiItems
                 } else {
                     (_uiState.value.movies + uiItems).distinctBy { it.selectionKey }
-                }.sortedByDescending { it.listedAt }
+                }.sortedWith(watchlistListedAtComparator())
                 _uiState.value = _uiState.value.copy(
                     movies = mergedMovies,
                     movieTotalCount = totalCount,
@@ -767,7 +778,7 @@ class WatchlistViewModel @Inject constructor(
                     uiItems
                 } else {
                     (_uiState.value.shows + uiItems).distinctBy { it.selectionKey }
-                }.sortedByDescending { it.listedAt }
+                }.sortedWith(watchlistListedAtComparator())
                 _uiState.value = _uiState.value.copy(
                     shows = mergedShows,
                     showTotalCount = totalCount,
@@ -1628,9 +1639,11 @@ class WatchlistViewModel @Inject constructor(
         }
         if (alreadyHasData) return
         val cached = offlineCacheManager.getMediaItems(type)
-        if (cached.isEmpty()) return
+        if (cached.isEmpty()) {
+            return
+        }
         val items = withContext(computeDispatcher) {
-            cached.map { it.toMediaUiItem() }.sortedByDescending { it.listedAt }
+            cached.map { it.toMediaUiItem() }.sortedWith(watchlistListedAtComparator())
         }
         _uiState.update { current ->
             when (type) {
@@ -1787,7 +1800,7 @@ class WatchlistViewModel @Inject constructor(
         val updatedItems = when (mutation.action) {
             TraktRepository.WatchlistMutationAction.ADD -> {
                 (currentItems.filter { it.traktId != mutation.traktId } + mutation.toMediaUiItem())
-                    .sortedByDescending { it.listedAt }
+                    .sortedWith(watchlistListedAtComparator())
             }
             TraktRepository.WatchlistMutationAction.REMOVE -> {
                 currentItems.filter { it.traktId != mutation.traktId }
@@ -1816,6 +1829,30 @@ class WatchlistViewModel @Inject constructor(
         }
         _uiState.value = updatedState
         return true
+    }
+
+    /**
+     * 标记变更直写离线缓存。
+     *
+     * 缓存快照只在列表成功加载时整体重写；详情页标记后如果没再进 Watchlist 页
+     * （refreshWatchlist 只在列表已加载时才重拉），缓存仍是标记前的旧集合。
+     * 下次冷启动先闪旧集合、网络结果落地后卡片跳位。这里让缓存跟随每条成功
+     * 落到 Trakt 的变更同步增删，保证冷启动首帧与网络终帧组合一致。
+     */
+    private fun syncWatchlistCacheWithMutation(mutation: TraktRepository.WatchlistMutation) {
+        val cacheType = when (mutation.mediaType) {
+            MediaType.MOVIE -> OfflineCacheManager.TYPE_WATCHLIST_MOVIE
+            MediaType.SHOW -> OfflineCacheManager.TYPE_WATCHLIST_SHOW
+            else -> return
+        }
+        viewModelScope.launch {
+            when (mutation.action) {
+                TraktRepository.WatchlistMutationAction.ADD ->
+                    offlineCacheManager.saveMediaItem(cacheType, mutation.toMediaUiItem().toMediaItemEntity(cacheType))
+                TraktRepository.WatchlistMutationAction.REMOVE ->
+                    offlineCacheManager.removeMediaItem(cacheType, mutation.traktId)
+            }
+        }
     }
 
     private fun TraktRepository.WatchlistMutation.toMediaUiItem(): MediaUiItem {
@@ -1898,6 +1935,7 @@ class WatchlistViewModel @Inject constructor(
             removeDoubanItemsLocally(localOnlyItems, type, isWatchlist)
         }
         removeItemsFromUi(successfulItems, type, isWatchlist)
+        syncWatchlistCacheAfterBatchRemoval(successfulItems, type, isWatchlist)
 
         val itemsToSync = successfulTraktItems.filter { it.doubanId != null || it.imdbId.isNotBlank() }
         if (itemsToSync.isNotEmpty() || localOnlyItems.isNotEmpty()) {
@@ -1986,6 +2024,29 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 _uiState.value.copy(historyOthers = _uiState.value.historyOthers.filter { it.selectionKey !in selectionKeys })
             }
+        }
+    }
+
+    /**
+     * 批量移除后同步删除离线缓存行，理由同 [syncWatchlistCacheWithMutation]：
+     * 批量移除只更新 UI 与服务端，不重写缓存快照，下次冷启动会闪现已移除的条目。
+     */
+    private fun syncWatchlistCacheAfterBatchRemoval(
+        items: List<MediaUiItem>,
+        type: WatchlistMediaType,
+        isWatchlist: Boolean
+    ) {
+        val cacheType = when {
+            isWatchlist && type == WatchlistMediaType.MOVIE -> OfflineCacheManager.TYPE_WATCHLIST_MOVIE
+            isWatchlist && type == WatchlistMediaType.SHOW -> OfflineCacheManager.TYPE_WATCHLIST_SHOW
+            !isWatchlist && type == WatchlistMediaType.MOVIE -> OfflineCacheManager.TYPE_HISTORY_MOVIE
+            !isWatchlist && type == WatchlistMediaType.SHOW -> OfflineCacheManager.TYPE_HISTORY_SHOW
+            else -> return
+        }
+        val traktIds = items.mapNotNull { it.traktId.takeIf { id -> id > 0 } }
+        if (traktIds.isEmpty()) return
+        viewModelScope.launch {
+            traktIds.forEach { offlineCacheManager.removeMediaItem(cacheType, it) }
         }
     }
 
