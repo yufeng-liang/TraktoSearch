@@ -43,6 +43,7 @@ import { handleLegalRequest } from './legal-requests';
 import { closeLegalRequest, listLegalRequests } from './admin/legal-requests';
 import { cleanupRetention } from './retention';
 import { handleAiApi } from './ai/handler';
+import { handleAiIllustration } from './ai/daily-illustration';
 import { handleAiAudio } from './ai/tts';
 
 export interface Env {
@@ -87,6 +88,8 @@ export interface Env {
     AI_VOICE_SAMPLES?: R2Bucket;
     // 私有 R2 MP3 缓存，仅通过 10 分钟签名 URL 播放。
     AI_AUDIO_CACHE?: R2Bucket;
+    // 可选概念插图专用 R2 绑定；未配置时代码复用 AI_AUDIO_CACHE。
+    AI_IMAGE_CACHE?: R2Bucket;
 }
 
 export default {
@@ -245,6 +248,12 @@ async function handleAuthApi(
         return handleAiAudio(request, env, audioMatch[1]);
     }
 
+    // 概念插图只暴露短期签名 URL，不透出供应商临时地址或 R2 原始对象。
+    const illustrationMatch = path.match(/^\/api\/ai\/illustration\/([^/]+)$/);
+    if (illustrationMatch && request.method === 'GET') {
+        return handleAiIllustration(env, illustrationMatch[1]);
+    }
+
     // AI 角色目录和试听是公开体验入口；真正激活和四项能力仍在下方统一校验 JWT。
     if (
         (path === '/api/ai/characters' && request.method === 'GET')
@@ -301,7 +310,7 @@ async function handleAuthApi(
 
     // AI 角色与能力统一由 Worker 代理，客户端不接触 MiMo 密钥或音色样本。
     if (path === '/api/ai' || path.startsWith('/api/ai/')) {
-        return handleAiApi(request, env, requestId, path, payload);
+        return handleAiApi(request, env, requestId, path, payload, ctx);
     }
 
     if (path === '/api/auth/check' && request.method === 'POST') {

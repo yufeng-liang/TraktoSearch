@@ -30,12 +30,20 @@ import {
 import {
     dailyCandidateMessages,
     dailyReviewMessages,
+    DAILY_LOCALES,
     fallbackDailyKnowledgeUnit,
     normalizeDailyKnowledgeUnit,
     readDailyLocale,
     type DailyLocale,
     type KnowledgeUnit,
 } from './daily-knowledge.ts';
+import {
+    publicDailyIllustration,
+    type BackgroundScheduler,
+    type DailyIllustrationEnvironment,
+    type DailyIllustrationPublic,
+    type DailyIllustrationUnitInput,
+} from './daily-illustration.ts';
 import {
     cacheKeyDigest,
     getFriendNickname,
@@ -67,9 +75,10 @@ const QUIZ_DIFFICULTY_EASY_HINT = '用户反馈近期题目偏简单：本轮适
 const AI_TEXT_CACHE_VERSION = 'v2';
 const LEGACY_AI_CACHE_VERSION = 'v1';
 
-export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment {
+export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, DailyIllustrationEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
-    AI_AUDIO_CACHE?: R2Bucket;
+    // 概念插图优先使用专用绑定；未配置时由 daily-illustration 复用现有私有媒体桶。
+    AI_IMAGE_CACHE?: R2Bucket;
     AUDIO_PUBLIC_BASE_URL?: string;
     // 文本生成默认供应商：未配置或配置异常时使用 Agnes；显式 mimo 请求/配置保留兼容行为。
     AI_DEFAULT_PROVIDER?: string;
@@ -163,6 +172,8 @@ interface DailyResponse extends KnowledgeUnit {
     characterLine: string | null;
     relatedMediaTitle?: string | null;
     containsSpoiler?: boolean;
+    // 只在响应阶段动态装配，不写入文字缓存，避免签名 URL 过期后污染缓存。
+    illustration?: DailyIllustrationPublic;
 }
 
 interface NameSignal {
@@ -194,6 +205,7 @@ export async function handleAiApi(
     requestId: string,
     path: string,
     payload: AiJwtPayload | null,
+    background?: BackgroundScheduler,
 ): Promise<Response> {
     const audioOrigin = resolveAudioPublicBaseUrl(request, env);
 
@@ -210,7 +222,7 @@ export async function handleAiApi(
             ? readDailyQuery(request)
             : await readJsonBody(request);
         if (request.method === 'POST') assertAction(body, 'daily');
-        return handleDaily(body, env, requestId, requireAiPayload(payload));
+        return handleDaily(body, env, requestId, requireAiPayload(payload), audioOrigin, background);
     }
 
     if (request.method !== 'POST') {
@@ -739,6 +751,8 @@ async function handleDaily(
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload,
+    audioOrigin: string,
+    background: BackgroundScheduler | undefined,
 ): Promise<Response> {
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
@@ -750,7 +764,16 @@ async function handleDaily(
     const cacheKey = dailyKnowledgeCacheKey(payload.sub, day, locale, watchedKey);
     if (!forceRefresh) {
         const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
-        if (cached) return successResponse(cached, requestId);
+        if (cached) {
+            const cachedWithIllustration = await attachDailyIllustration(
+                cached,
+                env,
+                payload.sub,
+                audioOrigin,
+                background,
+            );
+            return successResponse(cachedWithIllustration, requestId);
+        }
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
@@ -760,8 +783,16 @@ async function handleDaily(
         response.sourceUrl = null;
         response.source = { ...response.source, url: '' };
     }
+    // 文字缓存不包含动态插图状态；每次响应按 D1 状态重新装配并新签短期 URL。
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
-    return successResponse(response, requestId, publicQuota(quota));
+    const responseWithIllustration = await attachDailyIllustration(
+        response,
+        env,
+        payload.sub,
+        audioOrigin,
+        background,
+    );
+    return successResponse(responseWithIllustration, requestId, publicQuota(quota));
 }
 
 /**
@@ -824,6 +855,21 @@ async function generateDailyKnowledgeUnit(
     } catch {
         return fallbackDailyKnowledgeUnit(day, locale);
     }
+}
+
+async function attachDailyIllustration<T>(response: T, env: AiEnvironment, friendId: string, origin: string, background: BackgroundScheduler | undefined): Promise<T> {
+    // 旧 v2 缓存没有 unitId/locale，不追加插图字段，保持旧响应合同不变。
+    if (!isRecord(response) || typeof response.unitId !== 'string' || typeof response.locale !== 'string') return response;
+    if (!(DAILY_LOCALES as readonly string[]).includes(response.locale)) return response;
+    const unit: DailyIllustrationUnitInput = {
+        unitId: response.unitId,
+        locale: response.locale as DailyLocale,
+        concept: typeof response.concept === 'string' ? response.concept : '',
+        takeaway: typeof response.takeaway === 'string' ? response.takeaway : '',
+        explanation: typeof response.explanation === 'string' ? response.explanation : '',
+    };
+    const illustration = await publicDailyIllustration(env, unit, friendId, origin, background);
+    return { ...response, illustration };
 }
 
 function dailyResponseFromUnit(unit: KnowledgeUnit, day: string): DailyResponse {

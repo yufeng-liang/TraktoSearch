@@ -53,7 +53,7 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # BAIDU_API_KEY —— 百度翻译 AI API Bearer token
 # 崩溃日志现在由 auth-worker 直接写入共享 CRASH_LOGS KV，不再需要单独的上报 token。
 # AI_VOICE_SAMPLES（可选私有 R2 binding；音色样本仅由 Worker 读取，不返回客户端）
-# AI_AUDIO_CACHE：私有 R2 缓存桶，MP3 只通过签名 URL 播放
+# AI_AUDIO_CACHE：私有 R2 缓存桶，MP3 只通过签名 URL 播放；概念插图未单独绑定 AI_IMAGE_CACHE 时复用此桶，并用 daily-illustration-v1/ 前缀隔离
 [[r2_buckets]]
 binding = "AI_AUDIO_CACHE"
 bucket_name = "tracktosearch-ai-audio"
@@ -62,6 +62,9 @@ bucket_name = "tracktosearch-ai-audio"
 ENVIRONMENT = "production"
 PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
 AUDIO_PUBLIC_BASE_URL = "https://tracktosearch-gateway.pages.dev/gateway-api"
+# 今日影视知识概念插图：默认关闭，开启后独立于文字 AI 配额并按账号每日限流
+AI_DAILY_ILLUSTRATION_ENABLED = "false"
+AI_DAILY_ILLUSTRATION_DAILY_LIMIT = "10"
 # 文本生成默认供应商：Agnes（主文本模型）；MiMo 文本仅显式旧请求/配置兼容，Agnes 失败不回退 MiMo；MiMo TTS 仍可用
 AI_DEFAULT_PROVIDER = "agnes"
 # Brevo 已验证的 Sender 地址
