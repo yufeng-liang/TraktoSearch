@@ -62,8 +62,8 @@ bucket_name = "tracktosearch-ai-audio"
 ENVIRONMENT = "production"
 PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
 AUDIO_PUBLIC_BASE_URL = "https://tracktosearch-gateway.pages.dev/gateway-api"
-# 今日影视知识概念插图：默认关闭，开启后独立于文字 AI 配额并按账号每日限流
-AI_DAILY_ILLUSTRATION_ENABLED = "false"
+# 今日影视知识概念插图：生产已开启，独立于文字 AI 配额并按账号每日限流
+AI_DAILY_ILLUSTRATION_ENABLED = "true"
 AI_DAILY_ILLUSTRATION_DAILY_LIMIT = "10"
 # 文本生成默认供应商：Agnes（主文本模型）；MiMo 文本仅显式旧请求/配置兼容，Agnes 失败不回退 MiMo；MiMo TTS 仍可用
 AI_DEFAULT_PROVIDER = "agnes"
