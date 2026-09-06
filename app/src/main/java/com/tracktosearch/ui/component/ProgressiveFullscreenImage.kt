@@ -85,9 +85,8 @@ internal fun progressiveUnderlay(context: Context, model: Any?): String? {
 internal fun fullscreenImageRequest(context: Context, model: Any, underlayUrl: String?): ImageRequest {
     val builder = ImageRequest.Builder(context)
         .data(model)
-        // 250ms 的「逐渐清晰」淡入。telephoto 的 Resolver 会读出 Coil CrossfadeTransition
-        // 的时长，用 animateFloatAsState 在占位小图与高清大图之间播放；关掉 crossfade
-        // 时是硬切，小图瞬间被替换成高清，过程感知不到。
+        // 250ms 的「逐渐清晰」淡入：telephoto 读出 Coil CrossfadeTransition 的时长，
+        // 用 animateFloatAsState 在占位小图之上淡入高清大图（占位保持可见）。
         .crossfade(250)
         .memoryCachePolicy(CachePolicy.READ_ONLY)
     if (underlayUrl != null) {
@@ -193,6 +192,9 @@ private fun BoxScope.FullscreenImageProgressRing(
  *   一次打开动画能触发几十轮重新分块解码，正是「点开大图卡一下」的主因。
  *   只在打开这一程传 true，且缓存里真有底图时才生效；没有底图时按原路挂 telephoto，
  *   否则转场期会是一片空白，比卡顿更糟。
+ *   底图不随转场结束撤走：telephoto 挂载后它自己的占位图要到 Coil 异步解析 + 下一轮
+ *   重组才真正画出来（实测有 200ms+ 空窗），期间底图垫在 telephoto 下面兜住画面，
+ *   直到 [ZoomableImageState.isImageDisplayed] 才撤。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -219,19 +221,26 @@ internal fun ProgressiveFullscreenImage(
     val deferred = deferZoomable && underlayPainter != null
 
     Box(modifier = modifier) {
-        if (deferred && underlayPainter != null) {
+        if (deferred) {
             // telephoto 未挂载的这一程它自己的返回键也没挂，这里补一个：
             // 转场期缩放必然在原位，reset 与 dismiss 等价，直接 dismiss。
             if (backHandlerEnabled && onRequestDismiss != null) {
                 BackHandler { onRequestDismiss() }
             }
+        }
+        // 静态底图不能只在转场期存在：telephoto 挂载后，它的占位图从 Coil 异步解析
+        // 到真正画出来之间有实测 200ms+ 的空窗（此期间 resolved.placeholder 已写入
+        // 但重组迟迟不来），若底图在交接点撤走，这一段就露出遮罩下的页面——「闪一下」。
+        // 垫在 telephoto 下面，直到大图真正显示（isImageDisplayed）才撤。
+        if (underlayPainter != null && (deferred || !state.isImageDisplayed)) {
             Image(
                 painter = underlayPainter,
-                contentDescription = contentDescription,
+                contentDescription = null,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
+        }
+        if (!deferred) {
             ZoomableFullscreenImage(
                 model = model,
                 contentScale = contentScale,
