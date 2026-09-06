@@ -1934,6 +1934,11 @@ Config:
     <string name="ai_daily_published_at_format">Published %1$s</string>
     <string name="ai_daily_spoiler_warning">Spoiler note: this fact may reveal a story detail.</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
+    <string name="ai_daily_recent_learned">Recently learned</string>
+    <string name="ai_daily_history_empty">Nothing learned yet</string>
+    <string name="ai_daily_illustration_caption">AI concept illustration, for understanding only</string>
+    <string name="ai_daily_illustration_description">Concept illustration for %1$s</string>
+    <string name="ai_daily_media_image_description">Related film image</string>
     <string name="help_ai_sprite">AI Sprite</string>
     <string name="help_ai_sprite_b2">Choose a character and say its name once. The app does not keep listening; after up to five voice attempts, or when the microphone is unavailable, type the name instead.</string>
     <string name="help_ai_sprite_b3">AI uses the nickname on your authorized account and your watched history.</string>

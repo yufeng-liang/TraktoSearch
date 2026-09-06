@@ -148,6 +148,93 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun dailyIllustration_generating_triggersSingleSilentRefresh() = runTest {
+        val generating = dailyKnowledge().copy(
+            unitId = "unit-illu",
+            illustration = com.tracktosearch.data.ai.AiDailyIllustration(status = "generating")
+        )
+        val readyIllustration = com.tracktosearch.data.ai.AiDailyIllustration(
+            status = "ready",
+            url = "https://img.example/unit-illu.png"
+        )
+        val refreshed = dailyKnowledge().copy(unitId = "unit-illu", illustration = readyIllustration)
+        val viewModel = viewModel()
+        coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
+        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(generating)
+        coEvery { aiRepository.refreshDailyKnowledge(any(), any(), any()) } returns Result.success(refreshed)
+
+        viewModel.openFeature(AiFeature.DAILY)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { aiRepository.refreshDailyKnowledge("friend-a", any(), any()) }
+        assertThat(viewModel.uiState.value.dailyKnowledge?.illustration?.isReady).isTrue()
+
+        // 同一内容只静默刷新一次；再进页面不重复拉取。
+        viewModel.openFeature(AiFeature.DAILY)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { aiRepository.refreshDailyKnowledge(any(), any(), any()) }
+    }
+
+    @Test
+    fun dailyIllustration_silentRefreshSkippedWhileQuestionAnswered() = runTest {
+        val generating = dailyKnowledge().copy(
+            unitId = "unit-answered",
+            illustration = com.tracktosearch.data.ai.AiDailyIllustration(status = "generating"),
+            checkQuestion = com.tracktosearch.data.ai.AiDailyCheckQuestion(
+                prompt = "题目",
+                options = listOf(
+                    com.tracktosearch.data.ai.AiQuizOption("a", "选项一"),
+                    com.tracktosearch.data.ai.AiQuizOption("b", "选项二")
+                ),
+                correctOptionIds = listOf("a"),
+                explanation = "解析"
+            )
+        )
+        val viewModel = viewModel()
+        coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
+        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(generating)
+
+        viewModel.openFeature(AiFeature.DAILY)
+        // 只推进到内容落地，不跨过 25 秒静默刷新窗口，先让用户答题。
+        testScheduler.advanceTimeBy(1_000)
+        testScheduler.runCurrent()
+        viewModel.selectDailyKnowledgeQuestionOption("a")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { aiRepository.refreshDailyKnowledge(any(), any(), any()) }
+    }
+
+    @Test
+    fun openDailyKnowledgeRecord_restoresHistoricalContentWithoutBurningChangeQuota() = runTest {
+        val record = com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord(
+            unitId = "unit-old",
+            shownDate = "2026-09-01",
+            locale = "zh-CN",
+            knowledge = dailyKnowledge().copy(id = "unit-old", unitId = "unit-old", title = "旧知识"),
+            questionResult = com.tracktosearch.data.ai.AiDailyKnowledgeQuestionResult(
+                selectedOptionIds = listOf("a"),
+                correct = true,
+                answeredAt = 1L
+            )
+        )
+        val viewModel = viewModel()
+        viewModel.seedState {
+            it.copy(
+                dailyKnowledge = dailyKnowledge(),
+                dailyKnowledgeChangeCount = 1,
+                activeFeature = AiFeature.DAILY
+            )
+        }
+
+        viewModel.openDailyKnowledgeRecord(record)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.dailyKnowledge?.title).isEqualTo("旧知识")
+        assertThat(viewModel.uiState.value.dailyQuestionSelectedOptionId).isEqualTo("a")
+        assertThat(viewModel.uiState.value.dailyKnowledgeChangeCount).isEqualTo(1)
+    }
+
+    @Test
     fun loadDaily_usesAppLanguageLocale() = runTest {
         val localeSlot = slot<String>()
         val viewModel = viewModel(

@@ -1926,6 +1926,11 @@
     <string name="ai_daily_published_at_format">发布时间：%1$s</string>
     <string name="ai_daily_spoiler_warning">剧透提示：这条知识可能会透露剧情细节。</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
+    <string name="ai_daily_recent_learned">最近学过</string>
+    <string name="ai_daily_history_empty">还没有学过的内容</string>
+    <string name="ai_daily_illustration_caption">AI 概念插图，仅辅助理解</string>
+    <string name="ai_daily_illustration_description">%1$s 的概念插图</string>
+    <string name="ai_daily_media_image_description">影视关联图片</string>
     <string name="help_ai_sprite">AI 精灵</string>
     <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，之后不会持续监听；语音最多尝试 5 次，失败或麦克风不可用时可改为输入角色名。</string>
     <string name="help_ai_sprite_b3">AI 会使用授权账号的昵称和你的已看历史。</string>

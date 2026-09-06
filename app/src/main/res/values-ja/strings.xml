@@ -1939,6 +1939,11 @@
     <string name="ai_daily_published_at_format">公開日：%1$s</string>
     <string name="ai_daily_spoiler_warning">ネタバレ注意：物語の細部に触れる可能性があります。</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
+    <string name="ai_daily_recent_learned">最近学んだこと</string>
+    <string name="ai_daily_history_empty">まだ学んだ内容はありません</string>
+    <string name="ai_daily_illustration_caption">AIコンセプトイラスト（理解の補助のみ）</string>
+    <string name="ai_daily_illustration_description">%1$sのコンセプトイラスト</string>
+    <string name="ai_daily_media_image_description">関連する映像画像</string>
     <string name="help_ai_sprite">AI スプライト</string>
     <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動し、その後は常時聞き取りません。音声は最大 5 回まで試せ、失敗時やマイク不可時は名前を入力できます。</string>
     <string name="help_ai_sprite_b3">AI は認証済みアカウントのニックネームと視聴履歴を利用します。</string>

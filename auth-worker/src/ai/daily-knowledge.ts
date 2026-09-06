@@ -310,26 +310,27 @@ function containsHighRiskActionGuidance(text: string): boolean {
 }
 
 function validateSpoilerLevel(unit: KnowledgeUnit): void {
-    // boundary 是关于边界的元说明，不把其中的“结局/剧透”等词当作剧情本身。
+    // 只扫剧情承载面（标题/结论/影视依据/小题/台词）；explanation 和现实延伸常把
+    // “真相”“死亡”当学科概念词使用，扫它们会把大量正常的 light 单元误杀成 heavy。
     const text = [
         unit.title,
         unit.takeaway,
         unit.filmEvidence,
-        unit.explanation,
-        unit.realWorldExample,
         unit.characterLine ?? '',
         unit.checkQuestion.prompt,
         ...unit.checkQuestion.options.map(option => option.text),
         unit.checkQuestion.explanation,
-        unit.source.evidence,
     ].join('\n');
-    const heavySpoilers = [
-        '结局', '结尾', '死亡', '凶手', '真相', '逆转',
-        'ending', 'finale', 'dies', 'death', 'killer', 'murderer', 'truth', 'twist',
-        '結末', 'ラスト', '死ぬ', '死亡', '犯人', '真相', 'どんでん返し',
-        '결말', '마지막', '죽다', '사망', '범인', '진실', '반전',
-    ];
-    const hasHeavySpoiler = heavySpoilers.some(word => text.toLocaleLowerCase(unit.locale).includes(word.toLocaleLowerCase(unit.locale)));
+    const lowered = text.toLocaleLowerCase(unit.locale);
+    // 拉丁词按整词匹配：'spending' 含 'ending'、'attending' 含 'ending' 这类子串误杀必须挡掉。
+    const latinHeavy = /\b(ending|finale|dies|death|killer|murderer|truth|twist)\b/i;
+    const hasHeavySpoiler = lowered.includes('结局') || lowered.includes('结尾') || lowered.includes('死亡')
+        || lowered.includes('凶手') || lowered.includes('真相') || lowered.includes('逆转')
+        || lowered.includes('結末') || lowered.includes('ラスト') || lowered.includes('死ぬ')
+        || lowered.includes('犯人') || lowered.includes('どんでん返し')
+        || lowered.includes('결말') || lowered.includes('마지막') || lowered.includes('죽다')
+        || lowered.includes('사망') || lowered.includes('범인') || lowered.includes('진실') || lowered.includes('반전')
+        || latinHeavy.test(text);
     if (unit.spoilerLevel === 'none' && hasHeavySpoiler) throw invalidUnit('spoilerLevel understates plot disclosure');
     if (unit.spoilerLevel === 'light' && hasHeavySpoiler) throw invalidUnit('heavy plot disclosure requires heavy spoilerLevel');
 }
@@ -338,7 +339,7 @@ function validateBoundary(unit: KnowledgeUnit): void {
     const markers: Record<KnowledgeEvidenceMode, string[]> = {
         film_fact: ['事实', '资料', '说明', 'fact', 'source', '資料', '説明', '사실', '자료', '설명'],
         viewing_interpretation: ['解读', '不是', 'interpretation', 'not', '解釈', '解説', '해석', '아님'],
-        external_fact: ['来源', '事实', '说明', 'source', 'fact', '출처', '사실', '자료', '설명'],
+        external_fact: ['来源', '事实', '说明', 'source', 'fact', '事実', '資料', '説明', '出典', '출처', '사실', '자료', '설명'],
         theme_extension: ['延伸', '不是', 'extension', 'not', '拡張', '확장'],
     };
     const boundary = unit.boundary.toLocaleLowerCase(unit.locale);
@@ -1376,9 +1377,11 @@ export const DAILY_KNOWLEDGE_SEEDS: readonly KnowledgeUnit[] = [
 
 
 // 非 zh-CN 的确定性兜底至少保证语言契约不回退；正常路径仍由模型按 locale 生成。
-const LOCALIZED_FALLBACK_SEEDS: Record<Exclude<DailyLocale, 'zh-CN'>, KnowledgeUnit> = {
-    'en-US': {
-        unitId: 'seed-continuity-editing-en',
+// 每语言 3 条按日轮换，避免 AI 失败时非中文用户每天看到同一条。
+const LOCALIZED_FALLBACK_SEEDS: Record<Exclude<DailyLocale, 'zh-CN'>, readonly KnowledgeUnit[]> = {
+    'en-US': [
+        {
+            unitId: 'seed-continuity-editing-en',
         version: 1,
         locale: 'en-US',
         relationType: 'general_knowledge',
@@ -1411,9 +1414,81 @@ const LOCALIZED_FALLBACK_SEEDS: Record<Exclude<DailyLocale, 'zh-CN'>, KnowledgeU
             explanation: 'Continuity editing uses gazes, action, and spatial relations to preserve scene coherence.',
         },
         characterLine: 'The cut hid itself in plain sight!',
-    },
-    'ja-JP': {
-        unitId: 'seed-continuity-editing-ja',
+        },
+        {
+            unitId: 'seed-opportunity-cost-en',
+            version: 1,
+            locale: 'en-US',
+            relationType: 'general_knowledge',
+            evidenceMode: 'external_fact',
+            subjectGroup: 'society_and_institution',
+            subject: '经济学',
+            concept: 'opportunity cost',
+            title: 'Every choice also gives something up',
+            takeaway: 'Opportunity cost is the value of the best alternative you give up when choosing one option.',
+            relatedMedia: null,
+            filmEvidence: 'Crime and workplace stories often frame chasing one goal as giving up time, relationships, or another chance.',
+            explanation: 'Time, money, and attention cannot go to every plan at once; comparing “what I gain” with “what I give up” makes decisions clearer.',
+            realWorldExample: 'Spending the weekend on a course means the same weekend cannot be a trip; the lost trip is part of the cost.',
+            boundary: 'This is an introductory economics fact, not a judgment of personal choices.',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: {
+                name: 'Federal Reserve Bank of St. Louis',
+                url: 'https://www.stlouisfed.org/open-vault/2020/january/real-life-examples-opportunity-cost',
+                evidence: 'The reference explains opportunity cost as the value of the next-best alternative given up.',
+            },
+            checkQuestion: {
+                prompt: 'What does opportunity cost refer to?',
+                options: [
+                    { id: 'a', text: 'The value of the best alternative given up by a choice.' },
+                    { id: 'b', text: 'Every expense listed on a bill.' },
+                    { id: 'c', text: 'The sum of gains from all possible plans.' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: 'Opportunity cost emphasizes the next-best alternative given up, not just the money you pay.',
+            },
+            characterLine: 'Choosing one road means paying for another.',
+        },
+        {
+            unitId: 'seed-selective-attention-en',
+            version: 1,
+            locale: 'en-US',
+            relationType: 'general_knowledge',
+            evidenceMode: 'external_fact',
+            subjectGroup: 'people_and_mind',
+            subject: '认知科学',
+            concept: 'selective attention',
+            title: 'You do not see the whole frame',
+            takeaway: 'Attention prioritizes cue-highlighted information, so different viewers can miss different details in the same shot.',
+            relatedMedia: null,
+            filmEvidence: 'Films guide attention with close-ups, motion, sound cues, and color contrast, and sometimes hide clues in the background.',
+            explanation: 'Perceptual resources are limited; shot language arranges priorities so a busy frame does not become uniform noise.',
+            realWorldExample: 'In a noisy room you follow one speaker; other voices still exist but are temporarily suppressed.',
+            boundary: 'This is a general fact about cognition, not a judgment of any viewer’s perception or testimony.',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: {
+                name: 'American Psychological Association',
+                url: 'https://www.apa.org/topics/perception-attention',
+                evidence: 'The reference explains that attention selectively allocates cognitive resources and filters distraction.',
+            },
+            checkQuestion: {
+                prompt: 'What can selective attention cause across viewers of one shot?',
+                options: [
+                    { id: 'a', text: 'Different people notice different details and miss others.' },
+                    { id: 'b', text: 'Everyone necessarily sees every detail at once.' },
+                    { id: 'c', text: 'Attention ignores sound and motion entirely.' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: 'Selective attention allocates cognitive resources and filters distraction, so details can be missed.',
+            },
+            characterLine: 'Attention is a small lamp; it lights part of the stage.',
+        },
+    ],
+    'ja-JP': [
+        {
+            unitId: 'seed-continuity-editing-ja',
         version: 1,
         locale: 'ja-JP',
         relationType: 'general_knowledge',
@@ -1446,9 +1521,81 @@ const LOCALIZED_FALLBACK_SEEDS: Record<Exclude<DailyLocale, 'zh-CN'>, KnowledgeU
             explanation: '継続的編集は視線、動作、空間関係で場面の連続性を保ちます。',
         },
         characterLine: '切り替わりはすぐそばに隠れています。',
-    },
-    'ko-KR': {
-        unitId: 'seed-continuity-editing-ko',
+        },
+        {
+            unitId: 'seed-opportunity-cost-ja',
+            version: 1,
+            locale: 'ja-JP',
+            relationType: 'general_knowledge',
+            evidenceMode: 'external_fact',
+            subjectGroup: 'society_and_institution',
+            subject: '经济学',
+            concept: '機会費用',
+            title: '選択とは、何かを手放すことでもある',
+            takeaway: '機会費用とは、ある案を選んだときに諦めた次善の案の価値を指します。',
+            relatedMedia: null,
+            filmEvidence: '犯罪ものや職場ものでは、一つの目標を追うことが時間や関係、別の好機を手放すこととして描かれます。',
+            explanation: '時間も資金も注意もすべての案には向けられません。「何を得るか」と「何を諦めるか」を並べて比べると判断が明確になります。',
+            realWorldExample: '週末を講習に使えば、同じ時間の旅行はできません。失われた旅行も講習を選んだ費用の一部です。',
+            boundary: 'これは経済学の入門的な事実の説明であり、個人の選択への評価ではありません。',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: {
+                name: 'Federal Reserve Bank of St. Louis',
+                url: 'https://www.stlouisfed.org/open-vault/2020/january/real-life-examples-opportunity-cost',
+                evidence: 'この資料は機会費用を、選択時に諦めた次善案の価値として説明しています。',
+            },
+            checkQuestion: {
+                prompt: '機会費用とは何を指しますか。',
+                options: [
+                    { id: 'a', text: '選んだときに諦めた次善案の価値。' },
+                    { id: 'b', text: '請求書に載るすべての支払い。' },
+                    { id: 'c', text: 'あり得る全案の利益の合計。' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: '機会費用は目に見える支出だけでなく、諦めた次善案の価値も含めて考えます。',
+            },
+            characterLine: '一つの道を選ぶとき、もう一つの道も支払っています。',
+        },
+        {
+            unitId: 'seed-selective-attention-ja',
+            version: 1,
+            locale: 'ja-JP',
+            relationType: 'general_knowledge',
+            evidenceMode: 'external_fact',
+            subjectGroup: 'people_and_mind',
+            subject: '认知科学',
+            concept: '選択的注意',
+            title: '見えているのは画面の一部かもしれない',
+            takeaway: '注意は手がかりで強調された情報を優先するため、同じ画面でも人によって見落とす細部が変わります。',
+            relatedMedia: null,
+            filmEvidence: '映画はクローズアップ、動き、音、色のコントラストで注意を誘導し、背景に後から気づく伏線を置くこともあります。',
+            explanation: '知覚資源には限りがあるため、注意が優先順位をつけます。映像言語はまさにその順序を観客の代わりに組んでいます。',
+            realWorldExample: '騒がしい場所で一人の声を聞き取るとき、他の音は消えたのではなく一時的に抑えられているだけです。',
+            boundary: 'これは認知過程の一般的な説明であり、特定の観客の知覚能力や証言の評価ではありません。',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: {
+                name: 'American Psychological Association',
+                url: 'https://www.apa.org/topics/perception-attention',
+                evidence: 'この資料は注意が認知資源を選択的に配分し干渉をろ過すると説明しています。',
+            },
+            checkQuestion: {
+                prompt: '選択的注意があると、同じ画面を見て何が起き得ますか。',
+                options: [
+                    { id: 'a', text: '人によって注目する情報が変わり、他の細部を見落とす。' },
+                    { id: 'b', text: '誰もが必ずすべての細部を同時に見る。' },
+                    { id: 'c', text: '注意は音や動きの影響を受けない。' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: '選択的注意は認知資源を配分して干渉をろ過するため、細部が見落とされることがあります。',
+            },
+            characterLine: '注意は小さなランプ。舞台の全部は照らしません。',
+        },
+    ],
+    'ko-KR': [
+        {
+            unitId: 'seed-continuity-editing-ko',
         version: 1,
         locale: 'ko-KR',
         relationType: 'general_knowledge',
@@ -1481,13 +1628,85 @@ const LOCALIZED_FALLBACK_SEEDS: Record<Exclude<DailyLocale, 'zh-CN'>, KnowledgeU
             explanation: '연속 편집은 시선, 동작, 공간 관계로 장면의 연속성을 유지합니다.',
         },
         characterLine: '컷은 바로 옆에 숨어 있었어요.',
-    },
+        },
+        {
+            unitId: 'seed-opportunity-cost-ko',
+            version: 1,
+            locale: 'ko-KR',
+            relationType: 'general_knowledge',
+            evidenceMode: 'external_fact',
+            subjectGroup: 'society_and_institution',
+            subject: '经济学',
+            concept: '기회비용',
+            title: '선택에는 포기하는 것도 함께 옵니다',
+            takeaway: '기회비용은 한 방안을 선택할 때 포기한 차선 방안의 가치를 가리킵니다.',
+            relatedMedia: null,
+            filmEvidence: '범죄물과 직장물은 한 목표를 쫓는 일을 시간, 관계, 다른 기회를 내려놓는 일로 그려냅니다.',
+            explanation: '시간과 돈, 주의력은 모든 방안에 동시에 쓸 수 없습니다. “무엇을 얻는가”와 “무엇을 포기하는가”를 함께 비교하면 판단이 분명해집니다.',
+            realWorldExample: '주말을 공부에 쓰면 같은 시간엔 여행을 갈 수 없습니다. 사라진 여행도 그 선택의 비용입니다.',
+            boundary: '이것은 경제학 입문 사실 설명이며 개인의 선택에 대한 평가가 아닙니다.',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: {
+                name: 'Federal Reserve Bank of St. Louis',
+                url: 'https://www.stlouisfed.org/open-vault/2020/january/real-life-examples-opportunity-cost',
+                evidence: '이 자료는 기회비용을 선택 시 포기한 차선안의 가치로 설명합니다.',
+            },
+            checkQuestion: {
+                prompt: '기회비용은 무엇을 가리키나요?',
+                options: [
+                    { id: 'a', text: '선택으로 포기한 차선 방안의 가치.' },
+                    { id: 'b', text: '청구서에 적힌 모든 지출.' },
+                    { id: 'c', text: '가능한 모든 방안의 이득 합계.' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: '기회비용은 눈에 보이는 지출뿐 아니라 포기한 차선안의 가치까지 함께 봅니다.',
+            },
+            characterLine: '한 길을 선택하면 다른 길의 값을 치릅니다.',
+        },
+        {
+            unitId: 'seed-selective-attention-ko',
+            version: 1,
+            locale: 'ko-KR',
+            relationType: 'general_knowledge',
+            evidenceMode: 'external_fact',
+            subjectGroup: 'people_and_mind',
+            subject: '认知科学',
+            concept: '선택적 주의',
+            title: '보이는 것은 화면 전부가 아닐 수 있어요',
+            takeaway: '주의는 단서로 강조된 정보를 우선 처리하기 때문에, 같은 장면에서 사람마다 놓치는 디테일이 달라집니다.',
+            relatedMedia: null,
+            filmEvidence: '영화는 클로즈업, 움직임, 소리, 색 대비로 주의를 유도하고, 배경에 나중에 알아채는 단서를 숨기기도 합니다.',
+            explanation: '지각 자원은 한정되어 주의가 우선순위를 매깁니다. 영상 문법은 바로 그 순서를 관객 대신 정리합니다.',
+            realWorldExample: '시끄러운 곳에서 한 사람의 말이 들리면, 다른 소리는 사라진 게 아니라 잠시 억제된 것입니다.',
+            boundary: '이것은 인지 과정에 대한 일반 설명이며 특정 관객의 지각 능력이나 증언 평가가 아닙니다.',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: {
+                name: 'American Psychological Association',
+                url: 'https://www.apa.org/topics/perception-attention',
+                evidence: '이 자료는 주의가 인지 자원을 선택적으로 배분하고 방해를 걸러 낸다고 설명합니다.',
+            },
+            checkQuestion: {
+                prompt: '선택적 주의가 있으면 같은 장면에서 무엇이 생길 수 있나요?',
+                options: [
+                    { id: 'a', text: '사람마다 다른 정보에 주의하고 다른 디테일을 놓친다.' },
+                    { id: 'b', text: '누구나 반드시 모든 디테일을 동시에 본다.' },
+                    { id: 'c', text: '주의는 소리와 움직임의 영향을 받지 않는다.' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: '선택적 주의는 인지 자원을 배분하고 방해를 걸러 내어 디테일이 놓칠 수 있습니다.',
+            },
+            characterLine: '주의는 작은 등불입니다. 무대 전체를 비추지 않아요.',
+        },
+    ],
 };
 
 export function fallbackDailyKnowledgeUnit(day: string, locale: DailyLocale): KnowledgeUnit {
-    const seed = locale === 'zh-CN'
-        ? DAILY_KNOWLEDGE_SEEDS[dailySeedIndex(day)]
+    const seeds = locale === 'zh-CN'
+        ? DAILY_KNOWLEDGE_SEEDS
         : LOCALIZED_FALLBACK_SEEDS[locale];
+    const seed = seeds[dailySeedIndex(day) % seeds.length];
     // 种子同样过本地门槛，避免手写内容未来变成绕过质量链的例外通道。
     return normalizeDailyKnowledgeUnit(seed, { day, locale, movies: [] });
 }

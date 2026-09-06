@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.OpenInNew
@@ -55,12 +57,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,6 +101,7 @@ import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
+import com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord
 import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiGreeting
 import com.tracktosearch.data.ai.AiNameSignal
@@ -934,6 +939,7 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DailyFeature(
     daily: AiDailyKnowledge,
@@ -974,6 +980,10 @@ private fun DailyFeature(
     val hasConceptDetails = realWorldExample.isNotBlank() || boundary.isNotBlank()
     val conceptKey = daily.unitId?.takeIf { it.isNotBlank() } ?: daily.id
     var conceptExpanded by rememberSaveable(conceptKey) { mutableStateOf(false) }
+    var historySheetVisible by rememberSaveable { mutableStateOf(false) }
+    val illustration = daily.illustration
+    val illustrationUrl = illustration?.takeIf { it.isReady }?.url
+    val mediaImageUrl = state.dailyMediaImageUrl
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -1003,6 +1013,32 @@ private fun DailyFeature(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.ai_daily_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = { historySheetVisible = true },
+                    enabled = state.dailyKnowledgeHistory.isNotEmpty()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.History,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(text = stringResource(R.string.ai_daily_recent_learned))
+                }
+            }
+        }
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -1055,49 +1091,66 @@ private fun DailyFeature(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 1.dp
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 64.dp, height = 88.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.secondaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // P1 只做影视依据占位，真实剧照与概念插图留给 P2。
-                            Icon(
-                                imageVector = Icons.Rounded.Movie,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    Column {
+                        if (mediaImageUrl != null) {
+                            // 真实剧照/海报由媒体数据层按 mediaId 选择；AI 不返回图片地址。
+                            AsyncImage(
+                                model = mediaImageUrl,
+                                contentDescription = relatedTitle.ifBlank {
+                                    stringResource(R.string.ai_daily_media_image_description)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f)
+                                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
+                                contentScale = ContentScale.Crop
                             )
                         }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            if (mediaImageUrl == null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 64.dp, height = 88.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Movie,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                relationRes?.let { DailyLabelPill(stringResource(it)) }
-                                evidenceModeRes?.let { DailyLabelPill(stringResource(it)) }
-                                subjectGroupRes?.let { DailyLabelPill(stringResource(it)) }
-                            }
-                            if (relatedTitle.isNotBlank()) {
-                                Text(
-                                    text = relatedTitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            if (daily.filmEvidence.isNotBlank()) {
-                                Text(
-                                    text = daily.filmEvidence,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    relationRes?.let { DailyLabelPill(stringResource(it)) }
+                                    evidenceModeRes?.let { DailyLabelPill(stringResource(it)) }
+                                    subjectGroupRes?.let { DailyLabelPill(stringResource(it)) }
+                                }
+                                if (relatedTitle.isNotBlank()) {
+                                    Text(
+                                        text = relatedTitle,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (daily.filmEvidence.isNotBlank()) {
+                                    Text(
+                                        text = daily.filmEvidence,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
                             }
                         }
                     }
@@ -1121,6 +1174,26 @@ private fun DailyFeature(
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
+                        if (illustrationUrl != null) {
+                            // AI 概念插图只辅助理解，不承担事实证明责任；角色与来源在 caption 里声明。
+                            AsyncImage(
+                                model = illustrationUrl,
+                                contentDescription = stringResource(
+                                    R.string.ai_daily_illustration_description,
+                                    daily.concept.orEmpty()
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f)
+                                    .clip(RoundedCornerShape(14.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Text(
+                                text = stringResource(R.string.ai_daily_illustration_caption),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         if (daily.explanation.isNotBlank()) {
                             Text(
                                 text = daily.explanation,
@@ -1453,6 +1526,85 @@ private fun DailyFeature(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    }
+
+    if (historySheetVisible) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = { historySheetVisible = false },
+            sheetState = sheetState
+        ) {
+            DailyKnowledgeHistorySheet(
+                records = state.dailyKnowledgeHistory,
+                onOpenRecord = { record ->
+                    historySheetVisible = false
+                    viewModel.openDailyKnowledgeRecord(record)
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DailyKnowledgeHistorySheet(
+    records: List<AiDailyKnowledgeHistoryRecord>,
+    onOpenRecord: (AiDailyKnowledgeHistoryRecord) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.ai_daily_recent_learned),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        if (records.isEmpty()) {
+            Text(
+                text = stringResource(R.string.ai_daily_history_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            records.forEach { record ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenRecord(record) }
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = record.knowledge.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = listOfNotNull(
+                                record.shownDate,
+                                record.concept?.takeIf { it.isNotBlank() },
+                                record.relatedMedia?.title?.takeIf { it.isNotBlank() }
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }

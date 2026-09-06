@@ -508,6 +508,34 @@ data class AiDailySourceDto(
     val evidence: String = ""
 )
 
+/** 概念插图状态：Worker 后台生成，URL 是 10 分钟短期签名地址。 */
+@Serializable
+data class AiDailyIllustrationDto(
+    val status: String = "unavailable",
+    val role: String = "concept_illustration",
+    val url: String? = null,
+    val styleVersion: String = "",
+    val mimeType: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val urlExpiresAt: Long? = null
+)
+
+@Serializable
+data class AiDailyIllustration(
+    val status: String,
+    val role: String = "concept_illustration",
+    val url: String? = null,
+    val styleVersion: String = "",
+    val mimeType: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val urlExpiresAt: Long? = null
+) {
+    val isReady: Boolean
+        get() = status == "ready" && !url.isNullOrBlank()
+}
+
 @Serializable
 data class AiDailyCheckQuestionDto(
     val prompt: String = "",
@@ -546,7 +574,8 @@ data class AiDailyKnowledgeDto(
     val difficulty: String? = null,
     val spoilerLevel: String? = null,
     val source: AiDailySourceDto? = null,
-    val checkQuestion: AiDailyCheckQuestionDto? = null
+    val checkQuestion: AiDailyCheckQuestionDto? = null,
+    val illustration: AiDailyIllustrationDto? = null
 )
 
 @Serializable
@@ -614,7 +643,9 @@ data class AiDailyKnowledge(
     val difficulty: String? = null,
     val spoilerLevel: String? = null,
     val source: AiDailySource? = null,
-    val checkQuestion: AiDailyCheckQuestion? = null
+    val checkQuestion: AiDailyCheckQuestion? = null,
+    // 插图状态每次响应动态装配，不参与本地历史去重；URL 过期后静默刷新链路会重取。
+    val illustration: AiDailyIllustration? = null
 ) {
     // 旧 domain 缓存没有结构化字段时，用旧 fact 兜底，保证升级后旧内容仍可读。
     val takeaway: String
@@ -868,7 +899,19 @@ fun AiDailyKnowledgeDto.toDomain(outerQuota: AiQuotaDto? = null): AiDailyKnowled
         difficulty = difficulty,
         spoilerLevel = spoilerLevel,
         source = sourceDomain,
-        checkQuestion = checkQuestion?.toDomain()
+        checkQuestion = checkQuestion?.toDomain(),
+        illustration = illustration?.let {
+            AiDailyIllustration(
+                status = it.status,
+                role = it.role,
+                url = it.url,
+                styleVersion = it.styleVersion,
+                mimeType = it.mimeType,
+                width = it.width,
+                height = it.height,
+                urlExpiresAt = it.urlExpiresAt
+            )
+        }
     )
 }
 

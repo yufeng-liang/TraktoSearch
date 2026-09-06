@@ -286,6 +286,19 @@ class AiModelsTest {
         assertThat(domain.source?.name).isEqualTo("新来源")
         assertThat(domain.source?.evidence).isEqualTo("来源支持群体压力结论")
         assertThat(domain.checkQuestion?.correctOptionIds).containsExactly("a")
+        assertThat(domain.illustration?.status).isEqualTo("generating")
+        assertThat(domain.illustration?.isReady).isFalse()
+    }
+
+    @Test
+    fun dailyIllustration_readyStateRequiresUrl() {
+        val ready = AiDailyIllustration(status = "ready", url = "https://img.example/a.png", urlExpiresAt = 1L)
+        val readyNoUrl = AiDailyIllustration(status = "ready", url = null)
+        val generating = AiDailyIllustration(status = "generating", url = "https://img.example/a.png")
+
+        assertThat(ready.isReady).isTrue()
+        assertThat(readyNoUrl.isReady).isFalse()
+        assertThat(generating.isReady).isFalse()
     }
 
     @Test

@@ -455,6 +455,51 @@ class AiRepository @Inject constructor(
     }
 
     /**
+     * 概念插图静默刷新：绕过本地缓存读，直接向 Worker 拿同一天的缓存响应。
+     * 服务端每次响应都按 D1 状态重新装配插图并新签短期 URL，所以这里必须走网络，
+     * 但 forceRefresh=false 保证不会生成新内容、不消耗换题额度外的配额。
+     */
+    suspend fun refreshDailyKnowledge(
+        friendId: String,
+        watched: List<AiWatchedTitleDto> = emptyList(),
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+    ): Result<AiDailyKnowledge> {
+        val normalizedLocale = locale.trim()
+        if (normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) {
+            return Result.failure(
+                AiErrorMapper.exception("INVALID_REQUEST", "Unsupported daily knowledge locale: $normalizedLocale", 400)
+            )
+        }
+        if (friendId.trim().isEmpty()) {
+            return Result.failure(AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400))
+        }
+        return try {
+            val payload = api.getDailyKnowledge(
+                AiDailyRequest(
+                    sessionId = sessionIdFor(friendId),
+                    forceRefresh = false,
+                    watched = watched.take(MAX_WATCHED_ITEMS),
+                    locale = normalizedLocale
+                )
+            ).requirePayload()
+            val knowledge = payload.data.toDomain(payload.quota)
+            runCatching {
+                storage.write(
+                    friendId,
+                    AiCacheFeature.DAILY_KNOWLEDGE,
+                    json.encodeToString(AiDailyKnowledge.serializer(), knowledge),
+                    dailyCacheSuffix(normalizedLocale, watched.take(MAX_WATCHED_ITEMS))
+                )
+            }
+            Result.success(knowledge)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(if (e is AiApiException) e else AiErrorMapper.fromThrowable(e))
+        }
+    }
+
+    /**
      * 记录一条真正展示过的今日知识。
      *
      * 只有 UI 确认内容已经渲染后才调用；这里不把“网络请求成功”偷换成“用户看过”。

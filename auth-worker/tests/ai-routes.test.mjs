@@ -121,6 +121,11 @@ function movies() {
     }));
 }
 
+/** 单元阶段门槛要求 direct_watch 单元引用具体证据（简介），纯年份/类型过不了门。 */
+function quizMoviesWithSynopsis() {
+    return movies().map(movie => ({ ...movie, overview: QUIZ_SYNOPSIS }));
+}
+
 function validDailyKnowledgeUnit({ direct = false } = {}) {
     return {
         unitId: direct ? 'daily-direct-unit' : 'daily-general-unit',
@@ -1644,12 +1649,14 @@ test('taste fallback never emits watched titles as recommendations', async () =>
     assert.deepEqual(json.data.recommendations, []);
 });
 
-test('quiz accepts a valid Mimo question package without answerKeywords', async () => {
+test('quiz accepts a valid unit package and converts it into 13 questions without answerKeywords', async () => {
     const originalFetch = globalThis.fetch;
     let requestBody;
+    let calls = 0;
     globalThis.fetch = async (_input, init) => {
         requestBody = JSON.parse(init.body);
-        return new Response(JSON.stringify(validQuizUpstreamPayload()), {
+        calls += 1;
+        return new Response(JSON.stringify(calls === 1 ? validQuizUnitsPayload() : validQuizFromUnitsPayload()), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
         });
@@ -1658,12 +1665,13 @@ test('quiz accepts a valid Mimo question package without answerKeywords', async 
     try {
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
-            body: { action: 'quiz', sessionId: 'quiz-normalize-session', watched: movies(), forceRefresh: true },
+            body: { action: 'quiz', sessionId: 'quiz-normalize-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
             env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
         assert.equal(json.data.questions.length, 13);
+        assert.equal(json.data.questions[0].unitId, 'quiz-unit-a');
         assert.equal(requestBody.model, 'mimo-v2.5-pro');
         assert.ok(requestBody.messages.some(message => String(message.content).includes('小明')));
     } finally {
@@ -1671,15 +1679,15 @@ test('quiz accepts a valid Mimo question package without answerKeywords', async 
     }
 });
 
-test('quiz runs a second AI review with watched evidence and returns the corrected non-generic package', async () => {
+test('quiz converts shared knowledge units with a second review and returns the unit-bound package', async () => {
     const originalFetch = globalThis.fetch;
     const requests = [];
     globalThis.fetch = async (_input, init) => {
         const requestBody = JSON.parse(init.body);
         requests.push(requestBody);
         const payload = requests.length === 1
-            ? validQuizUpstreamPayload({ generic: true })
-            : validQuizUpstreamPayload();
+            ? validQuizUnitsPayload()
+            : validQuizFromUnitsPayload();
         return new Response(JSON.stringify(payload), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -1689,31 +1697,35 @@ test('quiz runs a second AI review with watched evidence and returns the correct
     try {
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
-            body: { action: 'quiz', sessionId: 'quiz-review-session', watched: movies(), forceRefresh: true },
+            body: { action: 'quiz', sessionId: 'quiz-review-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
             env: createLegacyMimoTextEnv(),
         });
 
         assert.equal(response.status, 200);
         assert.equal(requests.length, 2);
-        assert.match(String(requests[1].messages?.[0]?.content), /二审审校器/);
-        assert.match(String(requests[1].messages?.[1]?.content), /CANDIDATE_QUIZ/);
+        assert.match(String(requests[0].messages?.[0]?.content), /候选学习单元编辑/);
+        assert.match(String(requests[1].messages?.[0]?.content), /二审转换器/);
+        assert.match(String(requests[1].messages?.[1]?.content), /KNOWLEDGE_UNITS/);
         assert.match(String(requests[1].messages?.[1]?.content), /上映年份/);
+        assert.equal(json.data.questions[0].unitId, 'quiz-unit-a');
         assert.match(json.data.questions[0].prompt, /2020年/);
         assert.equal(json.data.questions[0].subject, '心理学');
         assert.equal(json.data.questions[0].concept, '归因偏差');
         assert.ok(json.data.questions[0].learningTakeaway.length >= 12);
         assert.match(json.data.questions[0].evidenceUsed, /2020/);
+        // 13 题全部绑定共享单元，题目学科来自单元而不是自由发挥。
+        assert.ok(json.data.questions.every(question => question.unitId));
     } finally {
         globalThis.fetch = originalFetch;
     }
 });
 
-test('quiz never returns the first-round candidate when the second review is invalid', async () => {
+test('quiz never returns the unit stage when the converted package is invalid', async () => {
     const originalFetch = globalThis.fetch;
     let calls = 0;
     globalThis.fetch = async () => {
         calls += 1;
-        const payload = calls === 1 ? validQuizUpstreamPayload({ generic: true }) : { choices: [{ message: { content: JSON.stringify({ questions: [] }) } }] };
+        const payload = calls === 1 ? validQuizUnitsPayload() : { choices: [{ message: { content: JSON.stringify({ questions: [] }) } }] };
         return new Response(JSON.stringify(payload), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -1723,7 +1735,7 @@ test('quiz never returns the first-round candidate when the second review is inv
     try {
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
-            body: { action: 'quiz', sessionId: 'quiz-review-fallback-session', watched: movies(), forceRefresh: true },
+            body: { action: 'quiz', sessionId: 'quiz-review-fallback-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
             env: createLegacyMimoTextEnv(),
         });
 
@@ -1733,6 +1745,8 @@ test('quiz never returns the first-round candidate when the second review is inv
         assert.match(json.data.questions[0].prompt, /已看记录线索/);
         assert.equal(json.data.questions[0].prompt.includes('分析 Movie 1 中人物的选择。'), false);
         assert.ok(json.data.questions.every(question => question.learningTakeaway));
+        // 离线兜底题库不绑定共享单元。
+        assert.ok(json.data.questions.every(question => question.unitId === null));
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -1742,9 +1756,9 @@ test('reviewed quiz exposes education fields in the answer result as well as the
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (_input, init) => {
         const requestBody = JSON.parse(init.body);
-        return new Response(JSON.stringify(requestBody.messages?.[0]?.content.includes('二审审校器')
-            ? validQuizUpstreamPayload()
-            : validQuizUpstreamPayload({ generic: true })), {
+        return new Response(JSON.stringify(requestBody.messages?.[0]?.content.includes('二审转换器')
+            ? validQuizFromUnitsPayload()
+            : validQuizUnitsPayload()), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
         });
@@ -1754,7 +1768,7 @@ test('reviewed quiz exposes education fields in the answer result as well as the
         const env = createLegacyMimoTextEnv();
         const started = await call('/api/ai/quiz', {
             method: 'POST',
-            body: { action: 'quiz', sessionId: 'quiz-education-fields-session', watched: movies(), forceRefresh: true },
+            body: { action: 'quiz', sessionId: 'quiz-education-fields-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
             env,
         });
         const submitted = await call('/api/ai/quiz/submit', {
@@ -1776,22 +1790,14 @@ test('reviewed quiz exposes education fields in the answer result as well as the
     }
 });
 
-test('quiz review must use synopsis evidence when it is available', async () => {
+test('quiz conversion must keep synopsis evidence from its unit when it is available', async () => {
     const originalFetch = globalThis.fetch;
     const requests = [];
-    const synopsis = 'An engineer repeatedly revises judgment under pressure.';
-    const watched = movies().map((movie) => ({ ...movie, overview: synopsis }));
-    const payload = validQuizUpstreamPayload();
-    const questionPayload = JSON.parse(payload.choices[0].message.content);
-    for (const question of questionPayload.questions) {
-        question.evidenceUsed = `简介：${synopsis}`;
-        question.prompt += ` The synopsis states: "${synopsis}"`;
-        question.explanation = `${question.evidenceUsed} This maps to ${question.concept}, so the learning conclusion is: ${question.learningTakeaway}`;
-    }
-    const specificPayload = { choices: [{ message: { content: JSON.stringify(questionPayload) } }] };
     globalThis.fetch = async (_input, init) => {
         requests.push(JSON.parse(init.body));
-        return new Response(JSON.stringify(specificPayload), {
+        return new Response(JSON.stringify(requests.length === 1
+            ? validQuizUnitsPayload()
+            : validQuizFromUnitsPayload()), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
         });
@@ -1800,7 +1806,7 @@ test('quiz review must use synopsis evidence when it is available', async () => 
     try {
         const { response, json } = await call('/api/ai/quiz', {
             method: 'POST',
-            body: { action: 'quiz', sessionId: 'quiz-synopsis-evidence-session', watched, forceRefresh: true },
+            body: { action: 'quiz', sessionId: 'quiz-synopsis-evidence-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
             env: createLegacyMimoTextEnv(),
         });
         assert.equal(response.status, 200);
@@ -2413,6 +2419,123 @@ function validQuizUpstreamPayload({ generic = false } = {}) {
             distractorRationale: '',
             explanation,
             filmIndex: movieIndex,
+        };
+    });
+    return { choices: [{ message: { content: JSON.stringify({ questions }) } }] };
+}
+
+/** 单元阶段 fixture：3 个 direct_watch 共享学习单元，filmEvidence 内嵌简介供证据门槛校验。 */
+const QUIZ_SYNOPSIS = 'An engineer repeatedly revises judgment under pressure.';
+
+function validQuizUnitsPayload() {
+    const unitSpecs = [
+        { unitId: 'quiz-unit-a', movieIndex: 0, subject: '心理学', concept: '归因偏差' },
+        { unitId: 'quiz-unit-b', movieIndex: 1, subject: '社会学', concept: '社会规范' },
+        { unitId: 'quiz-unit-c', movieIndex: 2, subject: '历史', concept: '历史语境' },
+    ];
+    const units = unitSpecs.map(spec => {
+        const year = 2020 + spec.movieIndex;
+        const title = `Movie ${spec.movieIndex + 1}`;
+        return {
+            unitId: spec.unitId,
+            version: 1,
+            locale: 'zh-CN',
+            relationType: 'direct_watch',
+            evidenceMode: 'viewing_interpretation',
+            subjectGroup: spec.subject === '心理学' ? 'people_and_mind' : spec.subject === '社会学' ? 'society_and_institution' : 'history_and_culture',
+            subject: spec.subject,
+            concept: spec.concept,
+            title: `${title} 里如何观察${spec.concept}`,
+            takeaway: `观察${title}时，先用可核验材料说话，再谈${spec.concept}的解释。`,
+            relatedMedia: { title, mediaType: 'movie', tmdbId: 100 + spec.movieIndex },
+            filmEvidence: `《${title}》上映年份：${year}，类型：Drama，简介：${QUIZ_SYNOPSIS} 这条观看记录可用于讨论${spec.concept}。`,
+            explanation: `结合${title}的观看记录，${spec.concept}要求先确认可观察线索，再给出有限解释。`,
+            realWorldExample: `讨论现实议题时，同样先核对事实再套用${spec.concept}。`,
+            boundary: `这是基于观看记录的入门解读，不是对影片的权威结论。`,
+            difficulty: 'medium',
+            spoilerLevel: 'none',
+            source: {
+                name: 'Example',
+                url: 'https://www.britannica.com/example',
+                evidence: '该资料介绍' + spec.concept + '的基本含义与适用条件。',
+            },
+            checkQuestion: {
+                prompt: `${spec.concept}强调什么？`,
+                options: [
+                    { id: 'a', text: '先看可观察证据，再给出有限解释。' },
+                    { id: 'b', text: '直接下最终结论。' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: `${spec.concept}要求先确认证据再解释，所以选 a。`,
+            },
+            characterLine: null,
+        };
+    });
+    return { choices: [{ message: { content: JSON.stringify({ units }) } }] };
+}
+
+/** 转换阶段 fixture：13 题全部引用单元阶段的 unitId，证据直接取自单元 filmEvidence。 */
+function validQuizFromUnitsPayload() {
+    const unitSpecs = [
+        { unitId: 'quiz-unit-a', movieIndex: 0, subject: '心理学', concept: '归因偏差' },
+        { unitId: 'quiz-unit-b', movieIndex: 1, subject: '社会学', concept: '社会规范' },
+        { unitId: 'quiz-unit-c', movieIndex: 2, subject: '历史', concept: '历史语境' },
+    ];
+    const questions = Array.from({ length: 13 }, (_, index) => {
+        const spec = unitSpecs[index % unitSpecs.length];
+        const year = 2020 + spec.movieIndex;
+        const title = `Movie ${spec.movieIndex + 1}`;
+        const evidenceUsed = `《${title}》上映年份：${year}，类型：Drama，简介：${QUIZ_SYNOPSIS} 该材料对应单元概念“${spec.concept}”。`;
+        const learningTakeaway = `结合${spec.concept}时，应先回到可观察证据，再解释人物或形式，最后说明这一概念对现实判断的帮助。`;
+        const prompt = (index < 10
+            ? `在《${title}》（${year}年、Drama，简介：${QUIZ_SYNOPSIS}）中，若用${spec.concept}观察这条已看记录，哪种判断最稳妥？`
+            : index < 12
+                ? `关于《${title}》（${year}年、Drama，简介：${QUIZ_SYNOPSIS}）的已看证据，哪些说法能帮助我们理解${spec.concept}？`
+                : `结合《${title}》（${year}年、Drama，简介：${QUIZ_SYNOPSIS}）的已看证据，用${spec.concept}复述一个你能带回现实的问题。`) + `（第${index + 1}题）`;
+        const explanation = `${evidenceUsed}这对应学科概念“${spec.concept}”，因此可以得到学习结论：${learningTakeaway}`;
+        const base = {
+            id: `q${index + 1}`,
+            type: index < 10 ? 'single' : index < 12 ? 'multiple' : 'short',
+            difficulty: index < 4 ? 'easy' : index < 9 ? 'medium' : 'hard',
+            unitId: spec.unitId,
+            subject: spec.subject,
+            concept: spec.concept,
+            learningTakeaway,
+            evidenceUsed,
+            knowledgePoint: spec.concept,
+            sourceTitle: title,
+            prompt,
+            answerRationale: '正确选项同时使用了题干要求和已提供的观看证据。',
+            distractorRationale: '另一选项没有使用可核验材料，无法支持稳定结论。',
+            explanation,
+            filmIndex: spec.movieIndex,
+        };
+        if (index < 10) {
+            return {
+                ...base,
+                options: [
+                    { id: 'a', text: '只凭片名和第一印象下结论。' },
+                    { id: 'b', text: `把${year}年、Drama这一已知线索与题干要求结合起来判断。` },
+                ],
+                correctAnswer: 'b',
+            };
+        }
+        if (index < 12) {
+            return {
+                ...base,
+                options: [
+                    { id: 'a', text: `使用${year}年的时间线索。` },
+                    { id: 'b', text: '把学科概念和影视证据逐步对应。' },
+                    { id: 'c', text: '只依据平台总评分。' },
+                ],
+                correctAnswer: ['a', 'b'],
+            };
+        }
+        return {
+            ...base,
+            options: [],
+            correctAnswer: '先陈述证据，再说明概念，最后写出自己的学习结论。',
+            answerKeywords: ['证据', '概念', '结论', '现实'],
         };
     });
     return { choices: [{ message: { content: JSON.stringify({ questions }) } }] };
