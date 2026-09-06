@@ -122,7 +122,6 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
-import com.tracktosearch.ui.component.ZoomViewerTransition
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
@@ -411,14 +410,10 @@ fun DetailScreen(
     // 端点状态只在转场开始/结束时变化，足以控制首屏内容和 Haze source。
     // 共享海报的边界动画比页面淡入更长，只看页面转场端点会在海报还在飞的时候放开正文与
     // Haze 采样。两个信号取或，任一还在跑就继续冻结。
-    // 查看器（大图）开合走同一把 SharedTransitionScope，也会让 scope.isTransitionActive
-    // 置真；但那不是导航转场——页面静止且被遮罩盖着，冻结只会让评分区以下的正文在
-    // 开合全程消失。用计数把它排除。
-    val isNavigationTransitionRunning = ZoomViewerTransition.depth == 0 &&
-        (isAppSharedTransitionActive() ||
-            LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
-                transition.currentState != transition.targetState
-            } == true)
+    val isNavigationTransitionRunning = isAppSharedTransitionActive() ||
+        LocalAnimatedVisibilityScope.current?.transition?.let { transition ->
+            transition.currentState != transition.targetState
+        } == true
     val contentReadyForTransition = contentReady && !isNavigationTransitionRunning
 
 
