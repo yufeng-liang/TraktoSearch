@@ -197,10 +197,9 @@ private fun BoxScope.FullscreenImageProgressRing(
  *   底图不随转场结束撤走：telephoto 挂载后它自己的占位图要到 Coil 异步解析 + 下一轮
  *   重组才真正画出来（实测有 200ms+ 空窗），期间底图垫在 telephoto 下面兜住画面，
  *   直到 [ZoomableImageState.isImageDisplayed] 才撤。
- * @param transitionRunning 开合转场仍在进行（两个方向都算）。此间 telephoto 的手势被
- *   禁用，而它的单击也跟着 gestures=None 一起失效——没有兜底的话，打开动画还没收尾
- *   就点屏幕想关闭，这一下会被吞掉。转场期在容器上补一个无涟漪 clickable 接住单击
- *   直接关闭（转场中不可能处于放大态，无需走「先复位」协议）。
+ * @param transitionRunning 开合转场仍在进行（两个方向都算）。此间 telephoto 抬进共享
+ *   转场 overlay 层，实测单击存在不响应的空档。转场结束后兜底仍不撤——大图尚未
+ *   显示（placeholder 期/original 下载期）的窗口同样可能吞单击，见主体内的兜底层。
  */
 @Composable
 internal fun ProgressiveFullscreenImage(
@@ -264,11 +263,17 @@ internal fun ProgressiveFullscreenImage(
             progressFlow = progressFlow,
             visible = !deferred
         )
-        // 转场期单击兜底：telephoto 手势被禁(gestures=None)时连单击也不放行，而它
-        // 挂着的 pointerInput 已把事件吃掉，父级 clickable 收不到冒泡——只能盖在
-        // 它上面先接。转场结束覆盖层移除，telephoto 正常接管单击/双击/缩放。
-        // 转场中不可能处于放大态，直接关闭，无需走「先复位」协议。
-        if (transitionRunning && onRequestDismiss != null) {
+        // 转场期与图片未就绪期间的单击兜底。telephoto 的手势检测虽然无条件挂载，
+        // 但转场抬层与挂载交接（deferZoomable 结束、Coil resolve、原图落盘）的窗口内
+        // 实测存在单击不响应的空档，且它的 pointerInput 挂在图片上，兜底层只能盖在
+        // 它上面先接事件。
+        // 撤除条件用 isPlaceholderDisplayed 而非 isImageDisplayed：大图显示后 telephoto
+        // 还有 250ms 的 crossfade，期间 isPlaceholderDisplayed 仍为 true、gestures 被
+        // telephoto 内部强制为 None（onClick 不触发）——用 isImageDisplayed 撤兜底会
+        // 留下这段单击空窗（实测原图缓存命中时打开后 ~0.75s 关闭被吞）。placeholder
+        // 完全消失（crossfade 收尾）后 telephoto 才真正可交互，届时撤走，恢复完整手势
+        // （缩放/双击/黑边同协议）。兜底期间不可能处于放大态，直接关闭即可。
+        if (onRequestDismiss != null && (transitionRunning || state.isPlaceholderDisplayed)) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
