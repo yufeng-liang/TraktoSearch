@@ -90,7 +90,10 @@ fun ActionButtonRow(
                         onClick = action.onClick
                     )
                     .alpha(contentAlpha)
-                    .padding(vertical = verticalPadding)
+                    // 只做顶部 inset：底部 padding 会让 chip 视觉底边悬在行底边上方，
+                    // 详情页 HeaderRightColumn 把行底边对齐海报底边时按钮组就矮出一截
+                    // （像素实测 7dp）。底部贴住行边界才能与海报底平齐。
+                    .padding(top = verticalPadding)
                     .neumorphicShadow(
                         shape = RoundedCornerShape(14.dp),
                         isDark = !isLight,
