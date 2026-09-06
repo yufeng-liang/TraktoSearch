@@ -210,6 +210,156 @@ class AiModelsTest {
     }
 
     @Test
+    fun dailyKnowledgeDto_decodesStructuredUnitAndKeepsLegacyFields() {
+        val dto = Json { ignoreUnknownKeys = true }.decodeFromString<AiDailyKnowledgeDto>(
+            """
+            {
+              "id":"unit-1",
+              "title":"为什么第一个提出异议的人很重要？",
+              "fact":"旧事实",
+              "explanation":"旧解释",
+              "sourceName":"旧来源",
+              "sourceUrl":"https://legacy.example/source",
+              "publishedAt":1725500000000,
+              "characterLine":"旧台词",
+              "relatedMediaTitle":"旧片名",
+              "containsSpoiler":true,
+              "unitId":"unit-1",
+              "version":1,
+              "locale":"zh-CN",
+              "relationType":"direct_watch",
+              "evidenceMode":"viewing_interpretation",
+              "subjectGroup":"people_and_mind",
+              "subject":"心理学",
+              "concept":"从众压力",
+              "takeaway":"第一个表达异议的人会降低其他人说出不同意见的心理成本。",
+              "relatedMedia":{
+                "title":"十二怒汉",
+                "mediaType":"movie",
+                "traktId":"123",
+                "imdbId":"tt0050083",
+                "tmdbId":550,
+                "doubanId":null
+              },
+              "filmEvidence":"陪审团第一次投票后，少数意见逐渐获得公开讨论的空间。",
+              "realWorldExample":"会议室里第一个提出疑问的人会让后续讨论更开放。",
+              "boundary":"这是基于影片场景的入门解读，不是对角色的临床诊断。",
+              "difficulty":"easy",
+              "spoilerLevel":"light",
+              "source":{"name":"新来源","url":"https://source.example","evidence":"来源支持群体压力结论"},
+              "checkQuestion":{
+                "prompt":"谁降低了其他人表达异议的心理成本？",
+                "options":[{"id":"a","text":"第一个提出异议的人"},{"id":"b","text":"保持沉默的人"}],
+                "correctOptionIds":["a"],
+                "explanation":"第一个公开异议会打破表面共识。"
+              },
+              "illustration":{"status":"generating"}
+            }
+            """.trimIndent()
+        )
+        val domain = dto.toDomain()
+
+        // 旧字段必须原样保留，供旧 UI 与旧缓存语义继续工作。
+        assertThat(domain.fact).isEqualTo("旧事实")
+        assertThat(domain.explanation).isEqualTo("旧解释")
+        assertThat(domain.sourceName).isEqualTo("旧来源")
+        assertThat(domain.sourceUrl).isEqualTo("https://legacy.example/source")
+        assertThat(domain.relatedMediaTitle).isEqualTo("旧片名")
+        assertThat(domain.containsSpoiler).isTrue()
+        // 新结构化字段完整进入 domain。
+        assertThat(domain.unitId).isEqualTo("unit-1")
+        assertThat(domain.version).isEqualTo(1)
+        assertThat(domain.locale).isEqualTo("zh-CN")
+        assertThat(domain.relationType).isEqualTo("direct_watch")
+        assertThat(domain.evidenceMode).isEqualTo("viewing_interpretation")
+        assertThat(domain.subjectGroup).isEqualTo("people_and_mind")
+        assertThat(domain.subject).isEqualTo("心理学")
+        assertThat(domain.concept).isEqualTo("从众压力")
+        assertThat(domain.takeaway).isEqualTo("第一个表达异议的人会降低其他人说出不同意见的心理成本。")
+        assertThat(domain.relatedMedia?.title).isEqualTo("十二怒汉")
+        assertThat(domain.relatedMedia?.traktId).isEqualTo("123")
+        assertThat(domain.filmEvidence).isEqualTo("陪审团第一次投票后，少数意见逐渐获得公开讨论的空间。")
+        assertThat(domain.realWorldExample).isEqualTo("会议室里第一个提出疑问的人会让后续讨论更开放。")
+        assertThat(domain.boundary).isEqualTo("这是基于影片场景的入门解读，不是对角色的临床诊断。")
+        assertThat(domain.difficulty).isEqualTo("easy")
+        assertThat(domain.spoilerLevel).isEqualTo("light")
+        assertThat(domain.source?.name).isEqualTo("新来源")
+        assertThat(domain.source?.evidence).isEqualTo("来源支持群体压力结论")
+        assertThat(domain.checkQuestion?.correctOptionIds).containsExactly("a")
+    }
+
+    @Test
+    fun dailyKnowledgeDto_acceptsNullSourceUrlAndFallsBackToStructuredSource() {
+        val dto = Json { ignoreUnknownKeys = true }.decodeFromString<AiDailyKnowledgeDto>(
+            """
+            {
+              "id":"2026-09-06",
+              "unitId":"unit-null-source",
+              "version":1,
+              "title":"旧字段允许来源链接为空",
+              "fact":"旧事实",
+              "explanation":"旧解释",
+              "sourceName":"",
+              "sourceUrl":null,
+              "source":{"name":"结构化来源","url":"https://source.example","evidence":"来源支持该概念"},
+              "publishedAt":null,
+              "characterLine":null
+            }
+            """.trimIndent()
+        )
+        val domain = dto.toDomain()
+
+        assertThat(domain.sourceUrl).isEqualTo("https://source.example")
+        assertThat(domain.sourceName).isEqualTo("结构化来源")
+        assertThat(domain.source?.evidence).isEqualTo("来源支持该概念")
+    }
+
+    @Test
+    fun dailyKnowledgeLegacyPayload_decodesIntoDtoAndCachedDomainWithFallback() {
+        val legacyJson = """
+            {
+              "id":"legacy-cache",
+              "title":"旧标题",
+              "fact":"旧事实",
+              "explanation":"旧解释",
+              "sourceName":"旧来源",
+              "sourceUrl":"https://legacy.example/source",
+              "publishedAt":1725500000000,
+              "characterLine":null
+            }
+        """.trimIndent()
+        val json = Json { ignoreUnknownKeys = true }
+        val dto = json.decodeFromString<AiDailyKnowledgeDto>(legacyJson)
+        val cached = json.decodeFromString<AiDailyKnowledge>(legacyJson)
+        val domain = dto.toDomain()
+
+        assertThat(dto.version).isNull()
+        assertThat(dto.takeaway).isNull()
+        assertThat(domain.takeaway).isEqualTo("旧事实")
+        assertThat(domain.filmEvidence).isEqualTo("旧事实")
+        assertThat(cached.takeaway).isEqualTo("旧事实")
+        assertThat(cached.filmEvidence).isEqualTo("旧事实")
+        assertThat(cached.locale).isEqualTo(AiDailyKnowledgeContract.DEFAULT_LOCALE)
+        assertThat(cached.version).isNull()
+        assertThat(cached.relatedMedia).isNull()
+        assertThat(cached.checkQuestion).isNull()
+    }
+
+    @Test
+    fun dailyRequest_defaultsToChineseLocaleAndSerializesIt() {
+        assertThat(AiDailyKnowledgeContract.SUPPORTED_LOCALES)
+            .containsExactly("zh-CN", "en-US", "ja-JP", "ko-KR")
+            .inOrder()
+        val request = AiDailyRequest(sessionId = "daily-session")
+        val body = Json { encodeDefaults = true }
+            .encodeToJsonElement(AiDailyRequest.serializer(), request)
+            .jsonObject
+
+        assertThat(request.locale).isEqualTo("zh-CN")
+        assertThat(body["locale"]?.jsonPrimitive?.content).isEqualTo("zh-CN")
+    }
+
+    @Test
     fun watchedTitle_keepsOptionalTmdbEvidenceAndLegacyPayloadDefaults() {
         val legacy = Json.decodeFromString(
             AiWatchedTitleDto.serializer(),

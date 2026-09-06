@@ -2,6 +2,7 @@ package com.tracktosearch.data.ai
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -465,6 +466,41 @@ data class AiQuizHistory(
     val lastResult: AiQuizResult? = null
 )
 
+/** 今日影视知识的多语言契约。locale 标签区分大小写，避免 Worker 端做隐式猜测。 */
+// subject 是 Worker 内部受控学科键，客户端展示前需按 locale 本地化。
+object AiDailyKnowledgeContract {
+    const val DEFAULT_LOCALE = "zh-CN"
+    const val CACHE_SCHEMA_VERSION = "unit-v1"
+
+    /** P0 只开放四种内容语言，其他值由 Repository 在请求和缓存前拦截。 */
+    val SUPPORTED_LOCALES = setOf("zh-CN", "en-US", "ja-JP", "ko-KR")
+}
+
+@Serializable
+data class AiDailyRelatedMediaDto(
+    val title: String = "",
+    val mediaType: String = "",
+    val traktId: String? = null,
+    val tmdbId: Int? = null,
+    val imdbId: String? = null,
+    val doubanId: String? = null
+)
+
+@Serializable
+data class AiDailySourceDto(
+    val name: String = "",
+    val url: String = "",
+    val evidence: String = ""
+)
+
+@Serializable
+data class AiDailyCheckQuestionDto(
+    val prompt: String = "",
+    val options: List<AiQuizOption> = emptyList(),
+    val correctOptionIds: List<String> = emptyList(),
+    val explanation: String = ""
+)
+
 @Serializable
 data class AiDailyKnowledgeDto(
     val id: String = "",
@@ -472,24 +508,69 @@ data class AiDailyKnowledgeDto(
     val fact: String = "",
     val explanation: String = "",
     val sourceName: String = "",
-    val sourceUrl: String = "",
+    val sourceUrl: String? = null,
     val publishedAt: Long? = null,
     val characterLine: String? = null,
     val quota: AiQuotaDto? = null,
     val relatedMediaTitle: String? = null,
-    val containsSpoiler: Boolean = false
+    val containsSpoiler: Boolean = false,
+    // 共享学习单元结构化字段。全部可选，旧 Worker / 旧缓存缺失时仍按旧字段展示。
+    val unitId: String? = null,
+    val version: Int? = null,
+    val locale: String? = null,
+    val relationType: String? = null,
+    val evidenceMode: String? = null,
+    val subjectGroup: String? = null,
+    val subject: String? = null,
+    val concept: String? = null,
+    val takeaway: String? = null,
+    val relatedMedia: AiDailyRelatedMediaDto? = null,
+    val filmEvidence: String? = null,
+    val realWorldExample: String? = null,
+    val boundary: String? = null,
+    val difficulty: String? = null,
+    val spoilerLevel: String? = null,
+    val source: AiDailySourceDto? = null,
+    val checkQuestion: AiDailyCheckQuestionDto? = null
 )
 
 @Serializable
 data class AiDailyRequest(
     val sessionId: String = "daily",
     val forceRefresh: Boolean = false,
-    val watched: List<AiWatchedTitleDto> = emptyList()
+    val watched: List<AiWatchedTitleDto> = emptyList(),
+    val locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+)
+
+@Serializable
+data class AiDailyRelatedMedia(
+    val title: String = "",
+    val mediaType: String = "",
+    val traktId: String? = null,
+    val tmdbId: Int? = null,
+    val imdbId: String? = null,
+    val doubanId: String? = null
+)
+
+@Serializable
+data class AiDailySource(
+    val name: String = "",
+    val url: String = "",
+    val evidence: String = ""
+)
+
+@Serializable
+data class AiDailyCheckQuestion(
+    val prompt: String = "",
+    val options: List<AiQuizOption> = emptyList(),
+    val correctOptionIds: List<String> = emptyList(),
+    val explanation: String = ""
 )
 
 @Serializable
 data class AiDailyKnowledge(
     val id: String,
+    val unitId: String? = null,
     val title: String,
     val fact: String,
     val explanation: String,
@@ -499,8 +580,34 @@ data class AiDailyKnowledge(
     val characterLine: String?,
     val quota: AiQuota? = null,
     val relatedMediaTitle: String? = null,
-    val containsSpoiler: Boolean = false
-)
+    val containsSpoiler: Boolean = false,
+    // 以下结构化字段默认空值，保证旧 domain 缓存可继续反序列化。
+    val version: Int? = null,
+    val locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE,
+    val relationType: String? = null,
+    val evidenceMode: String? = null,
+    val subjectGroup: String? = null,
+    val subject: String? = null,
+    val concept: String? = null,
+    @SerialName("takeaway")
+    private val takeawayValue: String = "",
+    val relatedMedia: AiDailyRelatedMedia? = null,
+    @SerialName("filmEvidence")
+    private val filmEvidenceValue: String = "",
+    val realWorldExample: String? = null,
+    val boundary: String? = null,
+    val difficulty: String? = null,
+    val spoilerLevel: String? = null,
+    val source: AiDailySource? = null,
+    val checkQuestion: AiDailyCheckQuestion? = null
+) {
+    // 旧 domain 缓存没有结构化字段时，用旧 fact 兜底，保证升级后旧内容仍可读。
+    val takeaway: String
+        get() = takeawayValue.ifBlank { fact }
+
+    val filmEvidence: String
+        get() = filmEvidenceValue.ifBlank { fact }
+}
 
 @Serializable
 enum class AiTtsScene {
@@ -676,18 +783,67 @@ fun AiQuizResultDto.toDomain(outerQuota: AiQuotaDto? = null): AiQuizResult = AiQ
     quota = (outerQuota ?: quota)?.toDomain()
 )
 
-fun AiDailyKnowledgeDto.toDomain(outerQuota: AiQuotaDto? = null): AiDailyKnowledge = AiDailyKnowledge(
-    id = id,
+fun AiDailyKnowledgeDto.toDomain(outerQuota: AiQuotaDto? = null): AiDailyKnowledge {
+    val relatedMediaDomain = relatedMedia?.toDomain()
+        ?: relatedMediaTitle?.takeIf { it.isNotBlank() }?.let { AiDailyRelatedMedia(title = it) }
+    val sourceDomain = source?.toDomain()
+        ?: AiDailySource(name = sourceName, url = sourceUrl.orEmpty()).takeIf {
+            it.name.isNotBlank() || it.url.isNotBlank()
+        }
+    return AiDailyKnowledge(
+        id = id,
+        unitId = unitId,
+        title = title,
+        fact = fact,
+        explanation = explanation,
+        // 旧 UI 字段优先保留原值；新结构化响应缺旧字段时用结构化字段补齐。
+        sourceName = sourceName.ifBlank { source?.name.orEmpty() },
+        sourceUrl = sourceUrl ?: source?.url.orEmpty(),
+        publishedAt = publishedAt,
+        characterLine = characterLine,
+        quota = (outerQuota ?: quota)?.toDomain(),
+        relatedMediaTitle = relatedMediaTitle
+            ?: relatedMediaDomain?.title?.takeIf { it.isNotBlank() },
+        containsSpoiler = containsSpoiler,
+        version = version,
+        locale = locale?.takeIf { it.isNotBlank() } ?: AiDailyKnowledgeContract.DEFAULT_LOCALE,
+        relationType = relationType,
+        evidenceMode = evidenceMode,
+        subjectGroup = subjectGroup,
+        subject = subject,
+        concept = concept,
+        takeawayValue = takeaway.orEmpty(),
+        relatedMedia = relatedMediaDomain,
+        filmEvidenceValue = filmEvidence.orEmpty(),
+        realWorldExample = realWorldExample,
+        boundary = boundary,
+        difficulty = difficulty,
+        spoilerLevel = spoilerLevel,
+        source = sourceDomain,
+        checkQuestion = checkQuestion?.toDomain()
+    )
+}
+
+private fun AiDailyRelatedMediaDto.toDomain(): AiDailyRelatedMedia = AiDailyRelatedMedia(
     title = title,
-    fact = fact,
-    explanation = explanation,
-    sourceName = sourceName,
-    sourceUrl = sourceUrl,
-    publishedAt = publishedAt,
-    characterLine = characterLine,
-    quota = (outerQuota ?: quota)?.toDomain(),
-    relatedMediaTitle = relatedMediaTitle,
-    containsSpoiler = containsSpoiler
+    mediaType = mediaType,
+    traktId = traktId,
+    tmdbId = tmdbId,
+    imdbId = imdbId,
+    doubanId = doubanId
+)
+
+private fun AiDailySourceDto.toDomain(): AiDailySource = AiDailySource(
+    name = name,
+    url = url,
+    evidence = evidence
+)
+
+private fun AiDailyCheckQuestionDto.toDomain(): AiDailyCheckQuestion = AiDailyCheckQuestion(
+    prompt = prompt,
+    options = options,
+    correctOptionIds = correctOptionIds,
+    explanation = explanation
 )
 
 fun AiActivationDto.toDomain(outerQuota: AiQuotaDto? = null): AiActivation {

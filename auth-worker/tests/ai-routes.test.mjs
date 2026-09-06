@@ -121,6 +121,58 @@ function movies() {
     }));
 }
 
+function validDailyKnowledgeUnit({ direct = false } = {}) {
+    return {
+        unitId: direct ? 'daily-direct-unit' : 'daily-general-unit',
+        version: 1,
+        locale: 'zh-CN',
+        relationType: direct ? 'direct_watch' : 'general_knowledge',
+        evidenceMode: direct ? 'viewing_interpretation' : 'external_fact',
+        subjectGroup: direct ? 'people_and_mind' : 'history_and_culture',
+        subject: direct ? '心理学' : '历史',
+        concept: direct ? '从众压力' : '片场口令',
+        title: direct ? '第一个反对票为什么重要' : '片场口令如何组织协作',
+        takeaway: direct
+            ? '第一个公开反对的人，会降低其他人表达不同意见的心理成本。'
+            : '统一口令把多部门准备压缩成同一瞬间，降低拍摄现场的不确定性。',
+        relatedMedia: direct ? { title: 'Movie 1', mediaType: 'movie', tmdbId: 100 } : null,
+        filmEvidence: direct
+            ? 'Movie 1 是 2020 年的 Drama，输入资料包含“上映年份：2020”“类型：Drama”“简介：影片包含群体讨论场景”，可用来讨论群体讨论中的意见变化。'
+            : '开机前的部门准备和统一信号，是影片制作资料中可确认的协作方式。',
+        explanation: direct
+            ? '多数意见可见后，个体会评估表达异见的社会成本；第一个公开异议让不同意见变得可见。'
+            : '片场时间成本高，统一信号让摄影、灯光、表演和声音在同一时刻进入执行状态。',
+        realWorldExample: direct
+            ? '会议中先有人提出替代方案，后续同事更容易补充顾虑。'
+            : '复杂项目也需要明确职责边界和统一启动信号。',
+        boundary: direct
+            ? '这是基于观看记录的入门解读，不是对角色的临床诊断。'
+            : '这是制作历史的来源说明，不同剧组流程会存在差异。',
+        difficulty: 'easy',
+        spoilerLevel: 'none',
+        source: {
+            name: direct ? 'Example' : 'Encyclopaedia Britannica',
+            url: direct ? 'https://example.com/fact' : 'https://www.britannica.com/citizen-kane',
+            evidence: direct
+                ? '来源说明从众压力与少数意见影响讨论的条件。'
+                : '来源介绍电影制作协作与技术流程。',
+        },
+        checkQuestion: {
+            prompt: direct ? '第一个公开反对者的作用是什么？' : '统一口令的主要作用是什么？',
+            options: [
+                { id: 'a', text: '让所有人立刻改变立场。' },
+                { id: 'b', text: direct ? '降低其他人表达不同意见的心理成本。' : '让多部门在同一瞬间进入执行状态。' },
+                { id: 'c', text: '证明流程一定正确。' },
+            ],
+            correctOptionIds: ['b'],
+            explanation: direct
+                ? '从众压力说明第一个公开异议会让后续表达更容易。'
+                : '片场口令作为协作信号，能让多部门同时进入执行状态。',
+        },
+        characterLine: '原来如此！',
+    };
+}
+
 test('AI character catalog is public through the main router', async () => {
     const worker = await loadMainWorker();
     const response = await worker.default.fetch(
@@ -988,14 +1040,7 @@ test('daily nullifies the source URL when the HEAD check returns 404', async () 
     globalThis.fetch = async (_input, init) => {
         if (init?.method === 'HEAD') return new Response('', { status: 404 });
         return new Response(JSON.stringify({
-            choices: [{ message: { content: JSON.stringify({
-                title: '《公民凯恩》的玻璃雪球',
-                fact: '片头的玻璃雪球是影史最著名的道具意象之一。',
-                explanation: '道具把人物的内心记忆压缩成了一个可凝视的物件。',
-                sourceName: '维基百科',
-                sourceUrl: 'https://example.com/citizen-kane',
-                characterLine: '原来这个雪球还有故事！',
-            }) } }],
+            choices: [{ message: { content: JSON.stringify(validDailyKnowledgeUnit()) } }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
 
@@ -1008,9 +1053,36 @@ test('daily nullifies the source URL when the HEAD check returns 404', async () 
 
         assert.equal(response.status, 200);
         assert.equal(json.data.sourceUrl, null);
-        assert.equal(json.data.sourceName, '维基百科');
-        assert.equal(json.data.title, '《公民凯恩》的玻璃雪球');
-        assert.equal(json.data.characterLine, '原来这个雪球还有故事！');
+        assert.equal(json.data.source?.url, '');
+        assert.equal(json.data.sourceName, 'Encyclopaedia Britannica');
+        assert.equal(json.data.title, '片场口令如何组织协作');
+        assert.equal(json.data.characterLine, '原来如此！');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('daily removes an untrusted source URL without fetching it', async () => {
+    const originalFetch = globalThis.fetch;
+    const unit = validDailyKnowledgeUnit({ direct: true });
+    unit.source = { ...unit.source, url: 'https://untrusted.example/fact' };
+    globalThis.fetch = async (_input, init = {}) => {
+        if (init?.method === 'HEAD') throw new Error('untrusted source must not be fetched');
+        return new Response(JSON.stringify({
+            choices: [{ message: { content: JSON.stringify(unit) } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const { response, json } = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-untrusted-source-session', forceRefresh: true },
+            env: createLegacyMimoTextEnv(),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(json.data.sourceUrl, null);
+        assert.equal(json.data.source?.url, '');
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -1021,14 +1093,7 @@ test('daily keeps the source URL when the HEAD check is blocked by anti-scraping
     globalThis.fetch = async (_input, init) => {
         if (init?.method === 'HEAD') return new Response('', { status: 403 });
         return new Response(JSON.stringify({
-            choices: [{ message: { content: JSON.stringify({
-                title: '《公民凯恩》的玻璃雪球',
-                fact: '片头的玻璃雪球是影史最著名的道具意象之一。',
-                explanation: '道具把人物的内心记忆压缩成了一个可凝视的物件。',
-                sourceName: '维基百科',
-                sourceUrl: 'https://example.com/citizen-kane',
-                characterLine: '原来这个雪球还有故事！',
-            }) } }],
+            choices: [{ message: { content: JSON.stringify(validDailyKnowledgeUnit()) } }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
 
@@ -1040,7 +1105,7 @@ test('daily keeps the source URL when the HEAD check is blocked by anti-scraping
         });
 
         assert.equal(response.status, 200);
-        assert.equal(json.data.sourceUrl, 'https://example.com/citizen-kane');
+        assert.equal(json.data.sourceUrl, 'https://www.britannica.com/citizen-kane');
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -2207,16 +2272,7 @@ test('daily prompt uses watched titles and rejects an unrelated relatedMediaTitl
         requestBody = JSON.parse(init.body);
         return new Response(JSON.stringify({
             choices: [{
-                message: { content: JSON.stringify({
-                    title: '一条片场冷知识',
-                    fact: '这是一个可核验的影视事实。',
-                    explanation: '来源页面提供了相关背景。',
-                    sourceName: 'Example',
-                    sourceUrl: 'https://example.com/fact',
-                    characterLine: '原来如此！',
-                    relatedMediaTitle: 'Movie 1',
-                    containsSpoiler: true,
-                }) },
+                message: { content: JSON.stringify(validDailyKnowledgeUnit({ direct: true })) },
             }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -2224,12 +2280,19 @@ test('daily prompt uses watched titles and rejects an unrelated relatedMediaTitl
     try {
         const { response, json } = await call('/api/ai/daily', {
             method: 'POST',
-            body: { action: 'daily', sessionId: 'daily-watched-session', watched: movies(), forceRefresh: true },
+            body: {
+                action: 'daily',
+                sessionId: 'daily-watched-session',
+                watched: movies().map((movie, index) => index === 0
+                    ? { ...movie, overview: '影片包含群体讨论场景。' }
+                    : movie),
+                forceRefresh: true,
+            },
             env: createLegacyMimoTextEnv(),
         });
         assert.equal(response.status, 200);
         assert.equal(json.data.relatedMediaTitle, 'Movie 1');
-        assert.equal(json.data.containsSpoiler, true);
+        assert.equal(json.data.containsSpoiler, false);
         assert.match(String(requestBody.messages?.[1]?.content), /Movie 1/);
     } finally {
         globalThis.fetch = originalFetch;

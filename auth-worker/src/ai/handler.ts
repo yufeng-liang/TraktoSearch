@@ -28,6 +28,15 @@ import {
     type AgnesEnvironment,
 } from './agnes.ts';
 import {
+    dailyCandidateMessages,
+    dailyReviewMessages,
+    fallbackDailyKnowledgeUnit,
+    normalizeDailyKnowledgeUnit,
+    readDailyLocale,
+    type DailyLocale,
+    type KnowledgeUnit,
+} from './daily-knowledge.ts';
+import {
     cacheKeyDigest,
     getFriendNickname,
     readAiCache,
@@ -140,7 +149,8 @@ interface QuizDifficultyRecord {
     updatedAt: string;
 }
 
-interface DailyResponse {
+interface DailyResponse extends KnowledgeUnit {
+    unitVersion: number;
     id: string;
     date: string;
     title: string;
@@ -174,7 +184,7 @@ interface LlmJsonResult {
 }
 
 interface LlmRequestContext {
-    route: 'greeting' | 'taste' | 'quiz' | 'quiz-review' | 'daily';
+    route: 'greeting' | 'taste' | 'quiz' | 'quiz-review' | 'daily-candidate' | 'daily-review';
     requestId: string;
 }
 
@@ -732,47 +742,153 @@ async function handleDaily(
 ): Promise<Response> {
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
+    const locale = readDailyLocale(body.locale);
     const movies = readOptionalMovies(body);
-    // 每日冷知识按东八区自然日切换；有 watched 时把片单摘要纳入缓存键，避免串用个性化结果。
+    // 每日知识按东八区自然日切换；locale 与片单摘要都进入缓存键，避免语言或个性化结果串用。
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
     const watchedKey = movies.length > 0 ? await cacheKeyDigest(JSON.stringify(stableMovieDigest(movies))) : null;
-    const cacheKey = watchedKey === null
-        ? aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', payload.sub, day)
-        : aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', payload.sub, day, watchedKey);
+    const cacheKey = dailyKnowledgeCacheKey(payload.sub, day, locale, watchedKey);
     if (!forceRefresh) {
-        const cached = await readAiCache(env, cacheKey);
+        const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
         if (cached) return successResponse(cached, requestId);
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const upstream = await callLlmJson(
-        env,
-        provider,
-        model,
-        dailyMessages(day, movies),
-        {},
-        fallbackModel,
-        { route: 'daily', requestId },
-    );
-    const response = parseTextResultOrFallback(
-        upstream,
-        value => normalizeDaily(parseAssistantJson<unknown>(value), day, movies),
-        () => fallbackDaily(day, movies),
-        { route: 'daily', requestId },
-    );
-    if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) response.sourceUrl = null;
+    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId);
+    const response = dailyResponseFromUnit(unit, day);
+    if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) {
+        response.sourceUrl = null;
+        response.source = { ...response.source, url: '' };
+    }
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
     return successResponse(response, requestId, publicQuota(quota));
 }
 
 /**
+ * 两阶段生成：候选编辑只负责提出单元，二审审校器只能基于候选与输入重写。
+ * 任一阶段结构失败或本地门槛失败都返回审核种子，绝不把首轮候选返回给客户端。
+ */
+async function generateDailyKnowledgeUnit(
+    env: AiEnvironment,
+    provider: 'mimo' | 'agnes',
+    model: string,
+    fallbackModel: string,
+    day: string,
+    locale: DailyLocale,
+    movies: WatchMovie[],
+    requestId: string,
+): Promise<KnowledgeUnit> {
+    let candidateUpstream: LlmJsonResult | null;
+    try {
+        candidateUpstream = await callLlmJson(
+            env,
+            provider,
+            model,
+            dailyCandidateMessages(day, locale, movies),
+            { maxCompletionTokens: 2600 },
+            fallbackModel,
+            { route: 'daily-candidate', requestId },
+        );
+    } catch (error) {
+        if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+        return fallbackDailyKnowledgeUnit(day, locale);
+    }
+    if (!candidateUpstream) return fallbackDailyKnowledgeUnit(day, locale);
+
+    let candidate: KnowledgeUnit;
+    try {
+        candidate = normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(candidateUpstream.payload), { day, locale, movies });
+    } catch {
+        return fallbackDailyKnowledgeUnit(day, locale);
+    }
+
+    let reviewUpstream: LlmJsonResult | null;
+    try {
+        reviewUpstream = await callLlmJson(
+            env,
+            provider,
+            model,
+            dailyReviewMessages(candidate, locale, movies),
+            { maxCompletionTokens: 3000 },
+            fallbackModel,
+            { route: 'daily-review', requestId },
+        );
+    } catch (error) {
+        if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+        return fallbackDailyKnowledgeUnit(day, locale);
+    }
+    if (!reviewUpstream) return fallbackDailyKnowledgeUnit(day, locale);
+
+    try {
+        return normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(reviewUpstream.payload), { day, locale, movies });
+    } catch {
+        return fallbackDailyKnowledgeUnit(day, locale);
+    }
+}
+
+function dailyResponseFromUnit(unit: KnowledgeUnit, day: string): DailyResponse {
+    return {
+        ...unit,
+        unitVersion: unit.version,
+        id: day,
+        date: day,
+        fact: unit.takeaway,
+        sourceName: unit.source.name,
+        sourceUrl: unit.source.url,
+        publishedAt: Date.now(),
+        relatedMediaTitle: unit.relatedMedia?.title ?? null,
+        containsSpoiler: unit.spoilerLevel !== 'none',
+    };
+}
+
+function dailyKnowledgeCacheKey(friendId: string, day: string, locale: DailyLocale, watchedKey: string | null): string {
+    return aiCacheKey('v3', 'daily', friendId, day, locale, watchedKey ?? 'none');
+}
+
+/** v3 locale 键未命中时，zh-CN 继续读取旧 v2 daily 缓存；其他语言不回读旧中文内容。 */
+async function readDailyCacheCompat(
+    env: AiEnvironment,
+    friendId: string,
+    day: string,
+    locale: DailyLocale,
+    watchedKey: string | null,
+): Promise<unknown | null> {
+    const cached = await readAiCache(env, dailyKnowledgeCacheKey(friendId, day, locale, watchedKey));
+    if (cached) return cached;
+    if (locale !== 'zh-CN') return null;
+    const legacyKey = watchedKey === null
+        ? aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', friendId, day)
+        : aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', friendId, day, watchedKey);
+    return readAiCache(env, legacyKey);
+}
+
+/** P0 只核验人工审核种子覆盖的可信来源域，避免被片单注入诱导访问任意 URL。 */
+const TRUSTED_DAILY_SOURCE_HOSTS = new Set([
+    'www.britannica.com',
+    'dictionary.apa.org',
+    'www.apa.org',
+    'plato.stanford.edu',
+    'pmc.ncbi.nlm.nih.gov',
+    'www.who.int',
+    'www.stlouisfed.org',
+    'llis.nasa.gov',
+    'science.nasa.gov',
+    'www.computerhistory.org',
+    'www.law.cornell.edu',
+]);
+
+/**
  * HEAD 核验 LLM 给出的 daily 来源链接是否真实可达，拦截编造链接。
  * 403/405 多为反爬拦截而非幻觉，与 2xx/3xx 一样视为可达；
- * 404/410、网络异常、超时或任何抛错都视为不可达。
+ * 404/410、网络异常、超时、跳转后离开可信域或任何抛错都视为不可达。
  */
 async function isDailySourceReachable(url: string): Promise<boolean> {
     try {
+        const requested = new URL(url);
+        if (!TRUSTED_DAILY_SOURCE_HOSTS.has(requested.hostname)) return false;
         const head = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(5000) });
+        // Node 测试里的 Response.url 可能为空；真实 fetch 会带最终地址。
+        if (head.url && !TRUSTED_DAILY_SOURCE_HOSTS.has(new URL(head.url).hostname)) return false;
         if (head.status >= 200 && head.status < 400) return true;
         return head.status === 403 || head.status === 405;
     } catch {
@@ -995,19 +1111,6 @@ function quizReviewMessages(
     ];
 }
 
-function dailyMessages(day: string, movies: WatchMovie[] = []): MimoMessage[] {
-    const watchedInstruction = movies.length > 0
-        ? '优先从以下已看影视中选择一个确实有关联的作品，relatedMediaTitle 必须逐字复制标题；如果没有可靠关联就填 null，不要强行关联：<MOVIES>' + JSON.stringify(movies) + '</MOVIES>'
-        : '当前没有已看影视材料，relatedMediaTitle 必须为 null。';
-    return [
-        {
-            role: 'system',
-            content: '你是每日影视冷知识编辑。只返回 JSON，字段为 title、fact、explanation、sourceName（来源网站中文名）、sourceUrl、characterLine、relatedMediaTitle、containsSpoiler。事实必须短小、有趣、可核验；sourceUrl 必须是支持该事实的 http 或 https 来源链接，不要编造链接。relatedMediaTitle 只能来自已看列表，containsSpoiler 必须是布尔值。',
-        },
-        { role: 'user', content: '生成 ' + day + ' 的一条影视冷知识。' + watchedInstruction },
-    ];
-}
-
 function fallbackNameSignals(nickname: string): NameSignal[] {
     const normalized = nickname.trim();
     if (!normalized || /^[\d\W_]+$/u.test(normalized) || Array.from(normalized).length < 2) return [];
@@ -1158,49 +1261,6 @@ function normalizeRecommendation(value: unknown, index: number, movies: WatchMov
     const mediaType = object.mediaType === undefined ? 'movie' : object.mediaType === 'show' ? 'show' : object.mediaType === 'movie' ? 'movie' : null;
     if (mediaType === null) throw new AppError('INVALID_AI_OUTPUT', 'Recommendation media type is invalid', 502);
     return { mediaType, title, year, reason: requiredText(object, ['reason', 'why'], 'recommendation reason') };
-}
-
-function fallbackDaily(day: string, movies: WatchMovie[] = []): DailyResponse {
-    return {
-        id: day,
-        date: day,
-        title: '电影的第一声“Action”',
-        fact: '“Action”并不是电影诞生之初就固定使用的唯一开拍口令。不同剧组和时代会使用不同的现场信号。',
-        explanation: '电影制作把复杂的协作压缩成一个短口令，镜头、演员和现场声音才能在同一瞬间进入状态。',
-        sourceName: 'Encyclopaedia Britannica',
-        sourceUrl: 'https://www.britannica.com/art/motion-picture',
-        publishedAt: Date.now(),
-        characterLine: '今天也发现一个小细节！',
-        // 兜底事实没有与用户片单建立可靠关联，不能为了“个性化”硬贴一部片。
-        relatedMediaTitle: null,
-        containsSpoiler: false,
-    };
-}
-
-function normalizeDaily(value: unknown, day: string, movies: WatchMovie[] = []): DailyResponse {
-    const object = requireRecord(value, 'AI daily fact');
-    const sourceUrl = requiredText(object, ['sourceUrl', 'source'], 'sourceUrl');
-    if (!isHttpUrl(sourceUrl)) throw new AppError('INVALID_AI_OUTPUT', 'Daily fact source URL is invalid', 502);
-    const rawRelatedTitle = optionalText(object, ['relatedMediaTitle', 'mediaTitle']);
-    const watchedTitles = new Map(movies.map(movie => [movie.title.toLocaleLowerCase('zh-CN'), movie.title]));
-    let relatedMediaTitle: string | null = null;
-    if (rawRelatedTitle !== null) {
-        relatedMediaTitle = watchedTitles.get(rawRelatedTitle.toLocaleLowerCase('zh-CN')) ?? null;
-        if (relatedMediaTitle === null) throw new AppError('INVALID_AI_OUTPUT', 'Daily related title must be watched', 502);
-    }
-    return {
-        id: day,
-        date: day,
-        title: requiredText(object, ['title'], 'title'),
-        fact: requiredText(object, ['fact'], 'fact'),
-        explanation: requiredText(object, ['explanation', 'why'], 'explanation'),
-        sourceName: typeof object.sourceName === 'string' ? object.sourceName.trim().slice(0, 120) : '',
-        sourceUrl,
-        publishedAt: Date.now(),
-        characterLine: typeof object.characterLine === 'string' ? object.characterLine.slice(0, 240) : null,
-        relatedMediaTitle,
-        containsSpoiler: typeof object.containsSpoiler === 'boolean' ? object.containsSpoiler : false,
-    };
 }
 
 function fallbackEducation(index: number, movie: WatchMovie, knowledgePoint: string) {
@@ -1679,11 +1739,14 @@ function readOptionalMovies(body: Record<string, unknown>): WatchMovie[] {
 }
 
 function stableMovieDigest(movies: WatchMovie[]): Array<Record<string, unknown>> {
+    // 摘要必须覆盖进入生成 prompt 的完整证据；否则简介/类型更新后会命中旧个性化结果。
     return movies.map(movie => ({
         title: movie.title.trim(),
         mediaType: movie.mediaType,
         year: movie.year,
         mediaIds: movie.mediaIds,
+        genres: movie.genres,
+        evidence: movie.evidence,
     })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right), 'en-US'));
 }
 
@@ -1939,8 +2002,13 @@ function readSessionId(body: Record<string, unknown>): string {
 }
 
 function readDailyQuery(request: Request): Record<string, unknown> {
-    const sessionId = new URL(request.url).searchParams.get('sessionId');
-    return sessionId === null ? {} : { sessionId };
+    const params = new URL(request.url).searchParams;
+    const sessionId = params.get('sessionId');
+    const locale = params.get('locale');
+    return {
+        ...(sessionId === null ? {} : { sessionId }),
+        ...(locale === null ? {} : { locale }),
+    };
 }
 
 function readOpaqueId(value: unknown, field: string): string {

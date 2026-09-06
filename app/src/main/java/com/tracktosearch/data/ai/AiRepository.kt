@@ -414,21 +414,39 @@ class AiRepository @Inject constructor(
     suspend fun getDailyKnowledge(
         friendId: String,
         forceRefresh: Boolean = false,
-        watched: List<AiWatchedTitleDto> = emptyList()
+        watched: List<AiWatchedTitleDto> = emptyList(),
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
     ): Result<AiDailyKnowledge> {
+        val normalizedLocale = locale.trim()
+        if (normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) {
+            return Result.failure(
+                AiErrorMapper.exception(
+                    "INVALID_REQUEST",
+                    "Unsupported daily knowledge locale: $normalizedLocale",
+                    400
+                )
+            )
+        }
         val sessionId = sessionIdFor(friendId)
         return cachedRequest(
             friendId = friendId,
             feature = AiCacheFeature.DAILY_KNOWLEDGE,
             forceRefresh = forceRefresh,
-            suffix = currentCacheDate() + if (watched.isEmpty()) "" else ":" + watchedDigest(watched),
+            suffix = dailyCacheSuffix(normalizedLocale, watched),
+            // zh-CN 是旧缓存的真实语言。新键未命中时读旧日期键，避免升级当天强制重新请求。
+            fallbackSuffix = if (normalizedLocale == AiDailyKnowledgeContract.DEFAULT_LOCALE) {
+                legacyDailyCacheSuffix(watched)
+            } else {
+                null
+            },
             serializer = AiDailyKnowledge.serializer()
         ) {
             val payload = api.getDailyKnowledge(
                 AiDailyRequest(
                     sessionId = sessionId,
                     forceRefresh = forceRefresh,
-                    watched = watched.take(MAX_WATCHED_ITEMS)
+                    watched = watched.take(MAX_WATCHED_ITEMS),
+                    locale = normalizedLocale
                 )
             ).requirePayload()
             payload.data.toDomain(payload.quota)
@@ -545,6 +563,7 @@ class AiRepository @Inject constructor(
         forceRefresh: Boolean,
         serializer: KSerializer<T>,
         suffix: String? = null,
+        fallbackSuffix: String? = null,
         isCacheValid: (T) -> Boolean = { true },
         block: suspend () -> T
     ): Result<T> {
@@ -552,7 +571,7 @@ class AiRepository @Inject constructor(
             return Result.failure(AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400))
         }
         if (!forceRefresh) {
-            readCached(friendId, feature, serializer, suffix)
+            readCachedWithFallback(friendId, feature, serializer, suffix, fallbackSuffix)
                 ?.takeIf(isCacheValid)
                 ?.let { return Result.success(it) }
         }
@@ -564,7 +583,7 @@ class AiRepository @Inject constructor(
             throw e
         } catch (e: Exception) {
             if (!forceRefresh) {
-                readCached(friendId, feature, serializer, suffix)
+                readCachedWithFallback(friendId, feature, serializer, suffix, fallbackSuffix)
                     ?.takeIf(isCacheValid)
                     ?.let { return Result.success(it) }
             }
@@ -581,6 +600,18 @@ class AiRepository @Inject constructor(
 
     private fun isUsableGreetingCache(greeting: AiGreeting): Boolean =
         greeting.audio?.let(::isUsableTtsCache) ?: true
+
+    private suspend fun <T> readCachedWithFallback(
+        friendId: String,
+        feature: AiCacheFeature,
+        serializer: KSerializer<T>,
+        suffix: String?,
+        fallbackSuffix: String?
+    ): T? {
+        readCached(friendId, feature, serializer, suffix)?.let { return it }
+        if (fallbackSuffix == null || fallbackSuffix == suffix) return null
+        return readCached(friendId, feature, serializer, fallbackSuffix)
+    }
 
     private suspend fun <T> readCached(
         friendId: String,
@@ -629,6 +660,18 @@ class AiRepository @Inject constructor(
         excludedQuizIds.sorted().joinToString(","),
         watchedDigest(watched)
     ).joinToString("|").sha256Hex()
+
+    /** 今日知识新缓存键：日期 + locale + watchedDigest，语言之间互不覆盖。 */
+    private fun dailyCacheSuffix(locale: String, watched: List<AiWatchedTitleDto>): String = listOf(
+        AiDailyKnowledgeContract.CACHE_SCHEMA_VERSION,
+        currentCacheDate(),
+        locale,
+        if (watched.isEmpty()) "" else watchedDigest(watched)
+    ).joinToString("|")
+
+    /** 旧版今日知识缓存键，仅用于 zh-CN 升级后的读取兼容。 */
+    private fun legacyDailyCacheSuffix(watched: List<AiWatchedTitleDto>): String =
+        currentCacheDate() + if (watched.isEmpty()) "" else ":" + watchedDigest(watched)
 
     // 每日冷知识按东八区自然日切换缓存，避免 UTC 换日在本地中午/下午提前翻篇
     private fun currentCacheDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
