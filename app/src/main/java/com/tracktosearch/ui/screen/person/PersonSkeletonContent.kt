@@ -116,15 +116,8 @@ internal fun PersonSkeletonContent() {
                     }
                 }
 
-                // 简介区域骨架（「简介」标签为静态文字直接显示，正文 4 行保留骨架）
+                // 简介区域骨架（正文 4 行保留骨架，标题已去掉）
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = stringResource(R.string.detail_overview_label),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

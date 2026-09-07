@@ -431,11 +431,7 @@ fun MainScreen(
     val tabInteractionSources = remember(tabs.size) {
         List(tabs.size) { MutableInteractionSource() }
     }
-    val pageBackdropColor = androidx.compose.ui.graphics.lerp(
-        MaterialTheme.colorScheme.background,
-        MaterialTheme.colorScheme.primary,
-        0.05f
-    )
+    val pageBackdropColor = MaterialTheme.colorScheme.background
     val isGlassMode = LocalVisualEffectMode.current == VisualEffectMode.GLASS
     // 详情进入/返回时 NavHost 会同时组合新旧目的地：若继续录制全屏 backdrop，
     // 列表图片上传、页面淡入淡出与离屏录制全挤在同一帧。与 Watchlist 顶栏一致，

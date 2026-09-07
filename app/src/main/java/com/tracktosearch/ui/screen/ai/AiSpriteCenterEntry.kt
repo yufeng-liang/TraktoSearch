@@ -44,8 +44,8 @@ fun AiSpriteCenterEntryButton(
         modifier = modifier.semantics { contentDescription = description }
     ) {
         if (activatedCharacter != null) {
-            // 比标准 24dp 图标略大：立绘是全身像，脸只占一半高度，太小认不出是谁
-            AiCharacterGlyph(activatedCharacter, Modifier.size(28.dp))
+            // 激活后突出当前陪伴精灵；按钮本身仍保留 Material 最小触摸区域。
+            AiCharacterGlyph(activatedCharacter, Modifier.size(36.dp))
         } else {
             Icon(
                 imageVector = Icons.Rounded.AutoAwesome,

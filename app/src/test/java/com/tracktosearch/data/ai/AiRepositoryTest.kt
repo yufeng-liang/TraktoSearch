@@ -246,21 +246,107 @@ class AiRepositoryTest {
     }
 
     @Test
-    fun dailyCacheSuffix_containsCurrentUtcDate() = runTest {
+    fun dailyRequestAndCacheKeyIncludeLocaleAndWatchedDigest() = runTest {
         val api = mockk<AiApiService>()
         val storage = mockk<AiStorage>(relaxed = true)
-        coEvery { api.getDailyKnowledge(any()) } returns Response.success(
-            AiApiResponse(code = "SUCCESS", data = AiDailyKnowledgeDto(id = "daily-1"))
+        val watched = AiWatchedTitleDto(
+            mediaId = "tmdb:1",
+            mediaType = "movie",
+            title = "电影 A",
+            year = 2024,
+            mediaIds = AiMediaIdsDto(tmdbId = 1)
         )
-        val suffix = slot<String?>()
+        val requests = mutableListOf<AiDailyRequest>()
+        coEvery { api.getDailyKnowledge(any()) } coAnswers {
+            requests += arg<AiDailyRequest>(0)
+            Response.success(AiApiResponse(code = "SUCCESS", data = AiDailyKnowledgeDto(id = "daily-1")))
+        }
+        val suffixes = mutableListOf<String?>()
+        coEvery { storage.write(any(), any(), any(), any()) } coAnswers {
+            suffixes += arg<String?>(3)
+        }
         val repository = buildAiRepository(api, storage)
 
-        repository.getDailyKnowledge("friend-a", forceRefresh = true).getOrThrow()
+        repository.getDailyKnowledge(
+            "friend-a",
+            forceRefresh = true,
+            watched = listOf(watched),
+            locale = "ja-JP"
+        ).getOrThrow()
+        repository.getDailyKnowledge(
+            "friend-a",
+            forceRefresh = true,
+            watched = listOf(watched),
+            locale = "en-US"
+        ).getOrThrow()
 
-        coVerify(exactly = 1) {
-            storage.write("friend-a", AiCacheFeature.DAILY_KNOWLEDGE, any(), captureNullable(suffix))
+        coVerify(exactly = 2) { api.getDailyKnowledge(any()) }
+        assertThat(requests.map { it.locale }).containsExactly("ja-JP", "en-US").inOrder()
+        assertThat(requests.first().watched).isEqualTo(listOf(watched))
+        assertThat(suffixes).hasSize(2)
+        assertThat(suffixes[0]).isNotEqualTo(suffixes[1])
+        val parts = suffixes[0]!!.split("|")
+        assertThat(parts).hasSize(4)
+        assertThat(parts[0]).isEqualTo("unit-v1")
+        assertThat(parts[1]).matches("\\d{4}-\\d{2}-\\d{2}")
+        assertThat(parts[2]).isEqualTo("ja-JP")
+        val canonical = Json { encodeDefaults = true }
+            .encodeToString(ListSerializerHolder.serializer, listOf(watched))
+        assertThat(parts[3]).isEqualTo(canonical.sha256HexForTest())
+    }
+
+    @Test
+    fun dailyLocaleCache_fallsBackToLegacyDateCache() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>()
+        // 直接使用旧版 domain 缓存 JSON，避免当前序列化器把新字段写进测试夹具。
+        val legacyJson = """
+            {
+              "id":"legacy-daily",
+              "title":"旧标题",
+              "fact":"旧事实",
+              "explanation":"旧解释",
+              "sourceName":"旧来源",
+              "sourceUrl":"https://legacy.example/source",
+              "publishedAt":null,
+              "characterLine":null
+            }
+        """.trimIndent()
+        val readSuffixes = mutableListOf<String?>()
+        coEvery { storage.read(any(), any(), any()) } coAnswers {
+            val suffix = arg<String?>(2)
+            readSuffixes += suffix
+            // 旧键只有日期（或日期 + digest），没有 locale 分隔段。
+            if (suffix?.contains("|") == false) legacyJson else null
         }
-        assertThat(suffix.captured).matches("\\d{4}-\\d{2}-\\d{2}")
+        val repository = buildAiRepository(api, storage)
+
+        val daily = repository.getDailyKnowledge("friend-a").getOrThrow()
+
+        assertThat(daily.id).isEqualTo("legacy-daily")
+        assertThat(daily.takeaway).isEqualTo("旧事实")
+        assertThat(daily.filmEvidence).isEqualTo("旧事实")
+        assertThat(readSuffixes).hasSize(2)
+        assertThat(readSuffixes[0]).startsWith("unit-v1|")
+        assertThat(readSuffixes[1]).matches("\\d{4}-\\d{2}-\\d{2}")
+        coVerify(exactly = 0) { api.getDailyKnowledge(any()) }
+        coVerify(exactly = 0) { storage.write(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun dailyRequest_rejectsUnsupportedLocaleBeforeNetworkAndCache() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        val repository = buildAiRepository(api, storage)
+
+        val result = repository.getDailyKnowledge("friend-a", locale = "zh-TW")
+
+        assertThat(result.isFailure).isTrue()
+        val error = result.exceptionOrNull() as AiApiException
+        assertThat(error.errorCode).isEqualTo(AiErrorCode.INVALID_REQUEST)
+        coVerify(exactly = 0) { api.getDailyKnowledge(any()) }
+        coVerify(exactly = 0) { storage.read(any(), any(), any()) }
+        coVerify(exactly = 0) { storage.write(any(), any(), any(), any()) }
     }
 
     @Test

@@ -68,6 +68,7 @@ import com.tracktosearch.data.ai.AiWatchedTitleDto
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 /** 单选题选中后展示选中态的时长，之后自动进入下一题。 */
@@ -145,12 +146,14 @@ private fun QuizQuestionScreen(
     val question = quiz.questions[questionIndex]
     val answer = state.quizAnswers[question.id]
     val progress = quizProgress(questionIndex + 1, quiz.questions.size)
-    val unanswered = unansweredQuizCount(quiz, state.quizAnswers)
+    // 简答题是开放思考项，不计入必答进度；选择题完成度单独显示，避免跳过简答时制造焦虑。
+    val unansweredRequired = unansweredRequiredQuizCount(quiz, state.quizAnswers)
+    val requiredQuestionCount = quiz.questions.count { it.type != AiQuizQuestionType.SHORT }
     var unansweredConfirmVisible by remember(quiz.quizId, question.id) { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
 
-    LaunchedEffect(unanswered, state.isLoading) {
-        if (unanswered == 0 || state.isLoading) {
+    LaunchedEffect(unansweredRequired, state.isLoading) {
+        if (unansweredRequired == 0 || state.isLoading) {
             // 题目已补齐、提交或刷新开始后，不能继续显示上一状态的确认框。
             unansweredConfirmVisible = false
         }
@@ -207,8 +210,8 @@ private fun QuizQuestionScreen(
                 Text(
                     stringResource(
                         R.string.ai_quiz_answered_count,
-                        quiz.questions.size - unanswered,
-                        quiz.questions.size
+                        requiredQuestionCount - unansweredRequired,
+                        requiredQuestionCount
                     ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -218,6 +221,7 @@ private fun QuizQuestionScreen(
         item {
             QuizQuestionCard(
                 question = question,
+                stageRes = quizStageLabelRes(questionIndex, quiz.questions.size),
                 selectedOptionIds = answer?.selectedOptionIds.orEmpty(),
                 textAnswer = answer?.textAnswer.orEmpty(),
                 onSingleChoice = { selected -> viewModel.setQuizAnswer(question.id, listOf(selected)) },
@@ -246,7 +250,7 @@ private fun QuizQuestionScreen(
                         onClick = {
                             haptics.tap()
                             // 有漏题先提醒：未作答直接算 0 分，提交后没有回头路
-                            if (unanswered > 0) unansweredConfirmVisible = true else viewModel.submitQuiz()
+                            if (unansweredRequired > 0) unansweredConfirmVisible = true else viewModel.submitQuiz()
                         },
                         enabled = !state.isLoading,
                         modifier = Modifier.weight(1f)
@@ -269,12 +273,12 @@ private fun QuizQuestionScreen(
         item { Spacer(Modifier.height(8.dp)) }
     }
 
-    if (unansweredConfirmVisible && unanswered > 0 && !state.isLoading) {
+    if (unansweredConfirmVisible && unansweredRequired > 0 && !state.isLoading) {
         AlertDialog(
             onDismissRequest = { unansweredConfirmVisible = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.ai_quiz_unanswered_title)) },
-            text = { Text(stringResource(R.string.ai_quiz_unanswered_message, unanswered)) },
+            text = { Text(stringResource(R.string.ai_quiz_unanswered_message, unansweredRequired)) },
             confirmButton = {
                 // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
                 val confirmHaptics = rememberAppHaptics()
@@ -447,9 +451,89 @@ private fun localizedQuizPreviewTitle(
     ?: movie.title
 
 
+private fun quizDifficultyLabelRes(difficulty: String): Int = when (difficulty.trim().lowercase(Locale.ROOT)) {
+    "easy", "warmup", "basic" -> R.string.ai_quiz_difficulty_easy
+    "hard", "challenge", "advanced" -> R.string.ai_quiz_difficulty_hard
+    else -> R.string.ai_quiz_difficulty_medium
+}
+
+private fun quizStageLabelRes(index: Int, count: Int): Int {
+    // 固定 13 题时为 5 / 5 / 3；异常题量也保持三个阶段至少各有可读边界。
+    val warmupEnd = (count * 5 / 13).coerceAtLeast(1)
+    val deepEnd = (count * 10 / 13).coerceAtLeast(warmupEnd + 1)
+    return when {
+        index < warmupEnd -> R.string.ai_quiz_stage_warmup
+        index < deepEnd -> R.string.ai_quiz_stage_deep
+        else -> R.string.ai_quiz_stage_challenge
+    }
+}
+
+@Composable
+private fun QuizQuestionMeta(question: AiQuizQuestion, stageRes: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
+            Text(
+                stringResource(stageRes),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondaryContainer) {
+            Text(
+                stringResource(quizDifficultyLabelRes(question.difficulty)),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+    val concept = question.concept.trim().ifBlank { question.knowledgePoint.trim() }
+    if (concept.isNotBlank()) {
+        Text(
+            stringResource(R.string.ai_quiz_knowledge_point_format, concept),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    (question.sourceTitle ?: question.mediaTitle)?.takeIf { it.isNotBlank() }?.let { sourceTitle ->
+        Text(
+            stringResource(R.string.ai_quiz_source_format, sourceTitle),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+    question.subject.trim().takeIf { it.isNotBlank() }?.let { subject ->
+        Text(
+            stringResource(R.string.ai_quiz_subject_format, subject),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.secondary
+        )
+    }
+    question.learningTakeaway.trim().takeIf { it.isNotBlank() }?.let { takeaway ->
+        Text(
+            stringResource(R.string.ai_quiz_learning_takeaway_format, takeaway),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    question.evidenceUsed.trim().takeIf { it.isNotBlank() }?.let { evidence ->
+        Text(
+            stringResource(R.string.ai_quiz_evidence_used_format, evidence),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun QuizQuestionCard(
     question: AiQuizQuestion,
+    stageRes: Int,
     selectedOptionIds: List<String>,
     textAnswer: String,
     onSingleChoice: (String) -> Unit,
@@ -463,6 +547,7 @@ private fun QuizQuestionCard(
         tonalElevation = 1.dp
     ) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuizQuestionMeta(question = question, stageRes = stageRes)
             Text(question.prompt, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             question.quote?.takeIf { it.isNotBlank() }?.let { quote ->
                 Surface(
@@ -477,9 +562,6 @@ private fun QuizQuestionCard(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-            }
-            question.mediaTitle?.takeIf { it.isNotBlank() }?.let { title ->
-                Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
             when (question.type) {
                 AiQuizQuestionType.SINGLE -> {
@@ -589,6 +671,18 @@ private fun QuizResultScreen(
     val feedbackSelected = AiQuizDifficulty.fromName(feedbackName)
     val haptics = rememberAppHaptics()
     val answerSeparator = stringResource(R.string.ai_quiz_media_separator)
+    val orderedResults = quizOrderedQuestionResults(quiz, result)
+    val hasOptionalReflection = quiz?.questions?.any { it.type == AiQuizQuestionType.SHORT } == true
+    val objectiveResults = if (quiz == null) {
+        orderedResults
+    } else {
+        orderedResults.filterNot { questionResult ->
+            quiz.questions.firstOrNull { it.id == questionResult.questionId }?.type == AiQuizQuestionType.SHORT
+        }
+    }
+    val objectiveCorrectCount = objectiveResults.count { it.correct }
+    val objectiveTotal = if (quiz == null) result.totalQuestions else objectiveResults.size
+    val objectiveAccuracy = if (objectiveTotal > 0) objectiveCorrectCount * 100 / objectiveTotal else 0
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -609,12 +703,26 @@ private fun QuizResultScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(stringResource(R.string.ai_quiz_result_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.ai_quiz_score, result.score), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                    if (hasOptionalReflection) {
+                        Text(
+                            stringResource(R.string.ai_quiz_total_score_with_optional_reflection, result.score),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            stringResource(R.string.ai_quiz_optional_reflection_result),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Text(stringResource(R.string.ai_quiz_score, result.score), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                    }
                     Text(
-                        stringResource(R.string.ai_quiz_correct_count, result.correctCount, result.totalQuestions) +
+                        stringResource(R.string.ai_quiz_correct_count, objectiveCorrectCount, objectiveTotal) +
                             " · " +
-                            stringResource(R.string.ai_quiz_accuracy, quizAccuracyPercent(result)),
+                            stringResource(R.string.ai_quiz_accuracy, objectiveAccuracy),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -626,22 +734,23 @@ private fun QuizResultScreen(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(Modifier.height(4.dp))
-                    // 13 题一览条形：每题等宽一小段，答对主题色、答错弱化灰，一眼看出分布
+                    // 13 题一览条形：简答题使用中性段，避免把可选表达误读为客观对错。
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        quizOrderedQuestionResults(quiz, result).forEach { questionResult ->
+                        orderedResults.forEach { questionResult ->
+                            val isOptional = quiz?.questions?.firstOrNull { it.id == questionResult.questionId }?.type == AiQuizQuestionType.SHORT
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(
-                                        if (questionResult.correct) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.25f)
+                                        when {
+                                            isOptional -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f)
+                                            questionResult.correct -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.25f)
                                         }
                                     )
                             )
@@ -674,6 +783,7 @@ private fun QuizResultScreen(
         }
         items(result.questionResults, key = { it.questionId }) { item ->
             val question = quiz?.questions?.firstOrNull { it.id == item.questionId }
+            val isOptionalReflection = question?.type == AiQuizQuestionType.SHORT
             val answer = answers[item.questionId]
             val selectedLabels = if (question != null) quizAnswerLabels(question, answer) else emptyList()
             val userAnswerText = when {
@@ -683,12 +793,16 @@ private fun QuizResultScreen(
             }
             val correctAnswerText = quizCorrectAnswerText(question, item, answerSeparator)
                 ?: userAnswerText?.takeIf { item.correct }
+            val answerRationale = question?.answerRationale?.trim().orEmpty()
+                .ifBlank { item.answerRationale.trim() }
+            val distractorRationale = question?.distractorRationale?.trim().orEmpty()
+                .ifBlank { item.distractorRationale.trim() }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 color = if (item.correct) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     // 错题卡底色是 errorContainer，文字必须用 onErrorContainer；
                     // 之前用 error / primary 压在 errorContainer 上既对比度低又撞色
                     val labelColor = if (item.correct) {
@@ -696,29 +810,50 @@ private fun QuizResultScreen(
                     } else {
                         MaterialTheme.colorScheme.onErrorContainer
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // 答对/答错图标：答对主题色；答错沿用错题卡的前景色（在 errorContainer 上保证可读）
-                        Icon(
-                            imageVector = if (item.correct) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = labelColor
-                        )
+                    quiz?.let { activeQuiz ->
+                        question?.let { currentQuestion ->
+                            QuizQuestionMeta(
+                                question = currentQuestion,
+                                stageRes = quizStageLabelRes(
+                                    activeQuiz.questions.indexOfFirst { candidate -> candidate.id == currentQuestion.id }.coerceAtLeast(0),
+                                    activeQuiz.questions.size
+                                )
+                            )
+                        }
+                    }
+                    if (isOptionalReflection) {
                         Text(
-                            text = stringResource(R.string.ai_quiz_question_score, item.score),
+                            stringResource(R.string.ai_quiz_optional_reflection_review),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = labelColor
                         )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (item.correct) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = labelColor
+                            )
+                            Text(
+                                text = stringResource(R.string.ai_quiz_question_score, item.score),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = labelColor
+                            )
+                        }
                     }
-                    Text(
-                        stringResource(R.string.ai_quiz_answer_review),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = labelColor
-                    )
+                    if (!isOptionalReflection) {
+                        Text(
+                            stringResource(R.string.ai_quiz_answer_review),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = labelColor
+                        )
+                    }
                     correctAnswerText?.let { text ->
                         Text(
                             stringResource(R.string.ai_quiz_correct_answer, text),
@@ -733,9 +868,20 @@ private fun QuizResultScreen(
                     } else if (userAnswerText == null) {
                         Text(stringResource(R.string.ai_quiz_unanswered), style = MaterialTheme.typography.bodyMedium)
                     }
-                    if (item.explanation.isNotBlank()) {
+                    if (answerRationale.isNotBlank()) {
+                        Text(
+                            stringResource(R.string.ai_quiz_answer_rationale_format, answerRationale),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else if (item.explanation.isNotBlank()) {
                         Text(
                             stringResource(R.string.ai_quiz_explanation_format, item.explanation),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (distractorRationale.isNotBlank()) {
+                        Text(
+                            stringResource(R.string.ai_quiz_distractor_rationale_format, distractorRationale),
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -879,13 +1025,15 @@ private fun QuizUnavailable() {
     }
 }
 
-/** 正确率百分比（取整），总数为 0 时按 0 处理。 */
-private fun quizAccuracyPercent(result: AiQuizResult): Int =
-    if (result.totalQuestions > 0) {
-        result.correctCount * 100 / result.totalQuestions
-    } else {
-        0
-    }
+/** 简答题可跳过，提交确认只统计必答的单选/多选题。 */
+private fun unansweredRequiredQuizCount(
+    quiz: AiQuiz,
+    answers: Map<String, AiQuizAnswer>
+): Int = quiz.questions.count { question ->
+    if (question.type == AiQuizQuestionType.SHORT) return@count false
+    val answer = answers[question.id]
+    answer == null || (answer.selectedOptionIds.isEmpty() && answer.textAnswer.isNullOrBlank())
+}
 
 /** 按得分段选择评语资源：≥90 满分宣言 / ≥70 相当不错 / ≥40 有潜力 / <40 慢慢来。 */
 @androidx.annotation.StringRes

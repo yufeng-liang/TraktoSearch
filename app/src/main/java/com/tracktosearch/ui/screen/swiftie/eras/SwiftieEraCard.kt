@@ -50,6 +50,15 @@ const val CARD_GROW_MS: Long = 400L
  */
 const val CARD_FEED_MS: Long = 1_100L
 
+/**
+ * TTPD 卡片给底部那台打字机让出的高度。
+ *
+ * 机器画在背景层、卡片正下方：出纸口坐在卡片下缘上。这个值必须盖住机器
+ * 「滚筒 + 暗腔 + 两肩」那一段（键盘越往下越被时间轴挡住，不要求全露），
+ * 布局层用它把卡片从插槽底抬起来（见 `SwiftieErasStage`）。
+ */
+internal val TTPD_MACHINE_RESERVE = 104.dp
+
 /** 出纸期滚筒暗影的高度。纸刚离开压纸滚筒的那一段是背光的，没有这道影子纸就是「贴」上去的。 */
 private val FEED_ROLLER_SHADOW = 14.dp
 
@@ -126,7 +135,8 @@ private fun trackRowHeight(slotHeight: Dp, trackCount: Int): Dp {
  * @param collapseProgress 序列末尾的卷收：0f = 完整卡片；1f = 只剩专辑名 + 日期 +
  *   描金那一行。**在布局 / 绘制阶段读**，不进组合
  * @param feedProgress 只有 TTPD 传：0f..1f 的出纸进度。非 null 时这张卡片**不从轴上长出**，
- *   改成上缘钉死、下缘自上而下揭示 —— 它是背景那台打字机吐出来的那张纸。
+ *   改成下缘钉死在机器出纸口上、上缘自下而上揭示 —— 它是屏幕底下那台打字机吐上来的
+ *   那张纸，先打的那行（第 1 首）在纸的最上头，歌名从上到下读下去正是打字的顺序。
  *   段末的回落仍走统一的 scaleY 收起，纸不卷回机器
  */
 @Composable
@@ -169,10 +179,11 @@ fun SwiftieEraCard(
         Modifier
     } else {
         val shadowPx = with(density) { FEED_ROLLER_SHADOW.toPx() }
-        // Brush 在组合阶段建一次。draw lambda 里 new 一个 Brush = 每帧一个原生 Shader
+        // Brush 在组合阶段建一次。draw lambda 里 new 一个 Brush = 每帧一个原生 Shader。
+        // 渐变方向反过来：出口在**下缘**（机器在底下），影子越往下越深
         val roller = remember(shadowPx) {
             Brush.verticalGradient(
-                colors = listOf(FEED_ROLLER_INK, Color.Transparent),
+                colors = listOf(Color.Transparent, FEED_ROLLER_INK),
                 startY = 0f,
                 endY = shadowPx
             )
@@ -181,18 +192,24 @@ fun SwiftieEraCard(
             val p = feedProgress().coerceIn(0f, 1f)
             // 前摇那 1400ms 里 p 恒为 0：一笔不画，卡片连阴影都不存在
             if (p <= 0f) return@drawWithContent
-            val frontier = size.height * p
-            clipRect(bottom = frontier) {
+            // 纸从底下那台机器里**往上**出来：下缘钉死在出口上，前沿（纸的上边）上移
+            val frontier = size.height * (1f - p)
+            clipRect(top = frontier) {
                 this@drawWithContent.drawContent()
                 if (p >= 1f) return@clipRect
-                // 滚筒暗影钉在纸的上缘（出口不动），不跟着前沿走。
+                // 滚筒暗影钉在纸的下缘（出口不动），不跟着前沿走。
                 // 前 75% 恒定、末段淡掉 —— 走完那一帧直接抹掉会「啪」一下
                 val ink = ((1f - p) * 4f).coerceAtMost(1f)
-                drawRect(brush = roller, size = Size(size.width, shadowPx), alpha = ink)
-                // 前沿：纸的裁切边。一条实线 + 上方一小片压暗，读作纸有厚度
+                drawRect(
+                    brush = roller,
+                    topLeft = Offset(0f, size.height - shadowPx),
+                    size = Size(size.width, shadowPx),
+                    alpha = ink
+                )
+                // 前沿：纸的裁切边。一条实线 + 下方一小片压暗，读作纸有厚度
                 drawRect(
                     color = FEED_ROLLER_INK,
-                    topLeft = Offset(0f, frontier - shadowPx * 0.34f),
+                    topLeft = Offset(0f, frontier),
                     size = Size(size.width, shadowPx * 0.34f),
                     alpha = 0.10f
                 )
@@ -203,13 +220,13 @@ fun SwiftieEraCard(
                     strokeWidth = 1f.coerceAtLeast(size.height * 0.0008f),
                     alpha = 0.30f
                 )
-                // 两侧进纸导轨：上缘各一个小缺口，纸是从两片导片之间挤出来的
+                // 两侧进纸导轨：下缘各一个小缺口，纸是从两片导片之间挤出来的
                 for (side in 0..1) {
                     val cx = size.width * (if (side == 0) 0.17f else 0.83f)
                     val guideW = shadowPx * 0.30f
                     drawRect(
                         color = FEED_ROLLER_INK,
-                        topLeft = Offset(cx - guideW / 2f, 0f),
+                        topLeft = Offset(cx - guideW / 2f, size.height - shadowPx * 0.44f),
                         size = Size(guideW, shadowPx * 0.44f),
                         alpha = ink * 0.55f
                     )

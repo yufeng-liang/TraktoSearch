@@ -2087,32 +2087,23 @@ private fun DrawScope.drawBraidPlaid(color: Color, phase: Float, lowRam: Boolean
 }
 
 /**
- * 背影：后脑与收进辫子的头发 → 格纹呢大衣的翻领与肩 → 一条从颅顶编到背心的法式辫。
+ * 背影：后脑与收进辫子的头发 → 合身段呢大衣 → 垂在后背左侧的法式辫。
  *
- * *evermore* 的封面就是这一张，需求方给了原图，这一版照着原图复刻。原图里只有三样东西：
+ * *evermore* 的封面就是这一张，这一版按 800×800 原图逐像素量过比例：
  *
- * 1. **一颗后脑**。头发是金色的，两侧的头发**全部被斜着往上、往中间收进辫子**，
- *    肩上一根都没有 —— 之前那一版让头发披到肩、下缘还做了波浪毛边，那是散发不是法式辫，
- *    整块读作一顶连帽衫的帽子。两只耳朵露在发外，皮肤比头发浅一档。
- * 2. **一条法式辫**。从**颅顶**起编（不是后脑中段），越往下越细：头上那一截接近头宽的
- *    四成，垂到背心的那一截只有二十分之一，收在一撮散开的发尾里，没有发圈。
- * 3. **一件格纹呢大衣**。翻领 + 驳头，格子是**大块**的（一个循环占掉小半个肩宽），
- *    锈橙那几道比底色亮。肩线直接出框。
+ * 1. **一颗后脑**。头（含发）宽约为 0.53S（S = 颅顶到外撇缝），两侧头发收进辫子。
+ * 2. **一件两段式呢大衣**。合身段从头底一直垂到 1.0S、宽 0.67S（原图 y 185–460 那条
+ *    暗色柱），下摆从 1.0S 处**外撇**成 A 字、垂到 1.85S 出框 —— 外撇缝上有一整道
+ *    横向亮带（原图 y 457–495），是这件外套最亮的特征。格子间距 0.32S。
+ * 3. **一条法式辫**。挂在后背**偏左**（中心比身体中线偏左 0.25S —— 原图头心在
+ *    x 420、辫柱在 x 315），从颈后垂到外撇缝就结束，粗细几乎不变（0.13S 上下）。
+ *    之前那一版辫子居中、垂进下摆 0.93S，整张读作「帽子挂在口袋上」。
  *
  * ## 辫花为什么是「一叠朝下的弧」
  *
- * 试过三种画法：三条相位差 1/3 的正弦（正弦是连续的，辫子是一段一段的）、
- * 一列左右交替倾斜的短肉段（相邻两段一段左高一段右高、两端凑不上，柱体边缘出现深豁口，
- * 中间的亮线还连成一条 W —— 截出来是拉链或糖棍）。都不对。
- *
  * 从背后看一条辫子的真实结构是**一叠嵌套的 V**：每一道辫花横跨整个柱宽、中间往下坠，
- * 相邻两道重叠一半。横跨全宽是关键，柱体因此是实心的，两侧只剩浅浅的起伏。
- *
- * 辫花画成**填充的带**而不是描边的线：柱宽从 0.085w 收到 0.011w，一条描边只有一个线宽，
- * 收不动；改成一道道闭合的带，全部塞进同一个 Path 一次填充，20 来道辫花只要 4 次绘制。
- *
- * 节距也跟着柱宽收（`pitch = half × 1.06`）—— 细辫子的辫花也细。定长节距的话尾巴那一截
- * 会散成几颗离得很远的小括号。
+ * 相邻两道重叠一半。辫花画成**填充的带**而不是描边的线：柱宽要能逐道微调，
+ * 一条描边只有一个线宽。
  */
 private fun DrawScope.drawBackView(
     color: Color,
@@ -2123,42 +2114,45 @@ private fun DrawScope.drawBackView(
     u: Float
 ) {
     val cx = w * 0.50f
-    val headCy = h * 0.250f
-    val headRx = w * 0.232f
-    val napeY = h * 0.436f
-    val napeHalf = w * 0.120f
-    val shoulderY = h * 0.500f
-    val edge = w * 0.62f
+    val crownY = h * 0.100f
+    val headCy = h * 0.155f
+    val headRx = w * 0.250f
+    val napeY = h * 0.215f
+    val napeHalf = w * 0.150f
+    // 外撇缝：合身段转 A 字下摆的那道横缝（原图最亮的一条带）
+    val seamY = h * 0.720f
+    val torsoHalf = w * 0.320f
+    val flareHalf = w * 0.950f
+    // 辫子挂点：后背中线偏左 0.25S（原图实测头心 x 420、辫柱 x 315）
+    val braidCx0 = cx - w * 0.240f
 
-    // 某个高度上发块的半宽：耳际最宽，往上往下都收。侧发那批发缕靠它落在剪影里面
+    // 某个高度上发块的半宽：耳际最宽，往上往下都收
     val hairHalf = { y: Float ->
         val s = ((y - headCy) / (napeY - headCy)).coerceIn(-1.35f, 1f)
         if (s >= 0f) headRx - (headRx - napeHalf) * s * s else headRx * (1f - 0.60f * s * s)
     }
 
     // ── 头发 ──
-    // 颅顶是一个穹：三次贝塞尔的控制点要抬 4/3 倍穹高，穹顶才落在 headCy - 穹高。
-    // 下沿收到颈后（napeHalf），**不披到肩** —— 法式辫把两侧的头发全收走了
     val hair = Path()
     hair.moveTo(cx - headRx, headCy)
     hair.cubicTo(
-        cx - headRx, headCy - h * 0.190f,
-        cx + headRx, headCy - h * 0.190f,
+        cx - headRx, headCy - h * 0.083f,
+        cx + headRx, headCy - h * 0.083f,
         cx + headRx, headCy
     )
     hair.cubicTo(
-        cx + headRx, headCy + h * 0.086f,
-        cx + headRx * 0.80f, napeY - h * 0.026f,
+        cx + headRx, headCy + h * 0.048f,
+        cx + headRx * 0.80f, napeY - h * 0.020f,
         cx + napeHalf, napeY
     )
     hair.cubicTo(
-        cx + napeHalf * 0.42f, napeY + h * 0.020f,
-        cx - napeHalf * 0.42f, napeY + h * 0.020f,
+        cx + napeHalf * 0.42f, napeY + h * 0.016f,
+        cx - napeHalf * 0.42f, napeY + h * 0.016f,
         cx - napeHalf, napeY
     )
     hair.cubicTo(
-        cx - headRx * 0.80f, napeY - h * 0.026f,
-        cx - headRx, headCy + h * 0.086f,
+        cx - headRx * 0.80f, napeY - h * 0.020f,
+        cx - headRx, headCy + h * 0.048f,
         cx - headRx, headCy
     )
     hair.close()
@@ -2166,17 +2160,17 @@ private fun DrawScope.drawBackView(
     drawPath(hair, color, alpha = alpha * 1.05f)
     drawPath(hair, color, alpha = alpha * 1.70f, style = Stroke(width = u * 0.007f))
 
-    // 耳朵：封面上两只都露在发外。填充比头发浅一档 —— 皮肤不是头发
+    // 耳朵：封面上露在发外。填充比头发浅一档 —— 皮肤不是头发
     for (side in 0..1) {
         val dir = if (side == 0) -1f else 1f
         val ex = cx + dir * headRx * 0.96f
-        val ey = headCy + h * 0.050f
+        val ey = headCy + h * 0.038f
         val ear = Path()
-        ear.moveTo(ex - dir * u * 0.006f, ey - h * 0.034f)
+        ear.moveTo(ex - dir * u * 0.006f, ey - h * 0.026f)
         ear.cubicTo(
-            ex + dir * u * 0.032f, ey - h * 0.030f,
-            ex + dir * u * 0.028f, ey + h * 0.024f,
-            ex - dir * u * 0.004f, ey + h * 0.032f
+            ex + dir * u * 0.032f, ey - h * 0.023f,
+            ex + dir * u * 0.028f, ey + h * 0.018f,
+            ex - dir * u * 0.004f, ey + h * 0.024f
         )
         ear.close()
         drawPath(ear, Color.White, alpha = alpha * PROP_MASK)
@@ -2184,85 +2178,62 @@ private fun DrawScope.drawBackView(
         drawPath(ear, color, alpha = alpha * 1.25f, style = Stroke(width = u * 0.006f))
     }
 
-    // 把两侧头发**斜着往上、往中间**收进辫子的那一批发缕。
-    // 这是「法式」的唯一标志，也是封面上最抓眼的纹理：普通三股辫从发尾编起、两侧的头发
-    // 是垂下来的；法式辫一路把新头发拧进去，所以侧发的走向是斜向上而不是竖着往下
-    //
-    // 每侧八缕、短、贴着头形走：上一版每侧五缕、每缕从侧边一路斜到正中辫子上，
-    // 十条长斜线加一个圆头轮廓，截出来是一片叶子的叶脉。真头发是**很多根短的**，
-    // 而且只走到辫子边上就被卷进去了，不会画到中线
+    // 把两侧头发收进辫子的那一批发缕。辫子挂在后背偏左，发缕整体朝**左下**的
+    // 挂点收，而不是往正中 —— 原图上头发是从颅顶往左侧那条辫柱里拧进去的
     val sweeps = Path()
     repeat(12) { index ->
         val t = (index / 2) / 5f
         val dir = if (index % 2 == 0) -1f else 1f
-        val y0 = napeY - (napeY - (headCy - h * 0.140f)) * t
+        val y0 = napeY - (napeY - (headCy - h * 0.085f)) * t
         val hw = hairHalf(y0)
-        // 抬升量随高度变：靠颈后的几缕斜得厉害（要绕过后脑往上收），
-        // 靠颅顶的几缕几乎是竖着往里。等角度的一排短斜线会把整个穹顶排成罗纹
-        val rise = h * (0.082f - 0.055f * t)
+        // 终点一律偏向辫子挂点那一侧：左侧的发缕几乎竖直下去，右侧的斜穿过后脑
+        val endX = braidCx0 + dir * hw * (0.30f + 0.20f * t)
+        val rise = h * (0.060f - 0.038f * t)
         sweeps.moveTo(cx + dir * hw * 0.95f, y0)
         sweeps.quadraticTo(
-            cx + dir * hw * 0.70f, y0 - rise * 0.55f,
-            cx + dir * hw * (0.34f + 0.22f * t), y0 - rise
+            (cx + dir * hw * 0.95f + endX) / 2f, y0 - rise * 0.9f,
+            endX, y0 - rise
         )
     }
-    // 1.35：整张卡片的母题都压在 PROP_ALPHA=0.35 上，发丝再淡就只剩一个空气球轮廓。
-    // 上限是 PROP_MASK（0.78/0.35 ≈ 2.23），到那儿才开始截顶
     drawPath(sweeps, color, alpha = alpha * 1.35f, style = Stroke(width = u * 0.0055f))
-    // ── 格纹呢大衣 ──
-    // 立领 + 肩 + 下摆是**一整条剪影**：领子不另画一块。分成两块画就得分别裁格纹，
-    // 交界处必然错纹，而真大衣的格子是连着穿过领子的
-    val collarHalf = w * 0.250f
-    val collarTop = shoulderY - h * 0.074f
+    // ── 格纹呢大衣：合身段 + A 字下摆 ──
+    // 原图是两段式：合身段（宽 0.67S）从颈后直垂到外撇缝，下摆从缝上**外撇**出框。
+    // 上一版肩部直接外扩到出框，整块读作一只梯形口袋 —— 那件外套上半身是合身的。
+    // 一整条剪影：格纹连着穿过合身段与下摆，分两块画交界处必然错纹
     val coat = Path()
-    coat.moveTo(cx - collarHalf, shoulderY - h * 0.016f)
-    coat.cubicTo(
-        cx - collarHalf * 0.90f, collarTop,
-        cx + collarHalf * 0.90f, collarTop,
-        cx + collarHalf, shoulderY - h * 0.016f
+    coat.moveTo(cx - torsoHalf, napeY)
+    coat.quadraticTo(cx, napeY - h * 0.018f, cx + torsoHalf, napeY)
+    coat.lineTo(cx + torsoHalf, seamY)
+    coat.quadraticTo(
+        cx + w * 0.72f, seamY + h * 0.14f,
+        cx + flareHalf, h * 1.04f
     )
-    coat.cubicTo(
-        cx + w * 0.330f, shoulderY + h * 0.012f,
-        cx + w * 0.480f, shoulderY + h * 0.060f,
-        cx + edge, shoulderY + h * 0.118f
-    )
-    // 两侧**往下外倾**而不是竖直下来：道具框只占卡片右侧 32%，怎么放都有一侧的边落在
-    // 卡片里。竖直的那两条边加上收口的下摆，整块读作一只格纹袋（这条被点名过）。
-    // 斜出去的边读作「衣服在框外接着走」，下摆同时压到 1.04h 由卡片圆角裁掉
-    coat.lineTo(cx + edge * 1.26f, h * 1.04f)
-    coat.lineTo(cx - edge * 1.26f, h * 1.04f)
-    coat.lineTo(cx - edge, shoulderY + h * 0.118f)
-    coat.cubicTo(
-        cx - w * 0.480f, shoulderY + h * 0.060f,
-        cx - w * 0.330f, shoulderY + h * 0.012f,
-        cx - collarHalf, shoulderY - h * 0.016f
+    coat.lineTo(cx - flareHalf, h * 1.04f)
+    coat.quadraticTo(
+        cx - w * 0.72f, seamY + h * 0.14f,
+        cx - torsoHalf, seamY
     )
     coat.close()
     drawPath(coat, Color.White, alpha = alpha * PROP_MASK)
     drawPath(coat, color, alpha = alpha * 0.62f)
-    // 格纹：**大块**。封面上这件呢大衣的格子横过整个背，一个循环占掉小半个肩宽；
-    // 上一版 0.150u 的密网加 0.005u 的细线读作衬衫或桌布，不是粗呢大衣。
-    // 深格不另调色（纵横两条带子叠起来自然深一档，真格纹也是这么织的），
-    // 亮条用白 —— 那是封面上锈橙的那几道，比呢子底色亮
-    // 一个循环里放**三条宽窄不同**的带：宽深带 + 窄深带 + 亮细条。
-    // 上一版一个循环只有一条等宽深带 + 一条亮条，纵横一叠是标准棋盘格 —— 那是桌布。
-    // 真格纹的一个循环里带子宽窄不一，才有「组」的感觉
+    // 格纹间距 0.32S ≈ 0.31u，一个循环三条宽窄不同的带（宽深带 + 窄深带 + 亮细条）。
+    // 深格不另调色（纵横两条带子叠起来自然深一档），亮条用白 —— 那是封面上锈橙的那几道
     clipPath(coat) {
-        val span = edge * 2.6f
-        val left = cx - edge * 1.3f
-        val pitch = u * 0.320f
+        val span = flareHalf * 2f
+        val left = cx - flareHalf
+        val pitch = u * 0.310f
         var x = left - pitch * 0.35f
-        while (x < cx + edge * 1.3f) {
-            drawRect(color, Offset(x, collarTop), Size(u * 0.132f, h * 0.72f), alpha = alpha * 0.46f)
-            drawRect(color, Offset(x + u * 0.170f, collarTop), Size(u * 0.052f, h * 0.72f), alpha = alpha * 0.30f)
+        while (x < cx + flareHalf) {
+            drawRect(color, Offset(x, napeY), Size(u * 0.132f, h * 0.84f), alpha = alpha * 0.46f)
+            drawRect(color, Offset(x + u * 0.170f, napeY), Size(u * 0.052f, h * 0.84f), alpha = alpha * 0.30f)
             drawRect(
-                Color.White, Offset(x + u * 0.246f, collarTop), Size(u * 0.030f, h * 0.72f),
+                Color.White, Offset(x + u * 0.246f, napeY), Size(u * 0.030f, h * 0.84f),
                 alpha = alpha * 0.34f
             )
             x += pitch
         }
-        var y = collarTop - u * 0.105f
-        while (y < h * 1.05f) {
+        var y = napeY - u * 0.105f
+        while (y < h * 1.06f) {
             drawRect(color, Offset(left, y), Size(span, u * 0.132f), alpha = alpha * 0.46f)
             drawRect(color, Offset(left, y + u * 0.170f), Size(span, u * 0.052f), alpha = alpha * 0.30f)
             drawRect(
@@ -2271,68 +2242,44 @@ private fun DrawScope.drawBackView(
             )
             y += pitch
         }
-    }
-    // 领口下沿 + 两条驳头折线。**只描线不填色**，格纹才连着穿过领子
-    val collarLine = Path()
-    collarLine.moveTo(cx - collarHalf, shoulderY - h * 0.016f)
-    collarLine.cubicTo(
-        cx - collarHalf * 0.52f, shoulderY + h * 0.036f,
-        cx + collarHalf * 0.52f, shoulderY + h * 0.036f,
-        cx + collarHalf, shoulderY - h * 0.016f
-    )
-    for (side in 0..1) {
-        val dir = if (side == 0) -1f else 1f
-        collarLine.moveTo(cx + dir * collarHalf, shoulderY - h * 0.014f)
-        collarLine.quadraticTo(
-            cx + dir * w * 0.320f, shoulderY + h * 0.052f,
-            cx + dir * w * 0.372f, shoulderY + h * 0.116f
+        // 外撇缝亮带：原图 y 457–495 那道整宽的横向亮带，是这件外套最亮的特征，
+        // 也是「合身段转下摆」的读法来源。少了它两段的分界就没了
+        drawRect(
+            Color.White,
+            Offset(cx - flareHalf, seamY),
+            Size(flareHalf * 2f, h * 0.048f),
+            alpha = alpha * 0.30f
+        )
+        drawLine(
+            color = color,
+            start = Offset(cx - flareHalf, seamY),
+            end = Offset(cx + flareHalf, seamY),
+            strokeWidth = u * 0.008f,
+            alpha = alpha * 1.30f
         )
     }
-    drawPath(collarLine, color, alpha = alpha * 1.55f, style = Stroke(width = u * 0.0085f))
-    // 肩线：从领子外端斜着出框。两侧与下摆都在框外，描了反而把「出框」封死
-    val shoulderLine = Path()
-    for (side in 0..1) {
-        val dir = if (side == 0) -1f else 1f
-        shoulderLine.moveTo(cx + dir * collarHalf, shoulderY - h * 0.016f)
-        shoulderLine.cubicTo(
-            cx + dir * w * 0.330f, shoulderY + h * 0.012f,
-            cx + dir * w * 0.480f, shoulderY + h * 0.060f,
-            cx + dir * edge, shoulderY + h * 0.118f
-        )
-    }
-    drawPath(shoulderLine, color, alpha = alpha * 1.10f, style = Stroke(width = u * 0.0075f))
 
     // ── 法式辫 ──
-    // 从颅顶（0.118h，穹顶在 0.1075h）编到背心（0.905h）。每一道辫花是一条朝下的弧带，
-    // 横跨整个柱宽；柱宽与节距同步收窄。摆一点：辫尾比辫根摆得多，整条读作垂着的
-    val braidTop = h * 0.118f
-    val braidTip = h * 0.855f
-    val swing = sin(phase * TAU) * u * 0.012f
+    // 挂在后背偏左（braidCx0），从颈后垂到外撇缝为止，粗细几乎不变（原图 32→40px）。
+    // 之前那一版从颅顶编起、居中、垂进下摆 0.93S —— 三处都不像
+    val braidTop = napeY + h * 0.010f
+    val braidTip = seamY + h * 0.020f
+    val swing = sin(phase * TAU) * u * 0.010f
     val braidUnder = Path()
     val braid = Path()
     val creases = Path()
     val gloss = Path()
     var by = braidTop
-    var tipX = cx
+    var tipX = braidCx0
     var guard = 0
     while (by < braidTip && guard < 64) {
         val f = ((by - braidTop) / (braidTip - braidTop)).coerceIn(0f, 1f)
-        // 两段式收窄：颈后（BRAID_NAPE_F）之前是头上那一截法式辫 —— 宽、慢慢收；
-        // 过了颈后立刻细一档，之后是垂着的绳。一条线性锥形从头贯到尾的话，
-        // 「头上编的」与「垂下来的」两段没有分界，整条读作一只松果或鱼尾
-        val half = if (f < BRAID_NAPE_F) {
-            w * (0.085f - 0.030f * (f / BRAID_NAPE_F))
-        } else {
-            val g = (f - BRAID_NAPE_F) / (1f - BRAID_NAPE_F)
-            w * (0.055f - 0.038f * g * (0.60f + 0.40f * g))
-        }
+        // 等粗微收：0.058w → 0.046w。原图辫柱两端的宽度差不到三成，
+        // 强锥形会把辫子读成胡萝卜
+        val half = w * (0.058f - 0.012f * f)
         val pitch = half * 1.06f
-        val bx = cx + swing * f * f
+        val bx = braidCx0 - w * 0.022f * f + swing * f * f
         val dip = pitch * 1.70f
-        // 一道辫花 = 外弧 + 反向的内弧闭合成的带。同一个 Path 里所有带同向绕，
-        // NonZero 填充规则下它们自然并成一整条实心柱
-        // 1.02 而不是 1.06：垫白只需要挡住底纹，大一圈就会在每一道辫花外面镶出一道
-        // 白边，二十道白边叠起来整条辫子读作麦穗或松果
         band(braidUnder, bx, by, half * 1.02f, dip, pitch * 1.02f)
         band(braid, bx, by, half, dip, pitch * 0.96f)
         band(creases, bx, by + pitch * 0.50f, half * 0.64f, dip * 0.86f, pitch * 0.15f)
@@ -2342,21 +2289,18 @@ private fun DrawScope.drawBackView(
         guard++
     }
     drawPath(braidUnder, Color.White, alpha = alpha * PROP_MASK)
-    // 辫身压淡一点、辫花之间的深缝加重一档：辫子读不读作辫子全看这道缝的对比，
-    // 两者都是 0.8 左右的话整条是一根光滑的浅色管子
     drawPath(braid, color, alpha = alpha * 0.72f)
     drawPath(creases, color, alpha = alpha * 2.20f)
-    // 0.20 而不是 0.40：亮面一道道叠起来会连成一条贯穿全长的白线，又变回拉链
     drawPath(gloss, Color.White, alpha = alpha * 0.20f)
 
-    // 散开的发尾：封面上辫子末端没有发圈，直接散成一撮。少了这一撮，辫子读作被剪断的
+    // 散开的发尾：辫子末端没有发圈，直接散成一撮
     val ends = Path()
     repeat(5) { index ->
         val spread = (index - 2) / 2f
-        ends.moveTo(tipX + spread * u * 0.008f, braidTip - h * 0.006f)
+        ends.moveTo(tipX + spread * u * 0.007f, braidTip - h * 0.004f)
         ends.quadraticTo(
-            tipX + spread * u * 0.030f, braidTip + h * 0.026f,
-            tipX + spread * u * 0.052f, braidTip + h * 0.056f
+            tipX + spread * u * 0.026f, braidTip + h * 0.020f,
+            tipX + spread * u * 0.046f, braidTip + h * 0.042f
         )
     }
     drawPath(ends, color, alpha = alpha * 1.05f, style = Stroke(width = u * 0.0055f, cap = StrokeCap.Round))
@@ -2368,9 +2312,6 @@ private fun DrawScope.drawBackView(
  *
  * 辫花不用描边而用填充，就是为了让宽度能逐道收窄 —— 一条 Path 只有一个线宽。
  */
-/** 辫子从颅顶到发尾的哪个比例上是颈后：过了这里柱宽立刻细一档。 */
-private const val BRAID_NAPE_F = 0.42f
-
 private fun band(path: Path, cx: Float, cy: Float, half: Float, dip: Float, th: Float) {
     val up = cy - th * 0.5f
     val down = cy + th * 0.5f

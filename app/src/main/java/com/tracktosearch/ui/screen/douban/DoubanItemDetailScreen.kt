@@ -151,7 +151,6 @@ import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.DropdownAnchorMenu
-import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalFullscreenSharedElement
 import com.tracktosearch.ui.component.fullscreenSharedElementKey
@@ -2550,44 +2549,71 @@ private fun DoubanSearchingState() {
 @Composable
 private fun DoubanEmptyState(onRetry: () -> Unit) {
     val haptics = rememberAppHaptics()
-    EmptyStateCard(
-        isDark = isAppDarkTheme(),
-        title = stringResource(R.string.screen_douban_item_detail_no_resources),
-        icon = Icons.Rounded.Movie,
-        modifier = Modifier.padding(vertical = 16.dp),
-        actions = {
-            OutlinedButton(onClick = {
-                haptics.tap()
-                onRetry()
-            }) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.detail_retry))
-            }
+    // 裸排不带卡片：玻璃卡片会读作「一张内容为空的资源卡」而不是「搜索没有结果」
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Movie,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.screen_douban_item_detail_no_resources),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(onClick = {
+            haptics.tap()
+            onRetry()
+        }) {
+            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.detail_retry))
         }
-    )
+    }
 }
 
 /** 资源搜索失败态(与空结果区分):错误图标+「搜索失败」+重试 */
 @Composable
 private fun DoubanSearchErrorState(onRetry: () -> Unit) {
     val haptics = rememberAppHaptics()
-    EmptyStateCard(
-        isDark = isAppDarkTheme(),
-        title = stringResource(R.string.error_search_failed),
-        icon = Icons.Rounded.CloudOff,
-        modifier = Modifier.padding(vertical = 16.dp),
-        actions = {
-            OutlinedButton(onClick = {
-                haptics.tap()
-                onRetry()
-            }) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.detail_retry))
-            }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.CloudOff,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.error_search_failed),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(onClick = {
+            haptics.tap()
+            onRetry()
+        }) {
+            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.detail_retry))
         }
-    )
+    }
 }
 
 // ==================== 详情信息 Tab ====================

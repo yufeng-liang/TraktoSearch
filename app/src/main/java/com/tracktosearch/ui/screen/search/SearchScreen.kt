@@ -1238,12 +1238,14 @@ private fun SearchActionButton(
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            Icons.Rounded.Search,
-            contentDescription = null,
-            modifier = Modifier.size(iconSize),
-            tint = MaterialTheme.colorScheme.onPrimary
-        )
+            // tint 用 surface 而不是 onPrimary：onPrimary 按亮度可给纯黑（粉色调主题），
+            // 实心 primary 圆上黑图标观感突兀，与 Switch 选中态 thumb 同一问题。
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                modifier = Modifier.size(iconSize),
+                tint = MaterialTheme.colorScheme.surface
+            )
     }
 }
 

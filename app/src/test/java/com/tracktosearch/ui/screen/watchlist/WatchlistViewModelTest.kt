@@ -519,6 +519,67 @@ class WatchlistViewModelTest {
 
 
     @Test
+    fun `详情页想看ADD变更直写离线缓存`() = runTest {
+        watchlistMutationFlow.emit(
+            TraktRepository.WatchlistMutation(
+                action = TraktRepository.WatchlistMutationAction.ADD,
+                traktId = 11, tmdbId = 0, mediaType = MediaType.MOVIE,
+                title = "New Movie", displayTitle = "New Movie", year = 2025,
+                genres = "Drama", posterUrl = null, imdbId = "tt-11",
+                traktRating = 7.0, actedAt = 1_700_000_000_000
+            )
+        )
+        advanceUntilIdle()
+
+        coVerify {
+            offlineCacheManager.saveMediaItem(
+                OfflineCacheManager.TYPE_WATCHLIST_MOVIE,
+                match {
+                    it.traktId == 11 &&
+                        it.type == OfflineCacheManager.TYPE_WATCHLIST_MOVIE &&
+                        it.title == "New Movie" &&
+                        it.listedAt == "2023-11-14T22:13:20Z"
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `详情页想看REMOVE变更直写离线缓存`() = runTest {
+        watchlistMutationFlow.emit(
+            TraktRepository.WatchlistMutation(
+                action = TraktRepository.WatchlistMutationAction.REMOVE,
+                traktId = 12, tmdbId = 0, mediaType = MediaType.SHOW,
+                title = "Old Show", displayTitle = "Old Show", year = 2020,
+                genres = "", posterUrl = null, imdbId = "tt-12",
+                traktRating = 0.0, actedAt = 1_700_000_000_000
+            )
+        )
+        advanceUntilIdle()
+
+        coVerify { offlineCacheManager.removeMediaItem(OfflineCacheManager.TYPE_WATCHLIST_SHOW, 12) }
+    }
+
+    @Test
+    fun `批量移除想看电影后同步删除离线缓存行`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(11, "M1", "tt-11"), makeWatchlistMovie(12, "M2", "tt-12")) to 1)
+        coEvery { traktRepository.removeFromWatchlist(any(), any(), any()) } returns
+            Result.success(TraktSyncResponse())
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        viewModel.batchRemoveFromWatchlist(
+            listOf(viewModel.uiState.value.movies.first { it.traktId == 11 }),
+            WatchlistMediaType.MOVIE
+        )
+        advanceUntilIdle()
+
+        coVerify { offlineCacheManager.removeMediaItem(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, 11) }
+        coVerify(exactly = 0) { offlineCacheManager.removeMediaItem(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, 12) }
+    }
+
+    @Test
     fun `豆瓣独立模式其他条目沿用批量删除流程`() = runTest {
         every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.DOUBAN)
         val item = makeDoubanItem("douban-other", mediaType = "variety", title = "综艺")

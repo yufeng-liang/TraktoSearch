@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.ai
 import androidx.annotation.StringRes
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
+import com.tracktosearch.data.ai.AiDailyCheckQuestion
 import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestion
@@ -11,6 +12,7 @@ import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.math.log10
 import kotlin.random.Random
@@ -21,6 +23,7 @@ private const val MAX_OVERLAY_SESSION_COUNT = 3
 private const val MAX_OVERLAY_DAILY_COUNT = 6
 private const val IDLE_TRIGGER_DELAY_MS = 8_000L
 private const val MAX_QUIZ_REPLACEMENTS = 2
+private const val MAX_DAILY_KNOWLEDGE_CHANGES = 2
 
 /** 探头静止观察前的空闲等待时长，两个搜索页都用这个常量，别再各写一遍 8_000L。 */
 const val AI_SPRITE_IDLE_DELAY_MS = IDLE_TRIGGER_DELAY_MS
@@ -400,6 +403,81 @@ fun activationBlockedReasonRes(character: AiCharacter, state: AiSpriteUiState): 
         !canRequestTextActivation(state.textActivationAttempt) ->
         R.string.ai_sprite_activate_disabled_exhausted
     else -> null
+}
+
+/** 今日影视知识的请求 locale：应用语言设置优先，system 再回落到系统语言。 */
+fun dailyKnowledgeLocale(
+    languageSetting: String,
+    systemLanguage: String
+): String = when (languageSetting) {
+    LanguageStorage.LANGUAGE_CHINESE -> "zh-CN"
+    LanguageStorage.LANGUAGE_ENGLISH -> "en-US"
+    LanguageStorage.LANGUAGE_JAPANESE -> "ja-JP"
+    LanguageStorage.LANGUAGE_KOREAN -> "ko-KR"
+    LanguageStorage.LANGUAGE_SYSTEM -> when (systemLanguage.take(2).lowercase()) {
+        "zh" -> "zh-CN"
+        "en" -> "en-US"
+        "ja" -> "ja-JP"
+        "ko" -> "ko-KR"
+        else -> "zh-CN"
+    }
+    else -> "zh-CN"
+}
+
+/** 关联等级只认 Worker 受控枚举，未知值不渲染成看起来可信的标签。 */
+@StringRes
+fun dailyKnowledgeRelationLabelRes(relationType: String?): Int? = when (relationType) {
+    "direct_watch" -> R.string.ai_daily_relation_direct_watch
+    "theme_extension" -> R.string.ai_daily_relation_theme_extension
+    "general_knowledge" -> R.string.ai_daily_relation_general_knowledge
+    else -> null
+}
+
+/** 证据模式标签帮助用户区分影片事实、观影解读和外部事实。 */
+@StringRes
+fun dailyKnowledgeEvidenceModeLabelRes(evidenceMode: String?): Int? = when (evidenceMode) {
+    "film_fact" -> R.string.ai_daily_evidence_film_fact
+    "viewing_interpretation" -> R.string.ai_daily_evidence_viewing_interpretation
+    "external_fact" -> R.string.ai_daily_evidence_external_fact
+    "theme_extension" -> R.string.ai_daily_evidence_theme_extension
+    else -> null
+}
+
+/** UI 只展示八个大类，具体 subject 仍是 Worker 内部受控键，不直接透出。 */
+@StringRes
+fun dailyKnowledgeSubjectGroupLabelRes(subjectGroup: String?): Int? = when (subjectGroup) {
+    "film_expression" -> R.string.ai_daily_subject_film_expression
+    "people_and_mind" -> R.string.ai_daily_subject_people_and_mind
+    "society_and_institution" -> R.string.ai_daily_subject_society_and_institution
+    "history_and_culture" -> R.string.ai_daily_subject_history_and_culture
+    "philosophy_and_ethics" -> R.string.ai_daily_subject_philosophy_and_ethics
+    "science_and_nature" -> R.string.ai_daily_subject_science_and_nature
+    "technology_and_future" -> R.string.ai_daily_subject_technology_and_future
+    "life_and_career" -> R.string.ai_daily_subject_life_and_career
+    else -> null
+}
+
+/** 每日知识允许用户主动换 2 条；首次进入的自动加载不消耗这个额度。 */
+fun canChangeDailyKnowledge(changeCount: Int): Boolean =
+    changeCount < MAX_DAILY_KNOWLEDGE_CHANGES
+
+fun remainingDailyKnowledgeChanges(changeCount: Int): Int =
+    (MAX_DAILY_KNOWLEDGE_CHANGES - changeCount).coerceIn(0, MAX_DAILY_KNOWLEDGE_CHANGES)
+
+/**
+ * 即时小题渲染前的本地守卫：Worker 已做硬校验，这里再挡一次旧缓存或异常数据，
+ * 避免把没有唯一正确答案的题画成可点但永远无法判定的 UI。
+ */
+fun dailyCheckQuestionIsValid(question: AiDailyCheckQuestion?): Boolean {
+    if (question == null) return false
+    val options = question.options
+    if (options.size !in 2..4) return false
+    val optionIds = options.map { it.id.trim() }.toSet()
+    if (optionIds.size != options.size || optionIds.any { it.isBlank() }) return false
+    val correctIds = question.correctOptionIds.map { it.trim() }.toSet()
+    return correctIds.size == 1 && correctIds.first() in optionIds &&
+        question.prompt.isNotBlank() && question.explanation.isNotBlank() &&
+        options.all { it.text.isNotBlank() }
 }
 
 /** 未作答题目数，用于提交前提醒，避免用户一路点「下一题」到底后白拿 0 分。 */
