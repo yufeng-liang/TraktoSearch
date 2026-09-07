@@ -167,9 +167,14 @@ internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mate
         .fromHueAndChroma(seedHue, 4.0)
     val neutralVariant = com.tracktosearch.data.util.mcu.palettes.TonalPalette
         .fromHueAndChroma(seedHue, 8.0)
+    // 对话框底色专用：比页面底色（neutral 4.0）再淡一档，见下方 surface 阶梯注释
+    val neutralFaint = com.tracktosearch.data.util.mcu.palettes.TonalPalette
+        .fromHueAndChroma(seedHue, 2.0)
 
     fun neutralTone(darkTone: Double, lightTone: Double) =
         Color(neutral.tone(if (dark) darkTone else lightTone))
+    fun faintTone(darkTone: Double, lightTone: Double) =
+        Color(neutralFaint.tone(if (dark) darkTone else lightTone))
     fun variantTone(darkTone: Double, lightTone: Double) =
         Color(neutralVariant.tone(if (dark) darkTone else lightTone))
     fun accentTone(darkTone: Double, lightTone: Double) =
@@ -198,12 +203,14 @@ internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mate
 
     // surface 阶梯：深色档层级越高越亮，浅色档反之。tone 值对齐改造前的
     // background 95 / surface 99（浅）和 5 / 10（深），层级关系不变、只染上主题色相。
+    // containerHigh 单独用更淡的 neutralFaint（彩度 2.0）：它喂 AlertDialog 的默认底，
+    // 对话框压在页面正中、染色最扎眼，比页面底再淡一档；顶栏滚动态同槽位一起变淡。
     val background = neutralTone(5.0, 95.0)
     val surface = neutralTone(10.0, 99.0)
     val containerLowest = neutralTone(3.0, 100.0)
     val containerLow = neutralTone(7.0, 94.0)
     val container = neutralTone(12.0, 93.0)
-    val containerHigh = neutralTone(16.0, 91.0)
+    val containerHigh = faintTone(16.0, 91.0)
     // 浅色档 containerHighest 压到 tone 84 而不是 M3 的 90：填充输入框和未选中 chip 吃这一级，
     // 而本项目的卡片/对话框是 surfaceVariant（tone 90）。两者同 tone 时对比度只有 1.08，
     // 输入框压在卡片上看不出边界。84 给到 1.18，surfaceDim 跟着退到 81 让出位置。
