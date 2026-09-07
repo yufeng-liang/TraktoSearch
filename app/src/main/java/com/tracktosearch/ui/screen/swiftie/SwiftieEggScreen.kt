@@ -1025,13 +1025,13 @@ private fun SwiftieQuizStage(
             Box(modifier = Modifier.height(LUCKY_BAND), contentAlignment = Alignment.Center) {
                 SwiftieLuckyHint(visible = quiz.showLuckyHint)
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Box(modifier = Modifier.height(audioHintBand), contentAlignment = Alignment.Center) {
                 if (showAudioHint) {
                     SwiftieAudioHint(advice = audioAdvice)
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             SwiftieKeypad(
                 canSubmit = quiz.canSubmit,
                 enabled = !quiz.solved,
