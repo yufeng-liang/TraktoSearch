@@ -722,6 +722,8 @@ object NetworkModule {
         json: Json
     ): AiApiService {
         val client = baseClient.newBuilder()
+            // 出题/每日知识走两段顺序 LLM 生成，首包可达数十秒；10s 读超时真机必现 SocketTimeout
+            .readTimeout(90, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
                 chain.proceed(
