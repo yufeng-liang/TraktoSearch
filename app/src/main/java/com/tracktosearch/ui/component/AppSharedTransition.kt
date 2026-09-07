@@ -426,7 +426,7 @@ internal fun Modifier.appMorphContentFade(): Modifier {
     val transition = animatedVisibilityScope.transition
     val exiting = transition.currentState == EnterExitState.Visible &&
         transition.targetState == EnterExitState.PostExit
-    val alpha = animateFloatAsState(
+    val alphaState = animateFloatAsState(
         targetValue = when {
             exiting -> 0f
             revealed -> 1f
@@ -439,7 +439,8 @@ internal fun Modifier.appMorphContentFade(): Modifier {
         },
         label = "morphContentFade",
     )
-    return this.graphicsLayer { alpha = alpha.value }
+    // 只读 State 的 value，避免与 GraphicsLayerScope.alpha 属性同名遮蔽。
+    return this.graphicsLayer { alpha = alphaState.value }
 }
 
 /** chrome 入场：等容器基本落位再淡入。 */
