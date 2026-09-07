@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.theme
-
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import com.google.common.truth.Truth.assertThat
@@ -14,9 +13,7 @@ import org.junit.Test
 /**
  * 配色体系的结构约束：色调之间够不够分得开、surface 阶梯有没有排错、
  * 票根主色的两处真值有没有漂移。
- *
- * 和 [ThemeColorContrastTest] 分开是因为这里测的是「色板长什么样」而不是「读不读得清」——
- * 两类问题的修法不一样，红在哪一边一眼能看出来。
+ * 本类只管结构约束，与对比/语义类测试分开维护；结构问题红起来一眼能定位到色板本身。
  */
 class ThemePaletteStructureTest {
 

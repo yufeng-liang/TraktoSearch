@@ -7,9 +7,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-
-// 配色的数值约束见 ThemeColorContrastTest / ThemePaletteStructureTest，
-// 那两个是纯 JVM 的，不用起 Robolectric。
+// 配色结构/语义约束见 ThemePaletteStructureTest / ThemeSemanticPaletteTest，
+// 那些是纯 JVM 的，不用起 Robolectric。
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)

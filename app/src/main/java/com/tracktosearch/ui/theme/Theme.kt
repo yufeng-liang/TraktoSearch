@@ -224,8 +224,12 @@ internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mate
     fun accentTone(darkTone: Double, lightTone: Double) =
         Color(tonal.tone(if (dark) darkTone else lightTone))
 
+    // 主色 = 种子原色（按钮底色保持不变）。字色 onPrimary 直接用 surface：
+    // 与开关选中态 thumb 同一 token（浅色档近白字、深色档近黑字）。对比度不再用
+    // onColorFor 的黑白二分约束，相关按钮前景色测试已按需求移除。
+    val surface = neutralTone(10.0, 99.0)
     val primary = seed
-    val onPrimary = onColorFor(seed)
+    val onPrimary = surface
     // container 深色档用 tone 30，浅色档用同一 hue 的浅变体 tone 90（light 更贴近原色，dark 保持深容器）
     val primaryContainer = accentTone(30.0, 90.0)
     val onPrimaryContainer = accentTone(90.0, 10.0)
@@ -250,7 +254,6 @@ internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mate
     // containerHigh 单独用更淡的 neutralFaint（彩度 2.0）：它喂 AlertDialog 的默认底，
     // 对话框压在页面正中、染色最扎眼，比页面底再淡一档；顶栏滚动态同槽位一起变淡。
     val background = neutralTone(5.0, 95.0)
-    val surface = neutralTone(10.0, 99.0)
     val containerLowest = neutralTone(3.0, 100.0)
     val containerLow = neutralTone(7.0, 94.0)
     val container = neutralTone(12.0, 93.0)

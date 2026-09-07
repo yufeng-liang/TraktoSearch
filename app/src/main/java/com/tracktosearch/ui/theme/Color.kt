@@ -23,9 +23,9 @@ val Blue115 = Color(0xFF2563EB)          // 115网盘 - 蓝色
 /**
  * 莫奈/印象派主题色，按 Lab 色相升序排列 —— 设置页的色块网格直接按 entries 顺序铺，
  * 排成色环用户扫一眼就能定位，比随机顺序好找。
- *
- * 每项只存种子色：浅色档喂 [light]，深色档喂 [dark]，其余槽位由
  * `monetColorScheme` 用 Material You 的 TonalPalette 推导。前景色不在这里存 ——
+ * 主色上的字色（onPrimary）直接用 surface（与开关选中态 thumb 同 token），
+ * secondary 的字色仍按亮度取黑白，见 `monetColorScheme`。
  * 压在种子色上该用黑字还是白字由亮度算，见 `monetColorScheme` 的 onPrimary。
  *
  * **改动种子色时注意**：[VINTAGE_TICKET] 的两个值同时被 `vintageTicketColorScheme`
