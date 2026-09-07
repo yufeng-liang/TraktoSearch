@@ -35,7 +35,8 @@ class MovieCardTest {
                 genres = "",
                 posterUrl = null,
                 tmdbId = 1,
-                onClick = { clicked = true }
+                onClick = { clicked = true },
+                origin = "test"
             )
         }
         composeRule.onNodeWithText("点击测试").performClick()
