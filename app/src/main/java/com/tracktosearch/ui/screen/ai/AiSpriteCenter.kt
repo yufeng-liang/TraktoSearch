@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Keyboard
@@ -47,11 +48,13 @@ import androidx.compose.material.icons.rounded.RateReview
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WavingHand
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -328,6 +331,8 @@ private fun SpriteCenterHome(
     onClearError: () -> Unit
 ) {
     val character = state.selectedCharacter ?: state.characters.first()
+    val isActivated = shouldShowActivatedCharacterContent(character.id, state.activatedCharacterId, state.isAuthorized)
+    var showCharacterPicker by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -337,12 +342,14 @@ private fun SpriteCenterHome(
                 title = {
                     Column {
                         Text(
-                            text = stringResource(R.string.ai_sprite_center_title),
+                            text = if (isActivated) stringResource(R.string.ai_sprite_workbench_title)
+                            else stringResource(R.string.ai_sprite_center_title),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
-                            text = stringResource(R.string.ai_sprite_center_subtitle),
+                            text = if (isActivated) stringResource(R.string.ai_sprite_workbench_subtitle)
+                            else stringResource(R.string.ai_sprite_center_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -366,7 +373,30 @@ private fun SpriteCenterHome(
                 .verticalScroll(scrollState)
                 .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 20.dp)
         ) {
-            CharacterStage(
+            if (isActivated) {
+                ActivatedCompactHeader(
+                    state = state,
+                    character = character,
+                    onChangeCharacter = { showCharacterPicker = true },
+                    onReplayAudition = onReplayAudition,
+                    auditionPlaybackState = auditionPlaybackState
+                )
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    text = stringResource(R.string.ai_feature_section_title),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = stringResource(R.string.ai_feature_section_subtitle),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FeatureBento(onOpenFeature = onOpenFeature)
+            } else {
+                CharacterStage(
                 character = character,
                 state = state,
                 onPlayAudio = onPlayAudio,
@@ -470,7 +500,19 @@ private fun SpriteCenterHome(
                     FeatureList(state = state, onOpenFeature = onOpenFeature)
                 }
             }
+            }
         }
+    }
+    if (showCharacterPicker) {
+        CharacterPickerSheet(
+            state = state,
+            onDismiss = { showCharacterPicker = false },
+            onReloadCharacters = onReloadCharacters,
+            onSelectCharacter = { id ->
+                showCharacterPicker = false
+                onSelectCharacter(id)
+            }
+        )
     }
 }
 
@@ -1144,6 +1186,213 @@ private fun FeatureList(state: AiSpriteUiState, onOpenFeature: (AiFeature) -> Un
                     Text(title, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.ai_feature_start), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun ActivatedCompactHeader(
+    state: AiSpriteUiState,
+    character: AiCharacter,
+    onChangeCharacter: () -> Unit,
+    onReplayAudition: () -> Unit,
+    auditionPlaybackState: AuditionPlaybackState
+) {
+    val audioLabel = when (auditionPlaybackState) {
+        AuditionPlaybackState.LOADING -> stringResource(R.string.ai_audio_loading)
+        AuditionPlaybackState.PLAYING -> stringResource(R.string.ai_audio_playing)
+        AuditionPlaybackState.IDLE -> stringResource(R.string.ai_audio_play)
+    }
+    Surface(
+        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        color = characterTint(character).copy(alpha = 0.18f),
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            Modifier.padding(start = 12.dp, top = 12.dp, end = 4.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(Modifier.size(64.dp), RoundedCornerShape(20.dp), color = characterTint(character).copy(alpha = 0.42f)) {
+                Box(contentAlignment = Alignment.Center) { AiCharacterGlyph(character, Modifier.size(54.dp)) }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(character.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Rounded.CheckCircle, null, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ai_sprite_activated_status, character.name), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    state.quota?.let { q -> stringResource(R.string.ai_sprite_quota, q.dailyUsed, q.dailyLimit, q.sessionUsed, q.sessionLimit) }
+                        ?: stringResource(R.string.ai_sprite_quota_unavailable),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(
+                onClick = onReplayAudition,
+                enabled = auditionPlaybackState != AuditionPlaybackState.LOADING,
+                modifier = Modifier.semantics { contentDescription = audioLabel }
+            ) {
+                when (auditionPlaybackState) {
+                    AuditionPlaybackState.LOADING -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    AuditionPlaybackState.PLAYING -> Icon(Icons.Rounded.GraphicEq, stringResource(R.string.ai_audio_playing), tint = MaterialTheme.colorScheme.primary)
+                    AuditionPlaybackState.IDLE -> Icon(Icons.Rounded.VolumeUp, stringResource(R.string.ai_audio_play), tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            TextButton(onClick = onChangeCharacter, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
+                Text(stringResource(R.string.ai_sprite_change_character))
+            }
+        }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CharacterPickerSheet(
+    state: AiSpriteUiState,
+    onDismiss: () -> Unit,
+    onReloadCharacters: () -> Unit,
+    onSelectCharacter: (String) -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(
+                start = 20.dp,
+                end = 20.dp,
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 20.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(stringResource(R.string.ai_sprite_character_picker_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            Text(stringResource(R.string.ai_sprite_character_picker_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            state.characters.forEach { item ->
+                CharacterSheetRow(item, item.id == state.selectedCharacterId) { onSelectCharacter(item.id) }
+            }
+            if (state.charactersLoadFailed) {
+                Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.ai_error_characters_failed), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = onReloadCharacters) { Text(stringResource(R.string.ai_sprite_characters_retry)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharacterSheetRow(character: AiCharacter, selected: Boolean, onClick: () -> Unit) {
+    val availability = if (character.isAvailable) stringResource(R.string.ai_sprite_audition_available) else stringResource(R.string.ai_sprite_preparing)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.semantics { this.selected = selected; role = Role.RadioButton },
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) characterTint(character).copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = if (selected) 2.dp else 0.dp
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(Modifier.size(58.dp), RoundedCornerShape(18.dp), color = characterTint(character).copy(alpha = 0.32f)) {
+                Box(contentAlignment = Alignment.Center) { AiCharacterGlyph(character, Modifier.size(50.dp)) }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(character.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    if (selected) Text(stringResource(R.string.ai_sprite_current_character), Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(availability, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.ChevronRight, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+
+@Composable
+private fun FeatureBento(onOpenFeature: (AiFeature) -> Unit) {
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        BentoFeatureCard(AiFeature.TASTE, Modifier.fillMaxWidth(), true) { onOpenFeature(AiFeature.TASTE) }
+        BentoFeatureCard(AiFeature.QUIZ, Modifier.fillMaxWidth(), true) { onOpenFeature(AiFeature.QUIZ) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BentoFeatureCard(AiFeature.GREETING, Modifier.weight(1f), false) { onOpenFeature(AiFeature.GREETING) }
+            BentoFeatureCard(AiFeature.DAILY, Modifier.weight(1f), false) { onOpenFeature(AiFeature.DAILY) }
+        }
+    }
+}
+
+@Composable
+private fun BentoFeatureCard(
+    feature: AiFeature,
+    modifier: Modifier,
+    primary: Boolean,
+    onClick: () -> Unit
+) {
+    val icon = when (feature) {
+        AiFeature.GREETING -> Icons.Rounded.WavingHand
+        AiFeature.TASTE -> Icons.Rounded.RateReview
+        AiFeature.QUIZ -> Icons.Rounded.Quiz
+        AiFeature.DAILY -> Icons.Rounded.Lightbulb
+    }
+    // 四张卡片使用独立的主题色角色，避免两个小卡片的图标撞色，也让功能更容易扫读。
+    val tint = when (feature) {
+        AiFeature.GREETING -> MaterialTheme.colorScheme.secondary
+        AiFeature.TASTE -> MaterialTheme.colorScheme.tertiary
+        AiFeature.QUIZ -> MaterialTheme.colorScheme.inversePrimary
+        AiFeature.DAILY -> MaterialTheme.colorScheme.primary
+    }
+    val title = when (feature) {
+        AiFeature.GREETING -> stringResource(R.string.ai_feature_greeting)
+        AiFeature.TASTE -> stringResource(R.string.ai_feature_taste)
+        AiFeature.QUIZ -> stringResource(R.string.ai_feature_quiz)
+        AiFeature.DAILY -> stringResource(R.string.ai_feature_daily)
+    }
+    val description = when (feature) {
+        AiFeature.GREETING -> stringResource(R.string.ai_feature_greeting_description)
+        AiFeature.TASTE -> stringResource(R.string.ai_feature_taste_description)
+        AiFeature.QUIZ -> stringResource(R.string.ai_feature_quiz_description)
+        AiFeature.DAILY -> stringResource(R.string.ai_feature_daily_description)
+    }
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = if (primary) 174.dp else 190.dp),
+        shape = RoundedCornerShape(if (primary) 26.dp else 22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = if (primary) 2.dp else 1.dp
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(Modifier.size(if (primary) 52.dp else 46.dp), RoundedCornerShape(18.dp), color = tint.copy(alpha = 0.22f)) {
+                Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(if (primary) 28.dp else 24.dp), tint) }
+            }
+            Text(title, style = if (primary) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2)
+            Text(
+                description,
+                Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (primary) 3 else 4
+            )
+            // 整张卡片都可点击，只保留一个轻量箭头作为可点击暗示，不再用状态词和“打开”抢占信息层级。
+            Box(Modifier.fillMaxWidth()) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .size(20.dp),
+                    tint = tint
+                )
             }
         }
     }

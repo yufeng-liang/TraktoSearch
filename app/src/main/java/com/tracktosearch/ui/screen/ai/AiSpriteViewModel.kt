@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.ai
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.ai.AiActivateRequest
@@ -19,6 +20,9 @@ import com.tracktosearch.data.ai.AiVoiceCaptureEvent
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import com.tracktosearch.data.ai.AiMediaIdsDto
 import com.tracktosearch.data.ai.AiDailyKnowledge
+import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
+import com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord
+import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
@@ -51,6 +55,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Named
@@ -78,7 +84,9 @@ enum class AiActivationState {
     FAILED
 }
 
+private val BEIJING_ZONE = ZoneId.of("GMT+8")
 private const val WATCHED_TITLES_TTL_MS = 10 * 60 * 1000L
+private const val QUIZ_PREVIEW_SIZE = 7
 
 /**
  * 松手后继续采集的尾音宽限窗口。
@@ -140,6 +148,14 @@ data class AiSpriteUiState(
     val quizFeedbackState: AiQuizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED,
     val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
+    val dailyKnowledgeChangeCount: Int = 0,
+    val dailyQuestionSelectedOptionId: String? = null,
+    val dailyKnowledgeFeedback: AiDailyKnowledgeContentFeedback? = null,
+    val dailyKnowledgeDifficultyFeedback: AiQuizDifficulty? = null,
+    // 最近学过的本地历史（含当天离线回看），只读展示用
+    val dailyKnowledgeHistory: List<AiDailyKnowledgeHistoryRecord> = emptyList(),
+    // 影视依据区的真实剧照/海报 URL：TMDB backdrop 优先，海报兜底
+    val dailyMediaImageUrl: String? = null,
     // 角色目录是否成功取回：失败时全部角色停在「准备中」，UI 要给出原因和重试入口
     val charactersLoadFailed: Boolean = false,
     val errorCode: String? = null,
@@ -177,13 +193,16 @@ class AiSpriteViewModel @Inject constructor(
     private val overlayStorage: com.tracktosearch.data.local.AiSpriteOverlayStorage,
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
     private val voiceCapture: AiVoiceCapture,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+    private val restoredDailyKnowledgeChangeCount = restoreDailyKnowledgeChangeCount()
     private val _uiState = MutableStateFlow(
         AiSpriteUiState(
             authState = authManager.authState.value,
             networkStatus = connectivityObserver.status.value,
-            nickname = authManager.nickname.value
+            nickname = authManager.nickname.value,
+            dailyKnowledgeChangeCount = restoredDailyKnowledgeChangeCount
         )
     )
     val uiState: StateFlow<AiSpriteUiState> = _uiState.asStateFlow()
@@ -238,6 +257,9 @@ class AiSpriteViewModel @Inject constructor(
     private var quizCandidates = emptyList<AiWatchedTitleDto>()
     /** 当前问答预览的 TMDB 本地化标题补全任务；替换预览时取消旧任务，避免旧结果覆盖新列表。 */
     private var quizLocalizationJob: Job? = null
+    /** 开始答题构造请求时复用预览阶段的富化结果。 */
+    private var quizPreviewEnrichmentLanguage: String? = null
+    private var quizPreviewEnrichments = emptyMap<String, QuizPreviewEnrichment>()
     /** 授权变化时取消本地私有状态恢复，避免迟到结果复活旧账号数据。 */
     private var activationRestoreJob: Job? = null
     private var quizHistoryJob: Job? = null
@@ -245,6 +267,13 @@ class AiSpriteViewModel @Inject constructor(
     /** 锐评隐私守卫任务；关闭功能页或切换功能时必须取消。 */
     private var tasteGuardJob: Job? = null
     private var tasteGuardGeneration = 0L
+    /** 概念插图静默刷新任务：一个内容最多触发一次，切页即取消。 */
+    private var dailyIllustrationJob: Job? = null
+    private var dailyIllustrationRefreshedUnitIds = mutableSetOf<String>()
+    /** 影视依据区剧照查找任务：内容切换即取消，避免旧结果覆盖新内容。 */
+    private var dailyStillJob: Job? = null
+    /** 最近学过历史读取任务。 */
+    private var dailyHistoryJob: Job? = null
     /** 已看列表短期缓存（时间戳 to 列表），避免每次进功能页都全量重拉 Trakt 历史。 */
     private var watchedTitlesCache: Pair<Long, List<AiWatchedTitleDto>>? = null
     // 一次精灵中心会话共用一个会话 ID，让服务端会话配额按一次打开的精灵中心计算。
@@ -268,7 +297,10 @@ class AiSpriteViewModel @Inject constructor(
             connectivityObserver.status.collect { status ->
                 _uiState.update { it.copy(networkStatus = status) }
                 when {
-                    status == ConnectivityObserver.NetworkStatus.OFFLINE -> {
+                    // 初始就是离线时不能取消刚启动的每日知识本地缓存读取；
+                    // 只有从在线变离线才需要打断仍在等待网络的请求。
+                    previous != ConnectivityObserver.NetworkStatus.OFFLINE &&
+                        status == ConnectivityObserver.NetworkStatus.OFFLINE -> {
                         enterOfflineState()
                     }
                     previous == ConnectivityObserver.NetworkStatus.OFFLINE &&
@@ -322,20 +354,27 @@ class AiSpriteViewModel @Inject constructor(
         // 请求回调不能依赖 collect 尚未同步完成的 uiState 快照，直接读取实时网络源。
         connectivityObserver.status.value == ConnectivityObserver.NetworkStatus.ONLINE
 
-    private fun requireNetworkForAi(): Boolean {
-        if (isNetworkAvailable()) return true
-        setError(AI_OFFLINE_ERROR_CODE)
-        return false
-    }
-
     /** 受保护的 AI 请求只接受实时 AUTHORIZED；OFFLINE 仅可继续浏览本地缓存。 */
     private fun hasLiveAiSession(): Boolean =
         authManager.authState.value == AuthState.AUTHORIZED &&
             !authManager.friendId.value.isNullOrBlank()
 
-    /** 网络状态优先：真正离线时必须展示离线文案，而不是误报需要重新授权。 */
-    private fun requireAiAccess(): Boolean {
-        if (!requireNetworkForAi()) return false
+    /** 离线但仍有可识别账号时，仅允许每日知识走本地缓存读取。 */
+    private fun hasOfflineAiSession(): Boolean =
+        authManager.authState.value == AuthState.OFFLINE &&
+            !authManager.friendId.value.isNullOrBlank()
+
+    /**
+     * 网络状态优先：真正离线时必须展示离线文案，而不是误报需要重新授权。
+     * [allowOfflineCache] 只给每日知识首次进入使用：允许 Repository 先读缓存，
+     * 缓存未命中时仍由统一错误映射回落到离线空状态。
+     */
+    private fun requireAiAccess(allowOfflineCache: Boolean = false): Boolean {
+        if (!isNetworkAvailable()) {
+            if (allowOfflineCache && hasOfflineAiSession()) return true
+            setError(AI_OFFLINE_ERROR_CODE)
+            return false
+        }
         if (hasLiveAiSession()) return true
         setError("AUTH_REQUIRED")
         return false
@@ -345,13 +384,14 @@ class AiSpriteViewModel @Inject constructor(
      * AI 请求在每次挂起返回后都要重新过闸：取消 Job 不保证非协作式实现立即停止，
      * 迟到回调必须同时满足「仍是当前请求、实时在线、授权仍有效」才能写回状态。
      */
-    private fun canContinueAiRequest(requestId: Long): Boolean {
+    private fun canContinueAiRequest(requestId: Long, allowOfflineCache: Boolean = false): Boolean {
         if (requestGeneration != requestId) return false
         if (!isNetworkAvailable()) {
-            setRequestError(requestId, AI_OFFLINE_ERROR_CODE)
-            return false
-        }
-        if (!hasLiveAiSession()) {
+            if (!allowOfflineCache || !hasOfflineAiSession()) {
+                setRequestError(requestId, AI_OFFLINE_ERROR_CODE)
+                return false
+            }
+        } else if (!hasLiveAiSession()) {
             setRequestError(requestId, "AUTH_REQUIRED")
             return false
         }
@@ -487,8 +527,29 @@ class AiSpriteViewModel @Inject constructor(
                 }
             }
             launch {
+                var previousNickname: String? = null
                 authManager.nickname.collect { nickname ->
-                    _uiState.update { it.copy(nickname = nickname) }
+                    val changed = previousNickname != null && previousNickname != nickname
+                    previousNickname = nickname
+                    val current = _uiState.value
+                    val characterId = current.activatedCharacterId?.takeIf { it.isNotBlank() }
+                    val shouldReloadGreeting = changed &&
+                        current.activeFeature == AiFeature.GREETING &&
+                        characterId != null
+                    if (changed && characterId != null) {
+                        aiRepository.clearGreetingCache(
+                            friendId = authManager.friendId.value.orEmpty(),
+                            characterId = characterId
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            nickname = nickname,
+                            // 旧昵称点评不能继续与新昵称并排展示；在线时立即重新生成。
+                            greeting = if (changed) null else it.greeting
+                        )
+                    }
+                    if (shouldReloadGreeting) loadGreeting(characterId)
                 }
             }
         }
@@ -502,6 +563,7 @@ class AiSpriteViewModel @Inject constructor(
         invalidateCurrentRequest()
         cancelPrivateStateLoads()
         cancelTasteGuard()
+        cancelDailyKnowledgeJobs()
         discardVoiceHold()
         previewJob?.cancel()
         previewJob = null
@@ -533,6 +595,8 @@ class AiSpriteViewModel @Inject constructor(
         invalidateCurrentRequest()
         cancelPrivateStateLoads()
         cancelTasteGuard()
+        cancelDailyKnowledgeJobs()
+        dailyIllustrationRefreshedUnitIds.clear()
         // 正在按住时被撤销授权：麦克风必须当场还回去，不能留着录一段谁也不会用的音频
         discardVoiceHold()
         previewJob?.cancel()
@@ -574,9 +638,16 @@ class AiSpriteViewModel @Inject constructor(
                 quizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED,
                 quizHistory = null,
                 dailyKnowledge = null,
+                dailyKnowledgeChangeCount = 0,
+                dailyQuestionSelectedOptionId = null,
+                dailyKnowledgeFeedback = null,
+                dailyKnowledgeDifficultyFeedback = null,
+                dailyKnowledgeHistory = emptyList(),
+                dailyMediaImageUrl = null,
                 errorCode = null
             )
         }
+        persistDailyKnowledgeChangeCount(0)
     }
 
     private fun loadQuizHistory() {
@@ -1009,10 +1080,17 @@ class AiSpriteViewModel @Inject constructor(
 
     fun openFeature(feature: AiFeature) {
         cancelTasteGuard()
+        cancelDailyKnowledgeJobs()
         _uiState.update { it.copy(activeFeature = feature, errorCode = null) }
         // 「锐评我的看单」先过隐私守卫：首次点击弹说明（同意才上传）；离线时直接
         // 留在功能页展示不可用文案，不能再发请求后弹服务器错误遮罩。
         if (!isNetworkAvailable()) {
+            if (feature == AiFeature.DAILY) {
+                normalizeDailyKnowledgeChangeCountForToday()
+                // 每日知识有本地缓存时仍应可读；缓存未命中再落到离线空状态。
+                loadDaily(allowOfflineCache = true)
+                return
+            }
             setError(AI_OFFLINE_ERROR_CODE)
             return
         }
@@ -1076,6 +1154,16 @@ class AiSpriteViewModel @Inject constructor(
         tasteGuardJob = null
     }
 
+    /** 离开每日知识页时停掉插图刷新/剧照查找/历史读取，防止迟到结果写进别的页面。 */
+    private fun cancelDailyKnowledgeJobs() {
+        dailyIllustrationJob?.cancel()
+        dailyIllustrationJob = null
+        dailyStillJob?.cancel()
+        dailyStillJob = null
+        dailyHistoryJob?.cancel()
+        dailyHistoryJob = null
+    }
+
     /** 首次说明弹窗点击「同意并继续」：记录已决定，进入功能页并立即加载。 */
     fun onTasteConsentAgreed() {
         cancelTasteGuard()
@@ -1101,6 +1189,7 @@ class AiSpriteViewModel @Inject constructor(
 
     fun closeFeature() {
         cancelTasteGuard()
+        cancelDailyKnowledgeJobs()
         invalidateCurrentRequest()
         _uiState.update {
             it.copy(
@@ -1134,7 +1223,11 @@ class AiSpriteViewModel @Inject constructor(
             // 锐评刷新同样过隐私守卫：功能页打开期间开关可能已在设置里被关闭
             AiFeature.TASTE -> launchTasteGuard(forceRefresh = true)
             AiFeature.QUIZ -> replayQuiz()
-            AiFeature.DAILY -> loadDaily(forceRefresh = true)
+            AiFeature.DAILY -> {
+                normalizeDailyKnowledgeChangeCountForToday()
+                if (!canChangeDailyKnowledge(_uiState.value.dailyKnowledgeChangeCount)) return
+                loadDaily(forceRefresh = true)
+            }
             null -> Unit
         }
     }
@@ -1267,6 +1360,125 @@ class AiSpriteViewModel @Inject constructor(
         }
         viewModelScope.launch {
             aiRepository.submitQuizDifficulty(quizId, difficulty)
+        }
+    }
+
+    /** UI 渲染成功后才写入历史；网络成功不等于用户真的看过这条内容。 */
+    fun markDailyKnowledgeShown(daily: AiDailyKnowledge) {
+        val friendId = authManager.friendId.value.orEmpty()
+        if (friendId.isBlank()) return
+        viewModelScope.launch {
+            val record = aiRepository.markDailyKnowledgeShown(friendId, daily)
+            if (record == null) return@launch
+            var pendingAnswerOptionId: String? = null
+            _uiState.update { state ->
+                if (dailyKnowledgeHistoryKey(state.dailyKnowledge) != dailyKnowledgeHistoryKey(daily)) state
+                else {
+                    // 用户在历史写库完成前就答了题：首答还在 UI 里，落库交给下面的补写。
+                    pendingAnswerOptionId = if (record.questionResult == null) {
+                        state.dailyQuestionSelectedOptionId
+                    } else {
+                        null
+                    }
+                    state.copy(
+                        dailyQuestionSelectedOptionId = state.dailyQuestionSelectedOptionId
+                            ?: record.questionResult?.selectedOptionIds?.firstOrNull(),
+                        dailyKnowledgeFeedback = state.dailyKnowledgeFeedback ?: record.contentFeedback,
+                        dailyKnowledgeDifficultyFeedback = state.dailyKnowledgeDifficultyFeedback
+                            ?: record.difficultyFeedback
+                    )
+                }
+            }
+            if (pendingAnswerOptionId != null) {
+                aiRepository.recordDailyKnowledgeQuestionAnswer(
+                    friendId = friendId,
+                    unitId = dailyKnowledgeHistoryKey(daily),
+                    selectedOptionIds = listOf(pendingAnswerOptionId),
+                    locale = daily.locale
+                )
+            }
+            // 新记录落库后刷新“最近学过”列表。
+            loadDailyKnowledgeHistory()
+        }
+    }
+
+    /** 即时小题只在本地判定，不额外请求 AI，也不计入 13 题成绩。 */
+    fun selectDailyKnowledgeQuestionOption(optionId: String) {
+        val state = _uiState.value
+        val question = state.dailyKnowledge?.checkQuestion
+        if (!dailyCheckQuestionIsValid(question) || state.dailyQuestionSelectedOptionId != null) return
+        if (question?.options?.none { it.id == optionId } != false) return
+        _uiState.update { it.copy(dailyQuestionSelectedOptionId = optionId) }
+        persistDailyKnowledgeAnswer(state.dailyKnowledge, optionId)
+    }
+
+    /** 内容反馈本地一次性记录，同时落到今日知识历史，供后续候选选择使用。 */
+    fun recordDailyKnowledgeFeedback(feedback: AiDailyKnowledgeContentFeedback) {
+        val daily = _uiState.value.dailyKnowledge ?: return
+        if (dailyKnowledgeHistoryKey(daily).isBlank()) return
+        _uiState.update { state ->
+            if (state.dailyKnowledgeFeedback != null) state
+            else state.copy(dailyKnowledgeFeedback = feedback)
+        }
+        persistDailyKnowledgeFeedback(daily, feedback)
+    }
+
+    /** 难度反馈复用闯关难度枚举；同样本地一次性记录并写入历史。 */
+    fun recordDailyKnowledgeDifficultyFeedback(difficulty: AiQuizDifficulty) {
+        val daily = _uiState.value.dailyKnowledge ?: return
+        if (dailyKnowledgeHistoryKey(daily).isBlank()) return
+        _uiState.update { state ->
+            if (state.dailyKnowledgeDifficultyFeedback != null) state
+            else state.copy(dailyKnowledgeDifficultyFeedback = difficulty)
+        }
+        persistDailyKnowledgeDifficultyFeedback(daily, difficulty)
+    }
+
+    private fun persistDailyKnowledgeAnswer(daily: AiDailyKnowledge?, optionId: String) {
+        val friendId = authManager.friendId.value.orEmpty()
+        val unitId = dailyKnowledgeHistoryKey(daily)
+        if (daily == null || friendId.isBlank() || unitId.isBlank()) return
+        viewModelScope.launch {
+            aiRepository.recordDailyKnowledgeQuestionAnswer(
+                friendId = friendId,
+                unitId = unitId,
+                selectedOptionIds = listOf(optionId),
+                locale = daily.locale
+            )
+        }
+    }
+
+    private fun persistDailyKnowledgeFeedback(
+        daily: AiDailyKnowledge,
+        feedback: AiDailyKnowledgeContentFeedback
+    ) {
+        val friendId = authManager.friendId.value.orEmpty()
+        val unitId = dailyKnowledgeHistoryKey(daily)
+        if (friendId.isBlank() || unitId.isBlank()) return
+        viewModelScope.launch {
+            aiRepository.saveDailyKnowledgeContentFeedback(
+                friendId = friendId,
+                unitId = unitId,
+                feedback = feedback,
+                locale = daily.locale
+            )
+        }
+    }
+
+    private fun persistDailyKnowledgeDifficultyFeedback(
+        daily: AiDailyKnowledge,
+        difficulty: AiQuizDifficulty
+    ) {
+        val friendId = authManager.friendId.value.orEmpty()
+        val unitId = dailyKnowledgeHistoryKey(daily)
+        if (friendId.isBlank() || unitId.isBlank()) return
+        viewModelScope.launch {
+            aiRepository.saveDailyKnowledgeDifficultyFeedback(
+                friendId = friendId,
+                unitId = unitId,
+                difficulty = difficulty,
+                locale = daily.locale
+            )
         }
     }
 
@@ -1564,46 +1776,123 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     /**
-     * 为当前最多 7 部预览影视补齐 TMDB 当前语言标题。
-     * 先 peek 内存缓存，只有未命中才请求详情；单项失败不影响其他标题，也不改变发给 AI 的原始标题。
+     * 为最多 7 部预览影视补齐安全的 TMDB 依据字段。
+     * 始终先 peek；详情富化只限定在本轮预览，并由 startQuiz 复用。
      */
+    private suspend fun enrichQuizPreviewMovies(
+        movies: List<AiWatchedTitleDto>
+    ): List<AiWatchedTitleDto> {
+        val preview = movies.take(QUIZ_PREVIEW_SIZE)
+        val languageAtStart = languageStorage.language.value
+        if (quizPreviewEnrichmentLanguage != languageAtStart) {
+            quizPreviewEnrichmentLanguage = languageAtStart
+            quizPreviewEnrichments = emptyMap()
+        }
+
+        val missing = preview.filter { movie ->
+            !quizPreviewEnrichments.containsKey(quizPreviewTitleKey(movie))
+        }
+        if (missing.isNotEmpty()) {
+            val networkAvailableAtStart = isNetworkAvailable()
+            val resolved = withContext(ioDispatcher) {
+                supervisorScope {
+                    missing.map { movie ->
+                        async {
+                            quizPreviewTitleKey(movie) to enrichQuizMovie(movie, networkAvailableAtStart)
+                        }
+                    }.awaitAll().toMap()
+                }
+            }
+            if (languageStorage.language.value == languageAtStart) {
+                quizPreviewEnrichments = quizPreviewEnrichments + resolved
+            } else {
+                // 不保留两种语言混杂的富化结果。
+                quizPreviewEnrichmentLanguage = null
+                quizPreviewEnrichments = emptyMap()
+            }
+        }
+        return preview.map { movie ->
+            quizPreviewEnrichments[quizPreviewTitleKey(movie)]?.watched ?: movie
+        }
+    }
+
+    private suspend fun enrichQuizMovie(
+        movie: AiWatchedTitleDto,
+        networkAvailableAtStart: Boolean
+    ): QuizPreviewEnrichment {
+        val tmdbId = movie.mediaIds.tmdbId?.takeIf { it > 0 }
+            ?: return QuizPreviewEnrichment(movie, null)
+        return try {
+            val isShow = movie.mediaType.equals("show", ignoreCase = true) ||
+                movie.mediaType.equals("tv", ignoreCase = true)
+            if (isShow) {
+                val enrichment = tmdbRepository.peekTvEnrichment(tmdbId, movie.title, movie.year)
+                    ?: if (networkAvailableAtStart) tmdbRepository.enrichTv(tmdbId, movie.title, movie.year) else null
+                    ?: return QuizPreviewEnrichment(movie, null)
+                val localizedTitle = enrichment.chineseTitle.trim()
+                    .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
+                val enrichedMovie = movie.copy(
+                    // 保持 Trakt 标题不变；新增字段只作为 Worker 的补充事实依据。
+                    overview = enrichment.overview.trim().ifBlank { movie.overview },
+                    originalTitle = enrichment.originalTitle.trim().ifBlank { movie.originalTitle },
+                    runtime = enrichment.episodeRunTime ?: movie.runtime,
+                    country = enrichment.country.trim().ifBlank { movie.country },
+                    genres = movie.genres.ifEmpty {
+                        enrichment.genres.split(" · ").map(String::trim).filter(String::isNotBlank)
+                    },
+                    mediaIds = movie.mediaIds.copy(
+                        imdbId = movie.mediaIds.imdbId ?: enrichment.imdbId
+                    )
+                )
+                QuizPreviewEnrichment(enrichedMovie, localizedTitle)
+            } else {
+                val enrichment = tmdbRepository.peekMovieEnrichment(tmdbId, movie.title, movie.year)
+                    ?: if (networkAvailableAtStart) tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year) else null
+                    ?: return QuizPreviewEnrichment(movie, null)
+                val localizedTitle = enrichment.chineseTitle.trim()
+                    .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
+                val enrichedMovie = movie.copy(
+                    // 保持 Trakt 标题不变；新增字段只作为 Worker 的补充事实依据。
+                    overview = enrichment.overview.trim().ifBlank { movie.overview },
+                    originalTitle = enrichment.originalTitle.trim().ifBlank { movie.originalTitle },
+                    runtime = enrichment.runtime ?: movie.runtime,
+                    country = enrichment.country.trim().ifBlank { movie.country },
+                    genres = movie.genres.ifEmpty {
+                        enrichment.genres.split(" · ").map(String::trim).filter(String::isNotBlank)
+                    },
+                    mediaIds = movie.mediaIds.copy(
+                        imdbId = movie.mediaIds.imdbId ?: enrichment.imdbId
+                    )
+                )
+                QuizPreviewEnrichment(enrichedMovie, localizedTitle)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // 详情缺失不能阻断答题，也不能凭空制造依据。
+            QuizPreviewEnrichment(movie, null)
+        }
+    }
+
     private suspend fun resolveQuizPreviewLocalizedTitles(
         movies: List<AiWatchedTitleDto>
     ): Map<String, String> {
-        if (!isNetworkAvailable()) return emptyMap()
-        val languageAtStart = languageStorage.language.value
-        // 使用可注入调度器，测试可继续受 runTest 虚拟时钟控制，避免异步任务污染后续用例。
-        val resolved = withContext(ioDispatcher) {
-            supervisorScope {
-                movies.map { movie ->
-                    async {
-                        val tmdbId = movie.mediaIds.tmdbId?.takeIf { it > 0 }
-                            ?: return@async null
-                        try {
-                            val isShow = movie.mediaType.equals("show", ignoreCase = true) ||
-                                movie.mediaType.equals("tv", ignoreCase = true)
-                            val localizedTitle = if (isShow) {
-                                (tmdbRepository.peekTvEnrichment(tmdbId, movie.title, movie.year)
-                                    ?: tmdbRepository.enrichTv(tmdbId, movie.title, movie.year)).chineseTitle
-                            } else {
-                                (tmdbRepository.peekMovieEnrichment(tmdbId, movie.title, movie.year)
-                                    ?: tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year)).chineseTitle
-                            }
-                            val localized = localizedTitle.trim()
-                                .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
-                            localized?.let { quizPreviewTitleKey(movie) to it }
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-                }.awaitAll().filterNotNull().toMap()
-            }
+        enrichQuizPreviewMovies(movies)
+        return if (languageStorage.language.value == quizPreviewEnrichmentLanguage) {
+            movies.take(QUIZ_PREVIEW_SIZE).mapNotNull { movie ->
+                quizPreviewEnrichments[quizPreviewTitleKey(movie)]?.localizedTitle?.let {
+                    quizPreviewTitleKey(movie) to it
+                }
+            }.toMap()
+        } else {
+            emptyMap()
         }
-        // 语言在并发补全期间切换时，丢弃混合语言结果；下一次进入页面会按新语言重新补全。
-        return if (languageStorage.language.value == languageAtStart) resolved else emptyMap()
     }
+
+    private data class QuizPreviewEnrichment(
+        val watched: AiWatchedTitleDto,
+        val localizedTitle: String?
+    )
 
     private fun refreshQuizPreviewLocalizedTitles(movies: List<AiWatchedTitleDto>) {
         quizLocalizationJob?.cancel()
@@ -1627,10 +1916,12 @@ class AiSpriteViewModel @Inject constructor(
         runFeature(AiFeature.QUIZ) { requestId ->
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             if (!canContinueAiRequest(requestId)) return@runFeature
+            val enrichedWatched = enrichQuizPreviewMovies(watched)
+            if (!canContinueAiRequest(requestId)) return@runFeature
             aiRepository.getQuiz(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiQuizRequest(
-                    watched = watched,
+                    watched = enrichedWatched,
                     excludedQuizIds = recentQuizIds,
                     questionCount = 13,
                     sessionId = spriteSessionId
@@ -1653,29 +1944,248 @@ class AiSpriteViewModel @Inject constructor(
         }
     }
 
-    private fun loadDaily(forceRefresh: Boolean = false) {
-        runFeature(AiFeature.DAILY) { requestId ->
-            aiRepository.getDailyKnowledge(authManager.friendId.value.orEmpty(), forceRefresh)
+    private fun loadDaily(
+        forceRefresh: Boolean = false,
+        allowOfflineCache: Boolean = false
+    ) {
+        runFeature(
+            feature = AiFeature.DAILY,
+            allowOfflineCache = !forceRefresh && allowOfflineCache
+        ) { requestId ->
+            val friendId = authManager.friendId.value.orEmpty()
+            val locale = currentDailyKnowledgeLocale()
+            val shownDate = currentDailyKnowledgeChangeDay()
+            val history = aiRepository.readDailyKnowledgeHistory(friendId)
+            val todayRecords = history.filter {
+                it.shownDate == shownDate.toString() && it.locale == locale
+            }
+            val historyChangeCount = (todayRecords.size - 1).coerceIn(0, 2)
+            val latestRecord = todayRecords.firstOrNull()
+
+            // 当天已有真正展示过的内容时直接复用历史：内容稳定、离线可读，也少一次网络请求。
+            if (!forceRefresh && latestRecord != null) {
+                if (!canContinueAiRequest(requestId, allowOfflineCache)) return@runFeature
+                val latestKnowledge = latestRecord.knowledge
+                updateIfCurrentRequest(requestId) { state ->
+                    applyDailyKnowledgeRecord(state, latestRecord, historyChangeCount)
+                        .copy(dailyMediaImageUrl = null)
+                }
+                persistDailyKnowledgeChangeCount(historyChangeCount)
+                onDailyKnowledgeContentSet(latestKnowledge, requestId, history)
+                return@runFeature
+            }
+
+            aiRepository.getDailyKnowledge(
+                friendId = friendId,
+                watched = watchedTitles(),
+                forceRefresh = forceRefresh,
+                locale = locale
+            )
                 .onSuccess { daily ->
-                    if (!canContinueAiRequest(requestId)) return@onSuccess
-                    updateIfCurrentRequest(requestId) {
-                        it.copy(dailyKnowledge = daily, quota = daily.quota ?: it.quota)
+                    if (!canContinueAiRequest(requestId, !forceRefresh && allowOfflineCache)) {
+                        return@onSuccess
                     }
+                    updateIfCurrentRequest(requestId) { state ->
+                        val nextChangeCount = if (forceRefresh) {
+                            (maxOf(state.dailyKnowledgeChangeCount, historyChangeCount) + 1).coerceAtMost(2)
+                        } else {
+                            maxOf(state.dailyKnowledgeChangeCount, historyChangeCount)
+                        }
+                        if (forceRefresh) persistDailyKnowledgeChangeCount(nextChangeCount)
+                        state.copy(
+                            dailyKnowledge = daily,
+                            dailyKnowledgeChangeCount = nextChangeCount,
+                            dailyQuestionSelectedOptionId = null,
+                            dailyKnowledgeFeedback = null,
+                            dailyKnowledgeDifficultyFeedback = null,
+                            dailyMediaImageUrl = null,
+                            quota = daily.quota ?: state.quota
+                        )
+                    }
+                    onDailyKnowledgeContentSet(daily, requestId, history)
                 }
                 .getOrElse { throw it }
         }
     }
 
-    private fun runFeature(feature: AiFeature, block: suspend (Long) -> Unit) {
-        if (!requireAiAccess()) return
+    private fun applyDailyKnowledgeRecord(
+        state: AiSpriteUiState,
+        record: AiDailyKnowledgeHistoryRecord,
+        changeCount: Int
+    ): AiSpriteUiState = state.copy(
+        dailyKnowledge = record.knowledge,
+        dailyKnowledgeChangeCount = changeCount,
+        dailyQuestionSelectedOptionId = record.questionResult?.selectedOptionIds?.firstOrNull(),
+        dailyKnowledgeFeedback = record.contentFeedback,
+        dailyKnowledgeDifficultyFeedback = record.difficultyFeedback,
+        quota = record.knowledge.quota ?: state.quota
+    )
+
+    /** 内容落地后的插图/剧照/历史联动；requestId 失效后不写任何状态。 */
+    private fun onDailyKnowledgeContentSet(
+        daily: AiDailyKnowledge,
+        requestId: Long,
+        history: List<AiDailyKnowledgeHistoryRecord>
+    ) {
+        scheduleDailyStillLookup(daily, requestId)
+        scheduleDailyIllustrationRefresh(daily, requestId)
+        updateIfCurrentRequest(requestId) { it.copy(dailyKnowledgeHistory = history) }
+    }
+
+    /**
+     * 概念插图静默刷新：Worker 后台生图完成后，页面最多补拉一次拿到 ready 状态。
+     * 用户已在答题（插图就绪会改变布局）或离开页面时跳过，遵守设计的
+     * “最多静默刷新一次”与“答题时不插入图片”。
+     */
+    private fun scheduleDailyIllustrationRefresh(daily: AiDailyKnowledge, requestId: Long) {
+        dailyIllustrationJob?.cancel()
+        dailyIllustrationJob = null
+        val status = daily.illustration?.status ?: return
+        if (status != "generating") return
+        val unitKey = dailyKnowledgeHistoryKey(daily)
+        if (unitKey.isBlank() || unitKey in dailyIllustrationRefreshedUnitIds) return
+        dailyIllustrationRefreshedUnitIds += unitKey
+        dailyIllustrationJob = viewModelScope.launch {
+            delay(DAILY_ILLUSTRATION_REFRESH_DELAY_MS)
+            if (requestGeneration != requestId) return@launch
+            if (_uiState.value.activeFeature != AiFeature.DAILY) return@launch
+            if (_uiState.value.dailyQuestionSelectedOptionId != null) return@launch
+            if (!isNetworkAvailable() || !hasLiveAiSession()) return@launch
+            val current = _uiState.value.dailyKnowledge ?: return@launch
+            if (dailyKnowledgeHistoryKey(current) != unitKey) return@launch
+            aiRepository.refreshDailyKnowledge(
+                friendId = authManager.friendId.value.orEmpty(),
+                watched = watchedTitles(),
+                locale = current.locale
+            ).onSuccess { refreshed ->
+                if (requestGeneration != requestId) return@onSuccess
+                if (refreshed.illustration?.isReady != true) return@onSuccess
+                _uiState.update { state ->
+                    if (dailyKnowledgeHistoryKey(state.dailyKnowledge) != unitKey) state
+                    else state.copy(
+                        dailyKnowledge = state.dailyKnowledge?.copy(illustration = refreshed.illustration)
+                    )
+                }
+            }
+        }
+    }
+
+    /** 影视依据区配图：TMDB backdrop 优先，海报兜底；拿不到保持 null 走占位图标。 */
+    private fun scheduleDailyStillLookup(daily: AiDailyKnowledge, requestId: Long) {
+        dailyStillJob?.cancel()
+        dailyStillJob = null
+        val media = daily.relatedMedia ?: return
+        val tmdbId = media.tmdbId?.takeIf { it > 0 } ?: return
+        val isShow = media.mediaType.equals("show", ignoreCase = true) ||
+            media.mediaType.equals("tv", ignoreCase = true)
+        dailyStillJob = viewModelScope.launch {
+            val url = withContext(ioDispatcher) {
+                runCatching {
+                    val backdrops = if (isShow) {
+                        tmdbRepository.getTvImages(tmdbId)
+                    } else {
+                        tmdbRepository.getMovieImages(tmdbId)
+                    }
+                    val backdropPath = backdrops.firstOrNull()?.file_path?.takeIf { it.isNotBlank() }
+                    if (backdropPath != null) {
+                        com.tracktosearch.data.remote.tmdb.TmdbImageUrls.build(backdropPath, com.tracktosearch.data.remote.tmdb.TmdbImageUrls.W780)
+                    } else {
+                        val poster = tmdbRepository.posterPath(
+                            tmdbId,
+                            if (isShow) com.tracktosearch.data.repository.MediaType.SHOW
+                            else com.tracktosearch.data.repository.MediaType.MOVIE
+                        )
+                        poster?.let {
+                            com.tracktosearch.data.remote.tmdb.TmdbImageUrls.build(it, com.tracktosearch.data.remote.tmdb.TmdbImageUrls.W342)
+                        }
+                    }
+                }.getOrNull()
+            }
+            if (requestGeneration == requestId && url != null) {
+                _uiState.update { state ->
+                    if (dailyKnowledgeHistoryKey(state.dailyKnowledge) != dailyKnowledgeHistoryKey(daily)) state
+                    else state.copy(dailyMediaImageUrl = url)
+                }
+            }
+        }
+    }
+
+    /** 离线加载最近学过列表；只读，失败静默保持旧值。 */
+    private fun loadDailyKnowledgeHistory() {
+        val friendId = authManager.friendId.value.orEmpty()
+        if (friendId.isBlank()) return
+        val generation = privateStateGeneration
+        dailyHistoryJob?.cancel()
+        dailyHistoryJob = viewModelScope.launch {
+            val records = aiRepository.readDailyKnowledgeHistory(friendId)
+            if (canReadPrivateState(friendId, generation)) {
+                _uiState.update { it.copy(dailyKnowledgeHistory = records) }
+            }
+        }
+    }
+
+    /** 历史回看：把某天的旧知识装回每日视图，答题与反馈状态随记录恢复，不消耗换题额度。 */
+    fun openDailyKnowledgeRecord(record: AiDailyKnowledgeHistoryRecord) {
+        val requestId = beginRequest()
+        requestJob = viewModelScope.launch {
+            updateIfCurrentRequest(requestId) { state ->
+                applyDailyKnowledgeRecord(state, record, state.dailyKnowledgeChangeCount)
+            }
+        }
+        scheduleDailyStillLookup(record.knowledge, requestId)
+        dailyIllustrationJob?.cancel()
+        dailyIllustrationJob = null
+    }
+
+    private fun dailyKnowledgeHistoryKey(daily: AiDailyKnowledge?): String =
+        daily?.unitId?.trim()?.takeIf { it.isNotEmpty() } ?: daily?.id?.trim().orEmpty()
+
+    private fun currentDailyKnowledgeLocale(): String {
+        val systemLanguage = runCatching {
+            context.resources.configuration.locales[0]?.language.orEmpty()
+        }.getOrDefault("")
+        return dailyKnowledgeLocale(languageStorage.language.value, systemLanguage)
+    }
+
+    private fun currentDailyKnowledgeChangeDay(): String = LocalDate.now(BEIJING_ZONE).toString()
+
+    private fun restoreDailyKnowledgeChangeCount(): Int {
+        if (savedStateHandle.get<String>(KEY_DAILY_KNOWLEDGE_CHANGE_DAY) != currentDailyKnowledgeChangeDay()) {
+            return 0
+        }
+        return savedStateHandle.get<Int>(KEY_DAILY_KNOWLEDGE_CHANGE_COUNT)
+            ?.coerceIn(0, 2)
+            ?: 0
+    }
+
+    /** ViewModel 跨零点仍存活时也要按新的一天重置，不能沿用昨天的两次额度。 */
+    private fun normalizeDailyKnowledgeChangeCountForToday() {
+        val today = currentDailyKnowledgeChangeDay()
+        if (savedStateHandle.get<String>(KEY_DAILY_KNOWLEDGE_CHANGE_DAY) == today) return
+        savedStateHandle[KEY_DAILY_KNOWLEDGE_CHANGE_DAY] = today
+        savedStateHandle[KEY_DAILY_KNOWLEDGE_CHANGE_COUNT] = 0
+        _uiState.update { it.copy(dailyKnowledgeChangeCount = 0) }
+    }
+
+    private fun persistDailyKnowledgeChangeCount(count: Int) {
+        savedStateHandle[KEY_DAILY_KNOWLEDGE_CHANGE_DAY] = currentDailyKnowledgeChangeDay()
+        savedStateHandle[KEY_DAILY_KNOWLEDGE_CHANGE_COUNT] = count
+    }
+
+    private fun runFeature(
+        feature: AiFeature,
+        allowOfflineCache: Boolean = false,
+        block: suspend (Long) -> Unit
+    ) {
+        if (!requireAiAccess(allowOfflineCache)) return
         val requestId = beginRequest()
         requestJob = viewModelScope.launch {
             try {
-                if (!canContinueAiRequest(requestId)) return@launch
+                if (!canContinueAiRequest(requestId, allowOfflineCache)) return@launch
                 updateIfCurrentRequest(requestId) {
                     it.copy(isLoading = true, loadingFeature = feature, errorCode = null)
                 }
-                if (requestGeneration != requestId) return@launch
+                if (!canContinueAiRequest(requestId, allowOfflineCache)) return@launch
                 block(requestId)
             } catch (e: CancellationException) {
                 // 新请求（切换功能/提交/激活）取消旧请求时，不能走 onFailure 画假错误或翻转状态
@@ -1735,6 +2245,13 @@ class AiSpriteViewModel @Inject constructor(
         val aiError = error as? com.tracktosearch.data.ai.AiApiException
         return aiError?.errorCode?.name
             ?: com.tracktosearch.data.ai.AiErrorMapper.fromThrowable(error).errorCode.name
+    }
+
+    private companion object {
+        const val KEY_DAILY_KNOWLEDGE_CHANGE_DAY = "daily_knowledge_change_day"
+        const val KEY_DAILY_KNOWLEDGE_CHANGE_COUNT = "daily_knowledge_change_count"
+        /** 插图后台生成一般在请求后几十秒内完成；等 25 秒补拉一次足以覆盖首屏会话。 */
+        const val DAILY_ILLUSTRATION_REFRESH_DELAY_MS = 25_000L
     }
 }
 

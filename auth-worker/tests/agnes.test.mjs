@@ -33,6 +33,44 @@ async function call(path, { body, env, friendId = 'friend-1', deviceId = 'device
     return { response, json };
 }
 
+function validAgnesDailyKnowledgeUnit() {
+    return {
+        unitId: 'agnes-daily-unit',
+        version: 1,
+        locale: 'zh-CN',
+        relationType: 'general_knowledge',
+        evidenceMode: 'external_fact',
+        subjectGroup: 'history_and_culture',
+        subject: '历史',
+        concept: '片场口令',
+        title: '片场口令如何组织协作',
+        takeaway: '统一口令把多部门准备压缩成同一瞬间，降低拍摄现场的不确定性。',
+        relatedMedia: null,
+        filmEvidence: '开机前的部门准备和统一信号，是影片制作资料中可确认的协作方式。',
+        explanation: '片场时间成本高，统一信号让摄影、灯光、表演和声音在同一时刻进入执行状态。',
+        realWorldExample: '复杂项目也需要明确职责边界和统一启动信号。',
+        boundary: '这是制作历史的来源说明，不同剧组流程会存在差异。',
+        difficulty: 'easy',
+        spoilerLevel: 'none',
+        source: {
+            name: 'Example',
+            url: 'https://www.britannica.com/agnes-daily-source',
+            evidence: '来源介绍电影制作协作与技术流程。',
+        },
+        checkQuestion: {
+            prompt: '统一口令的主要作用是什么？',
+            options: [
+                { id: 'a', text: '让所有人立刻改变立场。' },
+                { id: 'b', text: '让多部门在同一瞬间进入执行状态。' },
+                { id: 'c', text: '证明流程一定正确。' },
+            ],
+            correctOptionIds: ['b'],
+            explanation: '片场口令作为协作信号，能让多部门同时进入执行状态。',
+        },
+        characterLine: '原来片场还有这个小秘密！',
+    };
+}
+
 test('Agnes multi-key failover: first key 401 -> retries next key', async () => {
     const authSeen = [];
     globalThis.fetch = async (_url, init) => {
@@ -147,9 +185,9 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
             const systemPrompt = String(requestBody.messages?.[0]?.content ?? '');
             const route = systemPrompt.includes('影视品味分析助手')
                 ? 'taste'
-                : systemPrompt.includes('影视知识闯关出题人')
+                : systemPrompt.includes('影视知识闯关')
                     ? 'quiz'
-                    : systemPrompt.includes('每日影视冷知识编辑')
+                    : systemPrompt.includes('今日影视知识')
                         ? 'daily'
                         : null;
             assert.ok(route, 'unexpected Agnes prompt');
@@ -174,14 +212,7 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
                 }
                 : route === 'quiz'
                     ? { questions: validAgnesQuizQuestions() }
-                    : {
-                        title: '电影片场的一个小细节',
-                        fact: '电影拍摄现场的简短口令帮助不同工种在同一时刻进入状态。',
-                        explanation: '这类口令把复杂协作压缩成所有人都能迅速理解的信号。',
-                        sourceName: '示例来源',
-                        sourceUrl: 'https://example.com/agnes-daily-source',
-                        characterLine: '原来片场还有这个小秘密！',
-                    };
+                    : validAgnesDailyKnowledgeUnit();
             return new Response(JSON.stringify({
                 choices: [{ message: { content: JSON.stringify(payload) } }],
             }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -215,7 +246,7 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         assert.equal(taste.response.status, 200);
         assert.equal(quiz.response.status, 200);
         assert.equal(daily.response.status, 200);
-        assert.deepEqual(requests.map(request => request.route), ['taste', 'quiz', 'daily']);
+        assert.deepEqual(requests.map(request => request.route), ['taste', 'quiz', 'daily', 'daily']);
         assert.ok(requests.every(request => request.model === 'agnes-2.5-flash'));
         assert.ok(requests.every(request => request.hasBearer));
         assert.ok(requests.every(request => !request.hasResponseFormat));
@@ -297,7 +328,7 @@ test('Agnes HTTP 200 with invalid JSON or structure uses deterministic route fal
             const systemPrompt = String(requestBody.messages?.[0]?.content ?? '');
             const route = systemPrompt.includes('影视品味分析助手')
                 ? 'taste'
-                : systemPrompt.includes('每日影视冷知识编辑')
+                : systemPrompt.includes('今日影视知识')
                     ? 'daily'
                     : 'greeting';
             requests.push(route);
@@ -338,11 +369,12 @@ test('Agnes HTTP 200 with invalid JSON or structure uses deterministic route fal
         });
 
         assert.equal(greeting.response.status, 200);
-        assert.equal(greeting.json.data.comment, '很适合当一名会发现细节的观众。');
+        assert.equal(greeting.json.data.comment, '真正能让人记住你的，还是你挑片时留下的细节。');
         assert.equal(taste.response.status, 200);
         assert.deepEqual(taste.json.data.recommendations, []);
         assert.equal(daily.response.status, 200);
-        assert.equal(daily.json.data.title, '电影的第一声“Action”');
+        assert.match(daily.json.data.unitId, /^seed-/);
+        assert.match(daily.json.data.sourceUrl, /^https?:\/\//);
         assert.deepEqual(requests, ['greeting', 'taste', 'daily']);
         assert.equal(mimoTextRequests, 0);
     } finally {

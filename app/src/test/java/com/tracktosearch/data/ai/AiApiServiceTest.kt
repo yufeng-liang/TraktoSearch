@@ -24,7 +24,7 @@ class AiApiServiceTest {
         api = Retrofit.Builder()
             .baseUrl(server.url("api/ai/"))
             .addConverterFactory(
-                Json { ignoreUnknownKeys = true }
+                Json { ignoreUnknownKeys = true; encodeDefaults = true }
                     .asConverterFactory("application/json".toMediaType())
             )
             .build()
@@ -67,6 +67,8 @@ class AiApiServiceTest {
         val request = server.takeRequest()
         assertThat(request.method).isEqualTo("POST")
         assertThat(request.path).isEqualTo("/api/ai/daily")
-        assertThat(request.body.readUtf8()).contains("sprite-session")
+        val body = request.body.readUtf8()
+        assertThat(body).contains("sprite-session")
+        assertThat(body).contains("\"locale\":\"zh-CN\"")
     }
 }
