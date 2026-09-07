@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,9 +51,10 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.FeedbackReplied
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -72,6 +72,7 @@ fun FeedbackScreen(
     // 共享元素转场作用域：两种列表卡片分别与反馈详情页、崩溃日志详情页配对。
     // 取在 composable 顶层，列表每一项直接复用同一个实例，不在 items lambda 里逐项重新读取。
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val haptics = rememberAppHaptics()
     val listState by viewModel.listState.collectAsStateWithLifecycle()
     val crashLogRecords by viewModel.crashLogRecords.collectAsStateWithLifecycle()
     // 未读回复由主界面进场时拉过一次，这里只读不再请求（VM 挂在 MAIN 返回栈上，是同一实例）
@@ -219,7 +220,7 @@ fun FeedbackScreen(
                                     title = stringResource(R.string.feedback_empty),
                                     actions = {
                                         Spacer(Modifier.height(12.dp))
-                                        Button(onClick = onNewFeedback) {
+                                        Button(onClick = { haptics.tap(); onNewFeedback() }) {
                                             Text(stringResource(R.string.feedback_new))
                                         }
                                     }
@@ -272,10 +273,9 @@ fun FeedbackScreen(
 
             // 写新反馈入口：原先是列表顶部一张大卡，反馈多了就滚出屏幕，
             // 挪成右下悬浮按钮后任何滚动位置都能点到。
-            val view = LocalView.current
             FloatingActionButton(
                 onClick = {
-                    view.performHaptic(HapticType.CLICK)
+                    haptics.tap()
                     onNewFeedback()
                 },
                 modifier = Modifier
@@ -375,7 +375,7 @@ private fun FeedbackCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val screenshotCount = remember(item.screenshots) { parseScreenshots(item.screenshots).size }
     Card(
         modifier = Modifier
@@ -383,10 +383,7 @@ private fun FeedbackCard(
             // 调用方的修饰符挂在卡片本体上：容器变形要量的是这张卡片可见的那块圆角面，
             // 列表的项间距由 LazyColumn 负责，这里没有外边距需要跳过。
             .then(modifier)
-            .clickable {
-                view.performHaptic(HapticType.CLICK)
-                onClick()
-            },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         shape = RoundedCornerShape(FeedbackListCardCorner),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -487,7 +484,7 @@ private fun CrashLogRecordCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val (statusRes, statusColor) = when (record.status) {
         com.tracktosearch.data.local.CrashLogRecord.Status.PENDING ->
             R.string.crash_record_status_pending to MaterialTheme.colorScheme.onSurfaceVariant
@@ -510,10 +507,7 @@ private fun CrashLogRecordCard(
             .fillMaxWidth()
             // 与 FeedbackCard 同理：修饰符挂在卡片本体上，量到的才是用户看到的那块圆角面。
             .then(modifier)
-            .clickable {
-                view.performHaptic(HapticType.CLICK)
-                onClick()
-            },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         shape = RoundedCornerShape(FeedbackListCardCorner),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)

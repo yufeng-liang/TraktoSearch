@@ -13,7 +13,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.delay
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import kotlin.math.roundToInt
 
 enum class AiSpriteMotionState {
@@ -300,7 +301,18 @@ private fun SpriteMotionVisual(
             .size(spriteSize, windowHeight)
             .clipToBounds()
             .then(if (isInteractive) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
-            .then(if (isInteractive) Modifier.clickable(onClick = onClick) else Modifier),
+            // 点精灵进精灵中心，按「次级入口」给轻一档。isInteractive = false 时（功能页/详情页
+            // 的庆祝插画）连 clickable 都不挂，也就不会有触感
+            .then(
+                if (isInteractive) {
+                    Modifier.hapticClickable(
+                        semantic = HapticSemantic.LIGHT_TAP,
+                        onClick = onClick
+                    )
+                } else {
+                    Modifier
+                }
+            ),
         contentAlignment = Alignment.BottomCenter
     ) {
         if (sceneRes != null) {

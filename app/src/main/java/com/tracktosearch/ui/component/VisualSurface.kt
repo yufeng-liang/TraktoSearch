@@ -175,6 +175,8 @@ fun AppIconButton(
     buttonStyle: NeumorphicIconButtonStyle = NeumorphicIconButtonStyle.Default,
     content: @Composable () -> Unit
 ) {
+    // 触感不在这里发。两条分支各自转给一个已经拥有可点面的组件（GlassIconButton 与
+    // NeumorphicIconButton），那两处内部已经各发一记 LIGHT_TAP；这里再包一层就是双震。
     when (LocalVisualEffectMode.current) {
         VisualEffectMode.GLASS -> {
             GlassIconButton(

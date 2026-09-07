@@ -36,7 +36,9 @@ class MovieCardTest {
                 posterUrl = null,
                 tmdbId = 1,
                 onClick = { clicked = true },
-                origin = "test"
+                // 本用例只验证点击回调，不涉及共享元素配对。SharedOrigin.ANY 的语义正是
+                // 「不参与来源区分」，比随便挑一个真实列表的 origin 更贴合这里的场景
+                origin = SharedOrigin.ANY
             )
         }
         composeRule.onNodeWithText("点击测试").performClick()

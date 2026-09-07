@@ -108,14 +108,17 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
-import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.StatisticsEntryKey
-import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.StatisticsEntryKey
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import dev.chrisbanes.haze.HazeState
@@ -141,6 +144,11 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
+    // 部分区块降级时提示一句「数字可能不全」——那几处降级原本连一个字都不报
+    ToastEffect(viewModel.toastEvent)
+    // 加载失败、降级、长图分享失败配对的触感都从这一行出（长图那三处在下面直接调 haptics）
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 共享元素转场 scope(与设置页观看统计卡片配对)
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -216,9 +224,12 @@ fun StatisticsScreen(
                     }
                     val feedbackText = try {
                         context.startActivity(Intent.createChooser(intent, shareChooserTitle))
+                        haptics.confirm()
                         shareSavedText
                     } catch (_: Exception) {
                         // 相册已经保存成功；系统分享面板异常不能误报成“保存失败”。
+                        // 但「分享」这件事没办成，用户还得自己去相册找图再发一次，所以判 reject
+                        haptics.reject()
                         shareOpenFailedText
                     }
                     shareScope.launch { snackbarHostState.showSnackbar(feedbackText) }
@@ -226,6 +237,7 @@ fun StatisticsScreen(
                     throw e
                 } catch (_: Exception) {
                     // 渲染或相册写入失败时不拉起分享，也不显示“已保存”。
+                    haptics.reject()
                     snackbarHostState.showSnackbar(shareFailedText)
                 } finally {
                     sharing = false
@@ -512,7 +524,10 @@ fun StatisticsScreen(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
-                    onClick = { showInfoDialog = true },
+                    onClick = {
+                        haptics.lightTap()
+                        showInfoDialog = true
+                    },
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
@@ -524,7 +539,10 @@ fun StatisticsScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
-                    onClick = onShare,
+                    onClick = {
+                        haptics.lightTap()
+                        onShare()
+                    },
                     enabled = shareEnabled,
                     modifier = Modifier.size(40.dp)
                 ) {
@@ -611,7 +629,15 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // 对话框有自己的宿主 View，按 ComposeHaptics 的约定在这一层重新取一份。
+            // 这一记是本弹窗唯一的主按钮（标着「确定」），即使它只是关掉弹窗也按主按钮给 tap
+            val dialogHaptics = rememberAppHaptics()
+            TextButton(
+                onClick = {
+                    dialogHaptics.tap()
+                    onDismiss()
+                }
+            ) {
                 Text(stringResource(android.R.string.ok))
             }
         }
@@ -883,7 +909,7 @@ private fun pieSlices(genreDistribution: Map<String, Int>): List<PieSlice> {
 /** 类型分布饼图（展开动画 + 点击交互） */
 @Composable
 private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionReveal) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val totalCount = genreDistribution.values.sum()
     if (totalCount == 0) return
 
@@ -930,7 +956,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionRe
                                 for ((index, entry) in entries.withIndex()) {
                                     val sweep = 360f * entry.count.toFloat() / totalCount.toFloat()
                                     if (angle >= accumulated && angle < accumulated + sweep) {
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.segmentTick()
                                         selectedIndex = if (selectedIndex == index) -1 else index
                                         break
                                     }
@@ -1008,7 +1034,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, reveal: SectionRe
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { view.performHaptic(HapticType.CLICK); selectedIndex = if (selectedIndex == index) -1 else index },
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) { selectedIndex = if (selectedIndex == index) -1 else index },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -1238,7 +1264,7 @@ private fun HeatmapChart(
     onWeekOffsetChange: (Int) -> Unit,
     reveal: SectionReveal
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val weeks = grid.weeks
     val monthLabels = grid.monthLabels
     val canGoForward = weekOffset < 0
@@ -1310,7 +1336,11 @@ private fun HeatmapChart(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
-                onClick = { onWeekOffsetChange(weekOffset - HEATMAP_WEEKS) },
+                onClick = {
+                    // 横滑翻周发的是 gestureEnd，箭头是同一个动作的按钮路径，按图标按钮给一记轻的
+                    haptics.lightTap()
+                    onWeekOffsetChange(weekOffset - HEATMAP_WEEKS)
+                },
                 modifier = Modifier.size(32.dp)
             ) {
                 Text("←", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1321,7 +1351,10 @@ private fun HeatmapChart(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             IconButton(
-                onClick = { onWeekOffsetChange(weekOffset + HEATMAP_WEEKS) },
+                onClick = {
+                    haptics.lightTap()
+                    onWeekOffsetChange(weekOffset + HEATMAP_WEEKS)
+                },
                 modifier = Modifier.size(32.dp),
                 enabled = canGoForward
             ) {
@@ -1349,7 +1382,7 @@ private fun HeatmapChart(
                             if (weekIdx in weeks.indices && dayIdx in 0 until 7) {
                                 val cell = weeks[weekIdx][dayIdx]
                                 if (!cell.isFuture) {
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.segmentTick()
                                     selectedCell = cell
                                 }
                             }
@@ -1380,13 +1413,13 @@ private fun HeatmapChart(
                                 // 向左滑：看更近日期
                                 if (canGoForward) {
                                     onWeekOffsetChange(weekOffset + HEATMAP_WEEKS)
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.gestureEnd()
                                 }
                                 triggered = true
                             } else if (totalDrag > dragThresholdPx) {
                                 // 向右滑：看更早日期
                                 onWeekOffsetChange(weekOffset - HEATMAP_WEEKS)
-                                view.performHaptic(HapticType.CLICK)
+                                haptics.gestureEnd()
                                 triggered = true
                             }
                         }

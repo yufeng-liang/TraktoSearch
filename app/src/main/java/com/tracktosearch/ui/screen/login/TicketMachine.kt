@@ -11,7 +11,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -91,6 +90,9 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.MachineBulbEmber
 import com.tracktosearch.ui.theme.MachineBulbEmberGreen
 import com.tracktosearch.ui.theme.MachineBulbEmberRed
@@ -327,6 +329,7 @@ internal fun TicketMachine(
     ticketSlot: @Composable () -> Unit = {},
 ) {
     val isDarkTheme = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
     val shellShape = RoundedCornerShape(ShellCorner)
     val shell = if (isDarkTheme) MachineShellDark else MachineShellLight
     // 机壳最亮的一点就是 shell 本身，往下压暗、不往上提亮，见 MachineShellShadeFraction
@@ -574,7 +577,11 @@ internal fun TicketMachine(
                 }
             }
             Button(
-                onClick = onSubmit,
+                // 整台机器唯一的主动作；成功/失败那一记归输出侧的任务在 VM 接
+                onClick = {
+                    haptics.tap()
+                    onSubmit()
+                },
                 enabled = submitEnabled && phase != MachinePhase.Verifying,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1236,9 +1243,12 @@ private fun RowScope.MachineKey(
         modifier = Modifier
             .weight(1f)
             // clickable 必须排在 padding 前面：排到后面这圈内边距就落在手势区外头，触达面积白加
-            .clickable(
+            // 触感收在这里：12 个键（数字/粘贴/退格）都从这条路走，各自再挂一层就是双份
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 键盘是一屏里反复按几十次的面，走列表项那一档
+                semantic = HapticSemantic.LIGHT_TAP,
                 enabled = enabled,
                 onClick = onClick
             )

@@ -3,8 +3,6 @@ package com.tracktosearch.ui.component
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -34,6 +32,9 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 
 /**
@@ -142,16 +143,18 @@ fun PosterCard(
                 .then(
                     if (onClick != null) {
                         if (onLongClick != null) {
-                            Modifier.combinedClickable(
+                            Modifier.hapticCombinedClickable(
                                 interactionSource = interactionSource,
                                 indication = null,
+                                semantic = HapticSemantic.LIGHT_TAP,
                                 onClick = onClick,
                                 onLongClick = onLongClick
                             )
                         } else {
-                            Modifier.clickable(
+                            Modifier.hapticClickable(
                                 interactionSource = interactionSource,
                                 indication = null,
+                                semantic = HapticSemantic.LIGHT_TAP,
                                 onClick = onClick
                             )
                         }

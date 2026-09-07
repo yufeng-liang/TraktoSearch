@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -46,6 +45,8 @@ import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.isDarkScheme
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -509,6 +510,8 @@ fun NeumorphicIconButton(
     content: @Composable () -> Unit
 ) {
     if (LocalVisualEffectMode.current == VisualEffectMode.GLASS) {
+        // 触感不在这里发：GlassIconButton 内部的可点面已经发了一记 LIGHT_TAP，
+        // 这里再包一层就是双震。BLUR 那条分支自绘 Box，触感在下面那个 hapticClickable 上。
         GlassIconButton(
             onClick = onClick,
             modifier = modifier,
@@ -605,9 +608,10 @@ fun NeumorphicIconButton(
                 },
                 shape = shape
             )
-            .clickable(
+            .hapticClickable(
                 interactionSource = resolvedInteractionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 enabled = enabled,
                 onClick = onClick
             ),

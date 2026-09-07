@@ -98,30 +98,33 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.session.SessionModeManager
-import com.tracktosearch.ui.animation.EnterMode
-import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.MarkRecordsEntryKey
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.SettingsEntryCardCorner
-import com.tracktosearch.ui.component.SharedCorner
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.navigation.DetailSeedStore
+import com.tracktosearch.ui.animation.EnterMode
+import com.tracktosearch.ui.animation.cardEnter
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.MarkRecordsEntryKey
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.theme.GlassBorderDark
 import com.tracktosearch.ui.theme.GlassFillDark
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -163,6 +166,10 @@ fun MarkRecordScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val traktConnected by sessionViewModel.traktConnected.collectAsStateWithLifecycle()
     val isDark = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
+    // ALL 页只有 Trakt 那一半失败时提示一句「列表可能不全」——原来这种失败一个字都不报
+    ToastEffect(viewModel.toastEvent)
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 共享元素转场 scope（与设置页标记记录入口卡片配对）。本页没有 Scaffold，作用域自己从
     // CompositionLocal 取，与 StatisticsScreen 的取法一致。
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -438,6 +445,7 @@ fun MarkRecordScreen(
                         actions = {
                             if (filteredEmpty) {
                                 TextButton(onClick = {
+                                    haptics.tap()
                                     collapseSearch()
                                     viewModel.updateSearchQuery("")
                                     viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
@@ -578,7 +586,10 @@ fun MarkRecordScreen(
                                                 }
                                                 if (uiState.searchQuery.isNotEmpty()) {
                                                     IconButton(
-                                                        onClick = { viewModel.updateSearchQuery("") },
+                                                        onClick = {
+                                                            haptics.lightTap()
+                                                            viewModel.updateSearchQuery("")
+                                                        },
                                                         modifier = Modifier.size(28.dp)
                                                     ) {
                                                         Icon(
@@ -644,6 +655,7 @@ fun MarkRecordScreen(
                     Tab(
                         selected = uiState.currentTab == tab,
                         onClick = {
+                            haptics.segmentTick()
                             collapseSearch()
                             viewModel.switchTab(tab)
                         },

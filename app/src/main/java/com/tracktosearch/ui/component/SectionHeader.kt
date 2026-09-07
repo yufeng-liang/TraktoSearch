@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.component
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +21,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 
 /**
  * 统一「标题 + 查看全部 ›」组件
@@ -60,7 +61,10 @@ fun SectionHeader(
             val actionColor = MaterialTheme.colorScheme.primary
             Row(
                 modifier = Modifier
-                    .clickable(onClick = onActionClick)
+                    .hapticClickable(
+                        semantic = HapticSemantic.LIGHT_TAP,
+                        onClick = onActionClick
+                    )
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)

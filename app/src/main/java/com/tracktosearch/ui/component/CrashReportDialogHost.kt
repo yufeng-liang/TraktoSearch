@@ -32,6 +32,7 @@ import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.CrashPromptDecision
 import com.tracktosearch.data.util.UploadState
 import com.tracktosearch.data.util.UploadToastPolicy
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -64,6 +65,7 @@ fun CrashReportDialogHost(
     var lastUploadState by remember { mutableStateOf<UploadState?>(null) }
     val uploadState by crashLogUploader.uploadState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
 
     // 启动决策：读崩溃计数与授权状态（一次性）
     LaunchedEffect(Unit) {
@@ -75,6 +77,10 @@ fun CrashReportDialogHost(
         when (CrashPromptDecision.decide(crashCount, enabled, prompted)) {
             CrashPromptDecision.Action.None -> dialogVisible = false
             CrashPromptDecision.Action.Authorize -> {
+                // 启动时发现上次崩过就弹，用户什么都没按。这里直接调而不用
+                // PopupShowEffect：haptics 本来就在作用域里，而且下面 Uploading 那一路
+                // 要按「是不是用户刚按的」区别对待，边沿判断挂在 dialogVisible 上更准
+                haptics.popupShow()
                 dialogVisible = true
                 dialogKind = DialogKind.Authorize
             }
@@ -95,18 +101,25 @@ fun CrashReportDialogHost(
         lastUploadState = state
         when (state) {
             UploadState.Uploading -> {
+                // 两种来路：用户在授权弹窗里按了「上传」（那时 dialogVisible 已经是
+                // true，没有边沿，不发），或者启动时的自动上传（弹窗凭空出现，发）
+                if (!dialogVisible) haptics.popupShow()
                 dialogVisible = true
                 dialogKind = DialogKind.Uploading
             }
             UploadState.Success -> {
                 // 手动触发（从 Uploading 转移）或启动自动上传完成（prev==null 且有崩溃）
                 if (UploadToastPolicy.shouldNotify(prev, state, crashCount)) {
+                    haptics.confirm()
                     context.showToast(context.getString(R.string.crash_upload_success))
                 }
                 dialogVisible = false
             }
             is UploadState.Failed -> {
+                // 触感与 toast 同一个闸门：shouldNotify 判的正是「这个终态是不是刚刚发生的」。
+                // 上一次会话遗留的 Failed（prev==null 且本次没崩溃）连 toast 都不弹，也不该震
                 if (UploadToastPolicy.shouldNotify(prev, state, crashCount)) {
+                    haptics.reject()
                     context.showToast(context.getString(R.string.crash_upload_failed))
                 }
                 dialogVisible = true
@@ -126,6 +139,7 @@ fun CrashReportDialogHost(
             text = { Text(stringResource(R.string.crash_auth_dialog_message)) },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.tap()
                     // 乐观切换上传中，避免关闭后再弹的闪烁空窗
                     dialogKind = DialogKind.Uploading
                     scope.launch {
@@ -136,6 +150,7 @@ fun CrashReportDialogHost(
             },
             dismissButton = {
                 TextButton(onClick = {
+                    haptics.lightTap()
                     dialogVisible = false
                     scope.launch {
                         crashLogStorage.setPrompted(true)
@@ -177,11 +192,15 @@ fun CrashReportDialogHost(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.tap()
                     scope.launch { crashLogUploader.uploadPendingLogs() }
                 }) { Text(stringResource(R.string.crash_upload_retry)) }
             },
             dismissButton = {
-                TextButton(onClick = { dialogVisible = false }) {
+                TextButton(onClick = {
+                    haptics.lightTap()
+                    dialogVisible = false
+                }) {
                     Text(stringResource(R.string.crash_dialog_cancel))
                 }
             },

@@ -55,6 +55,7 @@ import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.crashLogCardSharedKey
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -77,6 +78,7 @@ fun CrashLogDetailScreen(
     // remember(recordId) 使 recordId 变化时自动重置，避免切到另一条记录时误用旧加载态
     var loaded by remember(recordId) { mutableStateOf(false) }
     LaunchedEffect(record) { if (record != null) loaded = true }
+    val haptics = rememberAppHaptics()
 
     Scaffold(
         // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
@@ -166,7 +168,10 @@ fun CrashLogDetailScreen(
                         item {
                             // 上传中禁用：记录刷新为 UPLOADING 后按钮通常随即隐藏，enabled 兜底防重复触发
                             Button(
-                                onClick = { viewModel.uploadNow() },
+                                onClick = {
+                                    haptics.tap()
+                                    viewModel.uploadNow()
+                                },
                                 enabled = current.status != CrashLogRecord.Status.UPLOADING,
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.crash_detail_upload_now)) }

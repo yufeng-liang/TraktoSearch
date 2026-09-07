@@ -11,8 +11,11 @@ import com.tracktosearch.data.local.TicketStub
 import com.tracktosearch.data.local.TicketStubStorage
 import com.tracktosearch.data.local.deriveTicketSeat
 import com.tracktosearch.data.local.isTicketDigit
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -53,6 +56,15 @@ class AuthViewModel @Inject constructor(
         AuthUiState(activated = authManager.authState.value.hasGatewayAccess())
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    /**
+     * 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(authViewModel.hapticOutcomes)` 收集。
+     *
+     * 刻意**不挂在 [AuthUiState.activated] 上**：`init` 里那个 authState collector 也会把它
+     * 置真（静默恢复、后台 check 回来），挂上去会在用户什么都没做的时候莫名震一下。
+     */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     init {
         viewModelScope.launch {
@@ -141,6 +153,7 @@ class AuthViewModel @Inject constructor(
         // UI 会禁用不足 6 位时的取票键，这道校验兜住数字键盘之外的调用路径。
         if (inviteCode.length != TICKET_CODE_LENGTH) {
             _uiState.value = _uiState.value.copy(error = "INVALID_INVITE")
+            hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             return
         }
         viewModelScope.launch {
@@ -190,12 +203,22 @@ class AuthViewModel @Inject constructor(
                     activated = true,
                     requiresMigrationInvite = false
                 )
+                // 用户输的是一个「已被占用」的码，系统查出来他其实早就有权限。屏幕上
+                // 这一路和正常取票长得一样，但用户心里预期的是报错 —— confirm 在这里
+                // 是在说「没错，你确实进来了」。
+                //
+                // 正常取票成功刻意不发：那条路上出票动画会走六档 segmentTick（「咔咔咔」），
+                // 那就是它的反馈，再叠一记 confirm 只会把干净的机械感糊掉。
+                hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
             } else {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = "INVITE_BOUND")
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             }
             return
         }
         _uiState.value = _uiState.value.copy(isLoading = false, error = reason)
+        // 取票失败：六格会抖两下再清空，触感配合那个抖动
+        hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
     }
 
     /** 出票：票面内容在取票成功这一刻定格，之后不再随昵称/日期等外部状态变化。 */

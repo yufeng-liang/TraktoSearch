@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.searchsource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -38,6 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 // 示例值不随语言变化（URL、参数名、JSONPath 都是字面量），放常量比进四份 strings.xml 更省事
 internal const val EXAMPLE_BASE_URL = "https://so.252035.xyz/"
@@ -191,7 +193,15 @@ fun SourceGroupCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onToggle)
+                    // 展开/收起按「展开后的状态」给方向感：expanded 为 true 时这一下是收起
+                    .hapticClickable(
+                        semantic = if (expanded) {
+                            HapticSemantic.TOGGLE_OFF
+                        } else {
+                            HapticSemantic.TOGGLE_ON
+                        },
+                        onClick = onToggle
+                    )
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -359,6 +369,8 @@ fun ParseFieldsGroup(
             "zreso_template" to stringResource(R.string.settings_source_parse_mode_zreso),
             "custom" to stringResource(R.string.settings_source_parse_mode_custom)
         )
+        // 三种解析模式互斥，是单选而不是勾选：只是把选中位挪一格，走刻度感
+        val haptics = rememberAppHaptics()
         Text(
             text = stringResource(R.string.settings_source_parse_mode),
             style = MaterialTheme.typography.labelMedium,
@@ -377,13 +389,19 @@ fun ParseFieldsGroup(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
                         }
                     )
-                    .clickable { callbacks.onParseMode(mode) }
+                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
+                        callbacks.onParseMode(mode)
+                    }
                     .padding(end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(
                     selected = selected,
-                    onClick = { callbacks.onParseMode(mode) }
+                    // 圆点自己消费点击，行那侧的 clickable 不会跟着发，不是双震
+                    onClick = {
+                        haptics.segmentTick()
+                        callbacks.onParseMode(mode)
+                    }
                 )
                 Text(
                     text = label,

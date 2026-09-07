@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,8 +48,9 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -82,6 +82,9 @@ fun MessagesScreen(
     val visibleItems = remember(successState?.items) {
         successState?.items?.filter { it.author_role == "developer" }.orEmpty()
     }
+    // 空态里的「全部」按钮用；LazyColumn 的 item 不换宿主 View。
+    // 「加载更多」已换成共享的 LoadMoreFooter，那一记归它自己发
+    val haptics = rememberAppHaptics()
     // 日期分隔：同一天的消息只在第一条上方给一次日期标签
     val rows = remember(visibleItems, timeLabels) {
         var previousLabel: String? = null
@@ -223,8 +226,11 @@ fun MessagesScreen(
                                         icon = Icons.Rounded.Inbox,
                                         actions = {
                                             if (filter == FeedbackViewModel.MessageFilter.UNREAD) {
+                                                // EmptyStateCard 是纯容器，actions 槽自己发；
+                                                // 这一下等于把筛选挪回「全部」，与筛选 chip 同一种状态变化，走刻度感
                                                 TextButton(
                                                     onClick = {
+                                                        haptics.segmentTick()
                                                         viewModel.setMessagesFilter(
                                                             FeedbackViewModel.MessageFilter.ALL
                                                         )
@@ -305,7 +311,7 @@ private fun MessagesTopBar(
     onBack: () -> Unit,
     onMarkAllRead: () -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -336,10 +342,11 @@ private fun MessagesTopBar(
                     }
                 },
                 actions = {
+                    // 一次把所有未读清掉，有实际后果，按带文字的主操作给 tap。
                     // 全读完了就没有可清的了，禁用比留个点了没反应的按钮清楚
                     TextButton(
                         onClick = {
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.tap()
                             onMarkAllRead()
                         },
                         enabled = hasUnread
@@ -379,11 +386,12 @@ private fun MessageFilterChip(
     onClick: () -> Unit,
     badgeCount: Int = 0
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     FilterChip(
         selected = selected,
         onClick = {
-            view.performHaptic(HapticType.CLICK)
+            // 三个筛选互斥单选，只是把选中位挪一格
+            haptics.segmentTick()
             onClick()
         },
         label = {
@@ -435,11 +443,12 @@ private fun SwipeableMessageRow(
         MessageRow(item = item, timeLabels = timeLabels, onClick = onClick)
         return
     }
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.StartToEnd) {
-                view.performHaptic(HapticType.CLICK)
+                // 侧滑越过阈值那一刻发，正是「够了、可以松手」的那记
+                haptics.thresholdArmed()
                 onMarkRead()
             }
             // 一律拒绝状态变更，让 Box 自己弹回去
@@ -508,7 +517,7 @@ private fun MessageRow(
                     MaterialTheme.colorScheme.background
                 }
             )
-            .clickable(onClick = onClick)
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {

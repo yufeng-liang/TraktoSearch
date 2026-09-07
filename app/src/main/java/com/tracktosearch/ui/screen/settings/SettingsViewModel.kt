@@ -20,6 +20,7 @@ import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DiscoverSectionStorage
+import com.tracktosearch.data.local.HapticStorage
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
@@ -31,6 +32,11 @@ import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.haptic.HapticCapabilities
+import com.tracktosearch.ui.haptic.HapticMode
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticSystemState
+import com.tracktosearch.ui.haptic.systemHapticFeedbackEnabled
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
@@ -76,19 +82,39 @@ import javax.inject.Inject
 /**
  * 导出/导入/清缓存/检查更新等操作的一次性反馈消息(机器码)。
  * VM 不拼接本地化文案，UI 组合期按 resId+args 用 stringResource 渲染。
+ *
+ * [outcome] 把「这条消息是好消息还是坏消息」挂在消息本身上，界面那一处 snackbar 顺手
+ * 就能发对应的触感。刻意**不给默认值**：本 VM 没有统一漏斗，17 处构造散在六个方法里，
+ * 有默认值就一定会漏；没有默认值时新增一处构造编译器就会拦住，逼着当场表态。
  */
 @Immutable
 sealed interface ExportMessage {
     val resId: Int
     val args: List<Any> get() = emptyList()
 
+    /**
+     * 这条消息对应的操作结果，null 表示不该发触感。
+     *
+     * 只有进度类消息该给 null（[ExportImportState.syncProgress] 逐条刷新，一条一记就成了
+     * 连震）。结果类消息一律给出方向 —— 判据是「用户还得再动一次手吗」，
+     * 所以部分成功（导入有失败项）算 [HapticOutcome.FAILURE]。
+     */
+    val outcome: HapticOutcome?
+
     /** 无参数消息(成功/失败/提示类) */
     @Immutable
-    data class Plain(override val resId: Int) : ExportMessage
+    data class Plain(
+        override val resId: Int,
+        override val outcome: HapticOutcome?,
+    ) : ExportMessage
 
     /** 带格式化参数消息(args 顺序与资源占位符一一对应) */
     @Immutable
-    data class Formatted(override val resId: Int, override val args: List<Any>) : ExportMessage
+    data class Formatted(
+        override val resId: Int,
+        override val args: List<Any>,
+        override val outcome: HapticOutcome?,
+    ) : ExportMessage
 }
 
 @Immutable
@@ -133,6 +159,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanSyncManager: DoubanSyncManager,
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
+    private val hapticStorage: HapticStorage,
     private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
@@ -156,6 +183,19 @@ class SettingsViewModel @Inject constructor(
 
     /** 开屏台词开关：Storage 启动时已预加载磁盘首值，直接暴露不会有默认值跳变 */
     val splashQuoteEnabled: StateFlow<Boolean> = splashQuoteStorage.enabledState
+
+    /** 触感三档（跟随系统 / 关闭 / 增强）：同样已在启动时预加载，无默认值跳变 */
+    val hapticMode: StateFlow<HapticMode> = hapticStorage.modeState
+
+    private val _hapticSystemState = MutableStateFlow(HapticSystemState.OPTIMISTIC)
+
+    /**
+     * 触感的设备侧前提：系统总开关 + 有无马达。
+     *
+     * 与 [hapticMode] 分开是因为这两项不是应用状态而是环境状态，应用改不了、也不该缓存过夜 ——
+     * 用户随时可能切到系统设置里把触感关掉再回来。重读时机见 [refreshHapticSystemState]。
+     */
+    val hapticSystemState: StateFlow<HapticSystemState> = _hapticSystemState.asStateFlow()
 
     // 主页面背景彩色弥散光晕
     val meshPreset: StateFlow<String> = themeStorage.meshPreset
@@ -255,6 +295,31 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { splashQuoteStorage.setEnabled(enabled) }
     }
 
+    /** 写触感档位。落盘同时 Storage 会同步更新 modeState，引擎与设置页一起生效 */
+    fun setHapticMode(mode: HapticMode) {
+        viewModelScope.launch { hapticStorage.setMode(mode) }
+    }
+
+    /**
+     * 重读系统总开关与有无马达。设置页进入时与每次回到前台各调一次。
+     *
+     * 挂在 resume 而不是只读一次：用户看到「系统已关闭触感」这句话之后，多半就会去系统设置
+     * 把它打开再切回来 —— 那正是这句话必须消失的时刻。
+     *
+     * 两次读都过 binder，所以丢到 IO；读失败时 [systemHapticFeedbackEnabled] 与
+     * `deviceHasVibrator` 各自兜底（按可用 / 无马达算），这里不再补 try。
+     */
+    fun refreshHapticSystemState() {
+        viewModelScope.launch {
+            _hapticSystemState.value = withContext(Dispatchers.IO) {
+                HapticSystemState(
+                    systemHapticEnabled = systemHapticFeedbackEnabled(context),
+                    hasVibrator = HapticCapabilities.deviceHasVibrator(context),
+                )
+            }
+        }
+    }
+
     fun setMeshPreset(preset: String) {
         viewModelScope.launch { themeStorage.setMeshPreset(preset) }
     }
@@ -343,14 +408,14 @@ class SettingsViewModel @Inject constructor(
 
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
-                    message = ExportMessage.Plain(R.string.snackbar_export_success)
+                    message = ExportMessage.Plain(R.string.snackbar_export_success, outcome = HapticOutcome.SUCCESS)
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
-                    message = ExportMessage.Plain(R.string.snackbar_export_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_export_failed, outcome = HapticOutcome.FAILURE)
                 )
             }
         }
@@ -369,21 +434,21 @@ class SettingsViewModel @Inject constructor(
                     is ParseResult.MissingRequiredColumns -> {
                         _exportImportState.value = _exportImportState.value.copy(
                             isImporting = false,
-                            message = ExportMessage.Plain(R.string.error_not_imdb_csv)
+                            message = ExportMessage.Plain(R.string.error_not_imdb_csv, outcome = HapticOutcome.FAILURE)
                         )
                         return@launch
                     }
                     is ParseResult.Empty -> {
                         _exportImportState.value = _exportImportState.value.copy(
                             isImporting = false,
-                            message = ExportMessage.Plain(R.string.error_empty_csv)
+                            message = ExportMessage.Plain(R.string.error_empty_csv, outcome = HapticOutcome.FAILURE)
                         )
                         return@launch
                     }
                     is ParseResult.Error -> {
                         _exportImportState.value = _exportImportState.value.copy(
                             isImporting = false,
-                            message = ExportMessage.Formatted(R.string.error_parse_failed, listOf(result.message))
+                            message = ExportMessage.Formatted(R.string.error_parse_failed, listOf(result.message), outcome = HapticOutcome.FAILURE)
                         )
                         return@launch
                     }
@@ -391,7 +456,7 @@ class SettingsViewModel @Inject constructor(
                 if (items.isEmpty()) {
                     _exportImportState.value = _exportImportState.value.copy(
                         isImporting = false,
-                        message = ExportMessage.Plain(R.string.snackbar_import_no_data)
+                        message = ExportMessage.Plain(R.string.snackbar_import_no_data, outcome = HapticOutcome.FAILURE)
                     )
                     return@launch
                 }
@@ -404,7 +469,9 @@ class SettingsViewModel @Inject constructor(
                     _exportImportState.value = _exportImportState.value.copy(
                         syncProgress = ExportMessage.Formatted(
                             R.string.snackbar_sync_progress,
-                            listOf(index + 1, total, item.title)
+                            listOf(index + 1, total, item.title),
+                            // 逐条刷新，一条一记就成了连震；进度不是结果
+                            outcome = null,
                         )
                     )
                     try {
@@ -456,14 +523,19 @@ class SettingsViewModel @Inject constructor(
                     syncProgress = null,
                     syncSuccess = success,
                     syncFailed = failed,
-                    message = ExportMessage.Formatted(R.string.snackbar_import_done_imdb, listOf(success, failed))
+                    message = ExportMessage.Formatted(
+                        R.string.snackbar_import_done_imdb,
+                        listOf(success, failed),
+                        // 部分成功算失败：还有条目需要用户再来一次
+                        outcome = if (failed > 0) HapticOutcome.FAILURE else HapticOutcome.SUCCESS,
+                    )
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
-                    message = ExportMessage.Formatted(R.string.error_parse_failed, listOf(e.message ?: ""))
+                    message = ExportMessage.Formatted(R.string.error_parse_failed, listOf(e.message ?: ""), outcome = HapticOutcome.FAILURE)
                 )
             }
         }
@@ -485,13 +557,13 @@ class SettingsViewModel @Inject constructor(
                 statisticsSnapshotStore.clear()
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = ExportMessage.Plain(R.string.snackbar_cache_cleared)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_cleared, outcome = HapticOutcome.SUCCESS)
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = ExportMessage.Plain(R.string.snackbar_cache_clear_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_clear_failed, outcome = HapticOutcome.FAILURE)
                 )
             }
         }
@@ -535,7 +607,7 @@ class SettingsViewModel @Inject constructor(
         imageTrafficStorage.clear()
         // 成功反馈走与清缓存同一条 Snackbar 通道，之前重置后界面只有数字变化
         _exportImportState.value = _exportImportState.value.copy(
-            message = ExportMessage.Plain(R.string.snackbar_image_traffic_reset)
+            message = ExportMessage.Plain(R.string.snackbar_image_traffic_reset, outcome = HapticOutcome.SUCCESS)
         )
     }
 
@@ -557,13 +629,13 @@ class SettingsViewModel @Inject constructor(
                 }
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = ExportMessage.Plain(R.string.snackbar_cache_cleared)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_cleared, outcome = HapticOutcome.SUCCESS)
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = ExportMessage.Plain(R.string.snackbar_cache_clear_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_cache_clear_failed, outcome = HapticOutcome.FAILURE)
                 )
             }
         }
@@ -842,19 +914,19 @@ class SettingsViewModel @Inject constructor(
                     _latestVersion.value = info.latestVersion
                     _changelog.value = info.changelog
                     _exportImportState.value = _exportImportState.value.copy(
-                        message = ExportMessage.Plain(R.string.snackbar_already_latest)
+                        message = ExportMessage.Plain(R.string.snackbar_already_latest, outcome = HapticOutcome.SUCCESS)
                     )
                 } else {
                     _latestVersion.value = BuildConfig.VERSION_NAME
                     _exportImportState.value = _exportImportState.value.copy(
-                        message = ExportMessage.Plain(R.string.snackbar_check_update_failed)
+                        message = ExportMessage.Plain(R.string.snackbar_check_update_failed, outcome = HapticOutcome.FAILURE)
                     )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = ExportMessage.Plain(R.string.snackbar_check_update_failed)
+                    message = ExportMessage.Plain(R.string.snackbar_check_update_failed, outcome = HapticOutcome.FAILURE)
                 )
             } finally {
                 _isCheckingUpdate.value = false

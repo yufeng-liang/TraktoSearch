@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.discover
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
@@ -34,6 +35,8 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +49,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -170,6 +174,34 @@ class DiscoverViewModel @Inject constructor(
 
     private val _toastEvent = MutableSharedFlow<Int>()
     val toastEvent = _toastEvent.asSharedFlow()
+
+    /**
+     * 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。
+     *
+     * 不在 VM 里直接调 `AppHaptics`：VM 活得比屏幕长，网络回来时用户可能已经离开这一屏，
+     * 震一记而屏幕上什么都没有比不震更差。详见 ui/haptic/HapticOutcome.kt。
+     */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
+
+    /**
+     * 发一条结果 toast，并配上对应方向的触感。
+     *
+     * 把「说给用户看」与「震给用户摸」绑在同一个出口上：结果 toast 散在多个方法里，
+     * 各自记得补一行 emit 迟早会漏。[_toastEvent] 是 rendezvous 流（replay 0、无缓冲），
+     * emit 会挂起到 UI 收走，所以非挂起上下文一律这样另起协程。
+     */
+    private fun emitResultToast(@StringRes resId: Int, outcome: HapticOutcome) {
+        hapticOutcomeEmitter.emit(outcome)
+        viewModelScope.launch { _toastEvent.emit(resId) }
+    }
+
+    /** [emitResultToast] 的挂起版：调用方已经在协程里，不必再起一个。 */
+    private suspend fun emitResultToastNow(@StringRes resId: Int, outcome: HapticOutcome) {
+        // 先发触感：toast 那一步会挂起到 UI 收走，触感不该跟着一起等
+        hapticOutcomeEmitter.emit(outcome)
+        _toastEvent.emit(resId)
+    }
 
     // 发现页栏目配置（显示/隐藏 + 排序），同步读取已保存顺序作为初始值，避免首帧跳动
     val sectionConfigs: StateFlow<List<DiscoverSectionConfig>> = discoverSectionStorage.sectionConfigs
@@ -965,7 +997,7 @@ class DiscoverViewModel @Inject constructor(
         }
         // 负缓存命中（idCached == 0）：之前搜过没找到，不转圈直接提示
         if (idCached == 0) {
-            viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+            emitResultToast(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
             return
         }
         resolveJob = viewModelScope.launch {
@@ -981,14 +1013,14 @@ class DiscoverViewModel @Inject constructor(
                         val isW = _watchlistWatchedIds.value?.isWatched(traktId, tmdbId, MediaType.MOVIE) == true
                         onNavigate(traktId, tmdbId, title, imdbId, 0.0, inWl, isW)
                     } else {
-                        _toastEvent.emit(R.string.card_resolve_not_found)
+                        emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 // 转换失败不能静默：给用户可感知的错误提示
-                _toastEvent.emit(R.string.card_resolve_error)
+                emitResultToastNow(R.string.card_resolve_error, HapticOutcome.FAILURE)
             } finally {
                 // 仅当仍是自己设置的 tmdbId 时才清空，避免清空新协程设的值
                 if (_uiState.value.resolvingTmdbId == tmdbId) {
@@ -1043,7 +1075,7 @@ class DiscoverViewModel @Inject constructor(
             }
             // 负缓存命中（idCached == 0）：之前搜过没找到，不转圈直接提示
             if (idCached == 0) {
-                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                emitResultToast(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                 return
             }
             resolveJob = viewModelScope.launch {
@@ -1064,7 +1096,7 @@ class DiscoverViewModel @Inject constructor(
                     throw e
                 } catch (_: Exception) {
                     // 转换失败不能静默：给用户可感知的错误提示
-                    _toastEvent.emit(R.string.card_resolve_error)
+                    emitResultToastNow(R.string.card_resolve_error, HapticOutcome.FAILURE)
                 } finally {
                     // 仅当仍是自己设置的 tmdbId 时才清空，避免清空新协程设的值
                     if (_uiState.value.resolvingTmdbId == tmdbId) {
@@ -1130,7 +1162,7 @@ class DiscoverViewModel @Inject constructor(
             }
             // 负缓存命中：之前搜过没找到，不转圈直接提示
             if (idCached == 0) {
-                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                emitResultToast(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                 return
             }
         }
@@ -1154,7 +1186,7 @@ class DiscoverViewModel @Inject constructor(
                 if (searchResult == null || searchResult.id <= 0) {
                     // 与负缓存路径一致：搜索无结果要给用户可感知提示，不能静默无反馈
                     _uiState.value = _uiState.value.copy(resolvingItemId = null)
-                    _toastEvent.emit(R.string.card_resolve_not_found)
+                    emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     return@launch
                 }
 
@@ -1179,7 +1211,7 @@ class DiscoverViewModel @Inject constructor(
                 }
                 // 负缓存命中：之前搜过没找到
                 if (idCached == 0) {
-                    _toastEvent.emit(R.string.card_resolve_not_found)
+                    emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     _uiState.value = _uiState.value.copy(resolvingItemId = null)
                     return@launch
                 }
@@ -1196,17 +1228,17 @@ class DiscoverViewModel @Inject constructor(
                         val isW = _watchlistWatchedIds.value?.isWatched(traktId, searchResult.id, MediaType.MOVIE) == true
                         onNavigate(traktId, searchResult.id, searchResult.title, imdbId, 0.0, inWl, isW)
                     } else {
-                        _toastEvent.emit(R.string.card_resolve_not_found)
+                        emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     }
                 }.onFailure {
-                    _toastEvent.emit(R.string.card_resolve_error)
+                    emitResultToastNow(R.string.card_resolve_error, HapticOutcome.FAILURE)
                 }
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
-                _toastEvent.emit(R.string.card_resolve_error)
+                emitResultToastNow(R.string.card_resolve_error, HapticOutcome.FAILURE)
             } finally {
                 // 仅当仍是自己设置的 item.id 时才清空，避免清空新协程设的值
                 if (_uiState.value.resolvingItemId == item.id) {
@@ -1248,7 +1280,7 @@ class DiscoverViewModel @Inject constructor(
             }
             // 负缓存命中：之前搜过没找到
             if (idCached == 0) {
-                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                emitResultToast(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                 return
             }
         }
@@ -1269,7 +1301,7 @@ class DiscoverViewModel @Inject constructor(
                 }
                 if (searchResult == null || searchResult.id <= 0) {
                     _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
-                    _toastEvent.emit(R.string.card_resolve_not_found)
+                    emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     return@launch
                 }
 
@@ -1294,7 +1326,7 @@ class DiscoverViewModel @Inject constructor(
                 }
                 // 负缓存命中
                 if (idCached == 0) {
-                    _toastEvent.emit(R.string.card_resolve_not_found)
+                    emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
                     return@launch
                 }
@@ -1310,17 +1342,17 @@ class DiscoverViewModel @Inject constructor(
                         val isW = _watchlistWatchedIds.value?.isWatched(traktId, searchResult.id, mediaType) == true
                         onNavigate(traktId, searchResult.id, searchResult.title, imdbId, 0.0, inWl, isW)
                     } else {
-                        _toastEvent.emit(R.string.card_resolve_not_found)
+                        emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     }
                 }.onFailure {
-                    _toastEvent.emit(R.string.card_resolve_error)
+                    emitResultToastNow(R.string.card_resolve_error, HapticOutcome.FAILURE)
                 }
                 _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
-                _toastEvent.emit(R.string.card_resolve_error)
+                emitResultToastNow(R.string.card_resolve_error, HapticOutcome.FAILURE)
             } finally {
                 // 仅当仍是自己设置的 item.id 时才清空，避免清空新协程设的值
                 if (_uiState.value.resolvingRecommendItemId == item.id) {

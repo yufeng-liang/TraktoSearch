@@ -2,7 +2,6 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Column
@@ -31,6 +30,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 
 /**
@@ -83,9 +84,10 @@ fun ActionButtonRow(
                     .weight(1f)
                     .padding(horizontal = 4.dp)
                     .scale(scale)
-                    .clickable(
+                    .hapticClickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        semantic = HapticSemantic.TAP,
                         enabled = action.enabled && !action.isLoading,
                         onClick = action.onClick
                     )

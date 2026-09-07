@@ -9215,9 +9215,6 @@ Lcom/tracktosearch/ui/theme/VisualEffectModeKt$$ExternalSyntheticLambda0;
 Lcom/tracktosearch/ui/theme/VisualEffectModeKt$$ExternalSyntheticLambda1;
 Lcom/tracktosearch/ui/theme/VisualEffectModeKt;
 Lcom/tracktosearch/ui/util/ErrorMessagesKt;
-Lcom/tracktosearch/ui/util/HapticExtKt$WhenMappings;
-Lcom/tracktosearch/ui/util/HapticExtKt;
-Lcom/tracktosearch/ui/util/HapticType;
 Lcom/tracktosearch/ui/util/ScrollToTopProvider;
 Lcom/tracktosearch/ui/util/ScrollToTopProviderKt$$ExternalSyntheticLambda0;
 Lcom/tracktosearch/ui/util/ScrollToTopProviderKt;
@@ -29062,12 +29059,6 @@ SPLcom/tracktosearch/ui/theme/VisualEffectModeKt$$ExternalSyntheticLambda1;-><in
 SPLcom/tracktosearch/ui/theme/VisualEffectModeKt;-><clinit>()V
 SPLcom/tracktosearch/ui/theme/VisualEffectModeKt;->getLocalGlassVariant()Landroidx/compose/runtime/ProvidableCompositionLocal;
 SPLcom/tracktosearch/ui/theme/VisualEffectModeKt;->getLocalVisualEffectMode()Landroidx/compose/runtime/ProvidableCompositionLocal;
-SPLcom/tracktosearch/ui/util/HapticExtKt$WhenMappings;-><clinit>()V
-SPLcom/tracktosearch/ui/util/HapticExtKt;->performHaptic(Landroid/view/View;Lcom/tracktosearch/ui/util/HapticType;)V
-SPLcom/tracktosearch/ui/util/HapticType;->$values()[Lcom/tracktosearch/ui/util/HapticType;
-SPLcom/tracktosearch/ui/util/HapticType;-><clinit>()V
-SPLcom/tracktosearch/ui/util/HapticType;-><init>(Ljava/lang/String;I)V
-SPLcom/tracktosearch/ui/util/HapticType;->values()[Lcom/tracktosearch/ui/util/HapticType;
 SPLcom/tracktosearch/ui/util/ScrollToTopProvider;-><clinit>()V
 SPLcom/tracktosearch/ui/util/ScrollToTopProvider;-><init>()V
 SPLcom/tracktosearch/ui/util/ScrollToTopProvider;->register(Lkotlin/jvm/functions/Function0;)V
@@ -33268,7 +33259,6 @@ SPLretrofit2/converter/kotlinx/serialization/Serializer;->serializer(Ljava/lang/
 [Lcom/tracktosearch/ui/theme/MeshPreset;
 [Lcom/tracktosearch/ui/theme/MonetAccent;
 [Lcom/tracktosearch/ui/theme/VisualEffectMode;
-[Lcom/tracktosearch/ui/util/HapticType;
 [Lkotlin/Lazy;
 [Lkotlin/LazyThreadSafetyMode;
 [Lkotlin/Pair;

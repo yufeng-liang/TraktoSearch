@@ -33,12 +33,10 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
  * 下拉刷新状态。实现原样取自「我的」页那套调好的手感，抽出来供其他页面复用：
@@ -138,14 +136,14 @@ fun rememberAppPullToRefreshState(
     onRefresh: () -> Unit
 ): AppPullToRefreshState {
     val density = LocalDensity.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val currentOnRefresh by rememberUpdatedState(onRefresh)
     return remember(density, thresholdDp, holdDp, maxDp) {
         AppPullToRefreshState(
             thresholdPx = with(density) { thresholdDp.toPx() },
             holdPx = with(density) { holdDp.toPx() },
             maxPx = with(density) { maxDp.toPx() },
-            onThresholdArmed = { view.performHaptic(HapticType.CLICK) },
+            onThresholdArmed = { haptics.thresholdArmed() },
             onRefresh = { currentOnRefresh() }
         )
     }

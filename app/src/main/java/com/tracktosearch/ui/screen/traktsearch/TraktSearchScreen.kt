@@ -99,7 +99,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -143,8 +142,15 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.copyResourceLink
+import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
@@ -161,11 +167,6 @@ import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
 import com.tracktosearch.ui.theme.GlassBorderDark
 import com.tracktosearch.ui.theme.GlassFillDark
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.copyResourceLink
-import com.tracktosearch.ui.util.openResourceLink
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.personAvatarSharedKey
 import com.tracktosearch.ui.component.SharedOrigin
@@ -208,7 +209,9 @@ fun TraktSearchScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
+    // 搜索失败（含网盘搜索原本整段吞掉的那处）配对的 reject 从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
@@ -627,7 +630,10 @@ fun TraktSearchScreen(
                                     } else Modifier,
                                     onClick = {
                                         interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                        // 触感放进守卫里：没有 tmdbId 的人物点了什么也不会发生，
+                                        // 那种情况不该震（PersonSearchCard 用 Card(onClick=)，拦不到 Modifier）
                                         if (item.tmdbId > 0) {
+                                            haptics.lightTap()
                                             onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "", item.avatarColor)
                                         }
                                     }
@@ -813,6 +819,7 @@ fun TraktSearchScreen(
                                     }
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = {
+                                            haptics.lightTap()
                                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                                             searchQuery = ""
                                         }, modifier = Modifier.size(28.dp)) {
@@ -854,7 +861,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.MOVIE,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.TICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.MOVIE)
                         },
                         text = {
@@ -871,7 +878,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.SHOW,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.SHOW)
                         },
                         text = {
@@ -888,7 +895,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.PERSON,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.PERSON)
                         },
                         text = {
@@ -905,7 +912,7 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.DISK,
                         onClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            view.performHaptic(HapticType.CLICK)
+                            haptics.segmentTick()
                             viewModel.switchTab(MediaType.DISK)
                         },
                         text = {
@@ -951,11 +958,11 @@ fun TraktSearchScreen(
                             interactionSource = interactionSource
                         )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
-                        .clickable(
+                        .hapticClickable(
                             interactionSource = interactionSource,
                             indication = null,
+                            semantic = HapticSemantic.LIGHT_TAP,
                             onClick = {
-                                view.performHaptic(HapticType.TICK)
                                 scrollScope.launch { currentGridState.animateScrollToItem(0) }
                             }
                         ),
@@ -1030,7 +1037,7 @@ private fun DiskSearchContent(
     statusBarHeight: Dp = 0.dp,
     scene: GlassScene = GlassScene()
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val context = LocalContext.current
 
     val filteredResources = remember(diskState.resources, diskState.enabledSources, diskState.enabledDiskTypes) {
@@ -1185,7 +1192,7 @@ private fun DiskSearchContent(
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                             ),
-                                            onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
+                                            onClick = { haptics.toggle(source !in diskState.enabledSources); onToggleSource(source) },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                             modifier = Modifier.height(28.dp)
                                         )
@@ -1232,7 +1239,7 @@ private fun DiskSearchContent(
                                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                                             ),
-                                            onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
+                                            onClick = { haptics.toggle(type !in diskState.enabledDiskTypes); onToggleDiskType(type) },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                             modifier = Modifier.height(28.dp)
                                         )
@@ -1249,7 +1256,6 @@ private fun DiskSearchContent(
                             index = index,
                             onClick = { onItemClick(item) },
                             onLongClick = {
-                                view.performHaptic(HapticType.HEAVY_CLICK)
                                 copyResourceLink(context, item)
                             }
                         )

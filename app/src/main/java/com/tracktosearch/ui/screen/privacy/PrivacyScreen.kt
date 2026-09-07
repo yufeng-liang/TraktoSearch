@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
-import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
@@ -81,7 +80,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -100,6 +98,9 @@ import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.settings.GroupDivider
 import com.tracktosearch.ui.screen.settings.settingsIconContainerColor
 import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
@@ -107,8 +108,6 @@ import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
@@ -137,7 +136,6 @@ fun PrivacyScreen(
     }
     val aiTasteEnabled by viewModel.aiTasteEnabled.collectAsStateWithLifecycle()
     val crashLogEnabled by viewModel.crashLogEnabled.collectAsStateWithLifecycle()
-    val view = LocalView.current
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -175,7 +173,6 @@ fun PrivacyScreen(
                             title = stringResource(R.string.ai_feature_taste),
                             subtitle = stringResource(R.string.settings_ai_taste_subtitle),
                             checked = aiTasteEnabled,
-                            view = view,
                             onToggle = { viewModel.setAiTasteEnabled(it) }
                         )
                         GroupDivider()
@@ -185,7 +182,6 @@ fun PrivacyScreen(
                             title = stringResource(R.string.settings_crash_log_title),
                             subtitle = stringResource(R.string.settings_crash_log_subtitle),
                             checked = crashLogEnabled,
-                            view = view,
                             onToggle = { viewModel.setCrashLogEnabled(it) }
                         )
                         GroupDivider()
@@ -381,14 +377,16 @@ private fun PrivacySwitchRow(
     title: String,
     subtitle: String,
     checked: Boolean,
-    view: View,
     onToggle: (Boolean) -> Unit
 ) {
     val isDark = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.CLICK); onToggle(!checked) }
+            .hapticClickable(
+                semantic = if (checked) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
+            ) { onToggle(!checked) }
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -428,7 +426,7 @@ private fun PrivacySwitchRow(
         Spacer(modifier = Modifier.width(8.dp))
         Switch(
             checked = checked,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
+            onCheckedChange = { haptics.toggle(it); onToggle(it) },
             colors = appSwitchColors()
         )
     }
@@ -443,7 +441,7 @@ private fun PrivacySwitchRow(
 @Composable
 private fun PrivacyLocationRow() {
     val context = LocalContext.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val lifecycleOwner = LocalLifecycleOwner.current
     var locationGranted by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -508,7 +506,7 @@ private fun PrivacyLocationRow() {
         if (locationGranted) {
             // 已授权：跳系统应用详情页，用户可在权限管理里收回
             TextButton(onClick = {
-                view.performHaptic(HapticType.CLICK)
+                // 不发触感：焦点马上交给系统设置，那一记会响在别人的界面上
                 val intent = Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:${context.packageName}")
@@ -520,7 +518,7 @@ private fun PrivacyLocationRow() {
         } else {
             // 未授权：拉起系统权限弹窗（仅粗略位置，定位需求见对应功能页说明）
             TextButton(onClick = {
-                view.performHaptic(HapticType.CLICK)
+                haptics.tap()
                 permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
             }) {
                 Text(stringResource(R.string.privacy_location_grant))
@@ -812,7 +810,11 @@ private fun PrivacyFlowOption(
         color = if (selected) primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.48f),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, if (selected) primary.copy(alpha = 0.32f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
-        modifier = modifier.clickable(onClick = onClick)
+        // 五个数据流选项互斥（selectedIndex 是单值赋值），只是把选中位挪一格，走刻度感
+        modifier = modifier.hapticClickable(
+            semantic = HapticSemantic.SEGMENT_TICK,
+            onClick = onClick
+        )
     ) {
         Text(
             text = flow.title,
@@ -873,7 +875,14 @@ private fun PrivacyStatementContent() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { techExpanded = !techExpanded }
+                // 展开/收起按「展开后的状态」给方向感
+                .hapticClickable(
+                    semantic = if (techExpanded) {
+                        HapticSemantic.TOGGLE_OFF
+                    } else {
+                        HapticSemantic.TOGGLE_ON
+                    }
+                ) { techExpanded = !techExpanded }
                 .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -918,7 +927,6 @@ private fun PrivacyStatementContent() {
 @Composable
 private fun PrivacyLegalContent() {
     val context = LocalContext.current
-    val view = LocalView.current
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
         Text(
             text = stringResource(R.string.privacy_legal_intro),
@@ -978,7 +986,7 @@ private fun PrivacyLegalContent() {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        // 不发触感：CustomTabs 打开外部网页，焦点马上离开本应用
                         CustomTabsIntent.Builder().build()
                             .launchUrl(context, RIGHTS_URL.toUri())
                     },

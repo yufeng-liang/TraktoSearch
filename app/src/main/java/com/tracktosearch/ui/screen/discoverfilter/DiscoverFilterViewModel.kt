@@ -11,6 +11,8 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,6 +22,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -69,6 +72,10 @@ class DiscoverFilterViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DiscoverFilterUiState())
     val uiState: StateFlow<DiscoverFilterUiState> = _uiState.asStateFlow()
+
+    /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     /** 上次搜索时使用的筛选条件快照，用于判断条件是否变化 */
     private var lastSearchSnapshot: FilterSnapshot? = null
@@ -481,9 +488,18 @@ class DiscoverFilterViewModel @Inject constructor(
         // 加载中且条件没变：同一个请求不重复发。
         // 条件变了则必须放行——首屏还在加载时改条件点「应用」，早退会把这次改动直接丢掉，
         // 之后也没有补发时机，用户看到的是筛选条件亮着但结果是旧的。旧请求由 loadPage 取消。
-        if (_uiState.value.isLoading && !hasFilterChanged()) return
+        // 这两处早退是对的：条件没变就不该重发请求。但用户刚按了「应用」，屏幕上一个
+        // 像素都不会动 —— 他分不清是「已经是这个结果了」还是「按钮没响应」。
+        // reject 正是在说「这一下没生效」，与 chip 的「至少保留 1 个」守卫同族
+        if (_uiState.value.isLoading && !hasFilterChanged()) {
+            hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+            return
+        }
         // 条件未变化且有结果：不刷新
-        if (!hasFilterChanged() && _uiState.value.hasSearched && _uiState.value.items.isNotEmpty()) return
+        if (!hasFilterChanged() && _uiState.value.hasSearched && _uiState.value.items.isNotEmpty()) {
+            hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+            return
+        }
         lastSearchSnapshot = currentSnapshot()
         _uiState.value = _uiState.value.copy(
             items = emptyList(),
@@ -612,6 +628,7 @@ class DiscoverFilterViewModel @Inject constructor(
                     isLoadingMore = false,
                     error = e.toUserMessage(context, R.string.error_search_failed)
                 )
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             }
         }
     }

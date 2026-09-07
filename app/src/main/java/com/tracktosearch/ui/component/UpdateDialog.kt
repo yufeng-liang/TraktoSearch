@@ -69,7 +69,9 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
 import com.tracktosearch.data.util.ApkInstaller
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.toUserMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
@@ -497,8 +499,12 @@ private fun DownloadProgressContent(state: DownloadState.Downloading) {
 /** 主按钮：48dp 高、14dp 圆角 */
 @Composable
 private fun PrimaryButton(text: String, onClick: () -> Unit) {
+    val haptics = rememberAppHaptics()
     Button(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
@@ -515,8 +521,12 @@ private fun PrimaryButton(text: String, onClick: () -> Unit) {
 /** 次按钮：44dp 高、14dp 圆角，弱于主按钮形成层次 */
 @Composable
 private fun SecondaryButton(text: String, onClick: () -> Unit) {
+    val haptics = rememberAppHaptics()
     OutlinedButton(
-        onClick = onClick,
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp),
@@ -536,6 +546,7 @@ fun UpdateDialog(
     val signatureInvalidMsg = stringResource(R.string.update_signature_invalid)
     val openFailedMsg = stringResource(R.string.common_open_failed)
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
 
     // 统一封装浏览器跳转：设备无可用浏览器时显示 Toast,避免崩溃
     // 失败分支不关弹窗，所以这里必须用 Toast——Snackbar 会被更新弹窗的窗口挡住
@@ -544,6 +555,7 @@ fun UpdateDialog(
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             onDismiss()
         } catch (_: ActivityNotFoundException) {
+            haptics.reject()
             Toast.makeText(context, openFailedMsg, Toast.LENGTH_SHORT).show()
         }
     }
@@ -551,6 +563,13 @@ fun UpdateDialog(
     // Downloading 状态旋屏后 job 丢失，下方 LaunchedEffect 会重置为 Idle
     var downloadState by rememberSaveable(stateSaver = DownloadStateSaver) { mutableStateOf(DownloadState.Idle) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
+
+    // 失败态统一从这里落：下载失败与三处安装失败散在四个 catch 里，各自记得配一记 reject()
+    // 迟早会漏一个。触感与错误文案同一个出口，就漏不掉了
+    fun failDownload(message: String) {
+        haptics.reject()
+        downloadState = DownloadState.Error(message)
+    }
 
     // 旋屏后 downloadJob 为 null，若 downloadState 仍是 Downloading，重置为 Idle（下载已实际停止）
     LaunchedEffect(downloadState, downloadJob) {
@@ -572,10 +591,10 @@ fun UpdateDialog(
             try {
                 ApkInstaller.installApk(context, (downloadState as DownloadState.Completed).file)
             } catch (e: SecurityException) {
-                downloadState = DownloadState.Error(signatureInvalidMsg)
+                failDownload(signatureInvalidMsg)
             } catch (_: Exception) {
                 // 文件被清理/FileProvider 异常/无安装器等，避免崩溃
-                downloadState = DownloadState.Error(downloadFailedMsg)
+                failDownload(downloadFailedMsg)
             }
         }
     }
@@ -750,8 +769,16 @@ fun UpdateDialog(
                                             expectedSha256 = updateInfo.sha256
                                         )
                                         downloadState = DownloadState.Completed(file)
+                                        // 校验通过、文件落盘了才算成功；紧接着自动唤起安装器，
+                                        // 这一记是「包拿到了」，安装结果由上面那个 effect 各自表态
+                                        haptics.confirm()
+                                    } catch (e: CancellationException) {
+                                        // 「取消下载」按钮 cancel 掉这个 job，downloadApk 从挂起点抛
+                                        // CancellationException 也会落进下面那个 catch。取消不是失败：
+                                        // 既不该弹「下载失败」也不该震 reject，状态由取消处自己置回 Idle
+                                        throw e
                                     } catch (e: Exception) {
-                                        downloadState = DownloadState.Error(e.toUserMessage(context, R.string.update_download_failed))
+                                        failDownload(e.toUserMessage(context, R.string.update_download_failed))
                                     }
                                 }
                             }
@@ -776,10 +803,10 @@ fun UpdateDialog(
                                 ApkInstaller.installApk(context, state.file)
                                 onDismiss()
                             } catch (e: SecurityException) {
-                                downloadState = DownloadState.Error(signatureInvalidMsg)
+                                failDownload(signatureInvalidMsg)
                             } catch (_: Exception) {
                                 // 文件被清理/FileProvider 异常/无安装器等,避免崩溃
-                                downloadState = DownloadState.Error(downloadFailedMsg)
+                                failDownload(downloadFailedMsg)
                             }
                         }
                         Spacer(Modifier.height(8.dp))

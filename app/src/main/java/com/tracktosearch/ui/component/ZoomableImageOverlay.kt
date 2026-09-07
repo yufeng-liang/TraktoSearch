@@ -49,6 +49,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.launch
 import me.saket.telephoto.zoomable.DoubleClickToZoomListener
 import me.saket.telephoto.zoomable.DynamicZoomSpec
@@ -92,6 +95,7 @@ internal fun ZoomableImageOverlay(
     enter: EnterTransition = fadeIn(animationSpec = snap()),
     exit: ExitTransition = fadeOut(animationSpec = tween(120)),
 ) {
+    val haptics = rememberAppHaptics()
     val safeInitial = initialIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
     val closeDesc = stringResource(R.string.detail_close)
 
@@ -177,7 +181,10 @@ internal fun ZoomableImageOverlay(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onDismiss()
+                }) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -214,7 +221,10 @@ internal fun ZoomableImageOverlay(
                         if (saved) R.string.cd_saved else R.string.cd_save
                     )
                     IconButton(
-                        onClick = { onSave(idx) },
+                        onClick = {
+                            haptics.tap()
+                            onSave(idx)
+                        },
                         modifier = Modifier.semantics { contentDescription = saveDescription }
                     ) {
                         Box(
@@ -258,6 +268,11 @@ internal fun rememberFullscreenZoomableImageState(): ZoomableImageState =
  *
  * 图片本体的单击、返回键，以及 [ContentScale.Fit] 留出的黑边区域的单击都要走这里；
  * 黑边直接接 onDismiss 会让放大状态下点到边上就整个关掉。
+ *
+ * **这一记 `lightTap()` 也收口在这里**，调用方不要再各自挂一层触感 —— 三条入口
+ * （图片单击、黑边单击、返回键）落到同一个回调上，谁再补一记就是同一次点击震两下。
+ * 复位与关闭两个分支用同一记：两者都是「这一下被收下了」，落点不同却手感不同才是怪的。
+ * 返回键那条也发：收覆盖层不是弹导航栈，按 T8 的界线该给一记轻的。
  */
 @Composable
 internal fun rememberResetOrDismiss(
@@ -265,9 +280,11 @@ internal fun rememberResetOrDismiss(
     onDismiss: (() -> Unit)?,
 ): () -> Unit {
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
     val currentOnDismiss by rememberUpdatedState(onDismiss)
-    return remember(state, scope) {
+    return remember(state, scope, haptics) {
         {
+            haptics.lightTap()
             val zoomed = state.zoomableState.zoomFraction?.let { it > 0f } == true
             if (zoomed) scope.launch { state.zoomableState.resetZoom() } else currentOnDismiss?.invoke()
         }

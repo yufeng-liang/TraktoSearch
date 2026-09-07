@@ -64,7 +64,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,10 +84,12 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -126,11 +127,15 @@ fun SearchSourcesScreen(
     val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
     val customSources by viewModel.customSources.collectAsStateWithLifecycle()
     val testResults by viewModel.testResults.collectAsStateWithLifecycle()
+    // 源测试结果、导入撞冲突时的 reject 都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
     var showPanHubConfig by remember { mutableStateOf(false) }
     var showShareSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImport by remember { mutableStateOf<CustomSearchSource?>(null) }
+    // 导入弹层的确认按钮在自己的 subcomposition 里，但导入成功那一记发生在页面作用域
+    val importHaptics = rememberAppHaptics()
     // 导入成功反馈改走 Snackbar：与详情页标记、设置页清缓存的反馈风格一致，也不受系统「关闭通知/Toast」影响
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -295,6 +300,7 @@ fun SearchSourcesScreen(
                     pendingImport = source
                 } else {
                     viewModel.importSource(source)
+                    importHaptics.confirm()
                     scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }
             },
@@ -310,14 +316,22 @@ fun SearchSourcesScreen(
             title = { Text(stringResource(R.string.search_sources_title)) },
             text = { Text(stringResource(R.string.import_duplicate_warning)) },
             confirmButton = {
+                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     pendingImport = null
                     viewModel.importSource(source, overwrite = true)
+                    confirmHaptics.confirm()
                     scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
                 }) { Text(stringResource(R.string.import_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingImport = null }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    pendingImport = null
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -414,6 +428,7 @@ private fun BuiltinSourcesSection(
     onZresoChange: (Boolean) -> Unit,
     onOpenPanHubConfig: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -434,7 +449,14 @@ private fun BuiltinSourcesSection(
             onCheckedChange = onPanhubChange,
             onClick = onOpenPanHubConfig,
             leadingAction = {
-                IconButton(onClick = onOpenPanHubConfig) {
+                // 齿轮和整行点的是同一个动作，行那侧已给 LIGHT_TAP，这里对齐；
+                // 内层 IconButton 自己消费点击，不会连带发行那一记
+                IconButton(
+                    onClick = {
+                        haptics.lightTap()
+                        onOpenPanHubConfig()
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Settings,
                         contentDescription = stringResource(R.string.settings_panhub_config),
@@ -482,14 +504,20 @@ private fun SourceCardRow(
     onClick: (() -> Unit)? = null,
     leadingAction: (@Composable () -> Unit)? = null
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(1.dp, SOURCE_CARD_SHAPE)
             .clip(SOURCE_CARD_SHAPE)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            )
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -515,7 +543,7 @@ private fun SourceCardRow(
         Switch(
             checked = checked,
             onCheckedChange = {
-                view.performHaptic(HapticType.CLICK)
+                haptics.toggle(it)
                 onCheckedChange(it)
             },
             colors = appSwitchColors()
@@ -540,8 +568,15 @@ private fun EmptyCustomSourceCard(
         description = stringResource(R.string.search_sources_empty_hint),
         icon = Icons.Rounded.Language,
         actions = {
+            // EmptyStateCard 是纯容器，actions 槽里的按钮要自己发；两个都是带文字的 CTA，同给 TAP
+            val actionHaptics = rememberAppHaptics()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { showTemplateSheet = true }) {
+                TextButton(
+                    onClick = {
+                        actionHaptics.tap()
+                        showTemplateSheet = true
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = null,
@@ -550,7 +585,12 @@ private fun EmptyCustomSourceCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.settings_add_source))
                 }
-                TextButton(onClick = onImport) {
+                TextButton(
+                    onClick = {
+                        actionHaptics.tap()
+                        onImport()
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.FileDownload,
                         contentDescription = null,
@@ -590,7 +630,7 @@ private fun CustomSourceRow(
     onShare: () -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
 
     Column(
         modifier = Modifier
@@ -599,7 +639,7 @@ private fun CustomSourceRow(
             .shadow(1.dp, SOURCE_CARD_SHAPE)
             .clip(SOURCE_CARD_SHAPE)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = { view.performHaptic(HapticType.CLICK); onEdit() })
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onEdit)
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -626,7 +666,11 @@ private fun CustomSourceRow(
             }
             Switch(
                 checked = source.enabled,
-                onCheckedChange = onEnabledChange,
+                // 与紧挨在上方的内置源开关（SourceCardRow）同一种控件、同一屏，手感必须一致
+                onCheckedChange = {
+                    haptics.toggle(it)
+                    onEnabledChange(it)
+                },
                 colors = appSwitchColors()
             )
         }
@@ -685,7 +729,10 @@ private fun CustomSourceRow(
                 )
             },
             confirmButton = {
+                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     showDeleteConfirm = false
                     onDelete()
                 }) {
@@ -693,7 +740,11 @@ private fun CustomSourceRow(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showDeleteConfirm = false
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -752,8 +803,14 @@ private fun SourceActionIcon(
     enabled: Boolean = true,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
+    // 测试/编辑/分享/删除四个都走这里，一处给完保证同一行四个图标手感一致。
+    // 删除那个点下去会弹确认框，但按钮身份就是图标按钮，弹窗那记归另一个任务
+    val haptics = rememberAppHaptics()
     IconButton(
-        onClick = onClick,
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
         enabled = enabled,
         modifier = Modifier.size(32.dp)
     ) {
@@ -773,14 +830,13 @@ private fun AddSourceCard(
     onImport: () -> Unit
 ) {
     var showTemplateSheet by remember { mutableStateOf(false) }
-    val view = LocalView.current
 
     // 与反馈页「写新反馈」按钮统一：主色卡片 + 圆角 20 + 图标文字水平居中
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clickable(onClick = { view.performHaptic(HapticType.CLICK); showTemplateSheet = true }),
+            .hapticClickable(semantic = HapticSemantic.TAP) { showTemplateSheet = true },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

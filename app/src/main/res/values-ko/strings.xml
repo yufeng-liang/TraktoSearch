@@ -129,6 +129,7 @@
     <string name="detail_share">공유</string>
     <string name="detail_douban_sync_success">豆瓣 데이터가 동기화되었습니다</string>
     <string name="detail_douban_sync_failed">豆瓣 동기화 실패, 재시도 가능</string>
+    <string name="detail_douban_sync_deferred">豆瓣에 동기화하지 못했습니다. 다음 동기화 때 자동으로 재시도합니다</string>
     <string name="detail_douban_sync_id_not_ready">豆瓣 ID 준비 안 됨, 재시도 가능</string>
     <string name="detail_douban_sync_retry">豆瓣 동기화 재시도</string>
     <string name="detail_marked_watched">시청함</string>
@@ -303,6 +304,16 @@
     <string name="settings_shared_transition_subtitle">화면 간 공유 요소에 전환 애니메이션을 적용합니다. 전체 화면 이미지를 열 때의 확대 전환도 포함됩니다.</string>
     <string name="settings_splash_quote">시작 화면 오늘의 명대사</string>
     <string name="settings_splash_quote_subtitle">앱을 열 때 명작 영화의 대사와 포스터를 보여줍니다. 화면을 탭하면 건너뜁니다.</string>
+    <string name="settings_haptic">햅틱 피드백</string>
+    <string name="settings_haptic_follow_system">시스템 설정 따르기</string>
+    <string name="settings_haptic_off">끄기</string>
+    <string name="settings_haptic_boost">강하게</string>
+    <string name="settings_haptic_follow_system_desc">기본 햅틱을 사용하며 세기는 시스템 설정을 따릅니다.</string>
+    <string name="settings_haptic_off_desc">이스터에그를 포함해 앱 안의 모든 진동을 끕니다.</string>
+    <string name="settings_haptic_boost_desc">각 효과를 한 단계 강한 효과로 바꿉니다. 절대적인 세기는 시스템 설정을 따릅니다.</string>
+    <string name="settings_haptic_system_disabled">시스템 햅틱 피드백이 꺼져 있어 앱에서 진동할 수 없습니다.</string>
+    <string name="settings_haptic_no_vibrator">이 기기에는 진동 모터가 없습니다.</string>
+    <string name="settings_haptic_open_system_settings">시스템 설정 열기</string>
     <string name="splash_quote_skip">탭하여 건너뛰기</string>
 
     <!-- 하루 도장 -->
@@ -934,6 +945,7 @@
     <string name="screen_douban_item_detail_refetch">다시 크롤링</string>
     <string name="screen_douban_item_detail_subtitle_hint">탭하여 부제목 추가 (리소스 검색에 사용)</string>
     <string name="screen_douban_item_detail_subtitle_edit">부제목 편집</string>
+    <string name="screen_douban_item_detail_subtitle_save_failed">부제목을 저장하지 못했습니다. 다시 시도해 주세요</string>
     <string name="screen_douban_item_detail_search_with_subtitle">부제목으로 검색</string>
     <string name="screen_douban_item_detail_tab_resources">리소스</string>
     <string name="screen_douban_item_detail_tab_info">정보</string>
@@ -1048,6 +1060,8 @@
     <!-- Snackbar Messages -->
     <string name="snackbar_test_success">테스트 성공, %d 개 결과 파싱</string>
     <string name="snackbar_test_empty">연결 성공, 결과 없음</string>
+    <string name="editor_test_ok_sample">테스트 성공, %1$d개 결과 확인(예: %2$s)</string>
+    <string name="editor_test_incomplete">먼저 이름과 주소를 입력하세요</string>
     <string name="snackbar_export_success">내보내기 성공</string>
     <string name="snackbar_export_failed">내보내기 실패</string>
     <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
@@ -1102,6 +1116,7 @@
     <string name="statistics_share">통계 공유</string>
     <string name="statistics_share_generating">이미지 생성 중…</string>
     <string name="statistics_share_failed">이미지를 저장하지 못했습니다. 다시 시도해 주세요</string>
+    <string name="statistics_partial_load_failed">일부 통계를 불러오지 못했습니다. 숫자가 불완전할 수 있습니다</string>
     <string name="statistics_share_saved">갤러리에 저장했습니다</string>
     <string name="statistics_share_open_failed">갤러리에 저장했지만 공유 패널을 열지 못했습니다</string>
     <string name="statistics_share_not_ready">통계를 불러오는 중입니다. 잠시 후 다시 시도해 주세요</string>
@@ -1581,6 +1596,7 @@
     <string name="mark_records_filter_end_date">종료일</string>
     <string name="mark_records_empty_all">표시 기록이 없습니다</string>
     <string name="mark_records_empty_filtered">필터 조건에 맞는 기록이 없습니다</string>
+    <string name="mark_records_trakt_history_failed">Trakt 시청 기록을 불러오지 못했습니다. 목록이 불완전할 수 있습니다</string>
     <string name="mark_records_clear_filter">필터 지우기</string>
     <string name="mark_records_unknown_title">알 수 없는 제목</string>
     <string name="mark_records_empty_watchlist">관심목록 작업 기록이 없습니다</string>

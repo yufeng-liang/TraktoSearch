@@ -108,7 +108,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -164,6 +163,13 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.screen.detail.DETAIL_TOP_BAR_HEIGHT
 import com.tracktosearch.ui.screen.detail.DetailMetaChip
 import com.tracktosearch.ui.screen.detail.DetailMetaChips
 import com.tracktosearch.ui.screen.detail.DetailSectionHeader
@@ -171,17 +177,14 @@ import com.tracktosearch.ui.screen.detail.DoubanHeaderSkeleton
 import com.tracktosearch.ui.screen.detail.ExpandableText
 import com.tracktosearch.ui.screen.detail.FilterSection
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
+import com.tracktosearch.ui.screen.detail.detailBarColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterVariantColor
-import com.tracktosearch.ui.screen.detail.DETAIL_TOP_BAR_HEIGHT
-import com.tracktosearch.ui.screen.detail.detailBarColor
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.RatingGoldDim
-import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -299,6 +302,14 @@ class DoubanItemDetailViewModel @Inject constructor(
     // 一次性 Toast 事件(传 R.string 资源 ID),用 extraBufferCapacity 避免背压丢消息
     private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 4)
     val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
+
+    /**
+     * 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。
+     *
+     * 豆瓣写回的终态可能落在 IO 线程上，而触感要求主线程；收集放在 UI 层一律主线程。
+     */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     private var currentDoubanId: String = ""
     private var searchJob: Job? = null
@@ -512,6 +523,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                     // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
                     if (fromNetwork) {
                         _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+                        hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
                     }
                 }
             } catch (_: Exception) {
@@ -531,7 +543,17 @@ class DoubanItemDetailViewModel @Inject constructor(
     /** 更新子标题,持久化后刷新本地状态并自动重新搜索 */
     fun updateSubtitle(doubanId: String, subtitle: String?) {
         viewModelScope.launch {
-            doubanRetryManager.updateSubtitle(doubanId, subtitle)
+            // 原来这里没有 try/catch：写库抛异常时协程直接挂掉，弹窗关了、子标题没存下、
+            // 屏幕上一个字都不变，用户以为存好了。补一条失败提示与一记 reject
+            try {
+                doubanRetryManager.updateSubtitle(doubanId, subtitle)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _toastEvent.tryEmit(R.string.screen_douban_item_detail_subtitle_save_failed)
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+                return@launch
+            }
             val current = _uiState.value.failure ?: return@launch
             // updateSubtitle 内部会 trim 空串转 null,这里同步处理
             val normalized = subtitle?.trim()?.takeIf { it.isNotBlank() }
@@ -539,6 +561,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 failure = current.copy(subtitle = normalized),
                 searchWithSubtitle = !normalized.isNullOrBlank()
             )
+            // 成功不发触感：紧接着就重搜资源，结果列表刷出来本身就是反馈
             searchResources()
         }
     }
@@ -760,15 +783,20 @@ class DoubanItemDetailViewModel @Inject constructor(
         )
     }
 
-    /** 切换搜索源筛选(至少保留 1 个) */
-    fun toggleSource(source: String) {
+    /**
+     * 切换搜索源筛选（至少保留 1 个）。
+     *
+     * @return true 已切换；false 被守卫拒绝，状态没动。界面靠这个回执决定发哪一记触感，
+     *   判据留在这里而不是让 chip 自己去数 size。与 `DetailViewModel.toggleSource` 同一个约定。
+     */
+    fun toggleSource(source: String): Boolean {
         val current = _uiState.value.enabledSources
         val newSources = if (source in current) {
             if (current.size == 1) current else current - source
         } else {
             current + source
         }
-        if (newSources == current) return
+        if (newSources == current) return false
         val (displayed, hiddenCount) = run {
             val filtered = resourceRepository.filterItems(
                 allResources, newSources, _uiState.value.enabledDiskTypes
@@ -780,17 +808,22 @@ class DoubanItemDetailViewModel @Inject constructor(
             searchResults = displayed,
             lowRelevanceHiddenCount = hiddenCount
         )
+        return true
     }
 
-    /** 切换网盘类型筛选(至少保留 1 个) */
-    fun toggleDiskType(type: DiskType) {
+    /**
+     * 切换网盘类型筛选（至少保留 1 个）。
+     *
+     * @return true 已切换；false 被守卫拒绝。与 [toggleSource] 同一个约定。
+     */
+    fun toggleDiskType(type: DiskType): Boolean {
         val current = _uiState.value.enabledDiskTypes
         val newTypes = if (type in current) {
             if (current.size == 1) current else current - type
         } else {
             current + type
         }
-        if (newTypes == current) return
+        if (newTypes == current) return false
         val (displayed, hiddenCount) = run {
             val filtered = resourceRepository.filterItems(
                 allResources, _uiState.value.enabledSources, newTypes
@@ -802,6 +835,7 @@ class DoubanItemDetailViewModel @Inject constructor(
             searchResults = displayed,
             lowRelevanceHiddenCount = hiddenCount
         )
+        return true
     }
 
     fun showSubtitleDialog(show: Boolean) {
@@ -869,8 +903,11 @@ class DoubanItemDetailViewModel @Inject constructor(
                         }
                     }
                     _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+                    hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
                 } ?: run {
                     _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
+                    // 用户主动点的「重新爬取」，拿不到详情就是失败；界面同时切到 FAILED 态
+                    hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -903,8 +940,10 @@ class DoubanItemDetailViewModel @Inject constructor(
                         else -> R.string.douban_detail_mark_cleared
                     } else R.string.douban_detail_mark_cleared
                 )
+                hapticOutcomeEmitter.emit(HapticOutcome.SUCCESS)
             } catch (_: Exception) {
                 _toastEvent.tryEmit(R.string.douban_detail_mark_failed)
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             }
         }
     }
@@ -994,14 +1033,23 @@ class DoubanItemDetailViewModel @Inject constructor(
 
     /** 将写回结果映射为 Toast 文案资源 ID 并发事件 */
     private fun emitWritebackToast(outcome: MarkWriteOutcome) {
-        val resId = when (outcome) {
-            MarkWriteOutcome.Success -> R.string.douban_writeback_marked_success
-            MarkWriteOutcome.Removed -> R.string.douban_writeback_removed
-            MarkWriteOutcome.LoginRequired -> R.string.douban_writeback_login_required
-            MarkWriteOutcome.CookieExpired -> R.string.douban_writeback_cookie_expired
-            MarkWriteOutcome.CkFailed -> R.string.douban_writeback_ck_failed
-            is MarkWriteOutcome.Failed -> R.string.douban_writeback_failed
+        // 文案与触感方向定在同一个 when 里：往 MarkWriteOutcome 加一种结果时编译器会
+        // 同时逼着补两样，分开写就总有一天补了文案忘了触感
+        val (resId, haptic) = when (outcome) {
+            MarkWriteOutcome.Success ->
+                R.string.douban_writeback_marked_success to HapticOutcome.SUCCESS
+            MarkWriteOutcome.Removed ->
+                R.string.douban_writeback_removed to HapticOutcome.SUCCESS
+            MarkWriteOutcome.LoginRequired ->
+                R.string.douban_writeback_login_required to HapticOutcome.FAILURE
+            MarkWriteOutcome.CookieExpired ->
+                R.string.douban_writeback_cookie_expired to HapticOutcome.FAILURE
+            MarkWriteOutcome.CkFailed ->
+                R.string.douban_writeback_ck_failed to HapticOutcome.FAILURE
+            is MarkWriteOutcome.Failed ->
+                R.string.douban_writeback_failed to HapticOutcome.FAILURE
         }
+        hapticOutcomeEmitter.emit(haptic)
         _toastEvent.tryEmit(resId)
     }
 
@@ -1135,7 +1183,7 @@ fun DoubanItemDetailScreen(
     val context = LocalContext.current
     val openDoubanToast = stringResource(R.string.screen_douban_item_detail_open_douban)
     val copiedToast = stringResource(R.string.screen_douban_item_detail_copied)
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val listState = rememberLazyListState()
     // 下拉刷新：重新解析详情数据源（+ 已搜过资源时重搜）。整页原先只能靠退出重进刷新。
     var doubanRefreshPending by remember { mutableStateOf(false) }
@@ -1216,6 +1264,9 @@ fun DoubanItemDetailScreen(
 
     // 收集一次性 Toast 事件(爬取成功/标注成功/失败提示)
     ToastEffect(viewModel.toastEvent)
+
+    // 上面那些 toast 与写回结果配对的触感都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
 
     // 加载完成后若 failure == null(条目已被删除/不存在),自动返回;
     // entryNotFound(三表全空)除外:立即弹回像点击失灵,改为页面内错误卡片
@@ -1417,7 +1468,7 @@ fun DoubanItemDetailScreen(
                                 Tab(
                                     selected = selectedTab == 0,
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.segmentTick()
                                         selectedTab = 0
                                     },
                                     text = {
@@ -1430,7 +1481,7 @@ fun DoubanItemDetailScreen(
                                 Tab(
                                     selected = selectedTab == 1,
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.segmentTick()
                                         selectedTab = 1
                                         // 首次切换到资源搜索 Tab 时才触发搜索(延迟加载,减少进入页面时的并发负担)
                                         if (!uiState.searchAttempted && !uiState.isSearching) {
@@ -1505,7 +1556,10 @@ fun DoubanItemDetailScreen(
                                                     .alpha(contentAlpha)
                                                     .fillMaxWidth()
                                                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                                                    .clickable { viewModel.toggleShowHighRelevanceOnly() }
+                                                    // 这块提示只在「仅显示高相关」开着时出现，点它必然是关掉
+                                                    .hapticClickable(semantic = HapticSemantic.TOGGLE_OFF) {
+                                                        viewModel.toggleShowHighRelevanceOnly()
+                                                    }
                                             ) {
                                                 Text(
                                                     text = stringResource(
@@ -1528,11 +1582,9 @@ fun DoubanItemDetailScreen(
                                             sourceName = uiState.customSourceNames[item.source],
                                             isViewed = false,
                                             onClick = {
-                                                view.performHaptic(HapticType.CLICK)
                                                 openResourceLink(context, item)
                                             },
                                             onLongClick = {
-                                                view.performHaptic(HapticType.HEAVY_CLICK)
                                                 copyResourceLink(context, item)
                                             },
                                             index = index
@@ -1601,7 +1653,6 @@ fun DoubanItemDetailScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedButton(onClick = {
-                                view.performHaptic(HapticType.CLICK)
                                 handleBack()
                             }) {
                                 Text(stringResource(R.string.detail_back))
@@ -1639,7 +1690,7 @@ fun DoubanItemDetailScreen(
 
             // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
             NeumorphicIconButton(
-                onClick = { view.performHaptic(HapticType.TICK); handleBack() },
+                onClick = { handleBack() },
                 isDark = isDarkTheme,
                 modifier = Modifier
                     .statusBarsPadding()
@@ -1689,7 +1740,7 @@ fun DoubanItemDetailScreen(
                     menuWidth = markMenuWidth,
                     anchor = {
                         NeumorphicIconButton(
-                            onClick = { view.performHaptic(HapticType.CLICK); showMarkMenu = true },
+                            onClick = { showMarkMenu = true },
                             isDark = isDarkTheme,
                             hazeState = hazeState,
                             hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
@@ -1710,8 +1761,7 @@ fun DoubanItemDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (failure?.mediaType == "movie") markItemHighlight else Modifier)
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                 viewModel.setMediaType("movie")
                                 showMarkMenu = false
                             }
@@ -1732,8 +1782,7 @@ fun DoubanItemDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (failure?.mediaType == "show") markItemHighlight else Modifier)
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                 viewModel.setMediaType("show")
                                 showMarkMenu = false
                             }
@@ -1754,8 +1803,7 @@ fun DoubanItemDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (failure?.mediaType == "variety") markItemHighlight else Modifier)
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                 viewModel.setMediaType("variety")
                                 showMarkMenu = false
                             }
@@ -1776,8 +1824,7 @@ fun DoubanItemDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (failure?.mediaType == "documentary") markItemHighlight else Modifier)
-                            .clickable {
-                                view.performHaptic(HapticType.TICK)
+                            .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                 viewModel.setMediaType("documentary")
                                 showMarkMenu = false
                             }
@@ -1798,8 +1845,7 @@ fun DoubanItemDetailScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    view.performHaptic(HapticType.TICK)
+                                .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                     viewModel.setMediaType(null)
                                     showMarkMenu = false
                                 }
@@ -1820,7 +1866,6 @@ fun DoubanItemDetailScreen(
                 val shareDoubanRatingLabel = stringResource(R.string.share_douban_rating)
                 NeumorphicIconButton(
                     onClick = {
-                        view.performHaptic(HapticType.TICK)
                         val f = uiState.failure
                         if (f != null) {
                             val shareText = buildString {
@@ -1903,7 +1948,10 @@ fun DoubanItemDetailScreen(
                     )
                 },
                 confirmButton = {
+                    // AlertDialog 的槽是独立 subcomposition，单独取一份
+                    val confirmHaptics = rememberAppHaptics()
                     TextButton(onClick = {
+                        confirmHaptics.tap()
                         viewModel.updateSubtitle(failure.doubanId, subtitleInput)
                         viewModel.showSubtitleDialog(false)
                     }) {
@@ -1911,7 +1959,8 @@ fun DoubanItemDetailScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { viewModel.showSubtitleDialog(false) }) {
+                    val dismissHaptics = rememberAppHaptics()
+                    TextButton(onClick = { dismissHaptics.lightTap(); viewModel.showSubtitleDialog(false) }) {
                         Text(stringResource(R.string.douban_retry_cancel))
                     }
                 }
@@ -1927,8 +1976,10 @@ fun DoubanItemDetailScreen(
             title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
             text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
             confirmButton = {
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         showRemoveConfirm = false
                         viewModel.removeMark()
                     }
@@ -1937,7 +1988,8 @@ fun DoubanItemDetailScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRemoveConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showRemoveConfirm = false }) {
                     Text(stringResource(R.string.douban_retry_cancel))
                 }
             }
@@ -1951,6 +2003,8 @@ fun DoubanItemDetailScreen(
             onDismissRequest = { webviewUrl = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            // Dialog 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
+            val webviewHaptics = rememberAppHaptics()
             Column(modifier = Modifier.fillMaxSize()) {
                 TopAppBar(
                     title = {
@@ -1961,7 +2015,10 @@ fun DoubanItemDetailScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { webviewUrl = null }) {
+                        // 这个 ← 收的是盖在详情页上的一层全屏浮层，不弹导航栈，
+                        // 按「对话框的关闭」给 lightTap()；同一个 Dialog 的
+                        // onDismissRequest（系统返回手势）仍然静默
+                        IconButton(onClick = { webviewHaptics.lightTap(); webviewUrl = null }) {
                             Icon(
                                 Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = stringResource(R.string.detail_back)
@@ -2126,7 +2183,11 @@ private fun DoubanItemHeader(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
                     .size(width = 120.dp, height = 180.dp)
-                    .then(if (failure.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                    .then(
+                        if (failure.posterUrl != null) {
+                            Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                        } else Modifier
+                    )
             ) {
                 if (failure.posterUrl != null) {
                     val context = LocalContext.current
@@ -2210,7 +2271,7 @@ private fun DoubanItemHeader(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSubtitleClick() }
+                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onSubtitleClick() }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
@@ -2427,6 +2488,7 @@ private fun DoubanSearchKeywordBar(
     searchWithSubtitle: Boolean,
     onToggleSearchWithSubtitle: () -> Unit
 ) {
+    val haptics = rememberAppHaptics()
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text(
             text = if (failure.subtitle != null && searchWithSubtitle)
@@ -2454,7 +2516,10 @@ private fun DoubanSearchKeywordBar(
                 )
                 Switch(
                     checked = searchWithSubtitle,
-                    onCheckedChange = { onToggleSearchWithSubtitle() }
+                    onCheckedChange = { checked ->
+                        haptics.toggle(checked)
+                        onToggleSearchWithSubtitle()
+                    }
                 )
             }
         }
@@ -2483,7 +2548,7 @@ private fun DoubanSearchingState() {
 
 @Composable
 private fun DoubanEmptyState(onRetry: () -> Unit) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 裸排不带卡片：玻璃卡片会读作「一张内容为空的资源卡」而不是「搜索没有结果」
     Column(
         modifier = Modifier
@@ -2506,7 +2571,7 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedButton(onClick = {
-            view.performHaptic(HapticType.CLICK)
+            haptics.tap()
             onRetry()
         }) {
             Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -2519,7 +2584,7 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
 /** 资源搜索失败态(与空结果区分):错误图标+「搜索失败」+重试 */
 @Composable
 private fun DoubanSearchErrorState(onRetry: () -> Unit) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2541,7 +2606,7 @@ private fun DoubanSearchErrorState(onRetry: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedButton(onClick = {
-            view.performHaptic(HapticType.CLICK)
+            haptics.tap()
             onRetry()
         }) {
             Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -2565,7 +2630,7 @@ private fun DoubanDetailInfoTab(
     onRetryLoadDetail: () -> Unit,
     onCelebrityClick: (url: String, name: String) -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp)) {
         // 操作按钮区
@@ -2573,7 +2638,7 @@ private fun DoubanDetailInfoTab(
         if (isLegacyFailure && failure.failureReason.recoverable) {
             Button(
                 onClick = {
-                    view.performHaptic(HapticType.CLICK)
+                    haptics.tap()
                     onRetry()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -2592,7 +2657,6 @@ private fun DoubanDetailInfoTab(
         ) {
             Button(
                 onClick = {
-                    view.performHaptic(HapticType.CLICK)
                     onOpenDouban()
                 },
                 modifier = Modifier.weight(1f)
@@ -2604,7 +2668,7 @@ private fun DoubanDetailInfoTab(
             if (isLegacyFailure) {
                 OutlinedButton(
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.tap()
                         onRetryFetch()
                     },
                     modifier = Modifier.weight(1f)
@@ -2755,7 +2819,7 @@ private fun DoubanDetailInfoTab(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             TextButton(onClick = {
-                                view.performHaptic(HapticType.CLICK)
+                                haptics.tap()
                                 onRetryLoadDetail()
                             }) {
                                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -2999,7 +3063,7 @@ private fun DoubanDetailInfoTab(
                                 indication = null,
                                 onClick = {
                                     if (!celebrity.doubanPersonageUrl.isNullOrBlank()) {
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.lightTap()
                                         onCelebrityClick(celebrity.doubanPersonageUrl, celebrity.name)
                                     }
                                 }
@@ -3079,7 +3143,7 @@ private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (copyable) Modifier.clickable {
+                if (copyable) Modifier.hapticClickable(semantic = HapticSemantic.TAP) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
                     context.showToast(copiedToast)

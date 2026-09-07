@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.markrecord
 import android.content.Context
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,9 +64,10 @@ import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -194,7 +193,7 @@ fun MarkRecordItemRow(
             .clip(RoundedCornerShape(16.dp))
             .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
             .background(backgroundBrush)
-            .clickable {
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                 // 先登记本行参与转场，再交给调用方导航
                 clicked = true
                 onClick()
@@ -419,6 +418,11 @@ private fun CurrentStatusBadge(item: MarkRecordItem) {
  * 与 Watchlist 筛选弹窗保持一致的 FilterChip。
  *
  * 触感在这里统一发：调用点一个个加会漏（原来整个弹窗都没有，而列表页其他 chip 都有）。
+ * 发哪一记看 [multiSelect]，判据是互斥性而不是叫不叫「筛选」。
+ *
+ * @param multiSelect 这个 chip 是否有自己独立的二值选中态（一组里能同时亮好几个）。
+ *   true 时本质是穿了 chip 外衣的 Checkbox，「加上」与「去掉」的方向感有意义，按新状态发 toggle；
+ *   false（默认）是一组里只能选一个的单选 / 分段控件，没有「关掉」这回事，只是把选中位挪一格，发 segmentTick。
  */
 @Composable
 private fun MarkRecordFilterChip(
@@ -426,12 +430,13 @@ private fun MarkRecordFilterChip(
     onClick: () -> Unit,
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    multiSelect: Boolean = false,
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     FilterChip(
         selected = selected,
         onClick = {
-            view.performHaptic(HapticType.CLICK)
+            if (multiSelect) haptics.toggle(!selected) else haptics.segmentTick()
             onClick()
         },
         label = label,
@@ -487,6 +492,8 @@ fun FilterSheetContent(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    // 本内容整块在 ModalBottomSheet 里，sheet 有自己的宿主 View，在这一层取
+    val haptics = rememberAppHaptics()
 
     Column(
         modifier = Modifier
@@ -508,14 +515,17 @@ fun FilterSheetContent(
                 onClick = {
                     selectedMediaTypes = if ("movie" in selectedMediaTypes) selectedMediaTypes - "movie" else selectedMediaTypes + "movie"
                 },
-                label = { Text(stringResource(R.string.mark_records_media_movie)) }
+                label = { Text(stringResource(R.string.mark_records_media_movie)) },
+                // 媒体类型可以同时选上电影和剧集，两个 chip 各有独立选中态
+                multiSelect = true
             )
             MarkRecordFilterChip(
                 selected = "show" in selectedMediaTypes,
                 onClick = {
                     selectedMediaTypes = if ("show" in selectedMediaTypes) selectedMediaTypes - "show" else selectedMediaTypes + "show"
                 },
-                label = { Text(stringResource(R.string.mark_records_media_show)) }
+                label = { Text(stringResource(R.string.mark_records_media_show)) },
+                multiSelect = true
             )
         }
         Spacer(Modifier.height(16.dp))
@@ -547,7 +557,10 @@ fun FilterSheetContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
-                    onClick = { showStartDatePicker = true },
+                    onClick = {
+                        haptics.tap()
+                        showStartDatePicker = true
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
@@ -556,7 +569,10 @@ fun FilterSheetContent(
                     )
                 }
                 OutlinedButton(
-                    onClick = { showEndDatePicker = true },
+                    onClick = {
+                        haptics.tap()
+                        showEndDatePicker = true
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
@@ -591,10 +607,14 @@ fun FilterSheetContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            TextButton(onClick = onReset) {
+            TextButton(onClick = {
+                haptics.tap()
+                onReset()
+            }) {
                 Text(stringResource(R.string.mark_records_reset))
             }
             Button(onClick = {
+                haptics.tap()
                 val custom = selectedPreset == DatePreset.CUSTOM
                 // 两端都挑了却挑反了就换回来，省得筛出空列表让用户以为没数据
                 val start = selectedStart
@@ -627,15 +647,22 @@ fun FilterSheetContent(
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
+                // 对话框有自己的宿主 View，每个槽各取一份
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         pickerState.selectedDateMillis?.let { millis -> selectedStart = millis }
                         showStartDatePicker = false
                     }
                 ) { Text(stringResource(android.R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showStartDatePicker = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showStartDatePicker = false
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -649,15 +676,21 @@ fun FilterSheetContent(
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         pickerState.selectedDateMillis?.let { millis -> selectedEnd = millis }
                         showEndDatePicker = false
                     }
                 ) { Text(stringResource(android.R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showEndDatePicker = false
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }

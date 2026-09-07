@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.searchsource
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchSourceTemplate
 import com.tracktosearch.data.local.SearchSourceTemplates
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 
 /**
  * 模板库半屏弹层：网格展示内置模板 + 底部导入快捷通道。
@@ -79,7 +80,7 @@ fun SourceTemplateSheet(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { onImport() }
+                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onImport() }
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -108,7 +109,8 @@ private fun TemplateCell(
             .padding(12.dp)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
             .height(112.dp)
-            .clickable(onClick = onClick),
+            // 模板格不是「选中某个模板」而是拿它去开编辑页，没有选中态，按列表项给 LIGHT_TAP
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

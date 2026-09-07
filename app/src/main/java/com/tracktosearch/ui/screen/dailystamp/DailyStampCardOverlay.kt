@@ -116,6 +116,9 @@ import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.posterSharedKey
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.screen.splash.QuoteSeal
 import com.tracktosearch.ui.screen.splash.SplashPalette
@@ -261,6 +264,7 @@ private fun CardCarousel(
     if (dates.isEmpty()) return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
     var busy by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(
         initialPage = dates.indexOf(current).coerceAtLeast(0),
@@ -282,7 +286,14 @@ private fun CardCarousel(
             // 换月和退场那会儿，[dates] 已经换成新一列而 pager 还停在旧下标上，选中那天
             // 也不在这一列里了。这时写回去等于替用户随手翻开新月份里同下标的那天。
             if (selected !in dates) return@collect
-            dates.getOrNull(page)?.let { if (it != selected) onSelect(it) }
+            dates.getOrNull(page)?.let {
+                if (it == selected) return@let
+                // 「手势翻页落定」那一记收在这一处：滑动松手 settle 与点侧卡的
+                // animateScrollToPage 都从这里过，各自再挂一层就是同一次翻页震两下。
+                // 判等之后才发：snapshotFlow 起手会先吐一次当前页，那不是一次翻页
+                haptics.gestureEnd()
+                onSelect(it)
+            }
         }
     }
 
@@ -665,9 +676,10 @@ private fun CardPoster(
             )
             .clip(RoundedCornerShape(6.dp))
             .background(palette.cream)
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = {
                     // 先登记本张卡参与转场，再走进详情页
                     clicked = true
@@ -760,9 +772,10 @@ private fun CardSource(
         text = text,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick,
             ),
         color = palette.inkSoft,
@@ -1203,16 +1216,14 @@ private fun ActionPill(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(palette.sheet.copy(alpha = 0.86f))
-            .then(
-                if (enabled) {
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = onClick,
-                    )
-                } else {
-                    Modifier
-                }
+            // hapticClickable 自己带 enabled，禁用时既不发触感也不吃点击，
+            // 不必再套一层 .then(if (enabled))
+            .hapticClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                semantic = HapticSemantic.TAP,
+                enabled = enabled,
+                onClick = onClick,
             )
             .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -12,14 +12,19 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.data.util.UserActionTracker
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
@@ -105,6 +110,19 @@ class MarkRecordViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(MarkRecordUiState(isLoading = true))
     val uiState: StateFlow<MarkRecordUiState> = _uiState.asStateFlow()
+
+    /**
+     * 「Trakt 那半边没拉上」的一次性提示。
+     *
+     * ALL 页把本地流水与 Trakt 历史并成一个列表，Trakt 整段失败时原来只是当成空列表，
+     * [MarkRecordUiState.error] 照样是 null —— 屏幕上是一份看起来完整、实际缺了一半的列表。
+     */
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
+
+    /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     private val pageSize = 50
 
@@ -417,7 +435,15 @@ class MarkRecordViewModel @Inject constructor(
                             mediaTypesFilter = state.filterMediaTypes,
                             onBatch = { batch -> publishProgress(baseItems, localItems + batch, generation) }
                         )
-                    } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // 只有 Trakt 这一半失败：本地流水已经渲染出来了，不该整页报错，
+                        // 但也不能让用户以为这就是全部记录
+                        _toastEvent.tryEmit(R.string.mark_records_trakt_history_failed)
+                        hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
+                        emptyList()
+                    }
                 } else emptyList()
                 // 首次拉取后记录 Trakt 总页数,供后续页判断是否继续拉取
                 if (page == 1 && traktHistoryTotalPages == 0) {
@@ -468,6 +494,7 @@ class MarkRecordViewModel @Inject constructor(
                     error = mapToFriendlyError(e)
                 )
             }
+            hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
         }
     }
 

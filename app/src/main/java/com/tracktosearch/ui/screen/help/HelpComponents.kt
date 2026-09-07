@@ -4,7 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -118,9 +119,11 @@ internal fun HelpSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 展开/收起按「展开后的状态」发：expanded 是点击前的状态，点完取反
+                semantic = if (expanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON,
                 onClick = onToggle,
             )
             .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),

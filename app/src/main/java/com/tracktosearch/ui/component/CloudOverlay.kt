@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +28,8 @@ import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import kotlinx.coroutines.delay
 
 /**
@@ -78,9 +79,10 @@ fun CloudOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                .clickable(
+                .hapticClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
+                    semantic = HapticSemantic.LIGHT_TAP,
                     onClick = onDismiss
                 ),
             contentAlignment = Alignment.Center

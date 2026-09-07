@@ -36,6 +36,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /** 全部参演电影弹窗 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,6 +68,8 @@ internal fun AllMovieCreditsSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
+        // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
+        val haptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -81,7 +84,11 @@ internal fun AllMovieCreditsSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                // 面板的「关闭」按取消档给轻一记；滑下去关 / 点遮罩关走 onDismissRequest，照旧静默
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -164,6 +171,8 @@ internal fun AllTvCreditsSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
+        // 同上，ModalBottomSheet 内容是独立 subcomposition，单独取一份
+        val haptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -178,7 +187,11 @@ internal fun AllTvCreditsSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                // 面板的「关闭」按取消档给轻一记；滑下去关 / 点遮罩关走 onDismissRequest，照旧静默
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onDismiss()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)

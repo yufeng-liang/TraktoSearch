@@ -52,7 +52,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -65,8 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MultiRatings
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import java.util.Locale
 
 // ==================== 四平台评分卡 ====================
@@ -477,7 +476,6 @@ internal fun RatingDialog(
     }
     val starColor = RatingGold
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-    val ratingView = LocalView.current
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
@@ -547,12 +545,12 @@ internal fun RatingDialog(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
-                                        .clickable(
+                                        .hapticClickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
+                                            semantic = HapticSemantic.SEGMENT_TICK,
                                             enabled = !isSubmitting,
                                             onClick = {
-                                                ratingView.performHaptic(HapticType.TICK)
                                                 selectedRating = if (selectedRating == halfValue) 0 else halfValue
                                             }
                                         )
@@ -562,12 +560,12 @@ internal fun RatingDialog(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
-                                        .clickable(
+                                        .hapticClickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
+                                            semantic = HapticSemantic.SEGMENT_TICK,
                                             enabled = !isSubmitting,
                                             onClick = {
-                                                ratingView.performHaptic(HapticType.TICK)
                                                 selectedRating = if (selectedRating == fullValue) 0 else fullValue
                                             }
                                         )
@@ -614,7 +612,10 @@ internal fun RatingDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                            .clickable(enabled = !isSubmitting) { onDismiss() }
+                            .hapticClickable(
+                                semantic = HapticSemantic.LIGHT_TAP,
+                                enabled = !isSubmitting
+                            ) { onDismiss() }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -630,7 +631,13 @@ internal fun RatingDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.primary)
-                            .clickable(enabled = !isSubmitting) { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) }
+                            // 这一记就是评分弹窗「确定」的全部触感。DetailScreen 的
+                            // onConfirm 回调里原先也有一记，已删 —— 按钮才是手势的主人，
+                            // 且那一记捕获的是屏幕宿主 View 而不是弹窗自己的。
+                            .hapticClickable(
+                                semantic = HapticSemantic.TAP,
+                                enabled = !isSubmitting
+                            ) { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {

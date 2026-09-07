@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
@@ -51,8 +50,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.TraktLogo
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
  * 账户行：左 logo + 头像 + 主名称（含可选 ID 小字）+ 登出按钮。
@@ -72,7 +70,7 @@ internal fun AccountRow(
     isVip: Boolean,
     onLogout: () -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -195,7 +193,7 @@ internal fun AccountRow(
         // 右侧登出按钮（固定高度确保两行按钮大小一致）
         Button(
             onClick = {
-                view.performHaptic(HapticType.HEAVY_CLICK)
+                haptics.tap()
                 onLogout()
             },
             colors = ButtonDefaults.buttonColors(
@@ -228,7 +226,7 @@ internal fun AccountExpiredRow(
     onReconnect: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -276,7 +274,7 @@ internal fun AccountExpiredRow(
             )
             TextButton(
                 onClick = {
-                    view.performHaptic(HapticType.HEAVY_CLICK)
+                    haptics.tap()
                     onLogout()
                 },
                 contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
@@ -290,7 +288,7 @@ internal fun AccountExpiredRow(
         }
         Button(
             onClick = {
-                view.performHaptic(HapticType.HEAVY_CLICK)
+                haptics.tap()
                 onReconnect()
             },
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
@@ -314,7 +312,7 @@ internal fun AccountExpiredRow(
 internal fun DoubanLoginPromptRow(
     onLogin: () -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -356,7 +354,7 @@ internal fun DoubanLoginPromptRow(
         // 登录按钮(与 AccountRow 登出按钮同高,保持视觉对齐)
         Button(
             onClick = {
-                view.performHaptic(HapticType.HEAVY_CLICK)
+                haptics.tap()
                 onLogin()
             },
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
@@ -377,7 +375,7 @@ internal fun DoubanLoginPromptRow(
 internal fun TraktLoginPromptRow(
     onLogin: () -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -402,7 +400,7 @@ internal fun TraktLoginPromptRow(
         )
         Button(
             onClick = {
-                view.performHaptic(HapticType.HEAVY_CLICK)
+                haptics.tap()
                 onLogin()
             },
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),

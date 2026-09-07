@@ -38,7 +38,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -46,20 +48,22 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.swiftie.eras.LOVER_HIT_MS
 import com.tracktosearch.ui.screen.swiftie.eras.LOVER_SHOT_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraBackdropLayer
@@ -402,7 +406,9 @@ private fun SwiftieEggContent(
     // Unspecified 而不是 Zero：SwiftieDiffusion 用 isSpecified 判「键盘还没上报坐标」，
     // 给 Zero 会被当成一个真坐标，扩散就从左上角开始而不是回退到屏幕中心
     var submitCenter by remember { mutableStateOf(Offset.Unspecified) }
-    val haptics = LocalHapticFeedback.current
+    // 走应用自己的四层触感引擎，不用 Compose 的 LocalHapticFeedback：后者是第三条通道，
+    // 既走不到厂商预置效果，也不受设置页那个三档开关管 —— 用户选了「关闭」，彩蛋照样震
+    val haptics = rememberAppHaptics()
     val reducedMotion = rememberReducedMotion()
     // 背景三层要按它降档：L0/L1 静态、L2 粒子减半但仍动。
     // 整块定格看起来像卡死，留一层飘落物就还活着
@@ -450,6 +456,46 @@ private fun SwiftieEggContent(
     var audioGivenUp by remember { mutableStateOf(false) }
     val framePaused = userPaused || seekFrozen || focusPaused || previewPaused
     LaunchedEffect(framePaused) { clock.paused = framePaused }
+
+    // ---- 序列触感编排（设计文档「彩蛋编排」）----
+    //
+    // 走 Provider<AppHaptics> 而不是上面那个 rememberAppHaptics()：编排要 playEnvelope
+    // 与 stopOngoing，而且谱子里按乐句排好的密集 tick 不能被 ComposeHaptics 那道
+    // 40ms 节流吞掉。题面那三记（键盘 / 答对 / 答错）仍走 ComposeHaptics —— 它们是
+    // 交互反馈，节流对它们是对的
+    val conductor = rememberSwiftieHapticConductor(reducedMotion)
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+
+    // 四条闸门与 SwiftieMusic 同源：点按钮暂停 / 拖轴定格 / 焦点临时丢失 / 预览定格都
+    // 汇进 framePaused，ON_STOP（息屏、切后台）看生命周期，AUDIOFOCUS_LOSS 看
+    // audioGivenUp。序列没在跑（题面阶段、静态终态）时整条静音
+    val hapticsMuted = !sequenceRunning ||
+        framePaused ||
+        audioGivenUp ||
+        !lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    val mutedNow = rememberUpdatedState(hapticsMuted)
+
+    LaunchedEffect(conductor, clock) {
+        // snapshotFlow 而不是再挂一条 withFrameMillis：帧时钟上已经有时钟自己那条循环，
+        // 两条 withFrameMillis 的先后不保证，触感会稳定落后一帧。
+        // 值没变就不发射 —— 暂停时 elapsedMs 不动，这里一次都不跑
+        snapshotFlow { clock.elapsedMs }.collect { elapsed ->
+            conductor.onFrame(
+                elapsedMs = elapsed,
+                seekEpoch = clock.seekEpoch,
+                muted = mutedNow.value
+            )
+        }
+    }
+
+    // 闸门关上、以及整页销毁（用户在包络播放中途按 ✕）时把在飞的波形停掉。
+    // tier 3 与 tier 1 都有停止通道，所以这两处真的停得住，见 conductor.stopOngoing 的说明。
+    // 加 sequenceRunning 这道条件是为了不在挂载那一帧白调一次 —— 那时什么都还没响
+    LaunchedEffect(hapticsMuted, sequenceRunning) {
+        if (sequenceRunning && hapticsMuted) conductor.stopOngoing()
+    }
+    DisposableEffect(conductor) { onDispose { conductor.stopOngoing() } }
+
 
     /**
      * 浮出控件的可见性与它的保活计数。
@@ -675,13 +721,13 @@ private fun SwiftieEggContent(
     // 答错：Reject 触觉 + 摇晃走完后自动清空
     LaunchedEffect(quiz.wrongCount) {
         if (quiz.wrongCount == 0) return@LaunchedEffect
-        haptics.performHapticFeedback(HapticFeedbackType.Reject)
+        haptics.reject()
         delay(WRONG_SHAKE_MS)
         quiz = quiz.clearWrong()
     }
 
     LaunchedEffect(quiz.solved) {
-        if (quiz.solved) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        if (quiz.solved) haptics.confirm()
     }
 
     // 「减少动效」不跑序列：立刻落地主题，把写完的海报停 1200ms 让人看完，再给静态终态
@@ -780,7 +826,10 @@ private fun SwiftieEggContent(
                 onQuizChange = { quiz = it },
                 // 答对之后冻住：键盘正在下滑退场，再收它上报的坐标会把扩散原点拖出屏幕
                 onSubmitCenter = { if (!quiz.solved) submitCenter = it },
-                onKeyHaptic = { haptics.performHapticFeedback(HapticFeedbackType.VirtualKey) }
+                // 数字键与退格连按会很快，用最轻的一档。提交键不走这条 —— 它按下去的结果
+                // 要么答对要么答错，上面那两个 LaunchedEffect 会发 confirm() 或 reject()，
+                // 再叠一记 lightTap 就是「轻一下 + 重一下」两记挤在一起
+                onKeyHaptic = { haptics.lightTap() }
             )
         }
 

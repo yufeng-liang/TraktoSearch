@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.login
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +62,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.TicketStub
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.TraktLogo
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
@@ -546,9 +547,13 @@ private fun TicketEntryRow(
             // 高度由外面那个 Column 的权重给，这里只留一个下限：拿不到权重时行还得能按
             .heightIn(min = TicketEntryRowHeight)
             .alpha(rowAlpha)
-            .clickable(
+            // 触感收在这里：三行入口都从这条路走，调用方不要再各自挂一层。
+            // 三行长得一模一样（同款细线分隔、同款行尾箭头），手感分档会被当成 bug ——
+            // 游客那行虽然是次级选择，也跟着走同一记
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.TAP,
                 enabled = enabled && visible,
                 onClick = onClick
             )

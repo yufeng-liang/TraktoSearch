@@ -50,8 +50,9 @@ import com.tracktosearch.ui.component.rememberFullscreenZoomableImageState
 import com.tracktosearch.ui.component.rememberResetOrDismiss
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedTarget
-import com.tracktosearch.ui.component.zoomTransitionPhase
 import com.tracktosearch.ui.component.appSharedOverlayChrome
+import com.tracktosearch.ui.component.zoomTransitionPhase
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.theme.WatchedGreen
 import kotlinx.coroutines.launch
@@ -78,6 +79,8 @@ internal fun PosterFullscreenOverlay(
     val context = LocalContext.current
     val savedToAlbumToast = stringResource(R.string.gallery_saved_to_album)
     val scope = rememberCoroutineScope()
+    // AnimatedVisibility 的内容不是独立窗口，宿主 View 与本函数一致，取一份共用即可
+    val haptics = rememberAppHaptics()
     var isSaved by remember { mutableStateOf<Boolean?>(null) } // null=未检查, true=已保存, false=未保存
 
     // 进入时检查是否已保存（仅打开大图时查询，避免每次进详情页都跑 MediaStore 查询）
@@ -109,6 +112,8 @@ internal fun PosterFullscreenOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
+                // 用裸 clickable：这一记 LIGHT_TAP 由 rememberResetOrDismiss 自己发，
+                // 这里再套 hapticClickable 就是同一次点击震两下
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -167,7 +172,7 @@ internal fun PosterFullscreenOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 关闭按钮（半透明黑色背景）
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = { haptics.lightTap(); onDismiss() }) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -193,6 +198,7 @@ internal fun PosterFullscreenOverlay(
 
                 // 保存按钮（已保存时显示勾选图标，半透明黑色背景）
                 IconButton(onClick = {
+                    haptics.tap()
                     if (isSaved == true) {
                         context.showToast(savedToAlbumToast)
                     } else {

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +67,8 @@ import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -547,9 +548,14 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .clickable(
+            // OAuth 不算外跳：Custom Tab 只是拿 code 的管道，授权完带着 token 从 deep link
+            // 回到本应用，用户的意图是「登录」。判据是回不回来 —— 单纯拉浏览器看个网页才静默。
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 整张卡就是这一栏唯一的操作、文案是加粗的「去登录 Trakt」，
+                // 与豆瓣那张同样式的卡同档
+                semantic = HapticSemantic.TAP,
                 onClick = onLoginClick
             ),
         shape = shape,
@@ -606,9 +612,11 @@ private fun DoubanLoginGuideCard(promptText: String, onLoginClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 整张卡就是这一栏唯一的操作、文案是加粗的「去登录」，按带文字的主操作给
+                semantic = HapticSemantic.TAP,
                 onClick = onLoginClick
             ),
         shape = shape,
@@ -902,9 +910,11 @@ internal fun CapsuleTabSelector(
                     modifier = Modifier
                         .width(tabWidths[index])
                         .fillMaxHeight()
-                        .clickable(
+                        // 一组里只能亮一个，滑块只是挪一格，没有「关掉」这回事 → 刻度感
+                        .hapticClickable(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = null
+                            indication = null,
+                            semantic = HapticSemantic.SEGMENT_TICK
                         ) { onTabSelected(index) },
                     contentAlignment = Alignment.Center
                 ) {

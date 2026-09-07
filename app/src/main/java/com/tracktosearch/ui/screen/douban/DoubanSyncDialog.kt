@@ -41,6 +41,7 @@ import com.tracktosearch.data.repository.DoubanSyncStage
 import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.service.DoubanSyncService
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.watchlist.hasLiveCountProgress
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -98,6 +99,30 @@ fun DoubanSyncDialog(
         }
     }
 
+    // 同步终态那一记触感。用「上一次看到的 isComplete」做边沿检测，而不是直接
+    // LaunchedEffect(p.isComplete)：DoubanSyncManager 完成后不会立刻重置 progress，
+    // 弹窗重开时第一帧就可能拿到 isComplete=true —— 那是上一轮的旧结果，不该震。
+    // remember 而非 rememberSaveable：旋屏后重新以当前值为基线，同样不会补震一记
+    val outcomeHaptics = rememberAppHaptics()
+    var observedComplete by remember { mutableStateOf(p.isComplete) }
+    LaunchedEffect(p.isComplete) {
+        val wasComplete = observedComplete
+        observedComplete = p.isComplete
+        if (!p.isComplete || wasComplete) return@LaunchedEffect
+        // 取消不是结果：既没成也没败，用户自己按的，不用震回去告诉他
+        if (p.isCancelling) return@LaunchedEffect
+        // 判据就是下面结果区渲染出来的那几行：报错文案、失败数、未修复的冲突、
+        // 云端上传红字，任意一条成立就说明还有事要用户再来一趟
+        val clean = p.stage != DoubanSyncStage.FAILED &&
+            p.stage != DoubanSyncStage.LOGIN_REQUIRED &&
+            !p.cookieExpired &&
+            p.errorMessage.isNullOrBlank() &&
+            p.failedCount == 0 &&
+            p.conflictsFound == 0 &&
+            !(p.cloudUploadAttempted && !p.cloudUploadSucceeded)
+        if (clean) outcomeHaptics.confirm() else outcomeHaptics.reject()
+    }
+
     AlertDialog(
         onDismissRequest = {
             if (!p.isRunning) onDismiss()
@@ -105,6 +130,8 @@ fun DoubanSyncDialog(
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_sync_title)) },
         text = {
+            // AlertDialog 的 text 与 confirmButton 是各自独立的 subcomposition，各取一份
+            val textHaptics = rememberAppHaptics()
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 val stageLabel = stringResource(p.stage.labelRes())
                 val subStageLabel = p.subStage.labelRes()?.let { stringResource(it) }
@@ -389,7 +416,10 @@ fun DoubanSyncDialog(
                             value = p.pendingItemCount
                         )
                     }
-                    TextButton(onClick = { showActivityDetails = !showActivityDetails }) {
+                    TextButton(onClick = {
+                        textHaptics.toggle(!showActivityDetails)
+                        showActivityDetails = !showActivityDetails
+                    }) {
                         Text(
                             stringResource(
                                 if (showActivityDetails) R.string.douban_sync_hide_details
@@ -401,6 +431,7 @@ fun DoubanSyncDialog(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (p.failedItems.isNotEmpty()) {
                                 TextButton(onClick = {
+                                    textHaptics.lightTap()
                                     showActivityDetails = true
                                     showFailureItems = !showFailureItems
                                     onViewFailures?.invoke()
@@ -409,12 +440,13 @@ fun DoubanSyncDialog(
                                 }
                             }
                             if (p.failedCount > 0 && onRetry != null) {
-                                TextButton(onClick = onRetry) {
+                                TextButton(onClick = { textHaptics.tap(); onRetry() }) {
                                     Text(stringResource(R.string.douban_sync_retry_failures))
                                 }
                             }
                             if (p.conflictsFound > 0 && onViewConflicts != null) {
                                 TextButton(onClick = {
+                                    textHaptics.lightTap()
                                     showActivityDetails = true
                                     onViewConflicts()
                                 }) {
@@ -446,6 +478,9 @@ fun DoubanSyncDialog(
             }
         },
         confirmButton = {
+            val buttonHaptics = rememberAppHaptics()
+            // 「完成」虽然只是关掉弹窗（同步早已跑完、结果已落库），但它是这个弹窗的主按钮 → tap()。
+            // lightTap() 只留给下面标着「取消」的那一侧
             when {
                 p.isComplete &&
                     p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
@@ -453,12 +488,13 @@ fun DoubanSyncDialog(
                     Row {
                         if (onTraktLogin != null) {
                             TextButton(onClick = {
+                                buttonHaptics.tap()
                                 onDismiss()
                                 onTraktLogin()
                             }) { Text(stringResource(R.string.douban_sync_login_trakt)) }
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
+                        TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
                     }
                 }
                 p.isComplete &&
@@ -468,12 +504,13 @@ fun DoubanSyncDialog(
                     Row {
                         if (onRelogin != null) {
                             TextButton(onClick = {
+                                buttonHaptics.tap()
                                 onDismiss()
                                 onRelogin()
                             }) { Text(stringResource(R.string.douban_sync_login_douban)) }
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
+                        TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
                     }
                 }
                 p.isComplete &&
@@ -483,22 +520,24 @@ fun DoubanSyncDialog(
                     Row {
                         if (onRelogin != null) {
                             TextButton(onClick = {
+                                buttonHaptics.tap()
                                 onDismiss()
                                 onRelogin()
                             }) { Text(stringResource(R.string.douban_sync_relogin)) }
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
+                        TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
                     }
                 }
                 p.isComplete -> {
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
+                    TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
                 }
                 p.isRunning -> {
                     Row {
                         TextButton(
                             enabled = !p.isCancelling,
                             onClick = {
+                                buttonHaptics.tap()
                                 if (DoubanSyncService.start(context)) {
                                     onBackground()
                                 } else {
@@ -509,7 +548,7 @@ fun DoubanSyncDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         TextButton(
                             enabled = !p.isCancelling,
-                            onClick = { viewModel.cancel() }
+                            onClick = { buttonHaptics.lightTap(); viewModel.cancel() }
                         ) {
                             Text(
                                 stringResource(

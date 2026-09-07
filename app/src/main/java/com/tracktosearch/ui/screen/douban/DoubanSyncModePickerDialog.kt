@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.repository.SyncMode
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
  * 豆瓣重新导入模式选择对话框(设置页「重新同步豆瓣」按钮触发)。
@@ -66,7 +67,10 @@ fun DoubanSyncModePickerDialog(
             title = { Text(stringResource(R.string.douban_sync_mode_c_title)) },
             text = { Text(stringResource(R.string.douban_sync_mode_warning_c)) },
             confirmButton = {
+                // AlertDialog 的槽是独立 subcomposition，单独取一份
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showFullRewriteConfirm = false
                     onDismiss()
                     onModeSelected(SyncMode.FULL_REWRITE)
@@ -75,7 +79,8 @@ fun DoubanSyncModePickerDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showFullRewriteConfirm = false }) {
+                val haptics = rememberAppHaptics()
+                TextButton(onClick = { haptics.lightTap(); showFullRewriteConfirm = false }) {
                     Text(stringResource(R.string.douban_retry_cancel))
                 }
             }
@@ -123,7 +128,8 @@ fun DoubanSyncModePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
                 Text(stringResource(R.string.douban_retry_cancel))
             }
         }
@@ -139,8 +145,10 @@ private fun ModeOptionItem(
     onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null
 ) {
+    // 选项行就是这个弹窗真正的「确定」，本函数在弹窗的 text 槽内，取一份即可
+    val haptics = rememberAppHaptics()
     Surface(
-        onClick = onClick,
+        onClick = { haptics.tap(); onClick() },
         modifier = Modifier
             .fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -244,12 +252,14 @@ fun DoubanFirstSyncGuideDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = onStartImport) {
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.tap(); onStartImport() }) {
                 Text(stringResource(R.string.douban_first_sync_start))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
                 Text(stringResource(R.string.douban_first_sync_later))
             }
         }

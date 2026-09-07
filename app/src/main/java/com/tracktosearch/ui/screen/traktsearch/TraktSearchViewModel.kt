@@ -15,14 +15,18 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.haptic.HapticOutcome
+import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -124,6 +128,10 @@ class TraktSearchViewModel @Inject constructor(
     private val _initialTab = initialTypeFromNav ?: MediaType.MOVIE
     private val _uiState = MutableStateFlow(TraktSearchUiState(selectedTab = _initialTab))
     val uiState: StateFlow<TraktSearchUiState> = _uiState.asStateFlow()
+
+    /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
+    private val hapticOutcomeEmitter = HapticOutcomeEmitter()
+    val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
     // 全局想看/已看缓存
     private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
@@ -574,6 +582,9 @@ class TraktSearchViewModel @Inject constructor(
             MediaType.PERSON -> _uiState.value.copy(personState = state)
             MediaType.DISK -> _uiState.value
         }
+        // 五处搜索失败都从这个函数落进 error，触感挂在这里就不会漏掉某一处；
+        // 成功不发 —— 结果列表铺出来本身就是反馈
+        if (state.error != null) hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
     }
 
     private suspend fun enrichSearchResult(result: TraktSearchResult, type: MediaType): TraktSearchUiItem {
@@ -696,8 +707,18 @@ class TraktSearchViewModel @Inject constructor(
                         )
                     )
                 }
-            } catch (_: Exception) {
-                // 网络错误等异常，确保 isLoading 被重置
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 原来这里整段吞掉：搜索失败与「一条都没搜到」在界面上完全同形，用户只看到
+                // 「0 个结果」。落进 diskState.error 之后界面会画错误态（resources 为空时），
+                // 触感同时给一记 reject
+                _uiState.value = _uiState.value.copy(
+                    diskState = _uiState.value.diskState.copy(
+                        error = e.toUserMessage(context, R.string.error_search_failed)
+                    )
+                )
+                hapticOutcomeEmitter.emit(HapticOutcome.FAILURE)
             } finally {
                 if (_uiState.value.diskState.isLoading) {
                     _uiState.value = _uiState.value.copy(

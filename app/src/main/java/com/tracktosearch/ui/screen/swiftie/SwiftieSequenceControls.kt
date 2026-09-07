@@ -8,7 +8,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,6 +37,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 
 /** 浮出 / 收回的时长。200ms 是「浮上来」而不是「弹出来」，与整页的淡入同一档。 */
 private const val CONTROLS_MOTION_MS = 200
@@ -124,6 +125,8 @@ fun SwiftieSequenceControls(
                     // 退场那 200ms 里节点仍挂在树上，而此时 visible 已经是 false ——
                     // 顺手把 enabled 一起关掉，收回途中点不出第二次动作
                     enabled = visible,
+                    // 暂停 / 继续是同一颗按钮的两个状态，按点完之后的状态发
+                    semantic = if (paused) HapticSemantic.TOGGLE_ON else HapticSemantic.TOGGLE_OFF,
                     onClick = onTogglePause
                 )
                 if (skipEnabled) {
@@ -137,6 +140,7 @@ fun SwiftieSequenceControls(
                         icon = Icons.Rounded.SkipNext,
                         label = stringResource(R.string.swiftie_skip),
                         enabled = visible,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = onSkip
                     )
                 }
@@ -151,12 +155,15 @@ fun SwiftieSequenceControls(
  * 文字**跟随系统字号**（与轴上那行 TS 标签相反）—— 这是个真按钮而不是定时动画里的
  * 固定版面，放大档位下必须跟着长。胶囊本身是自适应宽高，只在极端档位配上最长的译文
  * （日文「一時停止」）时用省略号收尾，而不是把字形裁掉。
+ *
+ * 触感收在这里，两边各自不再挂：[semantic] 由调用侧给 —— 暂停/继续是开关，跳过是次级操作。
  */
 @Composable
 private fun SwiftieControlHalf(
     icon: ImageVector,
     label: String,
     enabled: Boolean,
+    semantic: HapticSemantic,
     onClick: () -> Unit
 ) {
     Row(
@@ -165,7 +172,7 @@ private fun SwiftieControlHalf(
             // 不撑起来手指就只有胶囊中间那一条能点。撑在 clickable **之前**，
             // 命中区域才跟着一起长
             .defaultMinSize(minHeight = CAPSULE_HEIGHT)
-            .clickable(enabled = enabled, onClick = onClick)
+            .hapticClickable(semantic = semantic, enabled = enabled, onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

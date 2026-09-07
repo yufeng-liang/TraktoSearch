@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -15,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.data.remote.panhub.ChannelGroup
@@ -23,9 +21,10 @@ import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.HapticType
 
 @Composable
 fun PanHubConfigDialog(
@@ -43,13 +42,13 @@ fun PanHubConfigDialog(
     var enabledPlugins by remember(config) { mutableStateOf(config.enabledPlugins) }
     var enabledChannels by remember(config) { mutableStateOf(config.enabledChannels) }
 
-    val view = LocalView.current
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.panhub_config_title)) },
         text = {
+            // text 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取
+            val haptics = rememberAppHaptics()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -68,7 +67,7 @@ fun PanHubConfigDialog(
                     )
                     Switch(
                         checked = enabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) },
+                        onCheckedChange = { haptics.toggle(it); onEnabledChange(it) },
                         colors = appSwitchColors()
                     )
                 }
@@ -83,13 +82,15 @@ fun PanHubConfigDialog(
                             val intVal = v.roundToInt()
                             val oldVal = concurrencyText.toIntOrNull() ?: 4
                             if (intVal != oldVal) {
-                                view.performHaptic(HapticType.TICK)
+                                haptics.frequentTick()
                             }
                             // 拖动过程只更新本地显示值；松手（onValueChangeFinished）
                             // 才回调提交，避免每个拖拽 tick 都写 DataStore 并触发收集方重组
                             concurrencyText = intVal.toString()
                         },
                         onValueChangeFinished = {
+                            // 松手落定那一记：拖动中的 frequentTick 只到「又过一格」，这里才是「停在这个值」
+                            haptics.gestureEnd()
                             concurrencyText.toIntOrNull()?.let(onConcurrencyChange)
                         },
                         valueRange = 1f..16f,
@@ -124,6 +125,9 @@ fun PanHubConfigDialog(
                     Text(stringResource(R.string.panhub_plugins), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     val allPluginsSelected = enabledPlugins.size == PanHubPlugin.entries.size
                     TextButton(onClick = {
+                        // 全选 / 全不选是整组勾选位一起加减（enabledPlugins 是 Set），
+                        // 「加上」与「去掉」的方向感有意义，按新状态发 toggle 而不是按钮那档 tap
+                        haptics.toggle(!allPluginsSelected)
                         val newSet = if (allPluginsSelected) emptySet() else PanHubPlugin.entries.map { it.id }.toSet()
                         enabledPlugins = newSet
                         onEnabledPluginsChange(newSet)
@@ -151,7 +155,7 @@ fun PanHubConfigDialog(
                                 Switch(
                                     checked = plugin.id in enabledPlugins,
                                     onCheckedChange = { enabled ->
-                                        view.performHaptic(HapticType.CLICK)
+                                        haptics.toggle(enabled)
                                         val updated = enabledPlugins.toMutableSet()
                                         if (enabled) updated.add(plugin.id) else updated.remove(plugin.id)
                                         enabledPlugins = updated
@@ -175,6 +179,8 @@ fun PanHubConfigDialog(
                     Text(stringResource(R.string.panhub_channels), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     val allChannelsSelected = enabledChannels.size == PanHubChannel.entries.size
                     TextButton(onClick = {
+                        // 同插件那侧：整组勾选位一起加减，按新状态发 toggle
+                        haptics.toggle(!allChannelsSelected)
                         val newSet = if (allChannelsSelected) emptySet() else PanHubChannel.entries.map { it.id }.toSet()
                         enabledChannels = newSet
                         onEnabledChannelsChange(newSet)
@@ -194,7 +200,11 @@ fun PanHubConfigDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { expanded = !expanded }
+                                // 展开 / 收起：语义按点完之后的新状态定
+                                .hapticClickable(
+                                    semantic = if (expanded) HapticSemantic.TOGGLE_OFF
+                                               else HapticSemantic.TOGGLE_ON
+                                ) { expanded = !expanded }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -213,7 +223,7 @@ fun PanHubConfigDialog(
                             Switch(
                                 checked = allEnabledInGroup,
                                 onCheckedChange = { allOn ->
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.toggle(allOn)
                                     val updated = enabledChannels.toMutableSet()
                                     if (allOn) {
                                         updated.addAll(groupChannels.map { it.id })
@@ -242,7 +252,7 @@ fun PanHubConfigDialog(
                                         Switch(
                                             checked = channel.id in enabledChannels,
                                             onCheckedChange = { enabled ->
-                                                view.performHaptic(HapticType.CLICK)
+                                                haptics.toggle(enabled)
                                                 val updated = enabledChannels.toMutableSet()
                                                 if (enabled) updated.add(channel.id) else updated.remove(channel.id)
                                                 enabledChannels = updated
@@ -259,7 +269,9 @@ fun PanHubConfigDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // confirmButton 槽自带宿主 View，不能复用 text 槽那份
+            val confirmHaptics = rememberAppHaptics()
+            TextButton(onClick = { confirmHaptics.tap(); onDismiss() }) {
                 Text(stringResource(R.string.common_done))
             }
         }

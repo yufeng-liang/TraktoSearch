@@ -32,6 +32,8 @@ import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.ui.component.CrashReportDialogHost
+import com.tracktosearch.ui.haptic.AppHaptics
+import com.tracktosearch.ui.haptic.LocalAppHaptics
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import javax.inject.Inject
+import javax.inject.Provider
 
 // OAuth 回调结果在 MainActivity 与 LoginViewModel 之间共享
 // 使用 StateFlow 替代轮询，避免 LoginScreen 每 300ms 检查
@@ -123,6 +126,10 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var sharedTransitionStorage: com.tracktosearch.data.local.SharedTransitionStorage
 
+    // 触感三档：必须在任何界面能发出触感之前读到磁盘首值，否则用户选的「关闭」在启动那段窗口不生效
+    @Inject
+    lateinit var hapticStorage: com.tracktosearch.data.local.HapticStorage
+
     @Inject
     lateinit var splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage
 
@@ -144,6 +151,12 @@ class MainActivity : AppCompatActivity() {
     // AppNavigation 通过其 StateFlow 派生 isLoggedIn / isDoubanMode 等 UI 状态
     @Inject
     lateinit var sessionModeManager: SessionModeManager
+
+    // 触感引擎的惰性入口，往组合树里 provide 用（见 setContent 里的 LocalAppHaptics）。
+    // 必须是 Provider：直接注入 AppHaptics 会把整套能力探测同步跑在 Activity 的注入点上，
+    // 那正是主线程。真正的 get() 由 TraktSearchApp 的启动预热在后台线程先做掉。
+    @Inject
+    lateinit var appHapticsProvider: Provider<AppHaptics>
 
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
@@ -251,6 +264,15 @@ class MainActivity : AppCompatActivity() {
             // 只读取首页启动所需的本地设置；影视/榜单缓存由当前页面首次使用时按需加载。
             StartupTrace.measure("local.shared_transition") {
                 sharedTransitionStorage.preloadAndGetValue()
+            }
+
+            // 触感档位：一次 DataStore 读，必须落在 isReady 之前 ——
+            // 之后任何一次点击都可能发触感，而 modeState 的初值是「跟随系统」，
+            // 预加载完成前用户选的「关闭」还没生效。
+            // 这里只读档位，不解析 AppHaptics：那条链要探设备能力（IPC + 厂商反射），
+            // 按 HapticModule 的规矩得由第一个真正用它的调用方在后台线程预热。
+            StartupTrace.measure("local.haptic_mode") {
+                hapticStorage.preloadAndGetValue()
             }
 
             // 开屏台词：读开关 + 选当天那条 + 解海报，全部在后台线程做完才放行 Splash。
@@ -363,7 +385,14 @@ class MainActivity : AppCompatActivity() {
                 visualEffectMode = visualEffectMode,
                 glassVariant = glassVariant
             ) {
-                CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
+                CompositionLocalProvider(
+                    LocalScrollToTopProvider provides scrollToTopProvider,
+                    // 递 Provider 而不是 AppHaptics 实例：解析它是阻塞的，交给
+                    // TraktSearchApp 的启动预热在后台线程做掉。位置必须在这里而不是
+                    // AppNavigation 内部 —— CrashReportDialogHost 与 SplashQuoteOverlay
+                    // 是 AppNavigation 的兄弟节点，也要能读到。
+                    LocalAppHaptics provides appHapticsProvider,
+                ) {
                 // Splash 完成后展示主导航
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }

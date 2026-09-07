@@ -61,7 +61,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +75,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.LoginActionInk
 import com.tracktosearch.ui.theme.LoginErrorInk
 import com.tracktosearch.ui.theme.LoginPaperDark
@@ -84,8 +85,6 @@ import com.tracktosearch.ui.theme.LoginSeatSilhouette
 import com.tracktosearch.ui.theme.LoginSecondaryInk
 import com.tracktosearch.ui.theme.LoginTitleInk
 import com.tracktosearch.ui.screen.auth.AuthViewModel
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.toUserMessage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -120,7 +119,10 @@ fun ActivationLoginScreen(
 
     val isActivated = authState.activated
 
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
+    // 取票失败与「已绑定但静默恢复成功」两种结果的触感从这一行出。正常取票成功不在
+    // 其中：那条路的反馈是下面走纸那六档 segmentTick
+    HapticOutcomeEffect(authViewModel.hapticOutcomes)
     val printProgress = remember { Animatable(0f) }
     var isPrinting by remember { mutableStateOf(false) }
     // 粘贴没抽到 6 位数字时的一次性提示。只占像素屏，不进 AuthUiState——
@@ -174,7 +176,9 @@ fun ActivationLoginScreen(
         snapshotFlow { phaseAt(printProgress.value).feedStep }
             .distinctUntilChanged()
             .filter { it > 0 }
-            .collect { if (isPrinting) view.performHaptic(HapticType.TICK) }
+            // 每一档是走纸「卡进一格」，走刻度感那一档；六档连起来才是「咔咔咔」，
+            // 用 FREQUENT_TICK 那种给滑块连发的极轻档，这一段会几乎摸不到
+            .collect { if (isPrinting) haptics.segmentTick() }
     }
 
     LaunchedEffect(authState.error) {
@@ -356,6 +360,8 @@ fun ActivationLoginScreen(
             title = { Text(stringResource(R.string.login_what_is_trakt_title)) },
             text = { Text(stringResource(R.string.login_what_is_trakt_desc)) },
             confirmButton = {
+                // 不发触感：CustomTabs 只是打开 trakt.tv 注册页去看，属真的离开本应用。
+                // 与票上那行 Trakt 登录的区别在「回不回来」，不是「有没有用 CustomTabs」
                 Button(
                     onClick = {
                         showWhatIsTraktDialog = false
@@ -369,8 +375,13 @@ fun ActivationLoginScreen(
                 ) { Text(stringResource(R.string.login_what_is_trakt_register)) }
             },
             dismissButton = {
+                // 槽是独立 subcomposition（对话框自己的宿主 View），单独取一份
+                val dismissHaptics = rememberAppHaptics()
                 TextButton(
-                    onClick = { showWhatIsTraktDialog = false },
+                    onClick = {
+                        dismissHaptics.lightTap()
+                        showWhatIsTraktDialog = false
+                    },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = LoginActionInk
                     )
@@ -472,12 +483,17 @@ internal fun loginContentScale(available: Dp): Float =
 /**
  * 版式在基准机上占掉的高度（不含系统栏）。
  *
- * 792dp 是实测值 779dp 加约 13dp 余量：标题 41 + 间隙 20 + 机器 451 + 票 178 +
- * 「什么是 Trakt」44 + 页面上下内边距 40。余量留给别的语言 —— 日韩文案更长，
- * 像素屏第二行和票面三行都可能比中文高一档。基准机 390×866dp 上算出来的比例是
- * 1.02，取 1f，也就是这台机器上的版面与实测那一版逐 dp 相同。
+ * 832dp 是**出票态**实测的 819dp 加约 13dp 余量。出票态才是最高的一屏：标题 41 +
+ * 间隙 20 + 机器 451 + 票 178 + 「什么是 Trakt」44 + 页面上下内边距 40，再加上机器与
+ * 票之间、票与入口三行之间那几段间距 —— 早先按分项相加估的 792dp 漏掉了后者，
+ * 于是 640dp 那一档算出 0.81 的比例、缩完仍超出 22px。现在这个数是在
+ * `zh-w360dp-h640dp`、默认字号下量出来的整屏内容高度，不再是分项估算。
+ *
+ * 余量留给别的语言 —— 日韩文案更长，像素屏第二行和票面三行都可能比中文高一档。
+ * 基准机 390×866dp 上算出来的比例是 1.04，取 1f，也就是这台机器上的版面与实测那一版
+ * 逐 dp 相同。
  */
-private val LoginContentBaselineHeight = 792.dp
+private val LoginContentBaselineHeight = 832.dp
 
 /** 缩放下界。再小键帽就按不准了，那种窗口宁可滚动。 */
 private const val LOGIN_MIN_CONTENT_SCALE = 0.7f

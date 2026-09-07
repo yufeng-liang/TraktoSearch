@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,7 +83,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -126,6 +124,11 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.PopupShowEffect
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
@@ -136,15 +139,13 @@ import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.SharedOrigin
-import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
@@ -181,7 +182,7 @@ fun DetailScreen(
     val spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     var showRatingDialog by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
     var showWatchlistScene by remember { mutableStateOf(false) }
@@ -222,6 +223,9 @@ fun DetailScreen(
     // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）
     ToastEffect(viewModel.toastEvent)
 
+    // 上面那些 toast、以及豆瓣乐观写失败时的重试按钮，配对的结果类触感都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
+
     // 标记想看/取消看过：给一条带「撤销」的 Snackbar。误点之前只能自己再点回去。
     val markSnackbarHostState = remember { SnackbarHostState() }
     val undoLabel = stringResource(R.string.common_undo)
@@ -241,6 +245,9 @@ fun DetailScreen(
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) {
+                // Material 自己渲染 action 按钮、拿不到 onClick=，ActionPerformed 分支是唯一的钩子。
+                // performAction() 在点击当帧就 resume 这条协程，不用等 Snackbar 退场动画
+                haptics.tap()
                 // 撤销就是再调一次同一个 toggle：两个 toggle 都是幂等的状态翻转
                 when (event.kind) {
                     DetailMarkKind.WATCHLIST -> viewModel.toggleWatchlist()
@@ -628,13 +635,13 @@ fun DetailScreen(
                         ) {
                             Tab(
                                 selected = selectedTab == 0,
-                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
+                                onClick = { haptics.segmentTick(); selectedTab = 0 },
                                 text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", maxLines = 1) }
                             )
                             if (showCommentsTab) {
                                 Tab(
                                     selected = selectedTab == 1,
-                                    onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
+                                    onClick = { haptics.segmentTick(); selectedTab = 1 },
                                     text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", maxLines = 1) }
                                 )
                             }
@@ -642,7 +649,7 @@ fun DetailScreen(
                                 val recTabIndex = if (showCommentsTab) 2 else 1
                                 Tab(
                                     selected = selectedTab == recTabIndex,
-                                    onClick = { view.performHaptic(HapticType.CLICK); selectedTab = recTabIndex },
+                                    onClick = { haptics.segmentTick(); selectedTab = recTabIndex },
                                     text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", maxLines = 1) }
                                 )
                             }
@@ -677,7 +684,10 @@ fun DetailScreen(
                                     .alpha(contentAlpha)
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .clickable { viewModel.toggleShowHighRelevanceOnly() },
+                                    // 这块提示只在「仅显示高相关」开着时出现，点它必然是关掉
+                                    .hapticClickable(semantic = HapticSemantic.TOGGLE_OFF) {
+                                        viewModel.toggleShowHighRelevanceOnly()
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -727,7 +737,6 @@ fun DetailScreen(
                                         openResourceLink(context, item)
                                     },
                                     onLongClick = {
-                                        view.performHaptic(HapticType.HEAVY_CLICK)
                                         copyResourceLink(context, item)
                                     },
                                     index = index
@@ -776,7 +785,7 @@ fun DetailScreen(
                                 horizontalArrangement = Arrangement.Start
                             ) {
                                 Surface(
-                                    onClick = { viewModel.translateComments() },
+                                    onClick = { haptics.tap(); viewModel.translateComments() },
                                     enabled = !uiState.isTranslating,
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1033,7 +1042,7 @@ fun DetailScreen(
 
             // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
             NeumorphicIconButton(
-                onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) },
+                onClick = { onBack(uiState.watchlistChanged, uiState.watchedChanged) },
                 isDark = detailIsDark,
                 modifier = Modifier
                     .statusBarsPadding()
@@ -1066,10 +1075,8 @@ fun DetailScreen(
             ) {
                 // 豆瓣同步重试按钮（仅在 doubanSyncRetryable=true 时显示）
                 if (uiState.doubanSyncRetryable) {
-                    val view = LocalView.current
                     NeumorphicIconButton(
                         onClick = {
-                            view.performHaptic(HapticType.CLICK)
                             viewModel.retryDoubanSync()
                         },
                         isDark = detailIsDark,
@@ -1257,7 +1264,10 @@ fun DetailScreen(
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {
+                        // AlertDialog 的每个槽是独立 subcomposition，各取一份
+                        val confirmHaptics = rememberAppHaptics()
                         TextButton(onClick = {
+                            confirmHaptics.tap()
                             dismissLoginPrompt()
                             when (loginTarget) {
                                 DetailLoginTarget.TRAKT -> onTraktLogin()
@@ -1269,7 +1279,8 @@ fun DetailScreen(
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = dismissLoginPrompt) {
+                        val dismissHaptics = rememberAppHaptics()
+                        TextButton(onClick = { dismissHaptics.lightTap(); dismissLoginPrompt() }) {
                             // 用应用内资源而非 android.R.string.cancel（平台串随系统语言变化）
                             Text(stringResource(R.string.common_cancel))
                         }
@@ -1290,6 +1301,10 @@ fun DetailScreen(
             }
 
             // 评分弹窗（标记已看后自动弹出，或点击评分区域弹出）
+            // 只对**自动弹出**那一路发 popupShow：uiState.showRatingDialog 是
+            // markAsWatched 的 onSuccess 里置的，网络回来才弹，与手势无关。
+            // 本地那个 showRatingDialog 是点评分区域同一帧置的，那一下已经震过了
+            PopupShowEffect(uiState.showRatingDialog)
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,
@@ -1301,7 +1316,8 @@ fun DetailScreen(
                     },
                     onConfirm = { rating, comment ->
                         showRatingDialog = false
-                        view.performHaptic(HapticType.HEAVY_CLICK)
+                        // 触感由 RatingDialog 里「确定」按钮自己发（弹窗有自己的宿主 View），
+                        // 这里不再补一记，否则同一次点击两震
                         // 不调用 dismissRatingDialog():setRatingWithComment/removeRating 内部会关闭弹窗并处理豆瓣同步
                         // 否则会先 syncDoubanMark(COLLECT) 再 syncDoubanMarkWithRating,导致两次豆瓣同步 toast
                         viewModel.confirmRatingWithComment(rating, comment)
@@ -1375,7 +1391,7 @@ private fun SearchingState(completedSources: Int, totalSources: Int) {
 
 @Composable
 private fun EmptyState(onRetry: () -> Unit) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 不用 EmptyStateCard：资源 Tab 夹在筛选器和列表之间，再垫一块玻璃卡片
     // 会读作「一张内容为空的资源卡」而不是「搜索没有结果」
     Column(
@@ -1398,7 +1414,7 @@ private fun EmptyState(onRetry: () -> Unit) {
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
+        OutlinedButton(onClick = { haptics.tap(); onRetry() }) {
             Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.detail_retry))

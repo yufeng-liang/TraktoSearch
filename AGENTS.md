@@ -120,6 +120,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - 整页容器变形的共享节点内侧必须自己铺一层不透明底色（`.appSharedBounds(...).background(colorScheme.background)`，并把该页 Scaffold 的 `containerColor` 置透明）。少了这一层，变形期那块区域就直接看到对面那一页：打开标记记录页的瞬间设置页的「外观」「搜索源」整块叠在本页上。底色只能挂在共享节点内侧，挂外侧会先铺满一整屏，「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。七个整页入口曾漏掉标记记录页和发现筛选页两处，排查时逐个 grep `corner = SharedCorner.flattenFrom` 后面有没有 `.background(`
 - 整页容器变形不能带 `fadeIn`/`fadeOut`：容器覆盖半屏到整屏，淡的那段时间它整片半透明，两页互相穿透。`SharedElementType.Bounds` 的默认进出动画因此是 `None`，揭示完全交给边界裁剪 + 圆角动画。代价是旧页内容在收缩结束时硬切消失，而不是 Material 规范里的容器内交叉溶解 —— 交叉溶解在两页内容差异大时看着像脏叠影，本项目选了硬切
 - git bash 里 `adb pull /sdcard/x.png` 会被 msys 路径转换改成 `C:/Program Files/Git/sdcard/x.png` 而报 `failed to stat remote object`；写成 `//sdcard/x.png` 或加 `MSYS_NO_PATHCONV=1`。`adb shell '...'` 单引号里的设备路径不受影响，所以「screencap 成功、pull 失败」是正常现象，不是设备没生成文件
+- compileSdk 37 给 View 加了 performHapticFeedback(HapticFeedbackRequest) 重载，MockK 里单参 `performHapticFeedback(any())` 在它与 `(int)` 之间歧义，报 `Cannot infer type for type parameter 'T'`；mock View 触感一律写 `any<Int>()`。同类问题适用于任何被新重载撑成多签名的方法：报这条错先查 SDK 是否新增重载，而不是改 mock 结构
 
 ## Git 规范
 - commit 须 Conventional Commits：<type>(<scope>): <中文描述>

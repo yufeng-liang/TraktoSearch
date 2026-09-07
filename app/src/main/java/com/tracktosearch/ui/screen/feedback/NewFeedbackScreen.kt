@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,8 +43,9 @@ import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -104,10 +104,21 @@ fun NewFeedbackScreen(
     }
 
     // 提交成功后返回
+    val outcomeHaptics = rememberAppHaptics()
     LaunchedEffect(submitState) {
-        if (submitState is FeedbackViewModel.SubmitState.Success) {
-            onSuccess()
-            viewModel.resetSubmitState()
+        when (submitState) {
+            is FeedbackViewModel.SubmitState.Success -> {
+                outcomeHaptics.confirm()
+                onSuccess()
+                viewModel.resetSubmitState()
+            }
+            // 失败态在下面渲染成一张错误卡片，触感是对那张卡片的补充而不是唯一反馈
+            is FeedbackViewModel.SubmitState.Error -> outcomeHaptics.reject()
+            // 上传中/提交中/空闲都不是结果
+            FeedbackViewModel.SubmitState.Idle,
+            is FeedbackViewModel.SubmitState.Uploading,
+            FeedbackViewModel.SubmitState.Submitting,
+            -> Unit
         }
     }
 
@@ -292,8 +303,11 @@ fun NewFeedbackScreen(
             title = { Text(stringResource(R.string.feedback_discard_title)) },
             text = { Text(stringResource(R.string.feedback_discard_message)) },
             confirmButton = {
+                // 弹窗的两个槽各是独立 subcomposition，各取一份 facade
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(
                     onClick = {
+                        confirmHaptics.tap()
                         showDiscardDialog = false
                         onBack()
                     }
@@ -305,7 +319,11 @@ fun NewFeedbackScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = {
+                    dismissHaptics.lightTap()
+                    showDiscardDialog = false
+                }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             },
@@ -391,11 +409,12 @@ private fun SubmitFeedbackButton(
     enabled: Boolean,
     onSubmit: () -> Unit
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val uploading = submitState as? FeedbackViewModel.SubmitState.Uploading
     Button(
         onClick = {
-            view.performHaptic(HapticType.CLICK)
+            // 本页的主操作；提交成功/失败那一记归输出侧的任务在 VM 接
+            haptics.tap()
             onSubmit()
         },
         modifier = Modifier
@@ -454,6 +473,7 @@ private fun ScreenshotRow(
     onReorder: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
         onReorder(from.index, to.index)
@@ -472,10 +492,14 @@ private fun ScreenshotRow(
                 Box(
                     // 长按触发拖动；库会自动通过 graphicsLayer 平移被拖项跟随手指。
                     // longPressDraggableHandle 是 ReorderableCollectionItemScope 内 Modifier 的扩展。
+                    // 起手与落定成对发：库本身一记触感都不发（3.1.0 里没有 performHapticFeedback），
+                    // 只发起手会让「抓起来有感、放下去没感」；换格中间不发，一趟拖过五张会连成一串。
                     Modifier
                         .size(80.dp)
                         .longPressDraggableHandle(
-                            enabled = enabled && screenshots.size >= 2
+                            enabled = enabled && screenshots.size >= 2,
+                            onDragStarted = { haptics.dragStart() },
+                            onDragStopped = { haptics.gestureEnd() }
                         )
                         // 拖动时抬起阴影 + 轻微放大，强化"被抓住"反馈
                         .graphicsLayer {
@@ -485,7 +509,10 @@ private fun ScreenshotRow(
                         }
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
                         .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = enabled) { onImageClick(index) },
+                        .hapticClickable(
+                            semantic = HapticSemantic.LIGHT_TAP,
+                            enabled = enabled
+                        ) { onImageClick(index) },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -511,7 +538,9 @@ private fun ScreenshotRow(
                             Modifier
                                 .align(Alignment.TopEnd)
                                 .size(36.dp)
-                                .clickable { onRemoveClick(index) },
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                    onRemoveClick(index)
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -538,7 +567,7 @@ private fun ScreenshotRow(
                             MaterialTheme.colorScheme.surfaceVariant,
                             RoundedCornerShape(10.dp)
                         )
-                        .clickable { onAddClick() },
+                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onAddClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     // 原先是个 "+" 字符，读屏念成加号、字形还跟着系统字体走
@@ -563,12 +592,13 @@ private fun FeedbackTypeChip(
     onClick: () -> Unit
 ) {
     val accent = feedbackTypeColor(type)
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     FilterChip(
         selected = selected,
         enabled = enabled,
         onClick = {
-            view.performHaptic(HapticType.CLICK)
+            // 四个类型互斥（selectedType 是单值赋值，不是集合加减），按单选给 SEGMENT_TICK
+            haptics.segmentTick()
             onClick()
         },
         label = { Text(text = feedbackTypeLabel(type), fontSize = 13.sp, maxLines = 1) },

@@ -116,7 +116,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -200,9 +199,13 @@ import com.tracktosearch.ui.theme.SearchTypeShow
 import com.tracktosearch.ui.theme.SearchTypeUnknown
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.ambientTextHalo
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.theme.readableOn
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -258,6 +261,9 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hotSearches by viewModel.hotSearches.collectAsStateWithLifecycle()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
+    // 热榜卡片点不开时提示一句并震一记 —— 原来这种失败只是把转圈收掉
+    ToastEffect(viewModel.toastEvent)
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 页面重新可见时(ON_RESUME)，若热门搜索为空则重新加载(新片榜重试后可拿到数据)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -275,7 +281,6 @@ fun SearchScreen(
     }
     var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
-    val view = LocalView.current
     val focusManager = LocalFocusManager.current
     val viewedItemStorage = remember {
         EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
@@ -635,6 +640,8 @@ fun SearchScreen(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 dragHandle = null
             ) {
+                // Sheet 内容是独立 subcomposition（自己的宿主 View），单独取一份而不是复用外层
+                val permissionSheetHaptics = rememberAppHaptics()
                 // 高度自适应：去掉固定 0.28f，让三层内容自然撑开，猫 Lottie 仍绝对定位在左上角当装饰
                 Box(
                     modifier = Modifier.fillMaxWidth()
@@ -708,6 +715,7 @@ fun SearchScreen(
                         ) {
                             TextButton(
                                 onClick = {
+                                    permissionSheetHaptics.lightTap()
                                     interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
                                     cloudThemeManager.onPermissionDismissed()
                                     scope.launch(Dispatchers.IO) {
@@ -724,6 +732,8 @@ fun SearchScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Button(
                                 onClick = {
+                                    // 系统权限弹窗盖在本应用之上，没有离开任务栈，不算「跳出去」，照主操作给 tap
+                                    permissionSheetHaptics.tap()
                                     interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
                                     cloudThemeManager.onPermissionDismissed()
                                     locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -894,7 +904,6 @@ fun SearchScreen(
                         searchSourceType = searchSourceType,
                         onSearchSourceTypeChange = onSearchSourceTypeChange,
                         isDark = isDark,
-                        view = view,
                         hazeState = hazeState,
                         interactionSource = searchInteractionSource,
                         scene = searchGlassScene
@@ -962,12 +971,14 @@ private fun SearchBarTopNew(
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     isDark: Boolean = false,
-    view: android.view.View,
     hazeState: HazeState,
     interactionSource: MutableInteractionSource,
     scene: GlassScene
 ) {
     var showTypeDropdown by remember { mutableStateOf(false) }
+    // 下拉锚点与清空输入两个 Material 按钮共用一份；DropdownAnchorMenu 的 anchor 槽不在 Popup 里，
+    // 与本 composable 同一个宿主 View，菜单项那侧走 Modifier 扩展自己读 LocalView
+    val haptics = rememberAppHaptics()
     // 类型色当文字/图标用，先压到能压在当前底色上读清楚 —— 剧集的琥珀黄原色在浅底上不足 2:1
     val typeColorSurface = MaterialTheme.colorScheme.surface
     val typeColorMap = remember(typeColorSurface) {
@@ -1044,7 +1055,12 @@ private fun SearchBarTopNew(
                         menuWidth = typeMenuWidth,
                         anchor = {
                             TextButton(
-                                onClick = { showTypeDropdown = true },
+                                // 这个面只可能「展开」——收起走 onDismissRequest 或选中某项，
+                                // toggle 的方向感出不来，按「次级入口」给 LIGHT_TAP
+                                onClick = {
+                                    haptics.lightTap()
+                                    showTypeDropdown = true
+                                },
                                 contentPadding = PaddingValues(start = 2.dp, top = 0.dp, end = 2.dp, bottom = 0.dp),
                                 modifier = Modifier.height(36.dp)
                             ) {
@@ -1068,8 +1084,7 @@ private fun SearchBarTopNew(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        view.performHaptic(HapticType.TICK)
+                                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
                                         showTypeDropdown = false
                                         if (type != searchSourceType) {
                                             onSearchSourceTypeChange.invoke(type)
@@ -1118,7 +1133,7 @@ private fun SearchBarTopNew(
             trailingIcon = {
                 if (searchQuery.isEmpty()) {
                     SearchActionButton(
-                        onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                        onClick = { onSearch() },
                         size = 44.dp,
                         iconSize = 20.dp,
                         isDark = isDark,
@@ -1132,7 +1147,10 @@ private fun SearchBarTopNew(
                         modifier = Modifier.padding(end = 2.dp)
                     ) {
                         IconButton(
-                            onClick = onClear,
+                            onClick = {
+                                haptics.lightTap()
+                                onClear()
+                            },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
@@ -1143,7 +1161,7 @@ private fun SearchBarTopNew(
                             )
                         }
                         SearchActionButton(
-                            onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                            onClick = { onSearch() },
                             size = 40.dp,
                             iconSize = 18.dp,
                             isDark = isDark,
@@ -1215,7 +1233,9 @@ private fun SearchActionButton(
                     1.0f to MaterialTheme.colorScheme.primary
                 )
             )
-            .clickable { onClick() },
+            // 触感在这里而不在调用点：GLASS 那条分支转给 GlassIconButton，它内部已经发了一记
+            // LIGHT_TAP，调用点再发就是玻璃档双震。两条分支各自发、语义一致，换外观不换手感
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         contentAlignment = Alignment.Center
     ) {
             // tint 用 surface 而不是 onPrimary：onPrimary 按亮度可给纯黑（粉色调主题），
@@ -1264,9 +1284,13 @@ private fun NeumorphicChip(
             kind = VisualSurfaceKind.Glass,
             modifier = Modifier
                 .scale(scale)
-                .clickable(
+                // 历史词与热词 chip 点下去是发起一次搜索，不是勾选：isSelected 只跟随当前输入高亮，
+                // 没有「取消」这一半，方向感出不来。一屏里成片出现，按列表项给 LIGHT_TAP。
+                // 两条视觉分支各自发、语义一致，换外观不换手感
+                .hapticClickable(
                     interactionSource = interactionSource,
                     indication = null,
+                    semantic = HapticSemantic.LIGHT_TAP,
                     onClick = onClick
                 ),
             shape = chipShape,
@@ -1294,9 +1318,10 @@ private fun NeumorphicChip(
                 .clip(chipShape)
                 .background(bgColor, chipShape)
                 .border(1.dp, borderColor, chipShape)
-                .clickable(
+                .hapticClickable(
                     interactionSource = interactionSource,
                     indication = null,
+                    semantic = HapticSemantic.LIGHT_TAP,
                     onClick = onClick
                 )
         ) {
@@ -1331,6 +1356,7 @@ private fun SearchHistoryTwoRow(
     val typeColorFallback = remember(typeColorSurface) {
         readableOn(SearchTypeUnknown, typeColorSurface)
     }
+    val haptics = rememberAppHaptics()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -1345,7 +1371,14 @@ private fun SearchHistoryTwoRow(
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
-            TextButton(onClick = onClearAll, contentPadding = PaddingValues(0.dp)) {
+            // 一键清空全部历史，无二次确认，按有后果的主操作给 TAP
+            TextButton(
+                onClick = {
+                    haptics.tap()
+                    onClearAll()
+                },
+                contentPadding = PaddingValues(0.dp)
+            ) {
                 Text(
                     text = stringResource(R.string.search_history_clear_all),
                     style = MaterialTheme.typography.labelSmall,
@@ -1413,7 +1446,10 @@ private fun SearchHistoryTwoRow(
                         Box(
                             modifier = Modifier
                                 .size(16.dp)
-                                .clickable { onHistoryDelete(item) },
+                                // chip 上的删除叉：内层 clickable 自己消费掉点击，不会连带发 chip 那记
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                    onHistoryDelete(item)
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -1443,6 +1479,7 @@ private fun PopularSearchesSectionNew(
 ) {
     // 热词为空不渲染整个栏目，避免历史存在时只剩「热门搜索」标题的空栏目
     if (popularSearches.isEmpty()) return
+    val haptics = rememberAppHaptics()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -1458,7 +1495,13 @@ private fun PopularSearchesSectionNew(
                 fontWeight = FontWeight.SemiBold
             )
             // 手动刷新入口：热词失败只有 ON_RESUME 自动重试，标题行补一个小刷新按钮
-            IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
+            IconButton(
+                onClick = {
+                    haptics.lightTap()
+                    onRefresh()
+                },
+                modifier = Modifier.size(28.dp)
+            ) {
                 Icon(
                     Icons.Rounded.Refresh,
                     contentDescription = stringResource(R.string.ai_feature_refresh),
@@ -1533,7 +1576,7 @@ private fun SearchSuggestionsInline(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onSuggestionClick(item) }
+                    .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onSuggestionClick(item) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1626,7 +1669,8 @@ fun DoubanHotCategorySection(
                                 modifier = Modifier
                                     .width(40.dp)
                                     .height(172.dp)
-                                    .clickable { onViewAll() },
+                                    // 与 SectionHeader 的「查看全部」同一个动作，语义跟它对齐
+                                    .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onViewAll() },
                                 shape = RoundedCornerShape(13.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1683,10 +1727,11 @@ fun DoubanHotCard(
                 // 与右上角评分徽章（RatingCorner = 13.dp）统一圆角规格，避免同一张海报出现两套圆角。
                 .shadow(8.dp, RoundedCornerShape(13.dp))
                 .clip(RoundedCornerShape(13.dp))
-                .clickable(
-                    enabled = !isResolving,
+                .hapticClickable(
                     interactionSource = interactionSource,
                     indication = null,
+                    semantic = HapticSemantic.LIGHT_TAP,
+                    enabled = !isResolving,
                     onClick = onClick
                 )
         ) {
@@ -1768,6 +1813,8 @@ fun DoubanHotAllSheet(
     DiscoverModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
+        // Sheet 内容是独立 subcomposition（自己的宿主 View），单独取一份
+        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -1781,7 +1828,13 @@ fun DoubanHotAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(onClick = onDismiss) {
+                // 显式的关闭按钮，不是 onDismissRequest：按「对话框的关闭」给 LIGHT_TAP
+                IconButton(
+                    onClick = {
+                        sheetHaptics.lightTap()
+                        onDismiss()
+                    }
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.common_close)
@@ -1867,9 +1920,14 @@ private fun DoubanHotGridItem(
     // 评分直接用接口返回的 rating 字段；标题仅去除排名前缀（不再从标题正则提取评分）
     val rating = remember(item.rating) { parseDoubanRating(item.rating) }
     val displayTitle = remember(item.title) { cleanDoubanTitle(item.title) }
+    // 本 composable 整体在 sheet 的 subcomposition 里，这里取到的就是 sheet 那个宿主 View
+    val haptics = rememberAppHaptics()
 
     Card(
-        onClick = { onClick() },
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
         enabled = !isResolving,
         // 与评分徽章统一 13.dp 圆角，保持豆瓣栏目卡片风格一致
         shape = RoundedCornerShape(13.dp),
@@ -2014,9 +2072,10 @@ private fun CloudIconWithAnimation(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .combinedClickable(
+                    .hapticCombinedClickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = { cloudThemeManager.onCloudClicked(onboardingCompleted) },
                         onLongClick = onLongClick
                     )

@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -55,7 +56,6 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -89,11 +89,11 @@ import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.theme.onColorFor
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.navigation.DetailSeedStore
+import com.tracktosearch.ui.theme.onColorFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -145,7 +145,6 @@ internal fun DetailHeaderContent(
     backdrop: LayerBackdrop? = null
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
     val scope = rememberCoroutineScope()
     // 沉浸背景下的自适应文字色，判据收在 DetailVisuals（豆瓣详情页共用同一套）
     val posterColor = uiState.posterDominantColor
@@ -188,7 +187,11 @@ internal fun DetailHeaderContent(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                        .then(
+                            if (uiState.posterUrl != null) {
+                                Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                            } else Modifier
+                        )
                         .testTag("detail_header_poster")
                 ) {
                     if (uiState.posterUrl != null) {
@@ -364,7 +367,6 @@ internal fun DetailHeaderContent(
                                     enabled = !isMarkingWatchlist,
                                     isLoading = isMarkingWatchlist,
                                     onClick = {
-                                        view.performHaptic(HapticType.TICK)
                                         onToggleWatchlist()
                                     }
                                 ),
@@ -375,7 +377,6 @@ internal fun DetailHeaderContent(
                                     enabled = !isMarkingWatched,
                                     isLoading = isMarkingWatched,
                                     onClick = {
-                                        view.performHaptic(HapticType.TICK)
                                         onToggleWatched()
                                     }
                                 ),
@@ -386,7 +387,6 @@ internal fun DetailHeaderContent(
                                     enabled = !uiState.isRating,
                                     isLoading = uiState.isRating,
                                     onClick = {
-                                        view.performHaptic(HapticType.TICK)
                                         onShowRatingDialog()
                                     }
                                 )
@@ -715,9 +715,10 @@ internal fun ExpandableText(
         }
     }
     val toggleModifier = if (canToggle) {
-        Modifier.clickable(
+        Modifier.hapticClickable(
             interactionSource = remember { MutableInteractionSource() },
-            indication = null
+            indication = null,
+            semantic = if (expanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
         ) { expanded = !expanded }
     } else Modifier
 

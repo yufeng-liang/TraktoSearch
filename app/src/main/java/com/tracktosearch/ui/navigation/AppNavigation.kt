@@ -83,6 +83,8 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.BackdropProvider
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.haptic.PopupShowEffect
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.crashlog.CrashLogDetailScreen
 import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterScreen
@@ -472,6 +474,9 @@ fun AppNavigation(
         }
     }
     val scope = rememberCoroutineScope()
+    // 全应用级 snackbar（Trakt 授权失败/被拒、自动导入结果）配的结果类触感。
+    // 这一层没有页面，触感只跟着 appSnackbarHostState 上那几条消息走
+    val outcomeHaptics = rememberAppHaptics()
     var directTraktLoginActive by rememberSaveable { mutableStateOf(false) }
 
     // 预热 onboarding 完成标记：登录成功时需要它决定默认 tab。
@@ -525,6 +530,7 @@ fun AppNavigation(
                             onLoginSuccess()
                         } else {
                             // 用 scope 另起协程：showSnackbar 会挂起到消失，直接在 collect 里调用会卡住后续回调
+                            outcomeHaptics.reject()
                             scope.launch { appSnackbarHostState.showSnackbar(loginFailedMessage) }
                         }
                     }
@@ -535,6 +541,8 @@ fun AppNavigation(
                     .collect {
                         OAuthCallback.setAuthDenied(false)
                         directTraktLoginActive = false
+                        // 用户在授权页按了「拒绝」。这条 snackbar 已经在报错，触感只是配合它
+                        outcomeHaptics.reject()
                         scope.launch { appSnackbarHostState.showSnackbar(loginDeniedMessage) }
                     }
             }
@@ -551,6 +559,7 @@ fun AppNavigation(
                 }
                 .onFailure {
                     directTraktLoginActive = false
+                    outcomeHaptics.reject()
                     scope.launch { appSnackbarHostState.showSnackbar(loginFailedMessage) }
                 }
         }
@@ -797,6 +806,8 @@ fun AppNavigation(
                                 rollbackDialogDismissed = false
                             }
                         }
+                        // 启动时读到回滚数据自己弹出来的，这一帧之前没有任何按压
+                        PopupShowEffect(rollbackCount > 0 && !rollbackDialogDismissed)
                         if (rollbackCount > 0 && !rollbackDialogDismissed) {
                             com.tracktosearch.ui.screen.douban.DoubanRollbackDialog(
                                 rollbackCount = rollbackCount,
@@ -829,6 +840,10 @@ fun AppNavigation(
                                 pendingDialogDismissed = false
                             }
                         }
+                        // 同上：进页面就弹，用户没按任何东西
+                        PopupShowEffect(
+                            pendingCount > 0 && rollbackCount == 0 && !pendingDialogDismissed
+                        )
                         if (pendingCount > 0 && rollbackCount == 0 && !pendingDialogDismissed) {
                             com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialogWithDiscard(
                                 pendingCount = pendingCount,
@@ -1655,6 +1670,8 @@ fun AppNavigation(
                 }
             }
             // 更新弹窗（仅有新版本时才显示，覆盖在 NavHost 之上）
+            // 启动 800 ms 后自动查更新，查到才弹 —— 网络回来的那一刻与任何手势都无关
+            PopupShowEffect(updateInfo?.hasUpdate == true)
             updateInfo?.let { info ->
                 if (info.hasUpdate) {
                     UpdateDialog(
@@ -1711,6 +1728,8 @@ fun AppNavigation(
                 showAutoImport = true
             }
 
+            // 剪贴板里认出一份搜索源配置就弹，用户只是把 App 切到前台
+            PopupShowEffect(showAutoImport)
             if (showAutoImport) {
                 ImportSourceDialog(
                     onConfirm = { source ->
@@ -1722,6 +1741,7 @@ fun AppNavigation(
                             autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                             autoImportHit = null
                             autoImportVm.importSource(source)
+                            outcomeHaptics.confirm()
                             scope.launch { appSnackbarHostState.showSnackbar(importSuccessMessage) }
                         }
                     },
@@ -1749,6 +1769,7 @@ fun AppNavigation(
                             autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                             autoImportHit = null
                             autoImportVm.importSource(source, overwrite = true)
+                            outcomeHaptics.confirm()
                             scope.launch { appSnackbarHostState.showSnackbar(importSuccessMessage) }
                         }) { Text(stringResource(R.string.import_confirm)) }
                     },

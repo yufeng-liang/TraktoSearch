@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.discover
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Column
@@ -24,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.component.TraktListCardCorner
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 
 /**
  * 社区列表卡片的形状。取 [TraktListCardCorner]（20dp）而不是就地写死：
@@ -72,9 +73,11 @@ internal fun TrendingListCard(
             .shadow(1.dp, TrendingListCardShape)
             .clip(TrendingListCardShape)
             .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-            .clickable(
+            // 一屏里排十几张的榜单行，与 ui/component/MovieCard、PosterCard 同档
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick
             )
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),

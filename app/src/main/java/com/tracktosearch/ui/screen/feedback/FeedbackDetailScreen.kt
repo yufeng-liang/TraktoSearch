@@ -10,8 +10,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,16 +57,17 @@ import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.component.ZoomThumbnailCrop
 import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.ZoomThumbnailCrop
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.feedbackCardSharedKey
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -157,12 +157,23 @@ fun FeedbackDetailScreen(
         }
     }
 
+    val outcomeHaptics = rememberAppHaptics()
     LaunchedEffect(replyState) {
-        if (replyState is FeedbackViewModel.ReplyState.Success) {
-            replyText = ""
-            replyScreenshots = emptyList()
-            viewModel.resetReplyState()
-            viewModel.loadDetail(feedbackId)
+        when (replyState) {
+            is FeedbackViewModel.ReplyState.Success -> {
+                outcomeHaptics.confirm()
+                replyText = ""
+                replyScreenshots = emptyList()
+                viewModel.resetReplyState()
+                viewModel.loadDetail(feedbackId)
+            }
+            // 失败态在输入区上方渲染成错误卡片，触感是对那张卡片的补充
+            is FeedbackViewModel.ReplyState.Error -> outcomeHaptics.reject()
+            // 上传中/发送中/空闲都不是结果
+            FeedbackViewModel.ReplyState.Idle,
+            is FeedbackViewModel.ReplyState.Uploading,
+            FeedbackViewModel.ReplyState.Sending,
+            -> Unit
         }
     }
 
@@ -404,6 +415,7 @@ private fun FeedbackDetailTopBar(
 ) {
     // 容器变形期间每帧背景都在变，此时还做实时模糊采样正是掉帧最集中的地方，先让 haze 停下来。
     val transitionActive = isAppSharedTransitionActive()
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -440,7 +452,10 @@ private fun FeedbackDetailTopBar(
                 }
             },
             actions = {
-                IconButton(onClick = onNewFeedback) {
+                IconButton(onClick = {
+                    haptics.lightTap()
+                    onNewFeedback()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = stringResource(R.string.feedback_new)
@@ -526,7 +541,7 @@ private fun OriginalFeedbackCard(
                                 .height(160.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surface)
-                                .clickable {
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                                     onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                 },
                             contentAlignment = Alignment.Center
@@ -709,7 +724,7 @@ private fun ConversationBubble(
                                         // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
                                         // 保证同一 key 同时只有一侧是 target
                                         .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
-                                        .clickable {
+                                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                                             onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                         }
                                 )
@@ -752,7 +767,7 @@ private fun ReplyBar(
     replyState: FeedbackViewModel.ReplyState
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -772,7 +787,9 @@ private fun ReplyBar(
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { onScreenshotClick(index) }
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                    onScreenshotClick(index)
+                                }
                         ) {
                             AsyncImage(
                                 model = remember(bytes) {
@@ -790,7 +807,10 @@ private fun ReplyBar(
                                 // 删除键原先是默认 48dp 的 IconButton，盖住整块缩略图，
                                 // 想点开预览反而先删了；收到 32dp，下半块留给预览
                                 IconButton(
-                                    onClick = { onRemoveScreenshot(index) },
+                                    onClick = {
+                                        haptics.lightTap()
+                                        onRemoveScreenshot(index)
+                                    },
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
                                         .size(32.dp)
@@ -863,7 +883,12 @@ private fun ReplyBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (enabled && screenshots.size < MAX_REPLY_SCREENSHOTS) {
-                    IconButton(onClick = onAddScreenshot) {
+                    IconButton(
+                        onClick = {
+                            haptics.lightTap()
+                            onAddScreenshot()
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = stringResource(R.string.feedback_screenshots)
@@ -887,7 +912,7 @@ private fun ReplyBar(
                 )
                 FilledIconButton(
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.tap()
                         onSend()
                     },
                     enabled = enabled && text.isNotBlank(),

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -32,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.theme.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -161,9 +162,10 @@ fun ResourceItemCard(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .scale(scale)
-            .combinedClickable(
+            .hapticCombinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = onClick,
                 onLongClick = onLongClick
             ),

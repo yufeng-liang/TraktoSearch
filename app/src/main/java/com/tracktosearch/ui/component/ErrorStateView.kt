@@ -20,6 +20,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -92,6 +95,7 @@ private fun InlineErrorState(
     showDetail: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val haptics = rememberAppHaptics()
     var showError by remember { mutableStateOf(false) }
     Row(
         modifier = modifier
@@ -102,14 +106,21 @@ private fun InlineErrorState(
     ) {
         Text(
             text = label,
-            modifier = if (showDetail) Modifier.clickable { showError = true } else Modifier,
+            modifier = if (showDetail) {
+                Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { showError = true }
+            } else {
+                Modifier
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error
         )
         if (showDetail) {
             // 点击 info 图标弹出错误详情对话框
             IconButton(
-                onClick = { showError = true },
+                onClick = {
+                    haptics.lightTap()
+                    showError = true
+                },
                 modifier = Modifier.size(20.dp)
             ) {
                 Icon(
@@ -122,7 +133,13 @@ private fun InlineErrorState(
         }
         if (onRetry != null) {
             Spacer(Modifier.width(4.dp))
-            TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
+            TextButton(
+                onClick = {
+                    haptics.tap()
+                    onRetry()
+                },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+            ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(retryText, style = MaterialTheme.typography.labelSmall)
@@ -142,7 +159,14 @@ private fun InlineErrorState(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showError = false }) {
+                // 对话框有自己的宿主 View，按 ComposeHaptics 的约定在这一层重新取一份
+                val dialogHaptics = rememberAppHaptics()
+                TextButton(
+                    onClick = {
+                        dialogHaptics.lightTap()
+                        showError = false
+                    }
+                ) {
                     Text(stringResource(R.string.error_detail_close))
                 }
             }
@@ -158,6 +182,7 @@ private fun FullErrorState(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
+    val haptics = rememberAppHaptics()
     // 高度交给调用方：整页错误传 Modifier.fillMaxSize() 居中，卡片内错误按内容高度包裹。
     Column(
         modifier = modifier
@@ -181,7 +206,12 @@ private fun FullErrorState(
         )
         if (onRetry != null) {
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onRetry) {
+            Button(
+                onClick = {
+                    haptics.tap()
+                    onRetry()
+                }
+            ) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(retryText)
@@ -197,10 +227,12 @@ private fun OverlayErrorState(
     onRetry: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
+    val haptics = rememberAppHaptics()
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+            // 纯挡板：只为吞掉点击不让触摸穿透，不是交互面，不要接触感
             .clickable(enabled = false, onClick = {}),
         contentAlignment = Alignment.Center
     ) {
@@ -221,7 +253,12 @@ private fun OverlayErrorState(
                     textAlign = TextAlign.Center
                 )
                 if (onRetry != null) {
-                    OutlinedButton(onClick = onRetry) { Text(retryText) }
+                    OutlinedButton(
+                        onClick = {
+                            haptics.tap()
+                            onRetry()
+                        }
+                    ) { Text(retryText) }
                 }
             }
         }

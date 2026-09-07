@@ -96,9 +96,9 @@ class ActivationLoginLayoutTest {
     fun `矮屏按比例缩，高屏不放大`() {
         // 上界是这条规则的一半：屏更高时机器不该跟着长大
         assertThat(loginContentScale(1200.dp)).isEqualTo(1f)
-        assertThat(loginContentScale(792.dp)).isEqualTo(1f)
-        // 792 的九成，缩到九成
-        assertThat(loginContentScale(712.8.dp)).isWithin(0.001f).of(0.9f)
+        assertThat(loginContentScale(832.dp)).isEqualTo(1f)
+        // 832 的九成，缩到九成
+        assertThat(loginContentScale(748.8.dp)).isWithin(0.001f).of(0.9f)
         // 异常小的窗口（分屏、折叠屏内屏的一半）触到下界，剩下的交给滚动
         assertThat(loginContentScale(396.dp)).isEqualTo(0.7f)
     }
@@ -106,7 +106,7 @@ class ActivationLoginLayoutTest {
     @Test
     @Config(qualifiers = "zh-w360dp-h640dp")
     fun `矮屏上出票之后也不需要滚动`() {
-        // 640dp 是这一屏见得到的最矮的一档（老 16 : 9 小屏）。整屏按 0.81 缩，仍不滚动
+        // 640dp 是这一屏见得到的最矮的一档（老 16 : 9 小屏）。整屏按 0.77 缩，仍不滚动
         val scrollState = ScrollState(0)
         setActivationContent(scrollState, width = 360.dp, height = 640.dp, printed = true)
 

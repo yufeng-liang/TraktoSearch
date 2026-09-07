@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -68,7 +69,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -92,9 +92,12 @@ import com.tracktosearch.data.local.SplashQuote
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.screen.splash.SplashPalette
+import com.tracktosearch.ui.screen.splash.grainBrush
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import androidx.compose.ui.platform.LocalContext
@@ -134,6 +137,7 @@ fun DailyStampScreen(
     val cardPalette = rememberDailyStampCardPalette()
     val content = rememberDailyStampContent(state)
     val hazeState = remember { HazeState() }
+    val haptics = rememberAppHaptics()
     var showSplashQuoteSettings by remember { mutableStateOf(false) }
 
     Box(
@@ -188,11 +192,10 @@ fun DailyStampScreen(
             onQuoteClick = onQuoteClick,
         )
         if (showSplashQuoteSettings) {
-            val view = LocalView.current
             SplashQuoteSettingsDialog(
                 enabled = splashQuoteEnabled,
                 onEnabledChange = { enabled ->
-                    view.performHaptic(HapticType.CLICK)
+                    haptics.toggle(enabled)
                     viewModel.setSplashQuoteEnabled(enabled)
                 },
                 onDismiss = { showSplashQuoteSettings = false },
@@ -578,7 +581,15 @@ private fun MonthArrow(
     palette: DailyStampPalette,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(34.dp)) {
+    val haptics = rememberAppHaptics()
+    IconButton(
+        onClick = {
+            haptics.lightTap()
+            onClick()
+        },
+        enabled = enabled,
+        modifier = Modifier.size(34.dp),
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
@@ -883,9 +894,10 @@ private fun DayCell(
             }
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(
+                    Modifier.hapticClickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        semantic = HapticSemantic.LIGHT_TAP,
                         onClick = onClick,
                     )
                 } else {

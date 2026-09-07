@@ -19,32 +19,39 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.repository.ResourceRepository
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /** 网盘类型选项：常量集合，不必每次重组都 toList 一份新的（LazyRow 的 items 会跟着重新读一遍） */
 private val DISK_TYPE_OPTIONS = ResourceRepository.ALL_DISK_TYPES.toList()
 
+/**
+ * 资源筛选条：搜索源与网盘类型两组互不影响的多选 chip，外加一个高相关度开关。
+ *
+ * @param onToggleSource 切换搜索源。**返回是否真的切换了** —— 两个持有方（`DetailViewModel`
+ *   与 `DoubanItemDetailScreen` 的内联 VM）都有「至少保留 1 个」的守卫，被守卫挡下时
+ *   什么都没变。返回值让触感能分辨这两种结果，同时把那条业务规则留在 VM 里 ——
+ *   界面在这里预判 `enabledSources.size == 1` 等于把规则抄一份过来。
+ * @param onToggleDiskType 切换网盘类型，同一条守卫、同一个约定。
+ */
 @Composable
 internal fun FilterSection(
     availableSources: List<String>,
     enabledSources: Set<String>,
     customSourceNames: Map<String, String>,
     enabledDiskTypes: Set<DiskType>,
-    onToggleSource: (String) -> Unit,
-    onToggleDiskType: (DiskType) -> Unit,
+    onToggleSource: (String) -> Boolean,
+    onToggleDiskType: (DiskType) -> Boolean,
     relevanceEnabled: Boolean = false,
     showHighRelevanceOnly: Boolean = false,
     onToggleShowHighRelevanceOnly: () -> Unit = {}
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
     val labelWidth = 64.dp
     // 标签文字颜色跟随 LocalContentColor(由详情页根据 Tab 沉浸色自动设置)
@@ -85,7 +92,12 @@ internal fun FilterSection(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         ),
-                        onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
+                        onClick = {
+                            // 触感看 VM 的回执，不看按下时的意图：被「至少保留 1 个」挡下时
+                            // 屏幕上什么都没变，发 TOGGLE_OFF 就是在说一件没发生的事
+                            val willSelect = source !in enabledSources
+                            if (onToggleSource(source)) haptics.toggle(willSelect) else haptics.reject()
+                        },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -133,7 +145,11 @@ internal fun FilterSection(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         ),
-                        onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
+                        onClick = {
+                            // 与上面那组搜索源同一条守卫、同一个判据
+                            val willSelect = type !in enabledDiskTypes
+                            if (onToggleDiskType(type)) haptics.toggle(willSelect) else haptics.reject()
+                        },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -163,7 +179,7 @@ internal fun FilterSection(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    onClick = { view.performHaptic(HapticType.TICK); onToggleShowHighRelevanceOnly() },
+                    onClick = { haptics.toggle(!showHighRelevanceOnly); onToggleShowHighRelevanceOnly() },
                     label = { Text(stringResource(R.string.detail_filter_high_relevance), style = MaterialTheme.typography.labelSmall, maxLines = 1) },
                     modifier = Modifier.height(28.dp)
                 )

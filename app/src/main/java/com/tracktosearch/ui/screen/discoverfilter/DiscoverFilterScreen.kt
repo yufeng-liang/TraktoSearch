@@ -74,7 +74,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -112,8 +111,10 @@ import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.haptic.HapticOutcomeEffect
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
@@ -141,6 +142,8 @@ fun DiscoverFilterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
+    // 「筛选条件没变」的两处早退、以及搜索失败配对的 reject 都从这一行出
+    HapticOutcomeEffect(viewModel.hapticOutcomes)
     // 地区名走系统本地化译名，需要 Context
     val filterContext = LocalContext.current
     val hazeState = remember { HazeState() }
@@ -168,7 +171,7 @@ fun DiscoverFilterScreen(
     // rememberSaveable + Saver：进入详情页返回后恢复原滚动位置，不再回到顶部
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     val statusBarHeight = WindowInsets.statusBars
         .asPaddingValues().calculateTopPadding()
 
@@ -429,7 +432,11 @@ fun DiscoverFilterScreen(
                         )
                     }
                 }
-                TextButton(onClick = { viewModel.resetFilters(); viewModel.search() }) {
+                // 「重置」把所有条件清空并重新搜一次，是一次真操作而不是入口，按「清除」给 tap
+                TextButton(onClick = {
+                    haptics.tap()
+                    viewModel.resetFilters(); viewModel.search()
+                }) {
                     Text(stringResource(R.string.discover_filter_reset))
                 }
             }
@@ -442,7 +449,7 @@ fun DiscoverFilterScreen(
                 Tab(
                     selected = uiState.type == TmdbRepository.DiscoverType.MOVIE,
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.segmentTick()
                         viewModel.switchType(TmdbRepository.DiscoverType.MOVIE); viewModel.search()
                     },
                     text = { Text(stringResource(R.string.discover_filter_tab_movie)) }
@@ -450,7 +457,7 @@ fun DiscoverFilterScreen(
                 Tab(
                     selected = uiState.type == TmdbRepository.DiscoverType.SHOW,
                     onClick = {
-                        view.performHaptic(HapticType.CLICK)
+                        haptics.segmentTick()
                         viewModel.switchType(TmdbRepository.DiscoverType.SHOW); viewModel.search()
                     },
                     text = { Text(stringResource(R.string.discover_filter_tab_show)) }
@@ -472,7 +479,8 @@ fun DiscoverFilterScreen(
                     hazeState = hazeState,
                     text = if (uiState.selectedGenreIds.isEmpty())
                         stringResource(R.string.discover_filter_genre)
-                    else "${uiState.selectedGenreIds.size} ${stringResource(R.string.discover_filter_genre)}"
+                    else "${uiState.selectedGenreIds.size} ${stringResource(R.string.discover_filter_genre)}",
+                    kind = FilterChipKind.Entry
                 )
                 // 地区
                 GlassFilterChip(
@@ -481,7 +489,8 @@ fun DiscoverFilterScreen(
                     hazeState = hazeState,
                     text = if (uiState.selectedCountries.isEmpty())
                         stringResource(R.string.discover_filter_region)
-                    else "${uiState.selectedCountries.size} ${stringResource(R.string.discover_filter_region)}"
+                    else "${uiState.selectedCountries.size} ${stringResource(R.string.discover_filter_region)}",
+                    kind = FilterChipKind.Entry
                 )
                 // 标签
                 GlassFilterChip(
@@ -490,7 +499,8 @@ fun DiscoverFilterScreen(
                     hazeState = hazeState,
                     text = if (uiState.selectedKeywordIds.isEmpty())
                         stringResource(R.string.discover_filter_tag)
-                    else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}"
+                    else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}",
+                    kind = FilterChipKind.Entry
                 )
                 // 评分：满量程时只显示"评分"。恒显示"评分 0.0 - 10.0" 会让人以为已经筛过
                 val ratingFiltered = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f
@@ -508,9 +518,11 @@ fun DiscoverFilterScreen(
                             )
                     } else {
                         stringResource(R.string.discover_filter_rating_label)
-                    }
+                    },
+                    // selected 是「评分已筛过」，不是「选中了评分这一项」；点下去只是展开面板
+                    kind = FilterChipKind.Entry
                 )
-                // 高级筛选
+                // 高级筛选：selected 就是面板的展开态，开合方向感成立，走 Toggle 那档
                 GlassFilterChip(
                     selected = uiState.showAdvanced,
                     onClick = { viewModel.toggleAdvanced() },
@@ -567,7 +579,7 @@ fun DiscoverFilterScreen(
                                 if (range.start.toInt() != localMin.toInt() ||
                                     range.endInclusive.toInt() != localMax.toInt()
                                 ) {
-                                    view.performHaptic(HapticType.TICK)
+                                    haptics.frequentTick()
                                 }
                                 localMin = range.start
                                 localMax = range.endInclusive
@@ -575,6 +587,9 @@ fun DiscoverFilterScreen(
                             // 松手即生效：等「应用」的话，用手势返回或滑动列表收起面板时这次改动就没了，
                             // 而顶部的评分 chip 已经显示成已筛选，看着像生效了
                             onValueChangeFinished = {
+                                // 松手落定的一记：拖动中的 frequentTick 只在跨整数刻度时响，
+                                // 到这里补一记「到位了」，不会和上一记挤在一起
+                                haptics.gestureEnd()
                                 viewModel.setVoteRange(localMin, localMax)
                                 viewModel.search()
                             },
@@ -619,7 +634,8 @@ fun DiscoverFilterScreen(
                                     // 点完立刻生效，理由同评分滑块
                                     onClick = { viewModel.setSortBy(sort); viewModel.search() },
                                     hazeState = hazeState,
-                                    text = sortText
+                                    text = sortText,
+                                    kind = FilterChipKind.SingleSelect
                                 )
                             }
                         }
@@ -673,7 +689,7 @@ fun DiscoverFilterScreen(
                             Switch(
                                 checked = uiState.hideWatched,
                                 onCheckedChange = {
-                                    view.performHaptic(HapticType.CLICK)
+                                    haptics.toggle(it)
                                     viewModel.toggleHideWatched()
                                     viewModel.search()
                                 },
@@ -685,7 +701,7 @@ fun DiscoverFilterScreen(
                     // （条件没变会被 ViewModel 挡掉），只兜住「条件变了但请求没发出去」的极端情况
                     Button(
                         onClick = {
-                            view.performHaptic(HapticType.HEAVY_CLICK)
+                            haptics.tap()
                             viewModel.toggleAdvanced()  // 先收起
                             viewModel.search()
                         },
@@ -858,9 +874,11 @@ private fun DiscoverFilterListItem(
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(backgroundBrush)
-            .clickable(
+            .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                // 结果列表项进详情
+                semantic = HapticSemantic.LIGHT_TAP,
                 onClick = {
                     clicked = true
                     onClick()
@@ -1067,6 +1085,8 @@ private fun MultiSelectDialog(
 ) {
     val scrollState = rememberScrollState()
     Dialog(onDismissRequest = onDismiss) {
+        // Dialog 内容是独立 subcomposition（自己的宿主 View），单独取一份
+        val dialogHaptics = rememberAppHaptics()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1121,12 +1141,36 @@ private fun MultiSelectDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onDismiss) {
+                // 「完成」是这个弹窗唯一的确认按钮，关掉的同时由调用方发起搜索；
+                // 点外部关闭走 onDismissRequest，按约定静默
+                TextButton(onClick = {
+                    dialogHaptics.tap()
+                    onDismiss()
+                }) {
                     Text(stringResource(R.string.common_done))
                 }
             }
         }
     }
+}
+
+/**
+ * [GlassFilterChip] 的三种身份。决定它发哪一档触感 —— 三者的差别是「这一次点击在语义上
+ * 做了什么」，不是长得像什么，所以不能靠 `selected` 一个布尔量分流。
+ */
+private enum class FilterChipKind {
+    /** 能同时亮多个（类型 / 地区 / 年代）或就地开合（高级筛选）：`selected` 就是这一项自己的状态 */
+    Toggle,
+
+    /** 一组里只能亮一个（排序方式）：没有「关掉」这回事，只是把选中位挪了一格 */
+    SingleSelect,
+
+    /**
+     * 次级入口：点下去是「打开一个弹窗 / 展开一块面板」，`selected` 表示「这一项已有筛选」
+     * 而不是「选中了这一项」。按 [Toggle] 分流会在已有筛选时发 TOGGLE_OFF，
+     * 手感在说「关掉了」，而实际上什么都没关。
+     */
+    Entry,
 }
 
 /**
@@ -1136,6 +1180,7 @@ private fun MultiSelectDialog(
  * 文字色与背景保持高对比度，避免浅色模式下看不清。
  * 触感反馈与无障碍语义都收在这里：以前靠各调用点自己加，有的加了有的没加，
  * 读屏也念不出选中状态。
+ * [kind] 区分触感语义，三档的判据见 [FilterChipKind]。
  * [hazeState] 参数已废弃，chip 自身不需要毛玻璃效果。
  */
 @Composable
@@ -1144,9 +1189,9 @@ private fun GlassFilterChip(
     onClick: () -> Unit,
     text: String,
     hazeState: HazeState? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    kind: FilterChipKind = FilterChipKind.Toggle
 ) {
-    val view = LocalView.current
     val isSelected = selected
     val background = if (selected) {
         MaterialTheme.colorScheme.primary
@@ -1167,8 +1212,14 @@ private fun GlassFilterChip(
                 this.role = Role.Button
                 this.selected = isSelected
             }
-            .clickable {
-                view.performHaptic(HapticType.CLICK)
+            .hapticClickable(
+                semantic = when (kind) {
+                    FilterChipKind.SingleSelect -> HapticSemantic.SEGMENT_TICK
+                    FilterChipKind.Entry -> HapticSemantic.LIGHT_TAP
+                    FilterChipKind.Toggle ->
+                        if (selected) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
+                }
+            ) {
                 onClick()
             }
             .padding(horizontal = 12.dp, vertical = 6.dp),

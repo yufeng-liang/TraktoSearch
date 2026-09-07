@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.ConsistencyCheckService
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.delay
 
 internal fun consistencySubPhaseForDisplay(phase: String, subPhase: String): String? {
@@ -73,6 +74,21 @@ fun ConsistencyCheckDialog(
                 delay(1000)
             }
         }
+    }
+
+    // 检查终态那一记触感，边沿检测的理由同 DoubanSyncDialog：进度不会立刻重置，
+    // 弹窗重开的第一帧可能就是上一轮的 isComplete=true
+    val outcomeHaptics = rememberAppHaptics()
+    var observedComplete by remember { mutableStateOf(p.isComplete) }
+    LaunchedEffect(p.isComplete) {
+        val wasComplete = observedComplete
+        observedComplete = p.isComplete
+        if (!p.isComplete || wasComplete) return@LaunchedEffect
+        if (p.isCancelled || p.isCancelling) return@LaunchedEffect
+        // 这里刻意**不**把 conflictsFound > 0 算失败：查出冲突并改掉正是这个功能要干的事，
+        // 修复数就记在 doubanUpdated/traktUpdated 上。真正的失败是登录态断了或 errors > 0
+        val clean = !p.cookieExpired && !p.neverLoggedInDouban && p.errors == 0
+        if (clean) outcomeHaptics.confirm() else outcomeHaptics.reject()
     }
 
     AlertDialog(
@@ -204,6 +220,9 @@ fun ConsistencyCheckDialog(
             }
         },
         confirmButton = {
+            // confirmButton 槽是独立 subcomposition（自带宿主 View），触感实例必须在槽内取；
+            // 三个分支同属这一个槽，共用一份即可
+            val haptics = rememberAppHaptics()
             when {
                 p.isRunning -> {
                     Row {
@@ -211,6 +230,7 @@ fun ConsistencyCheckDialog(
                             // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
                             enabled = !p.isCancelling,
                             onClick = {
+                                haptics.tap()
                                 if (ConsistencyCheckService.start(context)) onBackground()
                                 else onBackgroundUnavailable?.invoke()
                             }
@@ -222,6 +242,7 @@ fun ConsistencyCheckDialog(
                             // 正在取消时禁用取消按钮避免重复调用 + 改文案为"正在取消..."
                             enabled = !p.isCancelling,
                             onClick = {
+                                haptics.lightTap()
                                 viewModel.cancelConsistencyCheck()
                             }
                         ) {
@@ -237,15 +258,22 @@ fun ConsistencyCheckDialog(
                 p.isComplete -> {
                     Row {
                         if ((p.cookieExpired || p.neverLoggedInDouban) && onLogin != null) {
-                            TextButton(onClick = onLogin) { Text(stringResource(R.string.consistency_check_login)) }
+                            TextButton(onClick = { haptics.tap(); onLogin() }) {
+                                Text(stringResource(R.string.consistency_check_login))
+                            }
                         }
                         if (p.errors > 0 && onRetry != null) {
-                            TextButton(onClick = onRetry) { Text(stringResource(R.string.consistency_check_retry)) }
+                            TextButton(onClick = { haptics.tap(); onRetry() }) {
+                                Text(stringResource(R.string.consistency_check_retry))
+                            }
                         }
                         if (p.conflictsFound > 0 && onViewConflicts != null) {
-                            TextButton(onClick = onViewConflicts) { Text(stringResource(R.string.consistency_check_view_conflicts)) }
+                            // 「查看冲突」是转去另一个页面的次级入口，不是本对话框的主操作
+                            TextButton(onClick = { haptics.lightTap(); onViewConflicts() }) {
+                                Text(stringResource(R.string.consistency_check_view_conflicts))
+                            }
                         }
-                        TextButton(onClick = onDismiss) {
+                        TextButton(onClick = { haptics.tap(); onDismiss() }) {
                             Text(stringResource(R.string.consistency_check_phase_done))
                         }
                     }
@@ -258,7 +286,7 @@ fun ConsistencyCheckDialog(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = onDismiss) {
+                        TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
                             Text(stringResource(R.string.consistency_check_cancel))
                         }
                     }

@@ -63,6 +63,7 @@ import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -96,12 +97,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -112,11 +113,18 @@ import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.haptic.HapticModeSummary
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.PopupShowEffect
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.hapticModeSummary
+import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.haptic.semantic
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
@@ -139,23 +147,21 @@ import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
-import com.tracktosearch.ui.component.StatisticsEntryKey
 import com.tracktosearch.ui.component.MarkRecordsEntryKey
 import com.tracktosearch.ui.component.SearchSourcesEntryKey
-import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.StatisticsEntryKey
+import com.tracktosearch.ui.component.appSharedBounds
+import com.tracktosearch.ui.component.appSkipToLookaheadSize
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeSource
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
-import dev.chrisbanes.haze.hazeSource
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -376,6 +382,7 @@ fun SettingsScreen(
     var showAccentColorDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
+    var showHapticDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDoubanLogoutDialog by remember { mutableStateOf(false) }
@@ -405,6 +412,25 @@ fun SettingsScreen(
         context.startActivity(intent)
     }
 
+    // 触感：系统总开关与有无马达在每次回到前台重读 —— 用户看到「系统已关闭触感」
+    // 大概就会去系统设置打开再切回来，那正是这句提示该消失的时刻。
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshHapticSystemState()
+        onPauseOrDispose { }
+    }
+
+    // 跳系统「声音与振动」页。ACTION_SOUND_SETTINGS 是 API 1 的公开常量，
+    // 但个别 ROM 拆过这个页面，拿不到就静默放弃 —— 提示文案本身已经把原因说清楚了，
+    // 弹一句「打不开」只是再添一层噪音。
+    val openSystemSoundSettings: () -> Unit = {
+        runCatching {
+            context.startActivity(
+                Intent(android.provider.Settings.ACTION_SOUND_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+    }
+
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
@@ -427,11 +453,17 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = null as ExportMessage?)
     val exportMessageText = exportImportMessage
         ?.let { stringResource(it.resId, *it.args.toTypedArray()) }
+    // 这一处 snackbar 是本页所有导出/导入/清缓存/检查更新结果的唯一出口，触感就挂在这里，
+    // 不额外开第二条事件流；方向由 ExportMessage.outcome 给出，17 处构造点各自表过态
+    val outcomeHaptics = rememberAppHaptics()
     LaunchedEffect(exportImportMessage) {
-        exportMessageText?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearMessage()
-        }
+        // exportMessageText 与 exportImportMessage 同生同灭：前者就是后者渲染出来的文案
+        val text = exportMessageText ?: return@LaunchedEffect
+        // 先震后弹：showSnackbar 会挂起到提示消失，放在它后面就得等用户看完才震到手上。
+        // 进度类消息的 outcome 是 null，逐条刷新不发触感
+        exportImportMessage?.outcome?.let { outcomeHaptics.perform(it.semantic()) }
+        snackbarHostState.showSnackbar(text)
+        viewModel.clearMessage()
     }
     // 玻璃场景只依赖加载/登录等低频状态，包 remember 避免无关重组时重算；
     // 背景色作为 key 之一，主题切换时场景随之一并刷新（remember 块内不能调用
@@ -602,6 +634,7 @@ fun SettingsScreen(
                     onAccentColorClick = { showAccentColorDialog = true },
                     onLanguageClick = { showLanguageDialog = true },
                     onDefaultTabClick = { showDefaultTabDialog = true },
+                    onHapticClick = { showHapticDialog = true },
                     onSplashQuoteClick = onSplashQuoteClick
                 )
             }
@@ -616,7 +649,8 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(onClick = onGlassPilot)
+                                // 与其他分组入口行同档：次级入口取轻一档
+                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onGlassPilot() }
                                 .padding(horizontal = 14.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -932,6 +966,22 @@ fun SettingsScreen(
         )
     }
 
+    // 触感档位对话框：档位来自 DataStore，设备限制来自 resume 时重读的系统状态
+    if (showHapticDialog) {
+        val currentHapticMode by viewModel.hapticMode.collectAsStateWithLifecycle()
+        val hapticSystemState by viewModel.hapticSystemState.collectAsStateWithLifecycle()
+        HapticModeSelectionDialog(
+            currentMode = currentHapticMode,
+            systemState = hapticSystemState,
+            onModeSelected = {
+                viewModel.setHapticMode(it)
+                showHapticDialog = false
+            },
+            onOpenSystemSettings = openSystemSoundSettings,
+            onDismiss = { showHapticDialog = false }
+        )
+    }
+
     if (showChangelogDialog) {
         ChangelogDialog(
             viewModel = viewModel,
@@ -957,9 +1007,13 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                // 对话框每个按钮槽都是独立 subcomposition（自带宿主 View），触感实例逐槽取，
+                // 不能复用 SettingsScreen 外层的 —— 本文件下面每个对话框都照这条写
+                val haptics = rememberAppHaptics()
                 val traktLogoutDone = stringResource(R.string.settings_logout_button)
                 val reloginLabel = stringResource(R.string.settings_account_reconnect)
                 TextButton(onClick = {
+                    haptics.tap()
                     showLogoutDialog = false
                     viewModel.clearUserProfile()
                     onLogout()
@@ -978,7 +1032,8 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showLogoutDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1006,9 +1061,11 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                    val haptics = rememberAppHaptics()
                     val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
                     val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)
                     TextButton(onClick = {
+                        haptics.tap()
                         showDoubanLogoutDialog = false
                         viewModel.clearDoubanCredentials()
                         scope.launch {
@@ -1026,7 +1083,8 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDoubanLogoutDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLogoutDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1050,7 +1108,9 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showClearCacheDialog = false
                     viewModel.clearCache()
                 }) {
@@ -1058,7 +1118,8 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearCacheDialog = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showClearCacheDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1100,7 +1161,9 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     val cat = pendingClearCategory
                     showClearCategoryDialog = false
                     pendingClearCategory = null
@@ -1110,7 +1173,9 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
+                val dismissHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    dismissHaptics.lightTap()
                     showClearCategoryDialog = false
                     pendingClearCategory = null
                 }) {
@@ -1135,6 +1200,9 @@ fun SettingsScreen(
     }
 
     // 检测到新版本时弹出更新弹窗（复用首页 UpdateDialog）
+    // 按「检查更新」那一下已经发过 tap()，但弹窗是网络回来之后才出现的 ——
+    // 中间隔着一次请求，早就不是同一帧了，所以这一记不算重复
+    PopupShowEffect(showUpdateDialog && updateInfo != null)
     if (showUpdateDialog && updateInfo != null) {
         UpdateDialog(
             updateInfo = updateInfo!!,
@@ -1178,7 +1246,9 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.cooldown_guidance_title)) },
             text = { Text(stringResource(R.string.cooldown_guidance_message)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     val mode = pendingCooldownMode
                     showCooldownGuidance = false
                     pendingCooldownMode = null
@@ -1192,7 +1262,10 @@ fun SettingsScreen(
                 }) { Text(stringResource(R.string.cooldown_force_sync)) }
             },
             dismissButton = {
+                // 「跳过」在这个对话框里就是「稍后」，取轻一档
+                val dismissHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    dismissHaptics.lightTap()
                     showCooldownGuidance = false
                     pendingCooldownMode = null
                 }) { Text(stringResource(R.string.cooldown_skip)) }
@@ -1246,12 +1319,14 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { startConfirmedConsistencyCheck() }) {
+                val haptics = rememberAppHaptics()
+                TextButton(onClick = { haptics.tap(); startConfirmedConsistencyCheck() }) {
                     Text(stringResource(R.string.consistency_check_confirm_button))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConsistencyConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showConsistencyConfirm = false }) {
                     Text(stringResource(R.string.douban_retry_cancel))
                 }
             }
@@ -1292,13 +1367,16 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
             text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showDoubanLoginPrompt = false
                     onNavigateToDoubanLogin()
                 }) { Text(stringResource(R.string.settings_douban_not_logged_in_login)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDoubanLoginPrompt = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLoginPrompt = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }
@@ -1312,13 +1390,16 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.consistency_check_trakt_required_title)) },
             text = { Text(stringResource(R.string.consistency_check_trakt_required_message)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showTraktLoginPrompt = false
                     onTraktLogin()
                 }) { Text(stringResource(R.string.consistency_check_trakt_required_login)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTraktLoginPrompt = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showTraktLoginPrompt = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             }
@@ -1342,7 +1423,8 @@ fun SettingsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { consistencyCheckBlocker = null }) {
+                val haptics = rememberAppHaptics()
+                TextButton(onClick = { haptics.tap(); consistencyCheckBlocker = null }) {
                     Text(stringResource(R.string.common_confirm))
                 }
             }
@@ -1359,7 +1441,6 @@ private fun MarkRecordsEntryCard(
     modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
@@ -1371,7 +1452,7 @@ private fun MarkRecordsEntryCard(
             // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
             .then(modifier)
             .clip(RoundedCornerShape(SettingsEntryCardCorner))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
@@ -1445,7 +1526,6 @@ private fun SearchSourcesEntryCard(
     modifier: Modifier = Modifier,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
@@ -1457,7 +1537,7 @@ private fun SearchSourcesEntryCard(
             // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
             .then(modifier)
             .clip(RoundedCornerShape(SettingsEntryCardCorner))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(SettingsEntryCardCorner),
         backgroundColor = if (realBlur) {
@@ -1530,7 +1610,6 @@ private fun PrivacyEntryCard(
     onClick: () -> Unit,
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val view = LocalView.current
     val isDark = isAppDarkTheme()
     // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
     val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
@@ -1539,7 +1618,7 @@ private fun PrivacyEntryCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (realBlur) {
@@ -1613,18 +1692,20 @@ private fun SharedTransitionSwitchCard(
     onToggle: (Boolean) -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     SettingsItemCard(
         icon = Icons.Rounded.Animation,
         title = stringResource(R.string.settings_shared_transition),
         subtitle = stringResource(R.string.settings_shared_transition_subtitle),
-        onClick = { view.performHaptic(HapticType.CLICK); onToggle(!enabled) },
+        // 行区域那一记归 SettingsItemCard 自己的 hapticClickable，这里不能再发 —— 否则点行就是两下
+        onClick = { onToggle(!enabled) },
         containerColor = containerColor,
         trailing = {
             Switch(
                 checked = enabled,
+                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
                 onCheckedChange = { value ->
-                    view.performHaptic(HapticType.CLICK)
+                    haptics.toggle(value)
                     onToggle(value)
                 },
                 colors = appSwitchColors()
@@ -1648,9 +1729,51 @@ private fun SplashQuoteEntryCard(
         icon = Icons.Rounded.FormatQuote,
         title = stringResource(R.string.settings_splash_quote),
         subtitle = stringResource(R.string.settings_splash_quote_subtitle),
+        // 这一记归 SettingsItemCard 自己的 hapticClickable；开关本身搬去了
+        // ui/screen/splashquote 那一页，触感跟着开关走
         onClick = onClick,
         containerColor = containerColor
     )
+}
+
+/**
+ * 触感反馈档位卡片（外观分组下，独占一行）。
+ *
+ * 档位与设备状态都在本函数内部收集：切换只重组本卡片。
+ *
+ * 副标题不是固定的说明文案，而是 [hapticModeSummary] 算出来的那一句 ——
+ * 没马达或系统总开关关着时，回显「增强」是在骗人。
+ *
+ * 本卡片没有 trailing 开关，也不自己发触感：
+ * [SettingsItemCard] 的 `hapticClickable` 已经发过一记，外面再发一次就是同一语义背靠背两下
+ * （`SharedTransitionSwitchCard` 与 `SplashQuoteSwitchCard` 原先正是这个毛病，已随本次迁移清掉：
+ * 行点那一记留在 [SettingsItemCard]，两张卡只在 `Switch` 的 `onCheckedChange` 上发 toggle）。
+ */
+@Composable
+private fun HapticModeCard(
+    viewModel: SettingsViewModel,
+    onClick: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
+    val mode by viewModel.hapticMode.collectAsStateWithLifecycle()
+    val systemState by viewModel.hapticSystemState.collectAsStateWithLifecycle()
+    SettingsItemCard(
+        icon = Icons.Rounded.Vibration,
+        title = stringResource(R.string.settings_haptic),
+        subtitle = hapticSummaryText(hapticModeSummary(mode, systemState)),
+        onClick = onClick,
+        containerColor = containerColor
+    )
+}
+
+/** 触感副标题：五种互斥情况各一句，映射本身穷举、不写 else */
+@Composable
+private fun hapticSummaryText(summary: HapticModeSummary): String = when (summary) {
+    HapticModeSummary.NO_VIBRATOR -> stringResource(R.string.settings_haptic_no_vibrator)
+    HapticModeSummary.SYSTEM_DISABLED -> stringResource(R.string.settings_haptic_system_disabled)
+    HapticModeSummary.FOLLOW_SYSTEM -> stringResource(R.string.settings_haptic_follow_system)
+    HapticModeSummary.OFF -> stringResource(R.string.settings_haptic_off)
+    HapticModeSummary.BOOST -> stringResource(R.string.settings_haptic_boost)
 }
 
 /**
@@ -1667,6 +1790,7 @@ private fun AppearanceGroupItem(
     onAccentColorClick: () -> Unit,
     onLanguageClick: () -> Unit,
     onDefaultTabClick: () -> Unit,
+    onHapticClick: () -> Unit,
     onSplashQuoteClick: () -> Unit
 ) {
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -1747,6 +1871,12 @@ private fun AppearanceGroupItem(
         // 开屏每日台词入口：开关与日签日历都在二级页里
         SplashQuoteEntryCard(
             onClick = onSplashQuoteClick,
+            containerColor = Color.Transparent
+        )
+        // 触感反馈三档(默认跟随系统):点开选档位，副标题回显当前档或环境限制
+        HapticModeCard(
+            viewModel = viewModel,
+            onClick = onHapticClick,
             containerColor = Color.Transparent
         )
     }
@@ -1976,12 +2106,16 @@ private fun NotificationItem(
         }
     }
     val isDark = isAppDarkTheme()
-    val view = LocalView.current
+    val haptics = rememberAppHaptics()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
+                .hapticClickable(
+                    // 带勾选态的行：语义按点完之后的新状态定，与下面两行提醒开关同一写法
+                    semantic = if (notificationEnabled) HapticSemantic.TOGGLE_OFF
+                               else HapticSemantic.TOGGLE_ON
+                ) {
                     if (notificationEnabled) {
                         viewModel.setNotificationEnabled(false)
                     } else {
@@ -2030,7 +2164,9 @@ private fun NotificationItem(
             Spacer(modifier = Modifier.width(8.dp))
             Switch(
                 checked = notificationEnabled,
+                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
                 onCheckedChange = { enabled ->
+                    haptics.toggle(enabled)
                     if (enabled) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -2049,7 +2185,11 @@ private fun NotificationItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(!releaseEnabled) }
+                        .hapticClickable(
+                            // 带勾选态的行：语义按点完之后的新状态定
+                            semantic = if (releaseEnabled) HapticSemantic.TOGGLE_OFF
+                                       else HapticSemantic.TOGGLE_ON
+                        ) { viewModel.setReleaseReminderEnabled(!releaseEnabled) }
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2089,7 +2229,7 @@ private fun NotificationItem(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = releaseEnabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(it) },
+                        onCheckedChange = { haptics.toggle(it); viewModel.setReleaseReminderEnabled(it) },
                         colors = appSwitchColors()
                     )
                 }
@@ -2097,7 +2237,11 @@ private fun NotificationItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(!newSeasonEnabled) }
+                        .hapticClickable(
+                            // 带勾选态的行：语义按点完之后的新状态定
+                            semantic = if (newSeasonEnabled) HapticSemantic.TOGGLE_OFF
+                                       else HapticSemantic.TOGGLE_ON
+                        ) { viewModel.setNewSeasonReminderEnabled(!newSeasonEnabled) }
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2137,7 +2281,7 @@ private fun NotificationItem(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = newSeasonEnabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(it) },
+                        onCheckedChange = { haptics.toggle(it); viewModel.setNewSeasonReminderEnabled(it) },
                         colors = appSwitchColors()
                     )
                 }
@@ -2286,6 +2430,7 @@ private fun ImageTrafficSectionItem(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val stats by viewModel.imageTraffic.collectAsStateWithLifecycle()
+    val haptics = rememberAppHaptics()
     // 重置是破坏性动作（计数归零不可恢复），原来点了就执行，既无确认也无反馈
     var showResetConfirm by remember { mutableStateOf(false) }
     Surface(
@@ -2323,7 +2468,7 @@ private fun ImageTrafficSectionItem(
                 )
             }
             OutlinedButton(
-                onClick = { showResetConfirm = true },
+                onClick = { haptics.tap(); showResetConfirm = true },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
             ) {
                 Text(stringResource(R.string.settings_image_traffic_clear))
@@ -2344,7 +2489,9 @@ private fun ImageTrafficSectionItem(
                 )
             },
             confirmButton = {
+                val confirmHaptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    confirmHaptics.tap()
                     showResetConfirm = false
                     viewModel.clearImageTraffic()
                 }) {
@@ -2352,7 +2499,8 @@ private fun ImageTrafficSectionItem(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) {
+                val dismissHaptics = rememberAppHaptics()
+                TextButton(onClick = { dismissHaptics.lightTap(); showResetConfirm = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }

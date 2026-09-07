@@ -94,6 +94,7 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -435,6 +436,7 @@ private fun HelpHeaderBar(
 ) {
     val isDark = isAppDarkTheme()
     val topBarInteractionSource = remember { MutableInteractionSource() }
+    val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -577,6 +579,7 @@ private fun HelpSearchField(
     onSearchAction: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val haptics = rememberAppHaptics()
     val selectionColors = remember(colors.primary) {
         TextSelectionColors(
             handleColor = colors.primary,
@@ -633,7 +636,10 @@ private fun HelpSearchField(
                     }
                     if (query.isNotEmpty()) {
                         IconButton(
-                            onClick = { onQueryChange("") },
+                            onClick = {
+                                haptics.lightTap()
+                                onQueryChange("")
+                            },
                             modifier = Modifier.size(28.dp),
                         ) {
                             Icon(

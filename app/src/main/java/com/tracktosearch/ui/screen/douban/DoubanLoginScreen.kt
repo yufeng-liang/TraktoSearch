@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,6 +134,7 @@ fun DoubanLoginScreen(
 ) {
     val context = LocalContext.current
     val loginSuccess by viewModel.loginSuccess.collectAsStateWithLifecycle()
+    val haptics = rememberAppHaptics()
 
     // WebView 主框架加载失败时的兜底文案(预解析,避免在 WebViewClient 回调内硬编码中文)
     val loadFailedText = stringResource(R.string.douban_login_load_failed)
@@ -205,7 +207,10 @@ fun DoubanLoginScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 TextButton(
-                    onClick = { privacyExpanded = !privacyExpanded },
+                    onClick = {
+                        haptics.toggle(!privacyExpanded)
+                        privacyExpanded = !privacyExpanded
+                    },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 0.dp)
                 ) {
                     Icon(
@@ -307,6 +312,10 @@ fun DoubanLoginScreen(
                                     if (request?.isForMainFrame == true) {
                                         val code = error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
                                         Log.w(TAG, "WebView 主框架加载失败: code=$code desc=${error?.description}")
+                                        // 只在主框架上发：子资源失败（图片、埋点）不影响用户能不能登录。
+                                        // cookie 解析那一路刻意不发 —— onPageFinished 每次翻页都会跑，
+                                        // 「还没有 dbcl2」是登录前的常态而不是失败，挂在那里会一路乱震
+                                        haptics.reject()
                                         loadState = if (code in NETWORK_ERROR_CODES) {
                                             networkErrorText
                                         } else {
@@ -354,6 +363,7 @@ fun DoubanLoginScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         TextButton(
                             onClick = {
+                                haptics.tap()
                                 // 重新加载当前页；onPageStarted 会把状态切回 loading
                                 webViewRef?.reload()
                             }

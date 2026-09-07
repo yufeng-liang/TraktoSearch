@@ -60,6 +60,17 @@ fun swiftieEraCenterFraction(index: Int): Float {
 }
 
 /**
+ * 刻度与年份开始淡入的入场进度（入场第二拍的起点）。
+ *
+ * **不是私有的**：`SwiftieHapticScore` 按它反推「标尺出现了」那一记触感的时刻
+ * （`ERAS_INTRO_START + ERAS_INTRO_MS × 这个值`）。改了这个数，手上那一记跟着挪。
+ */
+const val AXIS_TICK_FADE_IN_AT = 0.35f
+
+/** 刻度淡入占入场进度的多长。0.35 + 0.35 = 刻度在入场七成处完全显形。 */
+const val AXIS_TICK_FADE_IN_SPAN = 0.35f
+
+/**
  * 横向比例落在第几段。拖动吸附用。
  *
  * 走一趟账本换算而不是自己二分 `SWIFTIE_ERA_EDGES`：段落归属只能有一个真相来源。
@@ -254,7 +265,8 @@ fun SwiftieErasAxis(
         ) {
             val intro = introProgress().coerceIn(0f, 1f)
             val linePhase = (intro / 0.45f).coerceIn(0f, 1f)
-            val tickPhase = ((intro - 0.35f) / 0.35f).coerceIn(0f, 1f)
+            val tickPhase =
+                ((intro - AXIS_TICK_FADE_IN_AT) / AXIS_TICK_FADE_IN_SPAN).coerceIn(0f, 1f)
             val ribbonPhase = ((intro - 0.55f) / 0.45f).coerceIn(0f, 1f)
 
             // 轴墨跟着当前专辑翻极性：12 张舞台里末档底色是深色的占 10 张
@@ -416,7 +428,8 @@ fun SwiftieErasAxis(
                 // 与上面那块 Canvas 同一个 20dp 侧边距，年份才对得上轴的两端
                 .padding(horizontal = AXIS_SIDE_PADDING)
                 .graphicsLayer {
-                    alpha = ((introProgress() - 0.35f) / 0.35f).coerceIn(0f, 1f)
+                    alpha = ((introProgress() - AXIS_TICK_FADE_IN_AT) / AXIS_TICK_FADE_IN_SPAN)
+                        .coerceIn(0f, 1f)
                 }
                 // 整块对 TalkBack 隐身：年份是给看得见的人的刻度说明，
                 // 而卡片本身已经播报「专辑名，发行于 X，共 N 首」

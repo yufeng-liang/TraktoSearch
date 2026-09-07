@@ -7,8 +7,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -48,6 +48,8 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.LocalGlassVariant
 import dev.chrisbanes.haze.HazeInput
@@ -200,9 +202,10 @@ fun GlassIconButton(
         .clip(shape)
         .then(effectModifier)
         .border(1.dp, backdropBorderColor(borderColor, token), shape)
-        .clickable(
+        .hapticClickable(
             interactionSource = resolvedInteractionSource,
             indication = null,
+            semantic = HapticSemantic.LIGHT_TAP,
             enabled = enabled,
             onClick = onClick
         )

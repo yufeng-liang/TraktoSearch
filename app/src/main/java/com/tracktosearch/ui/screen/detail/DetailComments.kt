@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.foundation.clickable
+import com.tracktosearch.ui.theme.RatingGold
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,9 +47,11 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.NeumorphicBorderLight
-import com.tracktosearch.ui.theme.RatingGold
 
 // ==================== 单条评论 ====================
 
@@ -88,15 +91,18 @@ internal fun OwnCommentComposer(
     var expanded by remember(initialComment, isEditing) {
         mutableStateOf(isEditing || initialComment.isNotBlank())
     }
+    val haptics = rememberAppHaptics()
     val isDark = isAppDarkTheme()
     CommentCardSurface(isDark = isDark, scene = scene) {
         if (!expanded) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(
+                    .hapticClickable(
                         interactionSource = remember { MutableInteractionSource() },
-                        indication = null
+                        indication = null,
+                        // 收起态入口点开就是「展开」，与 ExpandableText 那一档同语义
+                        semantic = HapticSemantic.TOGGLE_ON
                     ) { expanded = true }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -131,12 +137,15 @@ internal fun OwnCommentComposer(
                     modifier = Modifier.weight(1f)
                 )
                 if (isEditing) {
-                    TextButton(onClick = onCancelEdit, enabled = !isSaving) {
+                    TextButton(
+                        onClick = { haptics.lightTap(); onCancelEdit() },
+                        enabled = !isSaving
+                    ) {
                         Text(stringResource(R.string.detail_own_comment_cancel))
                     }
                 }
                 Button(
-                    onClick = { onSubmit(comment) },
+                    onClick = { haptics.tap(); onSubmit(comment) },
                     enabled = comment.isNotBlank() && !isSaving
                 ) {
                     if (isSaving) {
@@ -212,6 +221,7 @@ internal fun OwnCommentCard(
     scene: GlassScene = GlassScene()
 ) {
     val isDark = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
     val retryTargetName = when {
         OwnCommentTarget.TRAKT in retryTargets && OwnCommentTarget.DOUBAN in retryTargets ->
             stringResource(R.string.detail_own_comment_targets_trakt_douban)
@@ -233,7 +243,7 @@ internal fun OwnCommentCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onEdit, enabled = !isSaving) {
+                IconButton(onClick = { haptics.lightTap(); onEdit() }, enabled = !isSaving) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
                         contentDescription = stringResource(R.string.detail_own_comment_edit),
@@ -245,7 +255,7 @@ internal fun OwnCommentCard(
             ExpandableText(text = comment)
             if (retryTargets.isNotEmpty()) {
                 TextButton(
-                    onClick = onRetry,
+                    onClick = { haptics.tap(); onRetry() },
                     enabled = !isSaving,
                     modifier = Modifier.align(Alignment.End)
                 ) {
@@ -262,17 +272,27 @@ internal fun OwnCommentCard(
     }
 }
 
-/** 评论卡片底部的文字动作（翻译 / 原文·译文切换）：无涟漪、labelSmall、主色。 */
+/**
+ * 评论卡片底部的文字动作（翻译 / 原文·译文切换）：无涟漪、labelSmall、主色。
+ *
+ * [semantic] 由调用方给：「翻译」是一次次级操作（[HapticSemantic.LIGHT_TAP]），
+ * 「原文/译文」是互斥二选一、不是开关（[HapticSemantic.SEGMENT_TICK]）。
+ */
 @Composable
-private fun CommentActionText(text: String, onClick: () -> Unit) {
+private fun CommentActionText(
+    text: String,
+    semantic: HapticSemantic,
+    onClick: () -> Unit
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Medium,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.clickable(
+        modifier = Modifier.hapticClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
+            semantic = semantic,
             onClick = onClick
         )
     )
@@ -289,6 +309,7 @@ internal fun CommentItem(
 ) {
     var showOriginal by remember(comment.id) { mutableStateOf(false) }
     var spoilerRevealed by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
 
     val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
     val isDark = isAppDarkTheme()
@@ -352,7 +373,7 @@ internal fun CommentItem(
             // 剧透遮罩
             if (comment.spoiler && !spoilerRevealed) {
                 Surface(
-                    onClick = { spoilerRevealed = true },
+                    onClick = { haptics.toggleOn(); spoilerRevealed = true },
                     modifier = Modifier
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(6.dp),
@@ -379,6 +400,8 @@ internal fun CommentItem(
                                 } else {
                                     stringResource(R.string.detail_original)
                                 },
+                                // 原文/译文互斥，只能选一个 → 不是开关而是「把选中位挪一格」
+                                semantic = HapticSemantic.SEGMENT_TICK,
                                 onClick = { showOriginal = !showOriginal }
                             )
                         }
@@ -404,6 +427,7 @@ internal fun CommentItem(
                         {
                             CommentActionText(
                                 text = stringResource(R.string.detail_translate),
+                                semantic = HapticSemantic.LIGHT_TAP,
                                 onClick = { onTranslate(comment.id) }
                             )
                         }

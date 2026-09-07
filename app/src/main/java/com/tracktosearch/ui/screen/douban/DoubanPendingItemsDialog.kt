@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
  * 豆瓣同步续传对话框。
@@ -86,7 +87,9 @@ fun DoubanPendingItemsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            // AlertDialog 的槽是独立 subcomposition，单独取一份
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
                 Text(stringResource(R.string.douban_resume_cancel))
             }
         }
@@ -151,7 +154,8 @@ fun DoubanRollbackDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            val haptics = rememberAppHaptics()
+            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
                 Text(stringResource(R.string.douban_resume_cancel))
             }
         }
@@ -175,9 +179,11 @@ private fun ResumeOptionItem(
         MaterialTheme.colorScheme.onPrimaryContainer
     else
         MaterialTheme.colorScheme.onSurface
+    // 选项行是这几个弹窗真正的「确定」，本函数自己就在弹窗的 text 槽里，取一份即可
+    val haptics = rememberAppHaptics()
 
     Surface(
-        onClick = onClick,
+        onClick = { haptics.tap(); onClick() },
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp),
@@ -235,14 +241,17 @@ fun DoubanPendingItemsDialogWithDiscard(
             title = { Text(stringResource(R.string.douban_resume_discard_title)) },
             text = { Text(stringResource(R.string.douban_resume_discard_message, pendingCount)) },
             confirmButton = {
+                val haptics = rememberAppHaptics()
                 TextButton(onClick = {
+                    haptics.tap()
                     showDiscardConfirmation = false
                     onDiscardPending()
                     onDismiss()
                 }) { Text(stringResource(R.string.douban_resume_discard_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDiscardConfirmation = false }) {
+                val haptics = rememberAppHaptics()
+                TextButton(onClick = { haptics.lightTap(); showDiscardConfirmation = false }) {
                     Text(stringResource(R.string.douban_resume_discard_cancel))
                 }
             }
@@ -278,11 +287,12 @@ fun DoubanPendingItemsDialogWithDiscard(
             }
         },
         confirmButton = {
+            val haptics = rememberAppHaptics()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { showDiscardConfirmation = true }) {
+                TextButton(onClick = { haptics.tap(); showDiscardConfirmation = true }) {
                     Text(stringResource(R.string.douban_resume_discard))
                 }
-                TextButton(onClick = onDismiss) {
+                TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
                     Text(stringResource(R.string.douban_resume_cancel))
                 }
             }
