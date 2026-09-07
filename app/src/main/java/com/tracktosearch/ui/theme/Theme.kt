@@ -13,6 +13,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -43,9 +44,21 @@ fun appSwitchColors(): SwitchColors = SwitchDefaults.colors(
 )
 
 /**
+ * 主界面专用 ColorScheme：background 保留主题染色（monet 主题 = 种子色相 tone 95/5，
+ * 动态壁纸 = 系统底色，票根 = 牛皮纸），而 [TraktoSearchTheme] 对外层 MaterialTheme
+ * 用的是纯中性 background（见 NeutralPageBackground*）。
+ *
+ * MainScreen 路由用它把整棵主界面子树包回染色 scheme，达到「主屏带染色、其他目的地
+ * 页面纯中性」。其余 NavHost 目的地不包这层，自然吃到外层中性底。
+ */
+val LocalMainColorScheme =
+    staticCompositionLocalOf<androidx.compose.material3.ColorScheme?> { null }
+
+/**
  * 复古票根：唯一手写而非生成的主题，因为它要整套换纸。
  *
- * 其余主题共用中性底色、只换强调色；票根的主题身份本身就是牛皮纸，
+ * 其余主题共用一套底色层级、只换强调色（主界面底色保留染色，目的地页底色
+ * 另有中性覆盖，见 LocalMainColorScheme）；票根的主题身份本身就是牛皮纸，
  * 所以 background/surface 一起走暖，主色（赭红墨）才不必独自扛全部气质。
  * 主色取自 [MonetAccent.VINTAGE_TICKET]，不在这里重写字面量 ——
  * 设置页色块和桌面小组件都读那两个值，写两遍必然哪天对不上。
@@ -156,12 +169,16 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
  *
  * 阶梯的 tone 值对齐了改造前 background/surface 的明度（浅色 95/99，深色 5/10），
  * 所以观感上只是中性色染上了主题色相，层级关系没动。
+ *
+ * 这套染色 background 目前只服务主界面（MainScreen）子树；其余目的地页面的底色
+ * 在 [TraktoSearchTheme] 会被覆盖成纯中性（NeutralPageBackground*），不走这里的染色。
  */
 internal fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
     val seedArgb = seed.toArgb()
     val seedHue = com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seedArgb).hue
     val tonal = com.tracktosearch.data.util.mcu.palettes.TonalPalette.fromInt(seedArgb)
-    // neutral 染彩度 4.0（标准 6.0）：只管 background/surface/容器底，用户要求子页面底色染色更淡。
+    // neutral 染彩度 4.0（标准 6.0）：只管主界面 background/surface/容器底，用户要求底色染色更淡。
+    // 子页面底色已另行在 TraktoSearchTheme 覆盖为纯中性，这里只决定主屏与各级容器的染色深度。
     // neutralVariant 保持 8.0：surfaceVariant（卡片/对话框）不变，且与 neutral 拉开彩度差。
     val neutral = com.tracktosearch.data.util.mcu.palettes.TonalPalette
         .fromHueAndChroma(seedHue, 4.0)
@@ -289,7 +306,7 @@ fun TraktoSearchTheme(
         "light" -> false
         else -> isSystemInDarkTheme()
     }
-    val colorScheme = when {
+    val baseColorScheme = when {
         customAccentArgb != null -> monetColorScheme(
             seed = Color(customAccentArgb.toInt()),
             dark = darkTheme
@@ -313,6 +330,19 @@ fun TraktoSearchTheme(
         else -> monetColorScheme(seed = if (darkTheme) Red500 else Red700, dark = darkTheme)
     }
 
+    // 页面底色分层：baseColorScheme.background 是「主界面染色底」。子页面（NavHost 里
+    // 除 MAIN 外的目的地）统一覆盖成纯中性灰；票根主题的牛皮纸本身就是底色而非染色，
+    // 整站保持一致，不做覆盖。LocalMainColorScheme 保留 baseColorScheme 供 MainScreen 子树使用。
+    val isVintageTheme = accentColor == MonetAccent.VINTAGE_TICKET
+    val pageColorScheme = if (isVintageTheme) {
+        baseColorScheme
+    } else {
+        baseColorScheme.copy(
+            background = if (darkTheme) NeutralPageBackgroundDark else NeutralPageBackgroundLight,
+            onBackground = if (darkTheme) NeutralPageInkDark else NeutralPageInkLight,
+        )
+    }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -326,11 +356,12 @@ fun TraktoSearchTheme(
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = pageColorScheme,
         typography = Typography,
     ) {
         // 统一覆盖 Haze 未显式设置时的噪点默认值，显式 noiseFactor(0f) 仍然优先。
         CompositionLocalProvider(
+            LocalMainColorScheme provides baseColorScheme,
             LocalHazeBlurStyle provides AppHazeDefaultBlurStyle,
             LocalVisualEffectMode provides visualEffectMode,
             LocalGlassVariant provides glassVariant,

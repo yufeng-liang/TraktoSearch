@@ -119,6 +119,7 @@ import com.tracktosearch.ui.screen.ai.AI_DOUBAN_NAV_PREFIX
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
+import com.tracktosearch.ui.theme.LocalMainColorScheme
 import com.tracktosearch.data.util.CurrentPageHolder
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.data.util.UserActionTracker
@@ -885,136 +886,141 @@ fun AppNavigation(
                             )
                         }
 
-                        MainScreen(
-                            initialTab = mainInitialTab,
-                            isLoggedIn = isLoggedIn,
-                            isTraktConnected = isTraktConnected,
-                            isDoubanMode = isDoubanMode,
-                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
-                                navigateAiLegacyMediaClick(navController, "movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
-                            },
-                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
-                                navigateAiLegacyMediaClick(navController, "show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
-                            },
-                            onMediaItemClick = { item, inWatchlist, isWatched ->
-                                val doubanId = item.doubanId
-                                if (shouldUseDoubanItemDetail(
-                                        doubanId = doubanId,
-                                        imdbId = item.imdbId,
-                                        mediaType = item.mediaType,
-                                        traktId = item.traktId,
-                                        tmdbId = item.tmdbId
-                                    )) {
-                                    navController.navigate(Routes.doubanItemDetailRoute(requireNotNull(doubanId)))
-                                } else {
-                                    // DetailScreen 目前只接受电影/剧集媒体类型；已知类型之外的豆瓣条目走豆瓣详情框架。
-                                    val type = if (item.mediaType == WatchlistMediaType.SHOW) "show" else "movie"
-                                    navController.navigate(
-                                        Routes.detailRoute(
-                                            type = type,
-                                            traktId = item.traktId,
-                                            tmdbId = item.tmdbId,
-                                            title = item.displayTitle,
-                                            imdbId = item.imdbId,
-                                            traktRating = item.traktRating,
-                                            inWatchlist = inWatchlist,
-                                            isWatched = isWatched,
+                        MaterialTheme(
+                            colorScheme = LocalMainColorScheme.current ?: MaterialTheme.colorScheme,
+                        ) {
+                            MainScreen(
+                                initialTab = mainInitialTab,
+                                isLoggedIn = isLoggedIn,
+                                isTraktConnected = isTraktConnected,
+                                isDoubanMode = isDoubanMode,
+                                onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                    navigateAiLegacyMediaClick(navController, "movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
+                                },
+                                onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                    navigateAiLegacyMediaClick(navController, "show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
+                                },
+                                onMediaItemClick = { item, inWatchlist, isWatched ->
+                                    val doubanId = item.doubanId
+                                    if (shouldUseDoubanItemDetail(
                                             doubanId = doubanId,
-                                            // 卡片已经渲染过的海报和年份直接带给详情页当首帧种子：
-                                            // 想看列表冷启动是从 Room 快照恢复的，此时 TMDB 内存缓存还是空的，
-                                            // 详情页 peek 不到，只有靠这里传下去才能第一帧就有海报。
-                                            posterUrl = item.posterUrl,
-                                            year = item.year
+                                            imdbId = item.imdbId,
+                                            mediaType = item.mediaType,
+                                            traktId = item.traktId,
+                                            tmdbId = item.tmdbId
+                                        )) {
+                                        navController.navigate(Routes.doubanItemDetailRoute(requireNotNull(doubanId)))
+                                    } else {
+                                        // DetailScreen 目前只接受电影/剧集媒体类型；已知类型之外的豆瓣条目走豆瓣详情框架。
+                                        val type = if (item.mediaType == WatchlistMediaType.SHOW) "show" else "movie"
+                                        navController.navigate(
+                                            Routes.detailRoute(
+                                                type = type,
+                                                traktId = item.traktId,
+                                                tmdbId = item.tmdbId,
+                                                title = item.displayTitle,
+                                                imdbId = item.imdbId,
+                                                traktRating = item.traktRating,
+                                                inWatchlist = inWatchlist,
+                                                isWatched = isWatched,
+                                                doubanId = doubanId,
+                                                // 卡片已经渲染过的海报和年份直接带给详情页当首帧种子：
+                                                // 想看列表冷启动是从 Room 快照恢复的，此时 TMDB 内存缓存还是空的，
+                                                // 详情页 peek 不到，只有靠这里传下去才能第一帧就有海报。
+                                                posterUrl = item.posterUrl,
+                                                year = item.year
+                                            )
                                         )
-                                    )
+                                    }
+                                },
+                                onSearchClick = { keyword ->
+                                    // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页(仅 DEBUG 构建可用)
+                                    if (BuildConfig.DEBUG && keyword.trim() == "13638719007") {
+                                        navController.navigate(Routes.DOUBAN_SPIDER_TEST)
+                                    } else {
+                                        navController.navigate(Routes.searchRoute(keyword))
+                                    }
+                                },
+                                onNavigateToLogin = {
+                                    navController.navigate(Routes.LOGIN) {
+                                        popUpTo(Routes.MAIN) { inclusive = false }
+                                    }
+                                },
+                                onTraktLogin = { launchDirectTraktLogin() },
+                                onStatisticsClick = {
+                                    navController.navigate(Routes.STATISTICS)
+                                },
+                                onDailyStampClick = {
+                                    navController.navigate(Routes.DAILY_STAMP)
+                                },
+                                onMarkRecordsClick = {
+                                    navController.navigate(Routes.MARK_RECORDS)
+                                },
+                                onTraktSearch = { type, query ->
+                                    navController.navigate(Routes.traktSearchRoute(type, query))
+                                },
+                                onAiRecommendationClick = { recommendation ->
+                                    navigateAiRecommendation(navController, recommendation)
+                                },
+                                onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
+                                    navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
+                                },
+                                onListClick = { listId, listName, morph ->
+                                    navController.navigate(Routes.listDetailRoute(listId, listName, morph))
+                                },
+                                onLogout = {
+                                    // Trakt 退出登录：只清除 Trakt 连接状态，不清除网关激活令牌，
+                                    // 也不跳转到激活/登录页——用户仍处于已激活或访客模式，留在设置页即可。
+                                    sessionModeManager.setTraktConnectionState(TraktConnectionState.DISCONNECTED)
+                                    scope.launch { authStateHolder.disconnectTrakt() }
+                                    // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
+                                },
+                                onHelpClick = {
+                                    navController.navigate(Routes.helpRoute())
+                                },
+                                onOpenSourceClick = {
+                                    navController.navigate(Routes.OPEN_SOURCE)
+                                },
+                                onFilterDiscoverClick = { entry ->
+                                    navController.navigate(Routes.discoverFilterRoute(entry))
+                                },
+                                onDoubanResync = {
+                                    // 不再导航到 DoubanLoginScreen
+                                    // MainScreen 内部会切换到 Watchlist tab 显示同步横幅
+                                },
+                                onNavigateToDoubanLogin = {
+                                    navController.navigate(Routes.DOUBAN_LOGIN)
+                                },
+                                onSpiderTest = {
+                                    // 仅 DEBUG 构建允许进入豆瓣爬取测试页
+                                    if (BuildConfig.DEBUG) {
+                                        navController.navigate(Routes.DOUBAN_SPIDER_TEST)
+                                    }
+                                },
+                                onGlassPilot = {
+                                    // 仅 DEBUG 构建允许进入玻璃引擎试点页
+                                    if (BuildConfig.DEBUG) {
+                                        navController.navigate(Routes.GLASS_PILOT)
+                                    }
+                                },
+                                onFeedbackClick = {
+                                    navController.navigate(Routes.FEEDBACK)
+                                },
+                                onMessagesClick = {
+                                    navController.navigate(Routes.MESSAGES)
+                                },
+                                onSearchSourcesClick = {
+                                    navController.navigate(Routes.SEARCH_SOURCES)
+                                },
+                                onPrivacyClick = {
+                                    navController.navigate(Routes.PRIVACY)
+                                },
+                                onSplashQuoteClick = {
+                                    navController.navigate(Routes.SPLASH_QUOTE)
                                 }
-                            },
-                            onSearchClick = { keyword ->
-                                // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页(仅 DEBUG 构建可用)
-                                if (BuildConfig.DEBUG && keyword.trim() == "13638719007") {
-                                    navController.navigate(Routes.DOUBAN_SPIDER_TEST)
-                                } else {
-                                    navController.navigate(Routes.searchRoute(keyword))
-                                }
-                            },
-                            onNavigateToLogin = {
-                                navController.navigate(Routes.LOGIN) {
-                                    popUpTo(Routes.MAIN) { inclusive = false }
-                                }
-                            },
-                            onTraktLogin = { launchDirectTraktLogin() },
-                            onStatisticsClick = {
-                                navController.navigate(Routes.STATISTICS)
-                            },
-                            onDailyStampClick = {
-                                navController.navigate(Routes.DAILY_STAMP)
-                            },
-                            onMarkRecordsClick = {
-                                navController.navigate(Routes.MARK_RECORDS)
-                            },
-                            onTraktSearch = { type, query ->
-                                navController.navigate(Routes.traktSearchRoute(type, query))
-                            },
-                            onAiRecommendationClick = { recommendation ->
-                                navigateAiRecommendation(navController, recommendation)
-                            },
-                            onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
-                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
-                            },
-                            onListClick = { listId, listName, morph ->
-                                navController.navigate(Routes.listDetailRoute(listId, listName, morph))
-                            },
-                            onLogout = {
-                                // Trakt 退出登录：只清除 Trakt 连接状态，不清除网关激活令牌，
-                                // 也不跳转到激活/登录页——用户仍处于已激活或访客模式，留在设置页即可。
-                                sessionModeManager.setTraktConnectionState(TraktConnectionState.DISCONNECTED)
-                                scope.launch { authStateHolder.disconnectTrakt() }
-                                // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
-                            },
-                            onHelpClick = {
-                                navController.navigate(Routes.helpRoute())
-                            },
-                            onOpenSourceClick = {
-                                navController.navigate(Routes.OPEN_SOURCE)
-                            },
-                            onFilterDiscoverClick = { entry ->
-                                navController.navigate(Routes.discoverFilterRoute(entry))
-                            },
-                            onDoubanResync = {
-                                // 不再导航到 DoubanLoginScreen
-                                // MainScreen 内部会切换到 Watchlist tab 显示同步横幅
-                            },
-                            onNavigateToDoubanLogin = {
-                                navController.navigate(Routes.DOUBAN_LOGIN)
-                            },
-                            onSpiderTest = {
-                                // 仅 DEBUG 构建允许进入豆瓣爬取测试页
-                                if (BuildConfig.DEBUG) {
-                                    navController.navigate(Routes.DOUBAN_SPIDER_TEST)
-                                }
-                            },
-                            onGlassPilot = {
-                                // 仅 DEBUG 构建允许进入玻璃引擎试点页
-                                if (BuildConfig.DEBUG) {
-                                    navController.navigate(Routes.GLASS_PILOT)
-                                }
-                            },
-                            onFeedbackClick = {
-                                navController.navigate(Routes.FEEDBACK)
-                            },
-                            onMessagesClick = {
-                                navController.navigate(Routes.MESSAGES)
-                            },
-                            onSearchSourcesClick = {
-                                navController.navigate(Routes.SEARCH_SOURCES)
-                            },
-                            onPrivacyClick = {
-                                navController.navigate(Routes.PRIVACY)
-                            },
-                            onSplashQuoteClick = {
-                                navController.navigate(Routes.SPLASH_QUOTE)
-                            }
-                        )
+                            )
+
+                        }
                     }
                 }
 

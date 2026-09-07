@@ -186,6 +186,16 @@ internal val TicketPaperDarkVariant = Color(0xFF4A382E)     // 对话框 / 卡�
 internal val TicketInkDark = Color(0xFFF7EDE3)
 internal val TicketInkDarkMuted = Color(0xFFDDCDBE)
 
+// ====== 子页面中性底色（monet/动态主题专用） ======
+// 主界面底色保留主题染色（见 Theme.kt 的 LocalMainColorScheme）；从主界面 push 出去的
+// 目的地页面在 TraktoSearchTheme 统一覆盖为与主屏同明度（浅色 tone 95 / 深色 tone 5）
+// 的零彩度中性灰，避免整站底色都带强调色相。票根主题不走这里：它的牛皮纸底色
+// 本身就是主题身份，覆盖成灰会拆掉整套纸面。
+internal val NeutralPageBackgroundLight = Color(0xFFF1F1F1)
+internal val NeutralPageBackgroundDark = Color(0xFF111111)
+internal val NeutralPageInkLight = Color(0xFF1B1B1B)
+internal val NeutralPageInkDark = Color(0xFFE2E2E2)
+
 // ====== 玻璃棱镜结构色（深色档） ======
 // 深色档的玻璃是一层「白色薄雾」：填充和描边都是极低透明度的白。
 // 这四个值在 30 处重复出现，原先只在注释里记着「在使用处直接写」——
