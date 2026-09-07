@@ -141,7 +141,6 @@ reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.r
 
 # Telephoto (zoomable image + sub-sampling)
 telephoto-zoomable-image-coil = { group = "me.saket.telephoto", name = "zoomable-image-coil", version.ref = "telephoto" }
-openimage-base = { group = "io.github.flyjingfish", name = "openimage-base", version.ref = "openImage" }
 openimage-coil = { group = "io.github.flyjingfish", name = "openimage-coil", version.ref = "openImage" }
 
 # Compose Mesh Gradient (API 26~32 的背景光晕回退实现)
