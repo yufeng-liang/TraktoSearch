@@ -258,17 +258,22 @@ private const val BACKDROP_CROSSFADE_MS: Float = 500f
 private const val BACKDROP_CYCLE_MS: Long = 3_600L
 
 /**
- * L2 飘落物的行程相位周期。
+ * L2 飘落物的节拍相位周期：翻面 / 扑翼 / 闪烁 / 自转的快慢都由它定。
+ * 行程（进出画面、横向游走）不跟它走，另见 [PARTICLE_TRAVEL_CYCLE_MS]。
  *
  * **刻意不跟 L1 共用 3.6s。** 那 3.6s 是「呼吸」的节奏（灯在明暗、雾在起伏），
- * 而这一层要的是「一片叶子从画外飘到画外」的行程 —— 3.6s 走完全屏是被吹风机吹，
- * 而且每 3.6s 全部飘落物一起归零重掷，整层会有一次可见的集体跳动。
- *
- * 12s 也让两层的合拍周期变成 36s，长过任何一张卡片的停留，所以看不出「又对上了」。
- * `SwiftieEraParticles` 按整数倍关系设计了每个个体的速度档，周期改了它仍然无缝，
- * 但改到 11–14s 之外它的翻面与扑翼频率就会失真。
+ * 这层的闪烁翻面跟它对齐就会整层一起脉动；12s 也让两层的合拍周期变成 36s，
+ * 长过任何一张卡片的停留，所以看不出「又对上了」。节拍档位（`beat` / `twist`）
+ * 按这个周期调过，改了它们就失真。
  */
 private const val PARTICLE_CYCLE_MS: Long = 12_000L
+
+/**
+ * L2 飘落物的行程周期。12s 的 2.5 倍 —— 同一档 `rounds` 摊到更长的周期上，
+ * 飘落速度就是原来的 1/2.5。`rounds` 是整数，travelPhase 绕回 0f 时
+ * `travelPhase * rounds` 的小数部分不变，位置仍然连续无缝。
+ */
+private const val PARTICLE_TRAVEL_CYCLE_MS: Long = 30_000L
 
 /** 终局那一环的自转周期。30s 一圈，18.6s 的段落只转过 0.6 圈，慢到读作呼吸。 */
 private const val FINALE_RING_CYCLE_MS: Long = 30_000L
@@ -601,6 +606,9 @@ private fun SwiftieEggContent(
     val particlePhase: () -> Float = {
         clock.elapsedMs.mod(PARTICLE_CYCLE_MS).toFloat() / PARTICLE_CYCLE_MS
     }
+    val particleTravelPhase: () -> Float = {
+        clock.elapsedMs.mod(PARTICLE_TRAVEL_CYCLE_MS).toFloat() / PARTICLE_TRAVEL_CYCLE_MS
+    }
 
     /**
      * 专辑背景的不透明度：intro 里自水彩天空之上淡入，终局那 18.6s 让位给环，倒滑时换回来。
@@ -817,12 +825,14 @@ private fun SwiftieEggContent(
                 modifier = Modifier.fillMaxSize()
             )
             // L2 飘落物压在大主体之上、卡片之下。Speak Now 与 reputation 两张刻意没有粒子。
-            // 相位走自己那份 12s（见 PARTICLE_CYCLE_MS），不跟 L1 的呼吸同拍
+            // 节拍走 12s（PARTICLE_CYCLE_MS），行程走 30s（PARTICLE_TRAVEL_CYCLE_MS，
+            // 即慢 2.5 倍），都不跟 L1 的呼吸同拍
             SwiftieEraParticleLayer(
                 outgoing = backdropOutgoing,
                 incoming = backdropIncoming,
                 crossfade = backdropCrossfade,
                 phase = particlePhase,
+                travelPhase = particleTravelPhase,
                 lowRam = lowRam,
                 modifier = Modifier
                     .fillMaxSize()

@@ -74,11 +74,11 @@ private const val LUCKY_HINT = "Her lucky number."
  */
 private const val CURSOR_BLINK_MS = 1060
 
-/** 光标（基线下划线）的厚度，占答案槽字高。 */
+/** 光标（竖线）的笔宽，占答案槽字高。 */
 private const val CURSOR_THICKNESS_FRACTION = 0.06f
 
-/** 光标悬在基线下方的高度，占答案槽字高。 */
-private const val CURSOR_BASELINE_GAP_FRACTION = 0.08f
+/** 光标的高度，占答案槽字高；比数字略矮，立在基线上。 */
+private const val CURSOR_HEIGHT_FRACTION = 0.9f
 
 /** 有输入时光标与最后一位数字右缘的间距，占答案槽字高。 */
 private const val CURSOR_FOLLOW_GAP_FRACTION = 0.15f
@@ -475,11 +475,11 @@ private fun DrawScope.drawEquation(
     val top = box.top * poster.height
     val width = box.width * poster.width
     val height = box.height * poster.height
-    // 光标的度量全部从既有版式值推：答案槽正好放两位数字，宽度取一半就是单个数字的格子
+    // 光标的度量全部从既有版式值推：竖线立在基线上，高度按答案槽字高折算
     val glyphH = SwiftiePosterInk.ANSWER.height * poster.height
-    val cursorW = SwiftiePosterInk.ANSWER.width * poster.width / 2f
-    val cursorH = glyphH * CURSOR_THICKNESS_FRACTION
-    val cursorTop = art.slot.baselineY + glyphH * CURSOR_BASELINE_GAP_FRACTION
+    val cursorW = glyphH * CURSOR_THICKNESS_FRACTION
+    val cursorH = glyphH * CURSOR_HEIGHT_FRACTION
+    val cursorTop = art.slot.baselineY - cursorH
     val cursorLeft = if (hasInput) {
         slotBounds.right + glyphH * CURSOR_FOLLOW_GAP_FRACTION
     } else {

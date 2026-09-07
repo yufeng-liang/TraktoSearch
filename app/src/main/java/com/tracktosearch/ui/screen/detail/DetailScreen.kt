@@ -81,6 +81,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -107,7 +108,6 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.DetailTopBarIcon
-import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -864,16 +864,10 @@ fun DetailScreen(
 
                     if (!uiState.isLoadingComments && !uiState.commentsError && commentsToShow.isEmpty() && ownComment == null) {
                         item(key = "comments_empty") {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                EmptyStateCard(
-                                    isDark = detailIsDark,
-                                    icon = Icons.Rounded.ChatBubbleOutline,
-                                    title = stringResource(R.string.detail_no_comments)
-                                )
-                            }
+                            BareEmptyHint(
+                                icon = Icons.Rounded.ChatBubbleOutline,
+                                title = stringResource(R.string.detail_no_comments)
+                            )
                         }
                     }
 
@@ -956,17 +950,10 @@ fun DetailScreen(
                         }
                         recommendations.isEmpty() -> {
                             item(key = "rec_empty") {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    // 原先是一句裸 Text，跟同页短评空态的 EmptyStateCard 完全两种画法
-                                    EmptyStateCard(
-                                        isDark = detailIsDark,
-                                        icon = Icons.Rounded.Movie,
-                                        title = stringResource(R.string.detail_no_recommendations)
-                                    )
-                                }
+                                BareEmptyHint(
+                                    icon = Icons.Rounded.Movie,
+                                    title = stringResource(R.string.detail_no_recommendations)
+                                )
                             }
                         }
                         else -> {
@@ -1389,23 +1376,60 @@ private fun SearchingState(completedSources: Int, totalSources: Int) {
 @Composable
 private fun EmptyState(onRetry: () -> Unit) {
     val view = LocalView.current
-    Box(
+    // 不用 EmptyStateCard：资源 Tab 夹在筛选器和列表之间，再垫一块玻璃卡片
+    // 会读作「一张内容为空的资源卡」而不是「搜索没有结果」
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 32.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        EmptyStateCard(
-            isDark = isAppDarkTheme(),
-            icon = Icons.Rounded.Search,
-            title = stringResource(R.string.detail_no_resources),
-            actions = {
-                OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.detail_retry))
-                }
-            }
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.detail_no_resources),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
+            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.detail_retry))
+        }
+    }
+}
+
+/**
+ * 短评 / 推荐空态提示：裸排，不带卡片。同 [EmptyState] 的理由 ——
+ * 玻璃卡片会读作「一张内容为空的卡片」而不是「这里没有内容」。
+ */
+@Composable
+private fun BareEmptyHint(icon: ImageVector, title: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
