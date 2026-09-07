@@ -70,6 +70,7 @@ import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
 import com.tracktosearch.data.util.ApkInstaller
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.toUserMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -608,7 +609,7 @@ fun UpdateDialog(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
             shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
+            color = floatingDialogColor()
         ) {
             Column(
                 modifier = Modifier

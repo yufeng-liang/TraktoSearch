@@ -204,6 +204,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.theme.readableOn
 import dagger.hilt.EntryPoint
@@ -637,7 +638,7 @@ fun SearchScreen(
                     cloudThemeManager.onPermissionDismissed()
                 },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = floatingSheetColor(),
                 dragHandle = null
             ) {
                 // Sheet 内容是独立 subcomposition（自己的宿主 View），单独取一份而不是复用外层

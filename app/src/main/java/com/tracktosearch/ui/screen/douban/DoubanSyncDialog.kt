@@ -43,6 +43,7 @@ import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.service.DoubanSyncService
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.watchlist.hasLiveCountProgress
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -127,7 +128,7 @@ fun DoubanSyncDialog(
         onDismissRequest = {
             if (!p.isRunning) onDismiss()
         },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.douban_sync_title)) },
         text = {
             // AlertDialog 的 text 与 confirmButton 是各自独立的 subcomposition，各取一份

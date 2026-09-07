@@ -98,6 +98,7 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.grainBrush
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import androidx.compose.ui.platform.LocalContext
@@ -440,7 +441,7 @@ private fun SplashQuoteSettingsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.splash_quote_title)) },
         text = {
             Column {

@@ -99,6 +99,7 @@ import com.tracktosearch.data.remote.douban.RatingWriteTestResult
 import com.tracktosearch.data.remote.douban.RecommendTestResult
 import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.component.isAppDarkTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -1713,7 +1714,7 @@ private fun CachedItemsPickerDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
+            color = floatingDialogColor()
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Text(

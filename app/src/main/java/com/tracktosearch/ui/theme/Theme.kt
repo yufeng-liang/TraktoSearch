@@ -12,6 +12,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -53,6 +54,32 @@ fun appSwitchColors(): SwitchColors = SwitchDefaults.colors(
  */
 val LocalMainColorScheme =
     staticCompositionLocalOf<androidx.compose.material3.ColorScheme?> { null }
+
+/**
+ * 浮层底色（对话框/弹窗与底部弹层）。非票根主题下为纯中性（弹窗 tone90/30、底部弹层
+ * tone94/7，见 NeutralFloating*）；票根主题保持牛皮纸，分别回退到 surfaceVariant /
+ * surfaceContainerLow，这样弹窗/sheet 的底色与纸面保持一致。
+ *
+ * 使用处：AlertDialog/Dialog 的 containerColor 用 [floatingDialogColor]，ModalBottomSheet /
+ * 自定义底部弹层的 containerColor 用 [floatingSheetColor]。卡片、输入框、顶栏等非浮层
+ * 容器继续读各自原来的 scheme 槽位，不受这两个 token 影响。
+ */
+val LocalFloatingDialogColor = staticCompositionLocalOf<Color> { Color.Unspecified }
+val LocalFloatingSheetColor = staticCompositionLocalOf<Color> { Color.Unspecified }
+
+/** 对话框/弹窗容器底色；未提供时回退 surfaceVariant（预览/票根纸色）。 */
+@Composable
+@ReadOnlyComposable
+fun floatingDialogColor(): Color =
+    LocalFloatingDialogColor.current.takeIf { it != Color.Unspecified }
+        ?: MaterialTheme.colorScheme.surfaceVariant
+
+/** 底部弹层容器底色；未提供时回退 surfaceContainerLow（预览/票根纸色）。 */
+@Composable
+@ReadOnlyComposable
+fun floatingSheetColor(): Color =
+    LocalFloatingSheetColor.current.takeIf { it != Color.Unspecified }
+        ?: MaterialTheme.colorScheme.surfaceContainerLow
 
 /**
  * 复古票根：唯一手写而非生成的主题，因为它要整套换纸。
@@ -343,6 +370,19 @@ fun TraktoSearchTheme(
         )
     }
 
+    // 浮层底色：非票根主题统一纯中性（弹窗/sheet 各自对齐原容器明度档），
+    // 票根主题用纸色槽位；与调用点所在页面（主屏或子页面）无关，弹窗从哪打开都中性。
+    val floatingDialog = if (isVintageTheme) {
+        baseColorScheme.surfaceVariant
+    } else {
+        if (darkTheme) NeutralFloatingDialogDark else NeutralFloatingDialogLight
+    }
+    val floatingSheet = if (isVintageTheme) {
+        baseColorScheme.surfaceContainerLow
+    } else {
+        if (darkTheme) NeutralFloatingSheetDark else NeutralFloatingSheetLight
+    }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -362,6 +402,8 @@ fun TraktoSearchTheme(
         // 统一覆盖 Haze 未显式设置时的噪点默认值，显式 noiseFactor(0f) 仍然优先。
         CompositionLocalProvider(
             LocalMainColorScheme provides baseColorScheme,
+            LocalFloatingDialogColor provides floatingDialog,
+            LocalFloatingSheetColor provides floatingSheet,
             LocalHazeBlurStyle provides AppHazeDefaultBlurStyle,
             LocalVisualEffectMode provides visualEffectMode,
             LocalGlassVariant provides glassVariant,

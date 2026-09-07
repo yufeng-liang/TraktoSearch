@@ -90,6 +90,7 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -312,7 +313,7 @@ fun SearchSourcesScreen(
     pendingImport?.let { source ->
         AlertDialog(
             onDismissRequest = { pendingImport = null },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.search_sources_title)) },
             text = { Text(stringResource(R.string.import_duplicate_warning)) },
             confirmButton = {
@@ -718,7 +719,7 @@ private fun CustomSourceRow(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.settings_delete_source)) },
             text = {
                 Text(

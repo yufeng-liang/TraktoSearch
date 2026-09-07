@@ -102,6 +102,8 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
+import com.tracktosearch.ui.theme.floatingSheetColor
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -268,7 +270,7 @@ fun AiSpriteCenter(
     if (state.showTasteConsent) {
         AlertDialog(
             onDismissRequest = viewModel::onTasteConsentDismissed,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.ai_taste_consent_title)) },
             text = { Text(stringResource(R.string.ai_taste_consent_message)) },
             confirmButton = {
@@ -297,7 +299,7 @@ fun AiSpriteCenter(
     if (state.showTasteDisabled) {
         AlertDialog(
             onDismissRequest = viewModel::onTasteDisabledDismiss,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             text = {
                 Text(
                     stringResource(
@@ -1194,7 +1196,7 @@ private fun TextActivationDialog(
     val valid = isTextActivationInputValid(input)
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.ai_sprite_text_fallback_title)) },
         text = {
             Column {
@@ -1343,7 +1345,7 @@ private fun CharacterPickerSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = floatingSheetColor(),
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(

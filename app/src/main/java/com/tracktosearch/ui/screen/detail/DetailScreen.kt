@@ -139,6 +139,7 @@ import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
@@ -1260,7 +1261,7 @@ fun DetailScreen(
                 val dismissLoginPrompt: () -> Unit = viewModel::dismissLoginPrompt
                 AlertDialog(
                     onDismissRequest = dismissLoginPrompt,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = floatingDialogColor(),
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {

@@ -12,6 +12,7 @@ import com.tracktosearch.ui.theme.OnBrandTmdb
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.readableOn
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -479,7 +480,7 @@ internal fun RatingDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         shape = RoundedCornerShape(24.dp),
         title = null,
         text = {

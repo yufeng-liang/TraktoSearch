@@ -68,6 +68,7 @@ import com.tracktosearch.data.ai.AiWatchedTitleDto
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import java.util.Locale
 import kotlinx.coroutines.delay
 
@@ -276,7 +277,7 @@ private fun QuizQuestionScreen(
     if (unansweredConfirmVisible && unansweredRequired > 0 && !state.isLoading) {
         AlertDialog(
             onDismissRequest = { unansweredConfirmVisible = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.ai_quiz_unanswered_title)) },
             text = { Text(stringResource(R.string.ai_quiz_unanswered_message, unansweredRequired)) },
             confirmButton = {

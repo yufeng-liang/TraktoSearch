@@ -78,6 +78,7 @@ import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.theme.onColorFor
 import com.tracktosearch.ui.theme.isDarkScheme
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.github.skydoves.colorpicker.compose.BrightnessSlider
@@ -103,7 +104,7 @@ internal fun ThemeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.settings_theme)) },
         text = {
             Column {
@@ -164,7 +165,7 @@ internal fun HapticModeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.settings_haptic)) },
         text = {
             // 三行都带一句说明，加上底部可能出现的限制提示，小屏放不下，给一条竖向滚动
@@ -430,7 +431,7 @@ internal fun AccentColorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(dialogTitle ?: stringResource(R.string.settings_accent_color)) },
         text = {
             Column(
@@ -777,7 +778,7 @@ internal fun CustomAccentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = {
             Text(
                 text = stringResource(R.string.settings_accent_custom),
@@ -869,7 +870,7 @@ internal fun LanguageSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.settings_language)) },
         text = {
             Column {
@@ -956,7 +957,7 @@ fun ChangelogDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = null,
         text = {
             Box(
@@ -1019,7 +1020,7 @@ fun DiscoverSectionsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = {
             Column {
                 Text(stringResource(R.string.settings_discover_sections))
@@ -1147,7 +1148,7 @@ fun DetailSectionsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = {
             Text(stringResource(R.string.settings_detail_sections))
         },
@@ -1215,7 +1216,7 @@ internal fun DefaultTabSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.settings_default_tab)) },
         text = {
             // text 槽是独立 subcomposition（有自己的宿主 View），触感实例必须在槽内取

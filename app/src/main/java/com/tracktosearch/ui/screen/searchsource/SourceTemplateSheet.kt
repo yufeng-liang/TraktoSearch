@@ -29,6 +29,7 @@ import com.tracktosearch.data.local.SearchSourceTemplate
 import com.tracktosearch.data.local.SearchSourceTemplates
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 /**
  * 模板库半屏弹层：网格展示内置模板 + 底部导入快捷通道。
@@ -44,7 +45,7 @@ fun SourceTemplateSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = floatingSheetColor(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Text(

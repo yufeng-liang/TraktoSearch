@@ -66,6 +66,7 @@ import com.tracktosearch.ui.component.personAvatarSharedKey
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingSheetColor
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 
@@ -309,7 +310,7 @@ internal fun FullCastCrewSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = floatingSheetColor()
     ) {
         // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
         val sheetHaptics = rememberAppHaptics()

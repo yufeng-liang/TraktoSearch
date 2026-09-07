@@ -114,6 +114,7 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.animation.EnterMode
@@ -701,7 +702,7 @@ fun MarkRecordScreen(
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = floatingSheetColor()
         ) {
             FilterSheetContent(
                 mediaTypes = uiState.filterMediaTypes,

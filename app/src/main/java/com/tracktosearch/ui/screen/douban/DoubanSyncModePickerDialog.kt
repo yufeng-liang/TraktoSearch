@@ -35,6 +35,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 /**
  * 豆瓣重新导入模式选择对话框(设置页「重新同步豆瓣」按钮触发)。
@@ -63,7 +64,7 @@ fun DoubanSyncModePickerDialog(
     if (showFullRewriteConfirm) {
         AlertDialog(
             onDismissRequest = { showFullRewriteConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.douban_sync_mode_c_title)) },
             text = { Text(stringResource(R.string.douban_sync_mode_warning_c)) },
             confirmButton = {
@@ -90,7 +91,7 @@ fun DoubanSyncModePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(if (neverSynced) R.string.douban_sync_mode_picker_title_first else R.string.douban_sync_mode_picker_title)) },
         text = {
             Column {
@@ -240,7 +241,7 @@ fun DoubanFirstSyncGuideDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         icon = { Icon(Icons.Rounded.AddCircle, contentDescription = null) },
         title = { Text(stringResource(R.string.douban_first_sync_title)) },
         text = {

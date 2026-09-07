@@ -25,6 +25,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 @Composable
 fun PanHubConfigDialog(
@@ -44,7 +45,7 @@ fun PanHubConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.panhub_config_title)) },
         text = {
             // text 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取

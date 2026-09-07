@@ -210,6 +210,7 @@ import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -2199,7 +2200,7 @@ private fun WatchlistFilterSheet(
         onDismissRequest = onApply,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         // 统一背景色与发现页查看全部 sheet 一致
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingSheetColor(),
         // 去除默认 drag 条,内容更紧凑
         dragHandle = null
     ) {

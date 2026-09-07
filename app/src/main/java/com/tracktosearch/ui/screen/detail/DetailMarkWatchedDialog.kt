@@ -47,6 +47,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.WatchedGreen
+import com.tracktosearch.ui.theme.floatingDialogColor
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 // ==================== 标记已看弹窗（电视剧季/集勾选） ====================
@@ -104,7 +105,7 @@ internal fun MarkWatchedDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.detail_mark_watched_title)) },
         text = {
             // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份

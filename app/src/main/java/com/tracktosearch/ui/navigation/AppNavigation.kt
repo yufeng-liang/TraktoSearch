@@ -120,6 +120,7 @@ import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import com.tracktosearch.ui.theme.LocalMainColorScheme
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.data.util.CurrentPageHolder
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.data.util.UserActionTracker
@@ -1766,7 +1767,7 @@ fun AppNavigation(
                         autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                         autoImportHit = null
                     },
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = floatingDialogColor(),
                     title = { Text(stringResource(R.string.search_sources_title)) },
                     text = { Text(stringResource(R.string.import_duplicate_warning)) },
                     confirmButton = {

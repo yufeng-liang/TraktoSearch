@@ -196,6 +196,16 @@ internal val NeutralPageBackgroundDark = Color(0xFF111111)
 internal val NeutralPageInkLight = Color(0xFF1B1B1B)
 internal val NeutralPageInkDark = Color(0xFFE2E2E2)
 
+// ====== 浮层中性底色（monet/动态主题专用） ======
+// 弹窗/底部弹层使用与各自现有容器同明度档位的零彩度中性，只换「底色」不动卡片等层级：
+// 弹窗对齐 surfaceVariant（浅 tone 90 / 深 tone 30），底部弹层对齐 surfaceContainerLow
+// （浅 tone 94 / 深 tone 7）。票根主题不覆盖，其牛皮纸由 Theme.kt 的
+// LocalFloatingDialogColor/LocalFloatingSheetColor 回退到纸色槽位。
+internal val NeutralFloatingDialogLight = Color(0xFFE2E2E2)
+internal val NeutralFloatingDialogDark = Color(0xFF474747)
+internal val NeutralFloatingSheetLight = Color(0xFFEEEEEE)
+internal val NeutralFloatingSheetDark = Color(0xFF151515)
+
 // ====== 玻璃棱镜结构色（深色档） ======
 // 深色档的玻璃是一层「白色薄雾」：填充和描边都是极低透明度的白。
 // 这四个值在 30 处重复出现，原先只在注释里记着「在使用处直接写」——

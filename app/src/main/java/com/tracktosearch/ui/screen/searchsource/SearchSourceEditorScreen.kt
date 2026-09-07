@@ -66,6 +66,7 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -299,7 +300,7 @@ fun SearchSourceEditorScreen(
     if (showConflictDialog) {
         AlertDialog(
             onDismissRequest = { showConflictDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.search_sources_title)) },
             text = { Text(stringResource(R.string.import_duplicate_warning)) },
             confirmButton = {

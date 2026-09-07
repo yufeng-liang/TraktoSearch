@@ -32,6 +32,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.ShareCodec
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 /** 分享配置弹层：编码文本 + 复制 + 系统分享面板 */
 @Composable
@@ -43,7 +44,7 @@ fun ShareSourceDialog(
     val text = remember(source.id) { ShareCodec.encode(source) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.share_source_title, source.name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -117,7 +118,7 @@ fun ImportSourceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.editor_title_import)) },
         text = {
             // text 槽也是独立 subcomposition，单独取一份

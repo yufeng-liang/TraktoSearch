@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 /**
  * 豆瓣同步续传对话框。
@@ -55,7 +56,7 @@ fun DoubanPendingItemsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.douban_resume_title)) },
         text = {
             Column {
@@ -116,7 +117,7 @@ fun DoubanRollbackDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.douban_rollback_title)) },
         text = {
             Column {
@@ -237,7 +238,7 @@ fun DoubanPendingItemsDialogWithDiscard(
     if (showDiscardConfirmation) {
         AlertDialog(
             onDismissRequest = { showDiscardConfirmation = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.douban_resume_discard_title)) },
             text = { Text(stringResource(R.string.douban_resume_discard_message, pendingCount)) },
             confirmButton = {
@@ -260,7 +261,7 @@ fun DoubanPendingItemsDialogWithDiscard(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.douban_resume_title)) },
         text = {
             Column {

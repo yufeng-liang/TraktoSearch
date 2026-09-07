@@ -147,6 +147,7 @@ import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.component.MarkRecordsEntryKey
 import com.tracktosearch.ui.component.SearchSourcesEntryKey
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
@@ -992,7 +993,7 @@ fun SettingsScreen(
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.settings_account)) },
             text = {
                 // 原来只有一句「确定要退出登录吗」，不说影响范围；豆瓣退出那侧早有条数提示与撤销入口
@@ -1044,7 +1045,7 @@ fun SettingsScreen(
     if (showDoubanLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanLogoutDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.douban_logout_confirm_title)) },
             text = {
                 Column {
@@ -1094,7 +1095,7 @@ fun SettingsScreen(
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.settings_cache)) },
             text = {
                 Column {
@@ -1133,7 +1134,7 @@ fun SettingsScreen(
                 showClearCategoryDialog = false
                 pendingClearCategory = null
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.settings_cache_clear_category_confirm)) },
             text = {
                 val cat = pendingClearCategory!!
@@ -1242,7 +1243,7 @@ fun SettingsScreen(
                 showCooldownGuidance = false
                 pendingCooldownMode = null
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.cooldown_guidance_title)) },
             text = { Text(stringResource(R.string.cooldown_guidance_message)) },
             confirmButton = {
@@ -1300,7 +1301,7 @@ fun SettingsScreen(
     if (showConsistencyConfirm) {
         AlertDialog(
             onDismissRequest = { showConsistencyConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.consistency_check_confirm_title)) },
             text = {
                 Column {
@@ -1363,7 +1364,7 @@ fun SettingsScreen(
     if (showDoubanLoginPrompt) {
         AlertDialog(
             onDismissRequest = { showDoubanLoginPrompt = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
             text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
             confirmButton = {
@@ -1386,7 +1387,7 @@ fun SettingsScreen(
     if (showTraktLoginPrompt) {
         AlertDialog(
             onDismissRequest = { showTraktLoginPrompt = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.consistency_check_trakt_required_title)) },
             text = { Text(stringResource(R.string.consistency_check_trakt_required_message)) },
             confirmButton = {
@@ -1409,7 +1410,7 @@ fun SettingsScreen(
     consistencyCheckBlocker?.let { blocker ->
         AlertDialog(
             onDismissRequest = { consistencyCheckBlocker = null },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.consistency_check_blocked_title)) },
             text = {
                 Text(
@@ -2479,7 +2480,7 @@ private fun ImageTrafficSectionItem(
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.settings_image_traffic_reset_confirm)) },
             text = {
                 Text(

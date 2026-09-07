@@ -31,6 +31,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.ConsistencyCheckService
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import kotlinx.coroutines.delay
 
 internal fun consistencySubPhaseForDisplay(phase: String, subPhase: String): String? {
@@ -96,7 +97,7 @@ fun ConsistencyCheckDialog(
             // 检查运行中不允许点击外部关闭（需点「转后台」或「取消」）
             if (!p.isRunning) onDismiss()
         },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingDialogColor(),
         title = {
             Text(text = stringResource(R.string.consistency_check_title))
         },

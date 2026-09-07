@@ -111,6 +111,8 @@ import com.tracktosearch.data.ai.AiNameSignal
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiTasteEvidence
 import com.tracktosearch.data.ai.AiTasteAnalysis
+import com.tracktosearch.ui.theme.floatingDialogColor
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -401,7 +403,7 @@ fun AiFeatureScreen(
         if (discardQuizConfirmVisible && canShowRefreshConfirm) {
             AlertDialog(
                 onDismissRequest = { discardQuizConfirmVisible = false },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = floatingDialogColor(),
                 title = { Text(stringResource(R.string.ai_quiz_refresh_title)) },
                 text = {
                     Text(
@@ -1566,6 +1568,7 @@ private fun DailyFeature(
     if (historySheetVisible) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
+            containerColor = floatingSheetColor(),
             onDismissRequest = { historySheetVisible = false },
             sheetState = sheetState
         ) {

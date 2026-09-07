@@ -111,6 +111,7 @@ import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -1091,7 +1092,7 @@ private fun MultiSelectDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    MaterialTheme.colorScheme.surface,
+                    floatingDialogColor(),
                     RoundedCornerShape(16.dp)
                 )
                 .padding(16.dp)

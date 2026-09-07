@@ -23,6 +23,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import androidx.compose.ui.unit.dp
 
 /**
@@ -150,7 +151,7 @@ private fun InlineErrorState(
     if (showError) {
         AlertDialog(
             onDismissRequest = { showError = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.error_detail_title)) },
             text = {
                 Text(

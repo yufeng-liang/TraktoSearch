@@ -46,6 +46,7 @@ import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -327,7 +328,7 @@ fun NewFeedbackScreen(
                     Text(stringResource(R.string.common_cancel))
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = floatingDialogColor()
         )
     }
 

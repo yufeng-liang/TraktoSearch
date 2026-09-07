@@ -180,6 +180,7 @@ import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.screen.detail.detailBarColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterVariantColor
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.RatingGoldDim
 import com.tracktosearch.ui.util.ToastEffect
@@ -1935,7 +1936,7 @@ fun DoubanItemDetailScreen(
         if (failure != null) {
             AlertDialog(
                 onDismissRequest = { viewModel.showSubtitleDialog(false) },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = floatingDialogColor(),
                 title = { Text(stringResource(R.string.screen_douban_item_detail_subtitle_edit)) },
                 text = {
                     OutlinedTextField(
@@ -1972,7 +1973,7 @@ fun DoubanItemDetailScreen(
     if (showRemoveConfirm) {
         AlertDialog(
             onDismissRequest = { showRemoveConfirm = false },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
             text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
             confirmButton = {

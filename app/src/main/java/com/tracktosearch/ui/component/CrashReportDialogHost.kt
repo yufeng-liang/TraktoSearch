@@ -33,6 +33,7 @@ import com.tracktosearch.data.util.CrashPromptDecision
 import com.tracktosearch.data.util.UploadState
 import com.tracktosearch.data.util.UploadToastPolicy
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -134,7 +135,7 @@ fun CrashReportDialogHost(
     when (val kind = dialogKind) {
         is DialogKind.Authorize -> AlertDialog(
             onDismissRequest = { /* 不可取消 */ },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.crash_auth_dialog_title)) },
             text = { Text(stringResource(R.string.crash_auth_dialog_message)) },
             confirmButton = {
@@ -161,7 +162,7 @@ fun CrashReportDialogHost(
         )
         DialogKind.Uploading -> AlertDialog(
             onDismissRequest = { /* 上传中不可取消 */ },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             title = { Text(stringResource(R.string.crash_uploading)) },
             text = {
                 Box(
@@ -175,7 +176,7 @@ fun CrashReportDialogHost(
         )
         is DialogKind.Retry -> AlertDialog(
             onDismissRequest = { /* 需用户明确取消 */ },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = floatingDialogColor(),
             icon = { Icon(Icons.Rounded.WarningAmber, contentDescription = null) },
             title = { Text(stringResource(R.string.crash_upload_failed)) },
             text = {
