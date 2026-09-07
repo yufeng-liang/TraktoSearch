@@ -221,7 +221,8 @@ private inline fun buildTriples(count: Int, seed: Int, item: (Random) -> FloatAr
  *   **两张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）与 reputation
  *   那条蛇（整段走完「进场 → 绕王座 → 立起头 → 出画」一趟）。其余 10 张只看 [phase]
  * @param cardBounds TTPD 卡片在根坐标里的边框（px），[Rect.Zero] = 还没量到。
- *   打字机按它把出纸口坐到纸的上缘、把滚筒上那截立纸对齐纸宽
+ *   打字机按它把出纸口坐到纸的下缘、把滚筒对齐纸宽 —— 机器在屏幕底下，纸从滚筒
+ *   后头升上来，先打的行升得最高
  * @param lowRam 低配降档：远景层与点阵数量减半，但**不许整层静止** ——
  *   定格的背景在用户眼里就是卡死
  */
@@ -628,12 +629,12 @@ private val PORCH_POSTS = floatArrayOf(0.20f, 0.86f)
  * 卡片盖住的横带上缘。
  *
  * 卡片高度按曲目数派生，所以顶边每张不同：首专 11 首在 0.56h、Lover 18 首在 0.41h。
- * **要被看见的大主体必须落在这条线以上。** 第一轮截图里城堡、王座、钢琴、打字机、舞女
+ * **要被看见的大主体必须落在这条线以上。** 第一轮截图里城堡、王座、钢琴、打字机、浴缸
  * 全钉在 0.62–0.80h，结果 12 张里有 7 张的主体整个藏在卡片背后，屏幕上只剩一片渐变。
  *
  * 0.38f 留了 0.03 余量给 Lover 那张（12 张里除 TTPD 外最长的一张）。
  * **TTPD 不在这条线管辖内** —— 31 首（The Anthology 版）把它的顶边压到 0.20h，
- * 那一张的打字机在 `drawTypewriterDesk` 里单独收进上缘 0.19h。
+ * 那一张的打字机坐到屏幕底下（`drawTypewriterDesk`），与卡片上缘无关。
  */
 private const val HERO_BOTTOM = 0.38f
 
@@ -4135,30 +4136,27 @@ private fun DrawScope.drawMidnightClock(
 // ─────────────────────── 11 · The Tortured Poets Department ───────────────────────
 
 /**
- * 台灯光锥 + 一台**俯视**的打字机。
+ * 台灯光锥 + 一台**正对观众**的打字机，坐在屏幕底下。
  *
- * ## 卡片就是这台机器吐出来的那张纸
+ * ## 卡片就是这台机器吐上来的那张纸
  *
- * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 1400ms 里屏幕上没有卡片：机器自己敲字、
- * 滑架逐格左移，1250ms 一次回车横扫回位，然后纸才从出纸口下来 —— 那张纸就是曲目卡片
- * （揭示由 `SwiftieEraCard` 的 `feedProgress` 做）。所以出纸口 [card] 的上缘必须坐在
- * 卡片上缘上，立纸必须与卡片同宽：31 首的卡片高度按屏高派生、宽度在平板上封顶 480dp，
- * 写死比例换台设备纸就会比机器宽出一截。
+ * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 1400ms 里屏幕上没有卡片：机器自己
+ * 敲字、滑架逐格左移，1250ms 一次回车横扫回位，字打在滚筒上那截露头的纸上；然后纸
+ * 开始往上走 —— 那张纸就是曲目卡片（揭示由 `SwiftieEraCard` 的 `feedProgress` 做，
+ * 下缘钉死在出纸口上、上缘上移）。真机正是这个方向：印字点在滚筒上不动，纸往上卷，
+ * 越早打的行越靠上 —— 第 1 首在纸的最顶上，歌名从上到下读下去就是打字的顺序。
  *
- * ## 为什么是俯视
+ * 出纸口 [card] 的下缘必须坐在卡片下缘上、滚筒必须与卡片同宽：31 首的卡片高度按屏高
+ * 派生、宽度在平板上封顶 480dp，写死比例换台设备纸就会比机器宽出一截。卡片在布局层
+ * 被抬高了 `TTPD_MACHINE_RESERVE`（见 `SwiftieErasStage`），机器的滚筒、暗腔与两肩
+ * 全落在那段里；键盘越往下越被时间轴挡住，属预期。
  *
- * 卡片顶边压到 0.20h，机器只有上缘这 0.137h 可用，而全宽的机身要 1.04w ——
- * 正面看那是 7.6:1 的一条，读作键盘。俯视（从上往下看自己桌面的那个角度）本来就把
- * 高度压扁，3.7:1 正是这个角度的投影比：键帽成横扁的椭圆、四排键前后相叠、
- * 滚筒缩成顶上一条、立纸因为朝后倒所以只露一小截 —— 这一截同时把状态栏让了出来。
+ * ## 为什么换成正视
  *
- * 键帽画成**圆形**是上一轮读作「一盘珍珠」的根源：圆键意味着正视，和扁机身互相矛盾。
- *
- * ## 手稿页去哪了
- *
- * 上一轮左上角那几张散落的稿纸**整段删掉**了：机器改成全宽之后，稿纸唯一放得下的地方
- * （上缘 0.045h–0.063h 那 0.018h）连一张纸的高度都装不下，实测四张全被压在机身背后，
- * 屏幕上一张也看不见。留着只是每帧多画 32 条线。
+ * 机器原先坐在卡片**上缘**（俯视、纸往下挂）。挪到底下之后纵向预算不再只有上缘那
+ * 0.137h —— 从卡片下缘到屏幕底整段都是机器的，于是换回最经典的正对视角：滚筒横在
+ * 顶上、字锤从暗腔里朝滚筒抬、四排键从后往前渐大、回车杆在左端翘起。纸从滚筒后头
+ * 升上来，机器的每一层都在纸的下沿之下，不会被纸挡。
  */
 private fun DrawScope.drawTypewriterDesk(
     path: Path,
@@ -4173,7 +4171,7 @@ private fun DrawScope.drawTypewriterDesk(
     val w = size.width
     val h = size.height
 
-    // 台灯光锥：自左上打向右下，照在打字机上。锥体本身是竖直的，绕锥顶转 34°。
+    // 台灯光锥：自左上打向右下，落在底部那台机器上。锥体本身是竖直的，绕锥顶转 34°。
     // 亮度随相位极轻地呼吸（白炽灯的电流声），幅度只有 ±0.02
     val apex = Offset(w * 0.06f, -h * 0.03f)
     rotate(degrees = 34f, pivot = apex) {
@@ -4181,55 +4179,43 @@ private fun DrawScope.drawTypewriterDesk(
             path = path,
             apexX = apex.x,
             apexY = apex.y,
-            halfWidth = w * 0.42f,
+            halfWidth = w * 0.46f,
             bottomY = h * 1.05f,
             color = LAMP_CORE,
             alpha = alpha * (0.30f + 0.02f * sin(phase * TAU))
         )
     }
 
-    // 桌面两层雾**必须画在机器之前**。原来收在函数末尾，于是 0.188h 那条 0.43 的灰米
-    // 正好糊在前脸与出纸口上：实测机身墨色被从 0.88 冲淡到 0.62，整台机器是一片没有
-    // 层次的浅灰，而纸恰恰是从那一段里出来的。0.188h 那条也一并砍掉 —— 它原本是老机器
-    // 脚下的桌沿线，现在机器自己的前脸就压在那个 y 上，再铺一条只是把前脸洗白
-    //
-    // 0.24h 这一层还要：TTPD 三档底色是米白 → 米白 → 灰米，卡片也是米白，
-    // 不压它卡片边界在屏幕上找不到（第一轮就是一整屏没有层次的奶油色）
-    drawFogBand(0.24f, 0.34f, deep, alpha * DISTANT_ALPHA * 1.5f)
+    // 两层雾给卡片与机器分层：中带那条压在卡片后面的水彩上（TTPD 三档底色是米白 →
+    // 米白 → 灰米，卡片也是米白，不压它卡片边界在屏幕上找不到）；顶上那条收远山。
+    // 机器那一段不铺 —— 前摇里字全打在滚筒上那截纸上，糊一层灰就把字洗没了
+    drawFogBand(0.34f, 0.30f, deep, alpha * DISTANT_ALPHA * 1.5f)
     drawFogBand(0.06f, 0.14f, top, alpha * DISTANT_ALPHA)
 
     drawTypewriter(path, mid, deep, alpha, eraMs, card)
 }
 
 /**
- * 打字机本体（近景：滑架在上、暗腔居中、四排键在下）。
+ * 打字机本体（正视：滚筒在顶、暗腔居中、四排键在前）。
  *
- * 纵向尺寸**全部**写成「离出纸口 [Rect.top] 多远」：这台机器要坐在卡片上缘上，而卡片
- * 顶边随曲目数与屏高变，写成屏高的比例每换台设备就得重算滚筒、四排键、前脸的相对位置。
+ * 纵向尺寸**全部**写成「离出纸口 [Rect.bottom] 多远往下」：出纸口坐在卡片下缘上，而卡片
+ * 位置随曲目数与屏高变，写成屏高的比例每换台设备就得重算滚筒、四排键、前脸的相对位置。
  *
- * ## 为什么这一版不再是平铺的俯视
+ * ## 正视的层次
  *
- * 上一版把滚筒、顶板、四排键、前脸四条横带从上往下码齐，每条只有二三十像素高，屏幕上
- * 读出来是「一条压扁的灰带上印了一格格圆点」。根因是纵向预算**改不动**：机器坐在卡片
- * 上缘（`exitY`，最高 0.196h）之上，顶上还要给状态栏让开 0.045h，一共只剩 0.150h；
- * 而纸就是卡片、宽度钉死在 0.89w，滚筒只能比纸更宽 —— 3.4:1 的横带是这两条约束**算出来
- * 的**，不是画歪的；把机器画窄反而会让纸从机器外面冒出来。
- *
- * 所以这一版不动比例，改的是「同一条横带里怎么读出深度」，四件事：
- * 1. **滑架与机身之间是一条暗腔**（`recessTop`..`recessBottom`），比全图任何一处都暗，
- *    字锤从腔里抬出来。一道真正的暗缝比任何描边都更像「后面还有东西」。
- * 2. **两肩高出中段**：色带盘盖坐在肩顶、肩的前脸一路落到前沿。轮廓于是「高—低—高」，
- *    机器有了肩宽，不再是一条等高的直边。
- * 3. **四排键近大远小**（见 [TYPE_KEY_TIERS]）：越靠前的一排键帽更大、排更宽，每颗键
- *    下面还露出一小截键杆。等大等宽的四排是一块机械键盘，逐排放大才是一道斜坡。
- * 4. **滚筒按圆柱上色**：暗—亮—暗三条横带 + 两端的轴套与刻纹旋钮。一个圆角矩形加一道
- *    高光只是一根扁条。
+ * 1. **滚筒横在机器顶上**：纸从它后头升上来，压纸架横在纸前。按圆柱上色 —— 暗—亮—暗
+ *    三条横带 + 两端轴套与刻纹旋钮（旋钮每打完一行转一格，是「纸在往上走」的证据）。
+ * 2. **滑架下是一条暗腔**：全图最暗的一块，字锤从腔里朝滚筒抬。一道真正的暗缝比任何
+ *    描边都更像「后面还有东西」。
+ * 3. **两肩高出键盘区**：色带盘盖坐在肩顶，轮廓「高—低—高」，机器有了肩宽。
+ * 4. **四排键近大远小**（见 [TYPE_KEY_TIERS]）：越靠前的一排键帽更大、整排更宽，每颗键
+ *    下面还露出一小截键杆。
  *
  * ## 滑架不横移
  *
  * 真机是纸跟着滑架往左走、字锤原地敲。这里**反过来**：纸不动，打字点沿滚筒左→右走，
- * 每 [TYPE_LINE_MS] 一行、末 12% 是回车横扫飞回行首。原因是出来的那张纸就是曲目卡片，
- * 卡片在布局里钉死不动 —— 滑架带着立纸横移，立纸和卡片当场错开一截。
+ * 每 [TYPE_LINE_MS] 一行、末 12% 是回车横扫飞回行首。原因是升上来的那张纸就是曲目卡片，
+ * 卡片在布局里钉死不动 —— 滑架带着纸横移，纸和卡片当场错开一截。
  * 代价是机械原理不对，但屏幕上「打字机正在打字」这件事读得出来，而错位读得出来。
  */
 private fun DrawScope.drawTypewriter(
@@ -4243,32 +4229,28 @@ private fun DrawScope.drawTypewriter(
     val w = size.width
     val h = size.height
 
-    // 出纸口坐在卡片上缘。量不到就用 0.196h 兜底，且不许再往上 ——
-    // 机器总高 0.150h，再抬一档立纸就顶进状态栏
-    val exitY = (if (card.width > 1f) card.top else h * 0.196f)
-        .coerceIn(h * 0.196f, h * 0.26f)
+    // 出纸口坐在卡片下缘。量不到就用 0.74h 兜底（那是布局层 TTPD_MACHINE_RESERVE
+    // 抬高后的典型位置），并钳在合理带内 —— 卡片下缘不该低于 0.84h（机器只剩一条缝）
+    val exitY = (if (card.width > 1f) card.bottom else h * 0.74f)
+        .coerceIn(h * 0.55f, h * 0.84f)
     val paperL = if (card.width > 1f) card.left else w * 0.055f
     val paperR = if (card.width > 1f) card.right else w * 0.945f
     val paperW = paperR - paperL
     val paperCx = (paperL + paperR) / 2f
 
-    // 机身左右各出画 0.02w。全宽的机器只截中段，正视比例的问题就不存在了（见调用处注释）
+    // 机身左右各出画 0.02w
     val mL = -w * 0.02f
     val mW = w * 1.04f
     val mR = mL + mW
 
-    // ── 纵向分层 ──
-    // 一律「离出纸口多远」，全在这一段里定完；改总高只动这十来个数
-    val tableTop = exitY - h * 0.150f
-    val stubTop = exitY - h * 0.147f
-    val stubBottom = exitY - h * 0.115f
-    val platenCy = exitY - h * 0.104f
+    // ── 纵向分层（一律「出口往下多远」，改总高只动这十来个数）──
+    val platenCy = exitY + h * 0.030f
     val platenRy = h * 0.017f
-    val recessTop = platenCy + platenRy
-    val shoulderTop = exitY - h * 0.080f
-    val recessBottom = exitY - h * 0.070f
-    val lipTop = exitY - h * 0.012f
-    // 横向：两肩各占 0.205w，中间 0.60w 是键盘区
+    val recessTop = exitY + h * 0.050f
+    val recessBottom = exitY + h * 0.080f
+    val shoulderTop = exitY + h * 0.082f
+    val lipTop = exitY + h * 0.112f
+    // 横向：两肩各占 0.185w，中间 0.60w 是键盘区
     val shoulderR = w * 0.185f
     val shoulderSpan = shoulderR - mL
     val midL = shoulderR
@@ -4277,7 +4259,7 @@ private fun DrawScope.drawTypewriter(
     val bankWidth = w * 0.60f
 
     // ── 节拍 ──
-    // 待机（换张淡变期，本段还没开始）：不敲、不打、立纸上是打了三行的一页
+    // 待机（换张淡变期，本段还没开始）：不敲、不打、滚筒上那截纸是打了三行的一页
     val idle = eraMs < 0L
     val lineT = if (idle) 0.62f else (eraMs % TYPE_LINE_MS).toFloat() / TYPE_LINE_MS
     val sweeping = lineT > TYPE_LINE_SPAN
@@ -4293,81 +4275,62 @@ private fun DrawScope.drawTypewriter(
         val t = (eraMs % TYPE_STRIKE_MS).toFloat() / TYPE_STRIKE_MS
         (1f - abs(t - 0.35f) / 0.65f).coerceIn(0f, 1f)
     }
-    // 立纸上累积的行数。第 3 行之后不再涨 —— 露在滚筒之上的只有 0.032h，第 4 行会被压掉
+    // 滚筒上那截露头的纸累积的行数。第 3 行之后不再涨 —— 出纸一启动卡片就从这里
+    // 接管，露头那截被卡片盖住
     val stubLines = if (idle) 3 else (1L + eraMs / TYPE_LINE_MS).coerceIn(1L, 3L).toInt()
-
-    // ── 纸台与立纸（在滚筒之前画，下沿由滚筒压住）──
-    // 纸台：托着立纸那块朝后倒的斜板，比纸宽一圈
-    path.rewind()
-    path.moveTo(paperCx - paperW * 0.545f, tableTop)
-    path.lineTo(paperCx + paperW * 0.545f, tableTop)
-    path.lineTo(paperCx + paperW * 0.515f, stubBottom)
-    path.lineTo(paperCx - paperW * 0.515f, stubBottom)
-    path.close()
-    drawPath(path = path, color = INK, alpha = alpha * 0.50f)
-    // 板子朝后倒，上缘离台灯最近：顶上这条亮边就是「这块板是斜的」的全部证据
-    drawLine(
-        color = PAPER_WHITE,
-        start = Offset(paperCx - paperW * 0.545f, tableTop),
-        end = Offset(paperCx + paperW * 0.545f, tableTop),
-        strokeWidth = (h * 0.0024f).coerceAtLeast(1f),
-        alpha = alpha * 0.22f
-    )
-    // 两侧托纸臂：斜板两边各一根探出来的金属臂，纸靠它们扶住。少了它纸台是一块光板
-    for (side in 0..1) {
-        val ax = paperCx + paperW * (if (side == 0) -0.545f else 0.545f)
-        drawRect(
-            color = INK,
-            topLeft = Offset(if (side == 0) ax - w * 0.019f else ax, tableTop + h * 0.004f),
-            size = Size(w * 0.019f, h * 0.022f),
-            alpha = alpha * 0.74f
-        )
+    // 露头纸的可见度：前摇里机器自己敲给谁看全靠它；卡片开始升上来（前摇结束）后
+    // 300ms 淡掉 —— 卡片是不透明的，硬留着只会从纸边上漏出几道旧线
+    val stubAlpha = if (eraMs < SwiftieTimeline.TTPD_PREROLL_MS) {
+        1f
+    } else {
+        (1f - (eraMs - SwiftieTimeline.TTPD_PREROLL_MS) / 300f).coerceIn(0f, 1f)
     }
-    // 立纸：绕过滚筒之后朝后倒的那一截。上缘略窄 = 朝后倒的透视
-    path.rewind()
-    path.moveTo(paperCx - paperW * 0.470f, stubTop)
-    path.lineTo(paperCx + paperW * 0.470f, stubTop)
-    path.lineTo(paperCx + paperW * 0.492f, stubBottom)
-    path.lineTo(paperCx - paperW * 0.492f, stubBottom)
-    path.close()
-    // 纸色**不能用 PAPER_WHITE**：实测米白纸压在米白桌面上是 246 比 243，屏幕上只剩一圈描边。
-    // 这一截是朝后倒的，本来就比桌面受光少 —— 压到灰米（deep 那一档）既分得开又是对的
-    drawPath(path = path, color = deep, alpha = alpha * 0.92f)
-    // 上半截提亮：纸朝后倒，顶边离台灯最近。两条白带（0.30 / 0.14）在灰米上叠出
-    // 「上亮下暗」的渐变，纸才不是一块均匀的灰卡。每帧 Brush.verticalGradient 要新建对象，
-    // 两条扁矩形省下这笔开销，而这么窄的一截上肉眼分不出两者
-    val stubH = stubBottom - stubTop
-    drawRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(paperCx - paperW * 0.470f, stubTop),
-        size = Size(paperW * 0.940f, stubH * 0.42f),
-        alpha = alpha * 0.30f
-    )
-    drawRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(paperCx - paperW * 0.478f, stubTop + stubH * 0.42f),
-        size = Size(paperW * 0.956f, stubH * 0.30f),
-        alpha = alpha * 0.14f
-    )
-    drawPath(
-        path = path,
-        color = INK,
-        alpha = alpha * 0.42f,
-        style = Stroke(width = (w * 0.0018f).coerceAtLeast(1f))
-    )
-    // 打上去的字。**印字行钉死在滚筒上沿之上**：真机是印字点不动、纸往上卷，
-    // 所以越早打的行越靠上，第 0 行（最新那行）贴着滚筒
-    for (line in 0 until stubLines) {
-        val len = if (line == 0) typed else 0.70f + 0.26f * abs(sin(line * 2.7f))
-        if (len <= 0.01f) continue
-        val lineY = exitY - h * (0.128f + 0.0070f * line)
-        drawLine(
-            color = INK,
-            start = Offset(paperL + paperW * 0.07f, lineY),
-            end = Offset(paperL + paperW * (0.07f + 0.84f * len), lineY),
-            strokeWidth = (h * 0.0024f).coerceAtLeast(1f),
-            alpha = alpha * 0.68f
+
+    // ── 滚筒后露头的那截纸（前摇期的「字打在哪」）──
+    // 印字行钉死在滚筒上沿之上：真机是印字点不动、纸往上卷，所以越早打的行越靠上，
+    // 第 0 行（最新那行）贴着滚筒
+    if (stubAlpha > 0.01f) {
+        val stubTop = exitY - h * 0.036f
+        path.rewind()
+        path.moveTo(paperCx - paperW * 0.470f, stubTop)
+        path.lineTo(paperCx + paperW * 0.470f, stubTop)
+        path.lineTo(paperCx + paperW * 0.492f, exitY - h * 0.002f)
+        path.lineTo(paperCx - paperW * 0.492f, exitY - h * 0.002f)
+        path.close()
+        // 纸色不能用 PAPER_WHITE：米白纸压在米白桌面上分不开。露头这截背着台灯，
+        // 压到灰米（deep 那一档）既分得开又是对的；顶边再提两条亮带表现「上亮下暗」
+        drawPath(path = path, color = deep, alpha = alpha * 0.92f * stubAlpha)
+        val stubH = h * 0.034f
+        drawRect(
+            color = PAPER_WHITE,
+            topLeft = Offset(paperCx - paperW * 0.470f, stubTop),
+            size = Size(paperW * 0.940f, stubH * 0.42f),
+            alpha = alpha * 0.30f * stubAlpha
         )
+        drawRect(
+            color = PAPER_WHITE,
+            topLeft = Offset(paperCx - paperW * 0.478f, stubTop + stubH * 0.42f),
+            size = Size(paperW * 0.956f, stubH * 0.30f),
+            alpha = alpha * 0.14f * stubAlpha
+        )
+        drawPath(
+            path = path,
+            color = INK,
+            alpha = alpha * 0.42f * stubAlpha,
+            style = Stroke(width = (w * 0.0018f).coerceAtLeast(1f))
+        )
+        for (line in 0 until stubLines) {
+            val len = if (line == 0) typed else 0.70f + 0.26f * abs(sin(line * 2.7f))
+            if (len <= 0.01f) continue
+            val lineY = exitY - h * (0.006f + 0.0070f * line)
+            drawLine(
+                color = INK,
+                start = Offset(paperL + paperW * 0.07f, lineY),
+                end = Offset(paperL + paperW * (0.07f + 0.84f * len), lineY),
+                strokeWidth = (h * 0.0024f).coerceAtLeast(1f),
+                alpha = alpha * 0.68f * stubAlpha
+            )
+        }
     }
 
     // ── 压纸滚筒 ──
@@ -4626,7 +4589,9 @@ private fun DrawScope.drawTypewriter(
     for (row in TYPE_KEY_ROWS.indices.reversed()) {
         val keys = TYPE_KEY_ROWS[row]
         val scale = TYPE_KEY_TIERS[row]
-        val rowY = exitY - h * (0.060f - 0.0112f * row)
+        // 第 0 排最靠里（贴着两肩下沿）、最小；越靠前越大越低。低到出屏的那几排
+        // 被时间轴挡住，属预期 —— 机器本来就坐在屏幕底
+        val rowY = exitY + h * (0.120f + 0.0112f * row)
         val keyRx = mW * 0.0250f * scale
         val keyRy = h * 0.0047f * scale
         // 每排往右错三分之一个键，和真机一样
@@ -4685,7 +4650,7 @@ private fun DrawScope.drawTypewriter(
     }
 
     // 空格键：最前那一条，也是唯一一根横杆。先垫一层影，它才是「架起来」的
-    val spaceTop = exitY - h * 0.0240f
+    val spaceTop = exitY + h * 0.1720f
     val spaceW = w * 0.360f
     drawRoundRect(
         color = Color.Black,
@@ -4711,12 +4676,13 @@ private fun DrawScope.drawTypewriter(
         style = Stroke(width = (w * 0.0020f).coerceAtLeast(1f))
     )
 
-    // ── 前脸 + 出纸口 ──
-    // 三个调子里最暗的一块（背光）。它的下沿就是纸的出口，坐在卡片上缘上
+    // ── 前脸 ──
+    // 三个调子里最暗的一块（背光）。从键区下沿一路落到屏幕底：机器「坐在屏幕底下」，
+    // 底边出画才对；落进时间轴后面的那截被轴盖住，属预期
     drawRect(
         color = INK,
         topLeft = Offset(mL, lipTop),
-        size = Size(mW, exitY - lipTop),
+        size = Size(mW, h - lipTop),
         alpha = alpha * 0.97f
     )
     drawLine(
@@ -4846,11 +4812,11 @@ private const val TYPE_LINE_SPAN = 0.88f
 // ─────────────────────── 12 · The Life of a Showgirl ───────────────────────
 
 /**
- * 剧场舞台：大幕 + 追光锥 + 桁架灯 + 红幕中央的原创舞女剪影。
+ * 剧场舞台：大幕 + 一排化妆镜边灯 + 追光锥 + 空浴缸剪影 + marquee 灯牌边框。
  *
- * 原先这一张画的是羽毛扇，被否掉了 —— 九条粗线扫过右下角读作一把扫帚。这里把主体
- * 收回到舞台本身：红丝绒开口、顶部灯架和一位被追光勾出轮廓的舞女，保留 Showgirl
- * 的戏剧感，同时不照搬任何具体插画。
+ * 原先这一张画的是羽毛扇，被否掉了 —— 九条粗线扫过右下角读作一把扫帚。改成剧场本身：
+ * 「Showgirl 的一生」讲的是幕后而不是道具，浴缸（官方主视觉里那只）比扇子更是它。
+ * **不画人形** —— 一旦有人，这就从「舞台」变成「某个人的画像」。
  *
  * 边灯按 [phase] 依次点亮（跑马灯），跑一圈正好是一个相位周期，所以绕回时接得上。
  */
@@ -4865,7 +4831,7 @@ private fun DrawScope.drawTheatreStage(
     val w = size.width
     val h = size.height
 
-    // 追光锥：自上缘正中打到舞台地板，落在舞女身上
+    // 追光锥：自上缘正中打到舞台地板，落在浴缸上
     drawCone(
         path = path,
         apexX = w * 0.52f,
@@ -4917,7 +4883,7 @@ private fun DrawScope.drawTheatreStage(
     // 是同一个毛病。
     //
     // 换成桁架灯：同样是「剧场」的信息，但形不撞（横杆 + 吊灯 vs 镶灯边框），
-    // 而且它给了舞女一个**光源的来处** —— 原来那束追光是从屏幕上缘凭空打下来的。
+    // 而且它给了浴缸一个**光源的来处** —— 原来那束追光是从屏幕上缘凭空打下来的。
     val trussY = h * 0.082f
     val trussH = h * 0.026f
     for (chord in 0..1) {
@@ -4971,7 +4937,7 @@ private fun DrawScope.drawTheatreStage(
             // 镜面：闪一下。五盏各自错相位，整排才不是同步的一串
             val lit = 0.62f + 0.38f * sin((phase * 2f + i * 0.21f) * TAU)
             drawBulb(Offset(lx, bodyTop + bodyH), w * 0.016f, lit, alpha * 0.9f)
-            // 光锥：从灯面往下，落到舞台中央那一带
+            // 光锥：从镜面往下，落到浴缸那一带
             drawCone(
                 path = path,
                 apexX = lx,
@@ -4984,8 +4950,233 @@ private fun DrawScope.drawTheatreStage(
         }
     }
 
-    // 舞女：占据原本中央主体区域，但把脚收在卡片覆盖线之前，保证轮廓完整可读。
-    drawShowgirlDancer(path, top, mid, deep, phase, alpha)
+    // 空浴缸：外沿一圈厚唇 + 缸体 + 四只爪脚 + 水面与泡沫。**缸里没有人**。
+    // 抬进 HERO_BOTTOM：原来在 0.62–0.84h，整只缸压在卡片背后，
+    // 只剩一团发白的圆角矩形透上来，把卡片左三分之二洗成一片脏白。
+    //
+    // 第五轮把缸放大了（0.10h 高 → 0.15h）：灯牌撤掉之后 0.14–0.38h 全空了出来，
+    // 而这只缸是官方主视觉里的那件东西，本来就该是这一张的主体。
+    // 缸体也从 0.42 提到 0.86 —— 0.42 的搪瓷缸背后透着幕布的竖褶，读作一只塑料桶。
+    val tubLeft = w * 0.275f
+    val tubRight = w * 0.765f
+    // 0.250h 而不是 0.225h：上一版 0.15h 高、下缘又收掉 7%，比例是**桶**不是缸。
+    // 独脚浴缸横向比竖向长得多，缸壁近乎直，只在贴近底部才收 —— 收窄量也从 7% 降到 3.5%
+    val tubTop = h * 0.250f
+    val tubBottom = h * 0.378f
+    val tubW = tubRight - tubLeft
+    // 缸体：上宽下略窄的圆角形
+    path.rewind()
+    path.moveTo(tubLeft, tubTop)
+    path.lineTo(tubRight, tubTop)
+    path.lineTo(tubRight - tubW * 0.035f, tubBottom - tubW * 0.04f)
+    path.quadraticTo(
+        (tubLeft + tubRight) / 2f, tubBottom + tubW * 0.035f,
+        tubLeft + tubW * 0.035f, tubBottom - tubW * 0.04f
+    )
+    path.close()
+    // 0.96 而不是 0.86：第七轮截图里幕布的竖褶从缸壁里透上来，横过缸体读作一道道水平
+    // 条纹（缸体自己是纯白，透上来的褶被缸口的椭圆切成了横的），一只搪瓷缸读作条纹布桶。
+    // 搪瓷是不透光的
+    drawPath(path = path, color = PAPER_WHITE, alpha = alpha * 0.96f)
+    drawPath(
+        path = path,
+        color = deep,
+        alpha = alpha * 0.70f,
+        style = Stroke(width = (w * 0.004f).coerceAtLeast(1f))
+    )
+    // 缸体左侧一道竖高光 + 右侧一道暗部：搪瓷是弧面，平填一块白是一张纸板
+    drawLine(
+        color = Color.White,
+        start = Offset(tubLeft + tubW * 0.10f, tubTop + tubW * 0.06f),
+        end = Offset(tubLeft + tubW * 0.13f, tubBottom - tubW * 0.10f),
+        strokeWidth = (tubW * 0.030f).coerceAtLeast(2f),
+        alpha = alpha * 0.34f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = deep,
+        start = Offset(tubRight - tubW * 0.09f, tubTop + tubW * 0.08f),
+        end = Offset(tubRight - tubW * 0.13f, tubBottom - tubW * 0.10f),
+        strokeWidth = (tubW * 0.040f).coerceAtLeast(2f),
+        alpha = alpha * 0.16f,
+        cap = StrokeCap.Round
+    )
+    // 厚唇：一条压在缸口的椭圆环，浴缸的边是有厚度的
+    drawOval(
+        color = PAPER_WHITE,
+        topLeft = Offset(tubLeft - tubW * 0.02f, tubTop - tubW * 0.055f),
+        size = Size(tubW * 1.04f, tubW * 0.115f),
+        alpha = alpha * 0.55f
+    )
+    // 缸口的内影：唇的里侧，缸因此是「有开口的」而不是一块实心白
+    drawOval(
+        color = deep,
+        topLeft = Offset(tubLeft + tubW * 0.03f, tubTop - tubW * 0.030f),
+        size = Size(tubW * 0.94f, tubW * 0.075f),
+        alpha = alpha * 0.45f
+    )
+    // 水面：缸口内的一片浅椭圆 + 一排泡沫。
+    // 一只**空**缸只是一件家具；有水才是官方主视觉里那一幕。
+    // 泡沫用一条路径里并起来的圆团一次填完 —— 逐个 drawCircle 的话交叠处会叠深一档，
+    // 一排大小相近的圆珠子（Red 与 folklore 两张都在这上面翻过车）
+    drawOval(
+        color = top,
+        topLeft = Offset(tubLeft + tubW * 0.055f, tubTop - tubW * 0.020f),
+        size = Size(tubW * 0.89f, tubW * 0.062f),
+        alpha = alpha * 0.62f
+    )
+    // 泡沫排两层、半径差到 2.6 倍、横向间距也按频率抖开。
+    // 上一版 13 团半径在 0.018–0.032 之间、y 只抖 ±0.012，等间距摆一排 ——
+    // 第六轮截图里那是**一串珍珠项链**贴在缸口上。真的泡沫是大小相差极大的团挤在一起，
+    // 所以半径 0.012–0.044（3.6 倍差），横向位置再叠一个频率错开
+    path.rewind()
+    for (layer in 0..1) {
+        val count = if (layer == 0) 11 else 9
+        for (b in 0 until count) {
+            val f = (b + 0.5f) / count
+            val jitterX = sin(f * (if (layer == 0) 9.1f else 6.7f) + layer * 2.3f) * 0.030f
+            val bx = tubLeft + tubW * (0.06f + f * 0.88f + jitterX)
+            val br = tubW * (0.012f + 0.032f * abs(sin(f * (if (layer == 0) 7.3f else 11.9f) + 1.1f)))
+            val by = tubTop - tubW * (if (layer == 0) 0.002f else 0.016f) +
+                sin(f * 4.7f + layer * 1.7f) * tubW * 0.020f
+            path.addOval(Rect(bx - br, by - br, bx + br, by + br))
+        }
+    }
+    drawPath(path = path, color = Color.White, alpha = alpha * 0.58f)
+    // 爪脚：踝 + 外撇的爪垫两段。前两只整只看得见，后两只**按比例缩小**（不是变淡）。
+    //
+    // 上一版是一个圆角矩形，圆角给到 0.030 而框只有 0.068×0.063，等于画了个椭圆；
+    // 后两只又叠了 vis 的半透明，第七轮截图里那两只读作缸底下方两颗**脱开的灰珠子**。
+    // 远近该用**大小**表示，不该用透明度：半透明的实心木件只会读作幽灵。
+    // 爪脚缸的辨识特征就是踝细、脚爪往外撇的那一块，所以这里必须是两段
+    for (i in 0 until TUB_FEET.size / 2) {
+        val f = TUB_FEET[i * 2]
+        val vis = TUB_FEET[i * 2 + 1]
+        val fx = tubLeft + tubW * f
+        val ankleH = tubW * 0.072f * vis
+        val padH = tubW * 0.044f * vis
+        val topY = tubBottom - tubW * 0.028f * vis
+        // 踝：上宽下窄的一小段梯形，接在缸底
+        path.rewind()
+        path.moveTo(fx - tubW * 0.030f * vis, topY)
+        path.lineTo(fx + tubW * 0.030f * vis, topY)
+        path.lineTo(fx + tubW * 0.019f * vis, topY + ankleH)
+        path.lineTo(fx - tubW * 0.019f * vis, topY + ankleH)
+        path.close()
+        drawPath(path = path, color = deep, alpha = alpha * 0.84f)
+        drawRoundRect(
+            color = deep,
+            topLeft = Offset(fx - tubW * 0.042f * vis, topY + ankleH - padH * 0.30f),
+            size = Size(tubW * 0.084f * vis, padH),
+            cornerRadius = CornerRadius(tubW * 0.012f * vis),
+            alpha = alpha * 0.90f
+        )
+    }
+    // 龙头：右端一根立柱 + 一段弯管，管口朝缸内。
+    // 第四轮只有那一段 150° 的弧、又细又小，压在橙底上读作一枚墨绿色的挂钩。
+    //
+    // 第五轮换掉了颜色。原来整支龙头用 [GOLD]（#D4AF37）—— 而这一张的中档底色是
+    // #E8620F 的橙：金画在橙上混出来是**黄绿**，第五轮截图里那支龙头读作一株
+    // 从缸沿长出来的嫩芽（当场没认出是龙头）。镀铬件本来就该是近白加深色描边，
+    // 白在橙底上永远不会串色
+    val tapX = tubRight - tubW * 0.13f
+    // 底座压在缸沿**之内**（+0.03 而不是 -0.02）。上一版整支龙头连底座都在缸口以上，
+    // 与缸沿之间还留着一道缝，第六轮截图里读作「浮在缸上方的一副自行车车把」。
+    // 龙头是从缸沿上装出来的，底座必须踩在沿上
+    val tapBase = tubTop + tubW * 0.030f
+    // 0.13 而不是 0.17：出水口只需要探进缸口一点，高过缸沿半个缸宽的龙头是消防栓
+    val tapH = tubW * 0.130f
+    // 管身：先描一道深色当轮廓，再压一道更细的近白当镀铬面。
+    // 两道叠出来才是「管」；单描一道白线在浅橙上几乎看不见
+    val pipeW = (tubW * 0.036f).coerceAtLeast(3f)
+    drawLine(
+        color = deep,
+        start = Offset(tapX, tapBase),
+        end = Offset(tapX, tapBase - tapH),
+        strokeWidth = pipeW,
+        alpha = alpha * 0.72f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = PAPER_WHITE,
+        start = Offset(tapX, tapBase),
+        end = Offset(tapX, tapBase - tapH),
+        strokeWidth = pipeW * 0.58f,
+        alpha = alpha * 0.92f,
+        cap = StrokeCap.Round
+    )
+    // 鹅颈弯管：立柱顶端往**左**（缸内一侧）绕过去，末端挂一段朝下的出水口。
+    //
+    // 上一版这段弧的圆心就落在立柱顶端，于是立柱插在弧的**正中间**，两端等长地朝下 ——
+    // 第七轮截图里那是一副对称的 ∩ 形车把，不是龙头。真龙头是不对称的：一头是立柱，
+    // 另一头是朝下的水口。所以弧的**右端**接立柱，左端接出水口
+    val neckRx = tubW * 0.088f
+    val neckRy = tubW * 0.058f
+    val neckCx = tapX - neckRx
+    val neckCy = tapBase - tapH
+    val nozzleX = neckCx - neckRx
+    val nozzleBottom = neckCy + tubW * 0.048f
+    for (pass in 0..1) {
+        val col = if (pass == 0) deep else PAPER_WHITE
+        val wid = if (pass == 0) pipeW else pipeW * 0.58f
+        val a = alpha * (if (pass == 0) 0.72f else 0.92f)
+        drawArc(
+            color = col,
+            startAngle = 0f,
+            sweepAngle = -180f,
+            useCenter = false,
+            topLeft = Offset(neckCx - neckRx, neckCy - neckRy),
+            size = Size(neckRx * 2f, neckRy * 2f),
+            alpha = a,
+            style = Stroke(width = wid, cap = StrokeCap.Round)
+        )
+        // 出水口：弯管左端往下一小段
+        drawLine(
+            color = col,
+            start = Offset(nozzleX, neckCy),
+            end = Offset(nozzleX, nozzleBottom),
+            strokeWidth = wid,
+            alpha = a,
+            cap = StrokeCap.Round
+        )
+    }
+    // 水柱：出水口到水面那一小段。有它这支才是**开着的**龙头，
+    // 而不是缸沿上装着的一件金属摆件
+    drawLine(
+        color = Color.White,
+        start = Offset(nozzleX, nozzleBottom),
+        end = Offset(nozzleX, tubTop - tubW * 0.020f),
+        strokeWidth = pipeW * 0.50f,
+        alpha = alpha * 0.42f,
+        cap = StrokeCap.Round
+    )
+    // 阀门：两枚十字把手（冷热各一），龙头才不是一根光管子
+    for (v in 0..1) {
+        val vx = tapX + (if (v == 0) -1f else 1f) * tubW * 0.058f
+        // 把手落在底座那一档高度上，跟着底座一起踩在缸沿上
+        val vy = tapBase - tapH * 0.12f
+        drawCircle(color = deep, radius = tubW * 0.024f, center = Offset(vx, vy), alpha = alpha * 0.72f)
+        drawCircle(color = PAPER_WHITE, radius = tubW * 0.017f, center = Offset(vx, vy), alpha = alpha * 0.90f)
+        for (arm in 0..1) {
+            val ax = if (arm == 0) tubW * 0.024f else 0f
+            val ay = if (arm == 0) 0f else tubW * 0.024f
+            drawLine(
+                color = deep,
+                start = Offset(vx - ax, vy - ay),
+                end = Offset(vx + ax, vy + ay),
+                strokeWidth = (tubW * 0.008f).coerceAtLeast(1f),
+                alpha = alpha * 0.55f
+            )
+        }
+        // 把手到管身的短颈
+        drawLine(
+            color = PAPER_WHITE,
+            start = Offset(tapX, vy),
+            end = Offset(vx, vy),
+            strokeWidth = pipeW * 0.42f,
+            alpha = alpha * 0.85f
+        )
+    }
 
     // 舞台地板：一条横向暗带 + 追光落地的椭圆光斑，再压一层暖雾表现空气中的尘。
     drawFogBand(HERO_BOTTOM, 0.14f, deep, alpha * DISTANT_ALPHA * 2f)
@@ -4994,214 +5185,14 @@ private fun DrawScope.drawTheatreStage(
 }
 
 /**
- * 原创舞女剪影：高举手臂、收腰亮片裙、错开的双腿和右侧轮廓光。
+ * 浴缸四只爪脚：(横向位置, 尺寸比例)。
  *
- * 采用几何化卡通轮廓而不是具体人物肖像：头发、姿态和裙摆让人一眼读成舞女，
- * 三档橙红色与金色边缘光负责体积，裙褶用曲线而不是均匀直线，避免变成纸片。
+ * 后两只是缸另一侧的脚，按 0.6 **整体缩小**（不是调透明度）—— 远近用大小表示。
  */
-private fun DrawScope.drawShowgirlDancer(
-    path: Path,
-    top: Color,
-    mid: Color,
-    deep: Color,
-    phase: Float,
-    alpha: Float
-) {
-    val w = size.width
-    val h = size.height
-    val cx = w * 0.52f
-    val floorY = h * 0.375f
-    val headR = w * 0.032f
-    val hair = Color(0xFF5A1B0B)
-    val dress = Color(0xFFB63D0D)
-    val dressLight = Color(0xFFE8751E)
-    val outline = deep
-    val sway = sin(phase * TAU) * w * 0.006f
+private val TUB_FEET = floatArrayOf(
+    0.12f, 1.0f,
+    0.86f, 1.0f,
+    0.30f, 0.6f,
+    0.68f, 0.6f
+)
 
-    // 追光中的空气亮斑，把人物从幕布里托出来。
-    drawUnitGlow(
-        GLOW_WARM,
-        Offset(cx + w * 0.015f, h * 0.245f),
-        w * 0.42f,
-        alpha * 0.24f
-    )
-
-    // 发髻与卷发轮廓：大小错开的圆团比一颗光秃的圆头更像舞台造型。
-    drawCircle(hair, headR * 1.20f, Offset(cx - headR * 0.52f, h * 0.158f), alpha = alpha * 0.90f)
-    drawCircle(hair, headR * 1.05f, Offset(cx + headR * 0.72f, h * 0.148f), alpha = alpha * 0.92f)
-    drawCircle(hair, headR * 0.82f, Offset(cx + headR * 1.06f, h * 0.178f), alpha = alpha * 0.88f)
-    drawCircle(dressLight, headR * 0.18f, Offset(cx - headR * 0.36f, h * 0.144f), alpha = alpha * 0.62f)
-
-    // 脸、颈、躯干合成一条干净的人形剪影，面部不画具体五官。
-    drawCircle(outline, headR, Offset(cx, h * 0.178f), alpha = alpha * 0.98f)
-    path.rewind()
-    path.moveTo(cx - w * 0.017f, h * 0.194f)
-    path.lineTo(cx + w * 0.016f, h * 0.194f)
-    path.lineTo(cx + w * 0.023f, h * 0.222f)
-    path.cubicTo(
-        cx + w * 0.047f, h * 0.232f,
-        cx + w * 0.054f, h * 0.254f,
-        cx + w * 0.035f, h * 0.274f
-    )
-    path.cubicTo(
-        cx + w * 0.020f, h * 0.287f,
-        cx - w * 0.020f, h * 0.287f,
-        cx - w * 0.038f, h * 0.273f
-    )
-    path.cubicTo(
-        cx - w * 0.056f, h * 0.252f,
-        cx - w * 0.047f, h * 0.232f,
-        cx - w * 0.022f, h * 0.221f
-    )
-    path.close()
-    drawPath(path, outline, alpha = alpha * 0.98f)
-
-    // 左臂抬起成舞姿，右臂贴腰形成 S 曲线，轮廓光只放在朝追光的一侧。
-    path.rewind()
-    path.moveTo(cx - w * 0.030f, h * 0.229f)
-    path.cubicTo(
-        cx - w * 0.076f, h * 0.218f,
-        cx - w * 0.112f, h * 0.190f,
-        cx - w * 0.104f, h * 0.155f
-    )
-    path.cubicTo(
-        cx - w * 0.100f, h * 0.141f,
-        cx - w * 0.084f, h * 0.136f,
-        cx - w * 0.077f, h * 0.146f
-    )
-    path.cubicTo(
-        cx - w * 0.078f, h * 0.186f,
-        cx - w * 0.056f, h * 0.211f,
-        cx - w * 0.011f, h * 0.242f
-    )
-    path.close()
-    drawPath(path, outline, alpha = alpha * 0.96f)
-    path.rewind()
-    path.moveTo(cx + w * 0.029f, h * 0.232f)
-    path.cubicTo(
-        cx + w * 0.074f, h * 0.241f,
-        cx + w * 0.083f, h * 0.266f,
-        cx + w * 0.056f, h * 0.286f
-    )
-    path.lineTo(cx + w * 0.038f, h * 0.276f)
-    path.cubicTo(
-        cx + w * 0.054f, h * 0.260f,
-        cx + w * 0.043f, h * 0.246f,
-        cx + w * 0.016f, h * 0.242f
-    )
-    path.close()
-    drawPath(path, outline, alpha = alpha * 0.92f)
-
-    // 腰部和裙摆：左侧轻抬、右侧展开，制造舞步中的旋转和舞台透视。
-    path.rewind()
-    path.moveTo(cx - w * 0.038f, h * 0.268f)
-    path.cubicTo(
-        cx - w * 0.060f, h * 0.286f,
-        cx - w * 0.122f, h * 0.300f,
-        cx - w * 0.165f + sway, h * 0.334f
-    )
-    path.cubicTo(
-        cx - w * 0.112f + sway, h * 0.350f,
-        cx - w * 0.066f, h * 0.358f,
-        cx - w * 0.012f, h * 0.360f
-    )
-    path.cubicTo(
-        cx + w * 0.069f, h * 0.361f,
-        cx + w * 0.145f + sway, h * 0.348f,
-        cx + w * 0.184f + sway, h * 0.326f
-    )
-    path.cubicTo(
-        cx + w * 0.139f, h * 0.300f,
-        cx + w * 0.078f, h * 0.286f,
-        cx + w * 0.037f, h * 0.268f
-    )
-    path.close()
-    drawPath(path, dress, alpha = alpha * 0.96f)
-
-    // 裙摆下方的暖色主面，给剪影一层卡通体积，不让它像一块黑色剪纸。
-    path.rewind()
-    path.moveTo(cx - w * 0.008f, h * 0.276f)
-    path.cubicTo(
-        cx + w * 0.032f, h * 0.302f,
-        cx + w * 0.082f, h * 0.315f,
-        cx + w * 0.145f + sway, h * 0.326f
-    )
-    path.cubicTo(
-        cx + w * 0.104f, h * 0.344f,
-        cx + w * 0.062f, h * 0.350f,
-        cx + w * 0.018f, h * 0.351f
-    )
-    path.cubicTo(
-        cx + w * 0.036f, h * 0.322f,
-        cx + w * 0.026f, h * 0.298f,
-        cx - w * 0.008f, h * 0.276f
-    )
-    path.close()
-    drawPath(path, dressLight, alpha = alpha * 0.58f)
-
-    // 双腿错开，脚踝落在舞台地面前；右腿略斜，姿态更像谢幕站姿而不是人体模型。
-    drawLine(
-        outline,
-        Offset(cx - w * 0.015f, h * 0.348f),
-        Offset(cx - w * 0.030f, floorY),
-        strokeWidth = w * 0.014f,
-        alpha = alpha * 0.94f,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        outline,
-        Offset(cx + w * 0.026f, h * 0.348f),
-        Offset(cx + w * 0.055f, floorY - h * 0.002f),
-        strokeWidth = w * 0.014f,
-        alpha = alpha * 0.94f,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        dressLight,
-        Offset(cx + w * 0.056f, floorY - h * 0.002f),
-        Offset(cx + w * 0.078f, floorY),
-        strokeWidth = w * 0.008f,
-        alpha = alpha * 0.82f,
-        cap = StrokeCap.Round
-    )
-
-    // 裙褶和亮片：曲线从腰部发散，按 phase 轻微闪动但不改变轮廓。
-    val shimmer = 0.68f + 0.32f * sin((phase * 2f + 0.18f) * TAU)
-    for (i in 0..3) {
-        val f = i / 3f
-        path.rewind()
-        path.moveTo(cx - w * (0.024f - f * 0.006f), h * 0.278f)
-        path.cubicTo(
-            cx + w * (0.008f + f * 0.015f), h * 0.300f,
-            cx + w * (0.026f + f * 0.050f) + sway, h * 0.323f,
-            cx + w * (0.038f + f * 0.100f) + sway, h * 0.347f
-        )
-        drawPath(
-            path,
-            color = if (i % 2 == 0) top else mid,
-            alpha = alpha * (0.28f + 0.11f * shimmer),
-            style = Stroke(width = w * 0.006f, cap = StrokeCap.Round)
-        )
-    }
-
-    // 右肩、腰线和裙摆外沿的金色轮廓光，朝向中央追光。
-    path.rewind()
-    path.moveTo(cx + w * 0.018f, h * 0.219f)
-    path.cubicTo(
-        cx + w * 0.046f, h * 0.232f,
-        cx + w * 0.050f, h * 0.254f,
-        cx + w * 0.032f, h * 0.273f
-    )
-    path.cubicTo(
-        cx + w * 0.085f, h * 0.286f,
-        cx + w * 0.142f + sway, h * 0.303f,
-        cx + w * 0.182f + sway, h * 0.326f
-    )
-    drawPath(
-        path,
-        color = LAMP_CORE,
-        alpha = alpha * 0.76f,
-        style = Stroke(width = w * 0.007f, cap = StrokeCap.Round)
-    )
-    drawCircle(LAMP_CORE, w * 0.006f, Offset(cx - w * 0.104f, h * 0.145f), alpha = alpha * 0.72f)
-}

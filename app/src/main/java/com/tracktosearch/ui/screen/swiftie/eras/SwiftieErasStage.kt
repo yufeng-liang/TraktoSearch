@@ -194,8 +194,11 @@ fun SwiftieErasStage(
                     .padding(horizontal = 20.dp),
                 contentAlignment = if (globeMounted) Alignment.Center else Alignment.BottomCenter
             ) {
-                // 卡片自己按这个高度折算曲目行高：31 首的 TTPD Anthology 在小屏上要压行
-                val slotHeight = maxHeight
+                // 卡片自己按这个高度折算曲目行高：31 首的 TTPD Anthology 在小屏上要压行。
+                // TTPD 的卡片要从插槽底再抬高一台打字机的高度（出纸口坐在卡片下缘上），
+                // 行高按抬高后的剩余空间折算，别让 31 行把机器顶出屏
+                val machineReserve = if (prerollMs != 0L) TTPD_MACHINE_RESERVE else 0.dp
+                val slotHeight = maxHeight - machineReserve
                 // key 换值就重挂：新卡片的 elapsedInCard 从 0 起算，
                 // 上一张此时 scaleY 已经收到 0，看不到硬切
                 val card: @Composable (Modifier) -> Unit = { cardModifier ->
@@ -248,6 +251,9 @@ fun SwiftieErasStage(
                         Modifier
                             .fillMaxWidth()
                             .widthIn(max = 480.dp)
+                            // TTPD：卡片从插槽底抬高一台机器，纸的下缘坐在出纸口上；
+                            // 其余 11 张仍贴插槽底（轴上长出）
+                            .padding(bottom = machineReserve)
                             // 卷收的同时从插槽底部升到插槽正中，好让球在 LOVER_BLOOM_START
                             // 那一帧原地长出来。缓动用 EaseInOutCubic：线性升会在起停两端
                             // 各有一次可见的速度突变
