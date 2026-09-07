@@ -478,7 +478,7 @@ implementation(libs.skydoves.colorpicker)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.core.testing)
-    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     // Compose UI 测试（Robolectric 组件测试用）
     testImplementation(libs.androidx.compose.ui.test.junit4)
