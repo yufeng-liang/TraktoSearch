@@ -117,6 +117,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.DiscoverFilterCardKey
 import com.tracktosearch.ui.component.DiscoverFilterCardCorner
@@ -263,451 +264,457 @@ fun DiscoverFilterScreen(
             // 底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // ========== 列表内容 ==========
-        LazyColumn(
-            state = listState,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .appSkipToLookaheadSize()
-                .hazeSource(state = hazeState)
-                .backdropContentSource(),
-            contentPadding = PaddingValues(
-                start = 12.dp,
-                end = 12.dp,
-                top = if (headerBottom > 0.dp) headerBottom else statusBarHeight + 148.dp,
-                bottom = 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .appMorphContentFade()
         ) {
-            when {
-                // 首次加载：骨架项铺满一屏，5 条刚好占满可视区，3 条会在下方留一块空白
-                showSkeleton -> {
-                    items(5) { DiscoverFilterItemSkeleton(shimmer = skeletonShimmer) }
-                }
-                // 请求失败：必须排在空结果分支之前。否则失败会落进「没有符合条件的结果」，
-                // 用户以为条件太严去改条件，而真正的原因是这次请求没成功。
-                uiState.error != null && uiState.items.isEmpty() && !uiState.isLoading -> {
-                    item {
-                        AppErrorState(
-                            message = uiState.error!!,
-                            onRetry = { viewModel.search() },
-                            modifier = Modifier.padding(top = 80.dp)
-                        )
+            // ========== 列表内容 ==========
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .appSkipToLookaheadSize()
+                    .hazeSource(state = hazeState)
+                    .backdropContentSource(),
+                contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
+                    top = if (headerBottom > 0.dp) headerBottom else statusBarHeight + 148.dp,
+                    bottom = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                when {
+                    // 首次加载：骨架项铺满一屏，5 条刚好占满可视区，3 条会在下方留一块空白
+                    showSkeleton -> {
+                        items(5) { DiscoverFilterItemSkeleton(shimmer = skeletonShimmer) }
                     }
-                }
-                // 空结果
-                uiState.hasSearched && uiState.items.isEmpty() && !uiState.isLoading -> {
-                    item {
-                        EmptyStateCard(
-                            modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
-                            isDark = isAppDarkTheme(),
-                            icon = Icons.Rounded.Star,
-                            title = stringResource(R.string.discover_filter_empty)
-                        )
-                    }
-                }
-                else -> {
-                    items(uiState.items, key = { it.id }) { item ->
-                        DiscoverFilterListItem(
-                            item = item,
-                            isMovie = uiState.type == TmdbRepository.DiscoverType.MOVIE,
-                            posterColorExtractor = viewModel.posterColorExtractor,
-                            onClick = {
-                                val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
-                                // 卡片海报来自 TMDB 列表接口（不写详情缓存），交给详情页做首帧种子
-                                DetailSeedStore.remember(
-                                    item.id,
-                                    item.poster_path?.let { TmdbImageUrls.W342 + it },
-                                    (item.release_date.ifBlank { item.first_air_date.orEmpty() })
-                                        .take(4).toIntOrNull(),
-                                    origin = SharedOrigin.DISCOVER_FILTER
-                                )
-                                if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
-                                    onMovieClick(item.id, title)
-                                } else {
-                                    onShowClick(item.id, title)
-                                }
-                            }
-                        )
-                    }
-                    // 统一的触底反馈区，保持固定高度避免列表跳动
-                    item(key = "load_more_footer") {
-                        LoadMoreFooter(
-                            state = when {
-                                uiState.isLoadingMore -> LoadMoreFooterState.Loading
-                                uiState.error != null && uiState.items.isNotEmpty() -> LoadMoreFooterState.Error
-                                uiState.hasSearched && uiState.items.isNotEmpty() && uiState.currentPage >= uiState.totalPages -> LoadMoreFooterState.Complete
-                                else -> LoadMoreFooterState.Hidden
-                            },
-                            onRetry = viewModel::loadMore,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    // 翻页失败：已有结果还在，底部给一条可重试的错误条，不清空列表
-                    if (uiState.error != null && !uiState.isLoadingMore) {
+                    // 请求失败：必须排在空结果分支之前。否则失败会落进「没有符合条件的结果」，
+                    // 用户以为条件太严去改条件，而真正的原因是这次请求没成功。
+                    uiState.error != null && uiState.items.isEmpty() && !uiState.isLoading -> {
                         item {
                             AppErrorState(
                                 message = uiState.error!!,
-                                onRetry = { viewModel.loadMore() },
-                                variant = AppErrorVariant.Inline
+                                onRetry = { viewModel.search() },
+                                modifier = Modifier.padding(top = 80.dp)
                             )
+                        }
+                    }
+                    // 空结果
+                    uiState.hasSearched && uiState.items.isEmpty() && !uiState.isLoading -> {
+                        item {
+                            EmptyStateCard(
+                                modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
+                                isDark = isAppDarkTheme(),
+                                icon = Icons.Rounded.Star,
+                                title = stringResource(R.string.discover_filter_empty)
+                            )
+                        }
+                    }
+                    else -> {
+                        items(uiState.items, key = { it.id }) { item ->
+                            DiscoverFilterListItem(
+                                item = item,
+                                isMovie = uiState.type == TmdbRepository.DiscoverType.MOVIE,
+                                posterColorExtractor = viewModel.posterColorExtractor,
+                                onClick = {
+                                    val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
+                                    // 卡片海报来自 TMDB 列表接口（不写详情缓存），交给详情页做首帧种子
+                                    DetailSeedStore.remember(
+                                        item.id,
+                                        item.poster_path?.let { TmdbImageUrls.W342 + it },
+                                        (item.release_date.ifBlank { item.first_air_date.orEmpty() })
+                                            .take(4).toIntOrNull(),
+                                        origin = SharedOrigin.DISCOVER_FILTER
+                                    )
+                                    if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
+                                        onMovieClick(item.id, title)
+                                    } else {
+                                        onShowClick(item.id, title)
+                                    }
+                                }
+                            )
+                        }
+                        // 统一的触底反馈区，保持固定高度避免列表跳动
+                        item(key = "load_more_footer") {
+                            LoadMoreFooter(
+                                state = when {
+                                    uiState.isLoadingMore -> LoadMoreFooterState.Loading
+                                    uiState.error != null && uiState.items.isNotEmpty() -> LoadMoreFooterState.Error
+                                    uiState.hasSearched && uiState.items.isNotEmpty() && uiState.currentPage >= uiState.totalPages -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = viewModel::loadMore,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        // 翻页失败：已有结果还在，底部给一条可重试的错误条，不清空列表
+                        if (uiState.error != null && !uiState.isLoadingMore) {
+                            item {
+                                AppErrorState(
+                                    message = uiState.error!!,
+                                    onRetry = { viewModel.loadMore() },
+                                    variant = AppErrorVariant.Inline
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // 快速回顶按钮
-        ScrollToTopButton(
-            listState = listState,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp),
-            hazeState = hazeState,
-            scene = discoverFilterGlassScene
-        )
-
-        // ========== 吸顶栏（Blur，透明底色） ==========
-        // 注意：不要在此 Column 上加 .scrollable(state=listState) —— 那会让高级面板内的拖拽
-        // 被转发到 listState，触发 isScrollInProgress=true 进而 collapseAdvanced()，导致弹窗内滑动
-        // 就关闭弹窗的 bug。结果列表的滚动由 LazyColumn 自己处理即可。
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                // 顶栏不参与配对，但从第一帧就在：与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出。
-                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期停 haze 采样
-                .appSkipToLookaheadSize()
-                .hazeTopBar(
-                    state = hazeState,
-                    style = hazeStyle,
-                    blurRadius = 24.dp,
-                    isContentUnderTopBar = if (transitionActive) false else null,
-                    scene = discoverFilterGlassScene
-                )
-                // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
-                .clickable(enabled = false, onClick = {})
-        ) {
-            Spacer(modifier = Modifier.statusBarsPadding())
-            // 标题栏 + 返回箭头
-            Row(
+            // 快速回顶按钮
+            ScrollToTopButton(
+                listState = listState,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 「返回箭头 + 标题」不参与配对：发现页那一侧是个圆形筛选图标，两端没有共同内容。
-                // 与整页配对的是 DiscoverFilterCardKey（底部入口卡片那条路）。
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.search_back),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.discover_filter_title),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    // 结果条数：让用户知道筛出来多少，条件太严时也有个数量感。
-                    // 只有「仅展示未标看过」这种服务端不知情的过滤才标"约"
-                    if (uiState.totalResults > 0) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (uiState.totalResultsApproximate) {
-                                stringResource(R.string.discover_filter_result_count, uiState.totalResults)
-                            } else {
-                                stringResource(R.string.discover_filter_result_count_exact, uiState.totalResults)
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
-                }
-                // 「重置」把所有条件清空并重新搜一次，是一次真操作而不是入口，按「清除」给 tap
-                TextButton(onClick = {
-                    haptics.tap()
-                    viewModel.resetFilters(); viewModel.search()
-                }) {
-                    Text(stringResource(R.string.discover_filter_reset))
-                }
-            }
-
-            // Tab 切换栏：电影 / 电视剧（透明背景，参考 Watchlist 页）
-            PrimaryTabRow(
-                selectedTabIndex = if (uiState.type == TmdbRepository.DiscoverType.MOVIE) 0 else 1,
-                containerColor = Color.Transparent
-            ) {
-                Tab(
-                    selected = uiState.type == TmdbRepository.DiscoverType.MOVIE,
-                    onClick = {
-                        haptics.segmentTick()
-                        viewModel.switchType(TmdbRepository.DiscoverType.MOVIE); viewModel.search()
-                    },
-                    text = { Text(stringResource(R.string.discover_filter_tab_movie)) }
-                )
-                Tab(
-                    selected = uiState.type == TmdbRepository.DiscoverType.SHOW,
-                    onClick = {
-                        haptics.segmentTick()
-                        viewModel.switchType(TmdbRepository.DiscoverType.SHOW); viewModel.search()
-                    },
-                    text = { Text(stringResource(R.string.discover_filter_tab_show)) }
-                )
-            }
-
-            // 筛选条件栏：类型 / 地区 / 标签 / 评分 / 高级（分散对齐）
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 类型
-                GlassFilterChip(
-                    selected = uiState.selectedGenreIds.isNotEmpty(),
-                    onClick = { showGenreDialog = true },
-                    hazeState = hazeState,
-                    text = if (uiState.selectedGenreIds.isEmpty())
-                        stringResource(R.string.discover_filter_genre)
-                    else "${uiState.selectedGenreIds.size} ${stringResource(R.string.discover_filter_genre)}",
-                    kind = FilterChipKind.Entry
-                )
-                // 地区
-                GlassFilterChip(
-                    selected = uiState.selectedCountries.isNotEmpty(),
-                    onClick = { showRegionDialog = true },
-                    hazeState = hazeState,
-                    text = if (uiState.selectedCountries.isEmpty())
-                        stringResource(R.string.discover_filter_region)
-                    else "${uiState.selectedCountries.size} ${stringResource(R.string.discover_filter_region)}",
-                    kind = FilterChipKind.Entry
-                )
-                // 标签
-                GlassFilterChip(
-                    selected = uiState.selectedKeywordIds.isNotEmpty(),
-                    onClick = { showTagDialog = true },
-                    hazeState = hazeState,
-                    text = if (uiState.selectedKeywordIds.isEmpty())
-                        stringResource(R.string.discover_filter_tag)
-                    else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}",
-                    kind = FilterChipKind.Entry
-                )
-                // 评分：满量程时只显示"评分"。恒显示"评分 0.0 - 10.0" 会让人以为已经筛过
-                val ratingFiltered = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f
-                GlassFilterChip(
-                    selected = ratingFiltered,
-                    // 只展开不收起：点评分是想调评分，面板开着时 toggle 会把它收起来，看起来像点了没反应
-                    onClick = { viewModel.expandAdvanced() },
-                    hazeState = hazeState,
-                    text = if (ratingFiltered) {
-                        stringResource(R.string.discover_filter_rating_label) + " " +
-                            stringResource(
-                                R.string.discover_filter_rating_range,
-                                uiState.voteAverageMin,
-                                uiState.voteAverageMax
-                            )
-                    } else {
-                        stringResource(R.string.discover_filter_rating_label)
-                    },
-                    // selected 是「评分已筛过」，不是「选中了评分这一项」；点下去只是展开面板
-                    kind = FilterChipKind.Entry
-                )
-                // 高级筛选：selected 就是面板的展开态，开合方向感成立，走 Toggle 那档
-                GlassFilterChip(
-                    selected = uiState.showAdvanced,
-                    onClick = { viewModel.toggleAdvanced() },
-                    hazeState = hazeState,
-                    text = stringResource(R.string.discover_filter_advanced)
-                )
-            }
-
-            // 零高度标尺：它的 Y 就是吸顶栏固定部分的底边，直接给列表当顶部留白。
-            // 放在这里而不是最外层测高，是因为高级面板展开时列表不该整体往下挪
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned { coords ->
-                        val bottom = with(density) { coords.positionInRoot().y.toDp() }
-                        if (bottom > 0.dp && bottom != headerBottom) headerBottom = bottom
-                    }
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp, end = 16.dp),
+                hazeState = hazeState,
+                scene = discoverFilterGlassScene
             )
 
-            // 高级筛选展开区（防御性消费垂直拖拽：避免拖拽冒泡到结果列表触发 collapse）
-            if (uiState.showAdvanced) {
-                Column(
+            // ========== 吸顶栏（Blur，透明底色） ==========
+            // 注意：不要在此 Column 上加 .scrollable(state=listState) —— 那会让高级面板内的拖拽
+            // 被转发到 listState，触发 isScrollInProgress=true 进而 collapseAdvanced()，导致弹窗内滑动
+            // 就关闭弹窗的 bug。结果列表的滚动由 LazyColumn 自己处理即可。
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 顶栏不参与配对，但从第一帧就在：与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出。
+                    // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期停 haze 采样
+                    .appSkipToLookaheadSize()
+                    .hazeTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = if (transitionActive) false else null,
+                        scene = discoverFilterGlassScene
+                    )
+                    // 拦截点击：顶栏覆盖可滚动列表，不消费会让点击穿透到下方列表项
+                    .clickable(enabled = false, onClick = {})
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding())
+                // 标题栏 + 返回箭头
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
-                        .pointerInput(Unit) {
-                            // 空实现：消费垂直拖拽手势，防止手势冒泡触发意外行为
-                            detectVerticalDragGestures { _, _ -> }
-                        },
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 评分标题 + 滑动条同一行
+                    // 「返回箭头 + 标题」不参与配对：发现页那一侧是个圆形筛选图标，两端没有共同内容。
+                    // 与整页配对的是 DiscoverFilterCardKey（底部入口卡片那条路）。
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.search_back),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Text(
-                            text = stringResource(R.string.discover_filter_rating_label),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
+                            text = stringResource(R.string.discover_filter_title),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.width(36.dp)
-                        )
-                        // 评分双滑块（步长 1，触感反馈）。
-                        // 拖动只改本地状态，松手才写 uiState + 发请求：每帧写 uiState 会让整页重组，
-                        // 连毛玻璃顶栏的取色和骨架/场景判断都跟着重跑，拖起来发涩。
-                        // remember 用 uiState 的值做 key，点了重置本地值才会跟着回到 0-10
-                        var localMin by remember(uiState.voteAverageMin) { mutableFloatStateOf(uiState.voteAverageMin) }
-                        var localMax by remember(uiState.voteAverageMax) { mutableFloatStateOf(uiState.voteAverageMax) }
-                        RangeSlider(
-                            value = localMin..localMax,
-                            onValueChange = { range ->
-                                if (range.start.toInt() != localMin.toInt() ||
-                                    range.endInclusive.toInt() != localMax.toInt()
-                                ) {
-                                    haptics.frequentTick()
-                                }
-                                localMin = range.start
-                                localMax = range.endInclusive
-                            },
-                            // 松手即生效：等「应用」的话，用手势返回或滑动列表收起面板时这次改动就没了，
-                            // 而顶部的评分 chip 已经显示成已筛选，看着像生效了
-                            onValueChangeFinished = {
-                                // 松手落定的一记：拖动中的 frequentTick 只在跨整数刻度时响，
-                                // 到这里补一记「到位了」，不会和上一记挤在一起
-                                haptics.gestureEnd()
-                                viewModel.setVoteRange(localMin, localMax)
-                                viewModel.search()
-                            },
-                            valueRange = 0f..10f,
-                            steps = 9,  // 步长 1（0,1,2,...,10）
-                            modifier = Modifier.weight(1f)
-                        )
-                        // 当前区间读数：松手才写 uiState，拖动中的反馈靠这里（顶部评分 chip 要等松手）
-                        Text(
-                            text = stringResource(R.string.discover_filter_rating_range, localMin, localMax),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            modifier = Modifier.width(72.dp)
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
-                    }
-                    HorizontalDivider()
-                    // 排序方式：标题左对齐，内容右对齐
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(R.string.discover_filter_sort_by),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                            verticalArrangement = Arrangement.spacedBy(0.dp)
-                        ) {
-                            TmdbRepository.DiscoverSort.entries.forEach { sort ->
-                                val sortText = when (sort) {
-                                    TmdbRepository.DiscoverSort.POPULARITY_DESC -> stringResource(R.string.discover_filter_sort_popularity)
-                                    TmdbRepository.DiscoverSort.RELEASE_DATE_DESC -> stringResource(R.string.discover_filter_sort_release_date)
-                                    TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC -> stringResource(R.string.discover_filter_sort_vote_average)
-                                }
-                                GlassFilterChip(
-                                    selected = uiState.sortBy == sort,
-                                    // 点完立刻生效，理由同评分滑块
-                                    onClick = { viewModel.setSortBy(sort); viewModel.search() },
-                                    hazeState = hazeState,
-                                    text = sortText,
-                                    kind = FilterChipKind.SingleSelect
-                                )
-                            }
-                        }
-                    }
-                    HorizontalDivider()
-                    // 年代
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(R.string.discover_filter_decade),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                            verticalArrangement = Arrangement.spacedBy(0.dp)
-                        ) {
-                            viewModel.decadeOptions.forEach { opt ->
-                                val decadeText = if (opt.specialLabelRes != null) {
-                                    stringResource(opt.specialLabelRes)
+                        // 结果条数：让用户知道筛出来多少，条件太严时也有个数量感。
+                        // 只有「仅展示未标看过」这种服务端不知情的过滤才标"约"
+                        if (uiState.totalResults > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (uiState.totalResultsApproximate) {
+                                    stringResource(R.string.discover_filter_result_count, uiState.totalResults)
                                 } else {
-                                    stringResource(R.string.decade_format, opt.startYear)
-                                }
-                                GlassFilterChip(
-                                    selected = opt.key in uiState.selectedDecadeKeys,
-                                    onClick = { viewModel.toggleDecade(opt.key); viewModel.search() },
-                                    hazeState = hazeState,
-                                    text = decadeText
-                                )
-                            }
+                                    stringResource(R.string.discover_filter_result_count_exact, uiState.totalResults)
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
                         }
                     }
-                    // 仅展示未标看过（登录后可用）
-                    if (isLoggedIn) {
-                        HorizontalDivider()
+                    // 「重置」把所有条件清空并重新搜一次，是一次真操作而不是入口，按「清除」给 tap
+                    TextButton(onClick = {
+                        haptics.tap()
+                        viewModel.resetFilters(); viewModel.search()
+                    }) {
+                        Text(stringResource(R.string.discover_filter_reset))
+                    }
+                }
+
+                // Tab 切换栏：电影 / 电视剧（透明背景，参考 Watchlist 页）
+                PrimaryTabRow(
+                    selectedTabIndex = if (uiState.type == TmdbRepository.DiscoverType.MOVIE) 0 else 1,
+                    containerColor = Color.Transparent
+                ) {
+                    Tab(
+                        selected = uiState.type == TmdbRepository.DiscoverType.MOVIE,
+                        onClick = {
+                            haptics.segmentTick()
+                            viewModel.switchType(TmdbRepository.DiscoverType.MOVIE); viewModel.search()
+                        },
+                        text = { Text(stringResource(R.string.discover_filter_tab_movie)) }
+                    )
+                    Tab(
+                        selected = uiState.type == TmdbRepository.DiscoverType.SHOW,
+                        onClick = {
+                            haptics.segmentTick()
+                            viewModel.switchType(TmdbRepository.DiscoverType.SHOW); viewModel.search()
+                        },
+                        text = { Text(stringResource(R.string.discover_filter_tab_show)) }
+                    )
+                }
+
+                // 筛选条件栏：类型 / 地区 / 标签 / 评分 / 高级（分散对齐）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 类型
+                    GlassFilterChip(
+                        selected = uiState.selectedGenreIds.isNotEmpty(),
+                        onClick = { showGenreDialog = true },
+                        hazeState = hazeState,
+                        text = if (uiState.selectedGenreIds.isEmpty())
+                            stringResource(R.string.discover_filter_genre)
+                        else "${uiState.selectedGenreIds.size} ${stringResource(R.string.discover_filter_genre)}",
+                        kind = FilterChipKind.Entry
+                    )
+                    // 地区
+                    GlassFilterChip(
+                        selected = uiState.selectedCountries.isNotEmpty(),
+                        onClick = { showRegionDialog = true },
+                        hazeState = hazeState,
+                        text = if (uiState.selectedCountries.isEmpty())
+                            stringResource(R.string.discover_filter_region)
+                        else "${uiState.selectedCountries.size} ${stringResource(R.string.discover_filter_region)}",
+                        kind = FilterChipKind.Entry
+                    )
+                    // 标签
+                    GlassFilterChip(
+                        selected = uiState.selectedKeywordIds.isNotEmpty(),
+                        onClick = { showTagDialog = true },
+                        hazeState = hazeState,
+                        text = if (uiState.selectedKeywordIds.isEmpty())
+                            stringResource(R.string.discover_filter_tag)
+                        else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}",
+                        kind = FilterChipKind.Entry
+                    )
+                    // 评分：满量程时只显示"评分"。恒显示"评分 0.0 - 10.0" 会让人以为已经筛过
+                    val ratingFiltered = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f
+                    GlassFilterChip(
+                        selected = ratingFiltered,
+                        // 只展开不收起：点评分是想调评分，面板开着时 toggle 会把它收起来，看起来像点了没反应
+                        onClick = { viewModel.expandAdvanced() },
+                        hazeState = hazeState,
+                        text = if (ratingFiltered) {
+                            stringResource(R.string.discover_filter_rating_label) + " " +
+                                stringResource(
+                                    R.string.discover_filter_rating_range,
+                                    uiState.voteAverageMin,
+                                    uiState.voteAverageMax
+                                )
+                        } else {
+                            stringResource(R.string.discover_filter_rating_label)
+                        },
+                        // selected 是「评分已筛过」，不是「选中了评分这一项」；点下去只是展开面板
+                        kind = FilterChipKind.Entry
+                    )
+                    // 高级筛选：selected 就是面板的展开态，开合方向感成立，走 Toggle 那档
+                    GlassFilterChip(
+                        selected = uiState.showAdvanced,
+                        onClick = { viewModel.toggleAdvanced() },
+                        hazeState = hazeState,
+                        text = stringResource(R.string.discover_filter_advanced)
+                    )
+                }
+
+                // 零高度标尺：它的 Y 就是吸顶栏固定部分的底边，直接给列表当顶部留白。
+                // 放在这里而不是最外层测高，是因为高级面板展开时列表不该整体往下挪
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coords ->
+                            val bottom = with(density) { coords.positionInRoot().y.toDp() }
+                            if (bottom > 0.dp && bottom != headerBottom) headerBottom = bottom
+                        }
+                )
+
+                // 高级筛选展开区（防御性消费垂直拖拽：避免拖拽冒泡到结果列表触发 collapse）
+                if (uiState.showAdvanced) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp)
+                            .pointerInput(Unit) {
+                                // 空实现：消费垂直拖拽手势，防止手势冒泡触发意外行为
+                                detectVerticalDragGestures { _, _ -> }
+                            },
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // 评分标题 + 滑动条同一行
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
-                                text = stringResource(R.string.discover_filter_hide_watched),
+                                text = stringResource(R.string.discover_filter_rating_label),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.width(36.dp)
                             )
-                            Switch(
-                                checked = uiState.hideWatched,
-                                onCheckedChange = {
-                                    haptics.toggle(it)
-                                    viewModel.toggleHideWatched()
+                            // 评分双滑块（步长 1，触感反馈）。
+                            // 拖动只改本地状态，松手才写 uiState + 发请求：每帧写 uiState 会让整页重组，
+                            // 连毛玻璃顶栏的取色和骨架/场景判断都跟着重跑，拖起来发涩。
+                            // remember 用 uiState 的值做 key，点了重置本地值才会跟着回到 0-10
+                            var localMin by remember(uiState.voteAverageMin) { mutableFloatStateOf(uiState.voteAverageMin) }
+                            var localMax by remember(uiState.voteAverageMax) { mutableFloatStateOf(uiState.voteAverageMax) }
+                            RangeSlider(
+                                value = localMin..localMax,
+                                onValueChange = { range ->
+                                    if (range.start.toInt() != localMin.toInt() ||
+                                        range.endInclusive.toInt() != localMax.toInt()
+                                    ) {
+                                        haptics.frequentTick()
+                                    }
+                                    localMin = range.start
+                                    localMax = range.endInclusive
+                                },
+                                // 松手即生效：等「应用」的话，用手势返回或滑动列表收起面板时这次改动就没了，
+                                // 而顶部的评分 chip 已经显示成已筛选，看着像生效了
+                                onValueChangeFinished = {
+                                    // 松手落定的一记：拖动中的 frequentTick 只在跨整数刻度时响，
+                                    // 到这里补一记「到位了」，不会和上一记挤在一起
+                                    haptics.gestureEnd()
+                                    viewModel.setVoteRange(localMin, localMax)
                                     viewModel.search()
                                 },
-                                colors = appSwitchColors()
+                                valueRange = 0f..10f,
+                                steps = 9,  // 步长 1（0,1,2,...,10）
+                                modifier = Modifier.weight(1f)
+                            )
+                            // 当前区间读数：松手才写 uiState，拖动中的反馈靠这里（顶部评分 chip 要等松手）
+                            Text(
+                                text = stringResource(R.string.discover_filter_rating_range, localMin, localMax),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                modifier = Modifier.width(72.dp)
                             )
                         }
-                    }
-                    // 收起面板看结果。面板内各项已经改完即生效，这里的 search() 通常是空操作
-                    // （条件没变会被 ViewModel 挡掉），只兜住「条件变了但请求没发出去」的极端情况
-                    Button(
-                        onClick = {
-                            haptics.tap()
-                            viewModel.toggleAdvanced()  // 先收起
-                            viewModel.search()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.discover_filter_apply))
+                        HorizontalDivider()
+                        // 排序方式：标题左对齐，内容右对齐
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = stringResource(R.string.discover_filter_sort_by),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                                verticalArrangement = Arrangement.spacedBy(0.dp)
+                            ) {
+                                TmdbRepository.DiscoverSort.entries.forEach { sort ->
+                                    val sortText = when (sort) {
+                                        TmdbRepository.DiscoverSort.POPULARITY_DESC -> stringResource(R.string.discover_filter_sort_popularity)
+                                        TmdbRepository.DiscoverSort.RELEASE_DATE_DESC -> stringResource(R.string.discover_filter_sort_release_date)
+                                        TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC -> stringResource(R.string.discover_filter_sort_vote_average)
+                                    }
+                                    GlassFilterChip(
+                                        selected = uiState.sortBy == sort,
+                                        // 点完立刻生效，理由同评分滑块
+                                        onClick = { viewModel.setSortBy(sort); viewModel.search() },
+                                        hazeState = hazeState,
+                                        text = sortText,
+                                        kind = FilterChipKind.SingleSelect
+                                    )
+                                }
+                            }
+                        }
+                        HorizontalDivider()
+                        // 年代
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = stringResource(R.string.discover_filter_decade),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                                verticalArrangement = Arrangement.spacedBy(0.dp)
+                            ) {
+                                viewModel.decadeOptions.forEach { opt ->
+                                    val decadeText = if (opt.specialLabelRes != null) {
+                                        stringResource(opt.specialLabelRes)
+                                    } else {
+                                        stringResource(R.string.decade_format, opt.startYear)
+                                    }
+                                    GlassFilterChip(
+                                        selected = opt.key in uiState.selectedDecadeKeys,
+                                        onClick = { viewModel.toggleDecade(opt.key); viewModel.search() },
+                                        hazeState = hazeState,
+                                        text = decadeText
+                                    )
+                                }
+                            }
+                        }
+                        // 仅展示未标看过（登录后可用）
+                        if (isLoggedIn) {
+                            HorizontalDivider()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.discover_filter_hide_watched),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Switch(
+                                    checked = uiState.hideWatched,
+                                    onCheckedChange = {
+                                        haptics.toggle(it)
+                                        viewModel.toggleHideWatched()
+                                        viewModel.search()
+                                    },
+                                    colors = appSwitchColors()
+                                )
+                            }
+                        }
+                        // 收起面板看结果。面板内各项已经改完即生效，这里的 search() 通常是空操作
+                        // （条件没变会被 ViewModel 挡掉），只兜住「条件变了但请求没发出去」的极端情况
+                        Button(
+                            onClick = {
+                                haptics.tap()
+                                viewModel.toggleAdvanced()  // 先收起
+                                viewModel.search()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.discover_filter_apply))
+                        }
                     }
                 }
             }

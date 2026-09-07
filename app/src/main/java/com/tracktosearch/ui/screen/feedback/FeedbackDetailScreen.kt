@@ -61,6 +61,7 @@ import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.ZoomThumbnailCrop
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.feedbackCardSharedKey
@@ -220,161 +221,167 @@ fun FeedbackDetailScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
         ) {
-            // 内容从顶栏下面穿过去，靠 contentPadding 让首屏不被压住
-            val topBarHeight = 64.dp +
-                WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            when (val state = detailState) {
-                is FeedbackViewModel.DetailState.Loading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = topBarHeight),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-                is FeedbackViewModel.DetailState.Error -> {
-                    AppErrorState(
-                        message = state.message,
-                        onRetry = { viewModel.loadDetail(feedbackId) },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = topBarHeight),
-                        retryLabel = stringResource(R.string.feedback_retry)
-                    )
-                }
-                is FeedbackViewModel.DetailState.Success -> {
-                    val feedback = state.data.feedback
-                    val replies = state.data.replies
-                    val isClosed = feedback.status == "CLOSED"
-                    val isReplying = replyState is FeedbackViewModel.ReplyState.Uploading ||
-                        replyState is FeedbackViewModel.ReplyState.Sending
-                    // 同一天的回复只在第一条上方给一次日期标签
-                    val dayLabels = remember(replies, timeLabels) {
-                        var previousLabel: String? = null
-                        replies.map { reply ->
-                            val label = timeLabels.dayLabel(reply.created_at)
-                            val header = label.takeIf { it != previousLabel }
-                            previousLabel = label
-                            header
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .appMorphContentFade()
+            ) {
+                // 内容从顶栏下面穿过去，靠 contentPadding 让首屏不被压住
+                val topBarHeight = 64.dp +
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                when (val state = detailState) {
+                    is FeedbackViewModel.DetailState.Loading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = topBarHeight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
                     }
-
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            state = listState,
+                    is FeedbackViewModel.DetailState.Error -> {
+                        AppErrorState(
+                            message = state.message,
+                            onRetry = { viewModel.loadDetail(feedbackId) },
                             modifier = Modifier
-                                .weight(1f)
-                                // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
-                                // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
-                                .appSkipToLookaheadSize()
-                                .hazeSource(state = hazeState),
-                            contentPadding = PaddingValues(
-                                start = 16.dp,
-                                top = topBarHeight,
-                                end = 16.dp,
-                                bottom = 24.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            item(key = "original") {
-                                OriginalFeedbackCard(
-                                    feedback = feedback,
-                                    timeLabels = timeLabels,
-                                    sharedKeyPrefix = "fb-conv-$feedbackId",
-                                    onScreenshotClick = { urls, index ->
-                                        fullscreenKeyPrefix = "fb-conv-$feedbackId"
-                                        fullscreenUrls = urls
-                                        fullscreenIndex = index
-                                    }
-                                )
+                                .fillMaxSize()
+                                .padding(top = topBarHeight),
+                            retryLabel = stringResource(R.string.feedback_retry)
+                        )
+                    }
+                    is FeedbackViewModel.DetailState.Success -> {
+                        val feedback = state.data.feedback
+                        val replies = state.data.replies
+                        val isClosed = feedback.status == "CLOSED"
+                        val isReplying = replyState is FeedbackViewModel.ReplyState.Uploading ||
+                            replyState is FeedbackViewModel.ReplyState.Sending
+                        // 同一天的回复只在第一条上方给一次日期标签
+                        val dayLabels = remember(replies, timeLabels) {
+                            var previousLabel: String? = null
+                            replies.map { reply ->
+                                val label = timeLabels.dayLabel(reply.created_at)
+                                val header = label.takeIf { it != previousLabel }
+                                previousLabel = label
+                                header
                             }
-                            if (replies.isNotEmpty() || state.isRefreshing) {
-                                item(key = "conv_title") {
-                                    Row(
-                                        modifier = Modifier.padding(top = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.feedback_conversation),
-                                            fontSize = 15.sp,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (state.isRefreshing) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(14.dp),
-                                                strokeWidth = 2.dp
+                        }
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
+                                    // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                                    .appSkipToLookaheadSize()
+                                    .hazeSource(state = hazeState),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp,
+                                    top = topBarHeight,
+                                    end = 16.dp,
+                                    bottom = 24.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                item(key = "original") {
+                                    OriginalFeedbackCard(
+                                        feedback = feedback,
+                                        timeLabels = timeLabels,
+                                        sharedKeyPrefix = "fb-conv-$feedbackId",
+                                        onScreenshotClick = { urls, index ->
+                                            fullscreenKeyPrefix = "fb-conv-$feedbackId"
+                                            fullscreenUrls = urls
+                                            fullscreenIndex = index
+                                        }
+                                    )
+                                }
+                                if (replies.isNotEmpty() || state.isRefreshing) {
+                                    item(key = "conv_title") {
+                                        Row(
+                                            modifier = Modifier.padding(top = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.feedback_conversation),
+                                                fontSize = 15.sp,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Bold
                                             )
+                                            if (state.isRefreshing) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(14.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                            }
                                         }
                                     }
                                 }
+                                itemsIndexed(replies, key = { _, reply -> reply.id }) { index, reply ->
+                                    ConversationBubble(
+                                        reply = reply,
+                                        dayLabel = dayLabels.getOrNull(index),
+                                        timeLabels = timeLabels,
+                                        sharedKeyPrefix = "fb-reply-${reply.id}",
+                                        highlight = highlightReplyId == reply.id,
+                                        onHighlightDone = {
+                                            if (highlightReplyId == reply.id) highlightReplyId = null
+                                        },
+                                        onScreenshotClick = { urls, shotIndex ->
+                                            fullscreenKeyPrefix = "fb-reply-${reply.id}"
+                                            fullscreenUrls = urls
+                                            fullscreenIndex = shotIndex
+                                        }
+                                    )
+                                }
                             }
-                            itemsIndexed(replies, key = { _, reply -> reply.id }) { index, reply ->
-                                ConversationBubble(
-                                    reply = reply,
-                                    dayLabel = dayLabels.getOrNull(index),
-                                    timeLabels = timeLabels,
-                                    sharedKeyPrefix = "fb-reply-${reply.id}",
-                                    highlight = highlightReplyId == reply.id,
-                                    onHighlightDone = {
-                                        if (highlightReplyId == reply.id) highlightReplyId = null
+                            if (isClosed) {
+                                ClosedFeedbackFooter()
+                            } else {
+                                ReplyBar(
+                                    text = replyText,
+                                    onTextChange = { if (it.length <= MAX_REPLY_LENGTH) replyText = it },
+                                    screenshots = replyScreenshots,
+                                    sharedKeyPrefix = "fb-compose",
+                                    enabled = !isReplying,
+                                    onAddScreenshot = { pickImageLauncher.launch("image/*") },
+                                    onRemoveScreenshot = { idx ->
+                                        replyScreenshots = replyScreenshots.toMutableList()
+                                            .apply { removeAt(idx) }
                                     },
-                                    onScreenshotClick = { urls, shotIndex ->
-                                        fullscreenKeyPrefix = "fb-reply-${reply.id}"
-                                        fullscreenUrls = urls
-                                        fullscreenIndex = shotIndex
-                                    }
+                                    onScreenshotClick = { idx -> replyFullscreenIndex = idx },
+                                    onSend = {
+                                        if (replyText.isNotBlank()) {
+                                            viewModel.reply(
+                                                feedbackId = feedbackId,
+                                                content = replyText,
+                                                screenshotBytes = replyScreenshots.map { it.first },
+                                                screenshotMimeTypes = replyScreenshots.map { it.second }
+                                            )
+                                        }
+                                    },
+                                    isSending = isReplying,
+                                    replyState = replyState
                                 )
                             }
                         }
-                        if (isClosed) {
-                            ClosedFeedbackFooter()
-                        } else {
-                            ReplyBar(
-                                text = replyText,
-                                onTextChange = { if (it.length <= MAX_REPLY_LENGTH) replyText = it },
-                                screenshots = replyScreenshots,
-                                sharedKeyPrefix = "fb-compose",
-                                enabled = !isReplying,
-                                onAddScreenshot = { pickImageLauncher.launch("image/*") },
-                                onRemoveScreenshot = { idx ->
-                                    replyScreenshots = replyScreenshots.toMutableList()
-                                        .apply { removeAt(idx) }
-                                },
-                                onScreenshotClick = { idx -> replyFullscreenIndex = idx },
-                                onSend = {
-                                    if (replyText.isNotBlank()) {
-                                        viewModel.reply(
-                                            feedbackId = feedbackId,
-                                            content = replyText,
-                                            screenshotBytes = replyScreenshots.map { it.first },
-                                            screenshotMimeTypes = replyScreenshots.map { it.second }
-                                        )
-                                    }
-                                },
-                                isSending = isReplying,
-                                replyState = replyState
-                            )
-                        }
                     }
                 }
-            }
 
-            FeedbackDetailTopBar(
-                hazeState = hazeState,
-                hazeStyle = hazeStyle,
-                isContentUnderTopBar = hasContentUnderTopBar,
-                displayId = (detailState as? FeedbackViewModel.DetailState.Success)
-                    ?.data?.feedback?.display_id,
-                onBack = onBack,
-                onNewFeedback = onNewFeedback,
-                // 顶栏不参与配对，但从第一帧就在：与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出。
-                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
-                modifier = Modifier.appSkipToLookaheadSize()
-            )
+                FeedbackDetailTopBar(
+                    hazeState = hazeState,
+                    hazeStyle = hazeStyle,
+                    isContentUnderTopBar = hasContentUnderTopBar,
+                    displayId = (detailState as? FeedbackViewModel.DetailState.Success)
+                        ?.data?.feedback?.display_id,
+                    onBack = onBack,
+                    onNewFeedback = onNewFeedback,
+                    // 顶栏不参与配对，与内容一起由外层 appMorphContentFade 控制：
+                    // 容器展开后统一延迟淡入，返回时先淡出再收容器。
+                    modifier = Modifier.appSkipToLookaheadSize()
+                )
+            }
         }
     }
 

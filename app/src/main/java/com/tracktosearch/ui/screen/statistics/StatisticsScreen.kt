@@ -118,6 +118,7 @@ import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.StatisticsEntryKey
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
@@ -279,289 +280,295 @@ fun StatisticsScreen(
                 // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            val listState = rememberLazyListState()
-            val hasContentUnderTopBar by remember {
-                derivedStateOf {
-                    hasListScrolled(
-                        firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                        firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
-                    )
-                }
-            }
-            val errorMsg = uiState.error
-            if (errorMsg != null && !uiState.watchTimeReady && !uiState.overviewReady) {
-                AppErrorState(
-                    message = errorMsg,
-                    onRetry = { viewModel.loadStatistics() },
-                    modifier = Modifier.fillMaxSize(),
-                    retryLabel = stringResource(R.string.watchlist_retry)
-                )
-            } else {
-                // Navigation 会恢复 LazyListState；页面实例每次重新进入时强制从 Hero 顶部开始。
-                // 只以 Unit 为 key，避免数据稍后就绪时把已经开始浏览的用户再次拉回顶部。
-                LaunchedEffect(Unit) {
-                    listState.scrollToItem(0)
-                }
-                val scrollToTopProvider = LocalScrollToTopProvider.current
-                val statsCoroutineScope = rememberCoroutineScope()
-                DisposableEffect(Unit) {
-                    scrollToTopProvider.register {
-                        statsCoroutineScope.launch {
-                            listState.animateScrollToItem(0)
-                        }
-                    }
-                    onDispose {
-                        scrollToTopProvider.unregister()
-                    }
-                }
-                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                // 热力图翻页位置与网格计算提升到列表外：item 滑出屏幕被回收也不会丢翻页位置，
-                // 且 13×7 网格（含 SimpleDateFormat / Calendar 运算）只在数据或翻页变化时重算一次
-                var heatmapWeekOffset by rememberSaveable { mutableStateOf(0) }
-                val heatmapLocale = statisticsLocale()
-                val heatmapGrid = remember(
-                    uiState.heatmapData,
-                    uiState.heatmapReady,
-                    heatmapWeekOffset,
-                    heatmapLocale
-                ) {
-                    if (uiState.heatmapReady) {
-                        buildHeatmapGrid(
-                            heatmapData = uiState.heatmapData,
-                            weekOffset = heatmapWeekOffset,
-                            locale = heatmapLocale
-                        )
-                    } else {
-                        null
-                    }
-                }
-                // 词云布局按屏幕缓存：item 被回收再进入时直接复用，不重跑螺旋排布
-                val wordCloudLayoutStore = rememberWordCloudLayoutStore()
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
-                        // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
-                        .appSkipToLookaheadSize()
-                        .hazeSource(state = statsHazeState)
-                        .backdropSource(),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 65.dp + statusBarHeight,
-                        bottom = 16.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .appMorphContentFade()
             ) {
-                // Hero 小结：一句话 + 一个大数字，先把「最突出的一项」讲成人话，
-                // 后面的总览再给全量数字。数据未就绪时不占位，避免一进页面就是空卡片。
-                item(key = "hero") {
-                    if (uiState.overviewReady) {
-                        StatisticsHeroCard(
-                            highlight = highlight,
-                            thisYearWatched = uiState.thisYearWatched,
-                            totalHours = (uiState.totalWatchMinutes / 60).toInt(),
-                            streakDays = streakDays
+                val listState = rememberLazyListState()
+                val hasContentUnderTopBar by remember {
+                    derivedStateOf {
+                        hasListScrolled(
+                            firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                            firstVisibleItemScrollOffsetPx = listState.firstVisibleItemScrollOffset
                         )
                     }
                 }
-
-                // 总览卡片（数字跳动动画）
-                item(key = "overview") {
-                    val reveal = rememberSectionReveal(listState, "overview")
-                    SectionCard(title = stringResource(R.string.statistics_overview)) {
-                        if (uiState.overviewReady) {
-                            OverviewCards(uiState, reveal)
-                        } else {
-                            StatisticsSkeletonContent(
-                                variant = StatisticsSkeletonVariant.OVERVIEW
-                            )
+                val errorMsg = uiState.error
+                if (errorMsg != null && !uiState.watchTimeReady && !uiState.overviewReady) {
+                    AppErrorState(
+                        message = errorMsg,
+                        onRetry = { viewModel.loadStatistics() },
+                        modifier = Modifier.fillMaxSize(),
+                        retryLabel = stringResource(R.string.watchlist_retry)
+                    )
+                } else {
+                    // Navigation 会恢复 LazyListState；页面实例每次重新进入时强制从 Hero 顶部开始。
+                    // 只以 Unit 为 key，避免数据稍后就绪时把已经开始浏览的用户再次拉回顶部。
+                    LaunchedEffect(Unit) {
+                        listState.scrollToItem(0)
+                    }
+                    val scrollToTopProvider = LocalScrollToTopProvider.current
+                    val statsCoroutineScope = rememberCoroutineScope()
+                    DisposableEffect(Unit) {
+                        scrollToTopProvider.register {
+                            statsCoroutineScope.launch {
+                                listState.animateScrollToItem(0)
+                            }
+                        }
+                        onDispose {
+                            scrollToTopProvider.unregister()
                         }
                     }
-                }
-
-                // 观影时长
-                item(key = "watch_time") {
-                    val reveal = rememberSectionReveal(listState, "watch_time")
-                    SectionCard(title = stringResource(R.string.statistics_total_watch_time)) {
-                        if (uiState.watchTimeReady) {
-                            WatchTimeCard(uiState = uiState, reveal = reveal)
-                        } else {
-                            StatisticsSkeletonContent(StatisticsSkeletonVariant.WATCH_TIME)
-                        }
-                    }
-                }
-
-                // 热力图
-                item(key = "heatmap") {
-                    val reveal = rememberSectionReveal(listState, "heatmap")
-                    SectionCard(title = stringResource(R.string.statistics_heatmap)) {
-                        if (heatmapGrid != null) {
-                            HeatmapChart(
-                                grid = heatmapGrid,
-                                locale = heatmapLocale,
+                    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                    // 热力图翻页位置与网格计算提升到列表外：item 滑出屏幕被回收也不会丢翻页位置，
+                    // 且 13×7 网格（含 SimpleDateFormat / Calendar 运算）只在数据或翻页变化时重算一次
+                    var heatmapWeekOffset by rememberSaveable { mutableStateOf(0) }
+                    val heatmapLocale = statisticsLocale()
+                    val heatmapGrid = remember(
+                        uiState.heatmapData,
+                        uiState.heatmapReady,
+                        heatmapWeekOffset,
+                        heatmapLocale
+                    ) {
+                        if (uiState.heatmapReady) {
+                            buildHeatmapGrid(
+                                heatmapData = uiState.heatmapData,
                                 weekOffset = heatmapWeekOffset,
-                                onWeekOffsetChange = { heatmapWeekOffset = it },
-                                reveal = reveal
+                                locale = heatmapLocale
                             )
                         } else {
-                            StatisticsSkeletonContent(StatisticsSkeletonVariant.HEATMAP)
+                            null
                         }
                     }
-                }
-
-                // 评分统计
-                item(key = "ratings") {
-                    val reveal = rememberSectionReveal(listState, "ratings")
-                    SectionCard(title = stringResource(R.string.statistics_ratings)) {
-                        if (uiState.ratingsReady) {
-                            RatingStatsCard(uiState = uiState, reveal = reveal)
-                        } else {
-                            StatisticsSkeletonContent(StatisticsSkeletonVariant.RATINGS)
-                        }
-                    }
-                }
-
-                // 短评词云
-                item(key = "wordcloud") {
-                    SectionCard(title = stringResource(R.string.statistics_wordcloud)) {
-                        if (!uiState.wordCloudReady) {
-                            StatisticsSkeletonContent(StatisticsSkeletonVariant.WORD_CLOUD)
-                        } else if (uiState.wordCloud.isNotEmpty()) {
-                            WordCloud(
-                                words = uiState.wordCloud,
-                                layoutStore = wordCloudLayoutStore,
-                                modifier = Modifier.fillMaxWidth().height(220.dp)
+                    // 词云布局按屏幕缓存：item 被回收再进入时直接复用，不重跑螺旋排布
+                    val wordCloudLayoutStore = rememberWordCloudLayoutStore()
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
+                            // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
+                            .appSkipToLookaheadSize()
+                            .hazeSource(state = statsHazeState)
+                            .backdropSource(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 65.dp + statusBarHeight,
+                            bottom = 16.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Hero 小结：一句话 + 一个大数字，先把「最突出的一项」讲成人话，
+                    // 后面的总览再给全量数字。数据未就绪时不占位，避免一进页面就是空卡片。
+                    item(key = "hero") {
+                        if (uiState.overviewReady) {
+                            StatisticsHeroCard(
+                                highlight = highlight,
+                                thisYearWatched = uiState.thisYearWatched,
+                                totalHours = (uiState.totalWatchMinutes / 60).toInt(),
+                                streakDays = streakDays
                             )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(120.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                        }
+                    }
+
+                    // 总览卡片（数字跳动动画）
+                    item(key = "overview") {
+                        val reveal = rememberSectionReveal(listState, "overview")
+                        SectionCard(title = stringResource(R.string.statistics_overview)) {
+                            if (uiState.overviewReady) {
+                                OverviewCards(uiState, reveal)
+                            } else {
+                                StatisticsSkeletonContent(
+                                    variant = StatisticsSkeletonVariant.OVERVIEW
+                                )
+                            }
+                        }
+                    }
+
+                    // 观影时长
+                    item(key = "watch_time") {
+                        val reveal = rememberSectionReveal(listState, "watch_time")
+                        SectionCard(title = stringResource(R.string.statistics_total_watch_time)) {
+                            if (uiState.watchTimeReady) {
+                                WatchTimeCard(uiState = uiState, reveal = reveal)
+                            } else {
+                                StatisticsSkeletonContent(StatisticsSkeletonVariant.WATCH_TIME)
+                            }
+                        }
+                    }
+
+                    // 热力图
+                    item(key = "heatmap") {
+                        val reveal = rememberSectionReveal(listState, "heatmap")
+                        SectionCard(title = stringResource(R.string.statistics_heatmap)) {
+                            if (heatmapGrid != null) {
+                                HeatmapChart(
+                                    grid = heatmapGrid,
+                                    locale = heatmapLocale,
+                                    weekOffset = heatmapWeekOffset,
+                                    onWeekOffsetChange = { heatmapWeekOffset = it },
+                                    reveal = reveal
+                                )
+                            } else {
+                                StatisticsSkeletonContent(StatisticsSkeletonVariant.HEATMAP)
+                            }
+                        }
+                    }
+
+                    // 评分统计
+                    item(key = "ratings") {
+                        val reveal = rememberSectionReveal(listState, "ratings")
+                        SectionCard(title = stringResource(R.string.statistics_ratings)) {
+                            if (uiState.ratingsReady) {
+                                RatingStatsCard(uiState = uiState, reveal = reveal)
+                            } else {
+                                StatisticsSkeletonContent(StatisticsSkeletonVariant.RATINGS)
+                            }
+                        }
+                    }
+
+                    // 短评词云
+                    item(key = "wordcloud") {
+                        SectionCard(title = stringResource(R.string.statistics_wordcloud)) {
+                            if (!uiState.wordCloudReady) {
+                                StatisticsSkeletonContent(StatisticsSkeletonVariant.WORD_CLOUD)
+                            } else if (uiState.wordCloud.isNotEmpty()) {
+                                WordCloud(
+                                    words = uiState.wordCloud,
+                                    layoutStore = wordCloudLayoutStore,
+                                    modifier = Modifier.fillMaxWidth().height(220.dp)
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(120.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.statistics_wordcloud_empty),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 类型分布（饼图，展开动画）
+                    item(key = "pie") {
+                        val reveal = rememberSectionReveal(listState, "pie")
+                        SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
+                            if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
+                                GenrePieChart(genreDistribution = uiState.genreDistribution, reveal = reveal)
+                            } else if (!uiState.genreReady) {
+                                StatisticsSkeletonContent(StatisticsSkeletonVariant.PIE)
+                            } else {
                                 Text(
-                                    text = stringResource(R.string.statistics_wordcloud_empty),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
+                                    text = stringResource(R.string.common_no_data),
+                                    modifier = Modifier.padding(24.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // 最常看的类型排行（柱形增长动画 + emoji奖牌）
+                    item(key = "ranking") {
+                        val reveal = rememberSectionReveal(listState, "ranking")
+                        SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
+                            if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
+                                GenreRanking(genreDistribution = uiState.genreDistribution, reveal = reveal)
+                            } else if (!uiState.genreReady) {
+                                StatisticsSkeletonContent(StatisticsSkeletonVariant.RANKING)
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.common_no_data),
+                                    modifier = Modifier.padding(24.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
                 }
-
-                // 类型分布（饼图，展开动画）
-                item(key = "pie") {
-                    val reveal = rememberSectionReveal(listState, "pie")
-                    SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
-                        if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
-                            GenrePieChart(genreDistribution = uiState.genreDistribution, reveal = reveal)
-                        } else if (!uiState.genreReady) {
-                            StatisticsSkeletonContent(StatisticsSkeletonVariant.PIE)
-                        } else {
-                            Text(
-                                text = stringResource(R.string.common_no_data),
-                                modifier = Modifier.padding(24.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 }
-
-                // 最常看的类型排行（柱形增长动画 + emoji奖牌）
-                item(key = "ranking") {
-                    val reveal = rememberSectionReveal(listState, "ranking")
-                    SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
-                        if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
-                            GenreRanking(genreDistribution = uiState.genreDistribution, reveal = reveal)
-                        } else if (!uiState.genreReady) {
-                            StatisticsSkeletonContent(StatisticsSkeletonVariant.RANKING)
-                        } else {
-                            Text(
-                                text = stringResource(R.string.common_no_data),
-                                modifier = Modifier.padding(24.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-            }
-            // Haze模糊渐变TopAppBar（含状态栏）
-            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-            // 但它必须从第一帧就在，否则容器长大的那段时间整屏只有一块底色，落位时内容再整片闪出来。
-            // 与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出；转场期间让 haze 停采样，
-            // 避免每帧背景都在变时还做实时模糊。
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .appSkipToLookaheadSize()
-                    .hazeTopBar(
-                        state = statsHazeState,
-                        style = statsHazeStyle,
-                        blurRadius = TopBarBackdropBlurRadius,
-                        isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
-                        scene = statisticsGlassScene
-                    )
-                    .clickable(enabled = false, onClick = {})
-            ) {
-                Spacer(modifier = Modifier.statusBarsPadding())
-                Row(
+                // Haze模糊渐变TopAppBar（含状态栏）
+                // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+                // 但它必须从第一帧就在，否则容器长大的那段时间整屏只有一块底色，落位时内容再整片闪出来。
+                // 与列表一样按落定尺寸布局，跟着容器裁剪逐渐露出；转场期间让 haze 停采样，
+                // 避免每帧背景都在变时还做实时模糊。
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .appSkipToLookaheadSize()
+                        .hazeTopBar(
+                            state = statsHazeState,
+                            style = statsHazeStyle,
+                            blurRadius = TopBarBackdropBlurRadius,
+                            isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
+                            scene = statisticsGlassScene
+                        )
+                        .clickable(enabled = false, onClick = {})
                 ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.detail_back), tint = MaterialTheme.colorScheme.primary)
-                }
-                Text(
-                    text = stringResource(R.string.statistics_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
-                    onClick = {
-                        haptics.lightTap()
-                        showInfoDialog = true
-                    },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.Help,
-                        contentDescription = stringResource(R.string.statistics_info),
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(
-                    onClick = {
-                        haptics.lightTap()
-                        onShare()
-                    },
-                    enabled = shareEnabled,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Share,
-                        contentDescription = stringResource(R.string.statistics_share),
-                        modifier = Modifier.size(22.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-                // 展示上次快照并后台刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
-                if (uiState.isRefreshing) {
-                    LinearProgressIndicator(
+                    Spacer(modifier = Modifier.statusBarsPadding())
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(2.dp)
+                            .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.detail_back), tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        text = stringResource(R.string.statistics_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = {
+                            haptics.lightTap()
+                            showInfoDialog = true
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Help,
+                            contentDescription = stringResource(R.string.statistics_info),
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(
+                        onClick = {
+                            haptics.lightTap()
+                            onShare()
+                        },
+                        enabled = shareEnabled,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Share,
+                            contentDescription = stringResource(R.string.statistics_share),
+                            modifier = Modifier.size(22.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                    // 展示上次快照并后台刷新时的细进度条：不遮挡内容，只提示数据可能不是最新
+                    if (uiState.isRefreshing) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp)
+                        )
+                    }
                 }
             }
         }
