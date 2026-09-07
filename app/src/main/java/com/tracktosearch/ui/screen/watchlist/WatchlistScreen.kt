@@ -216,10 +216,7 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.showToast
-import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
-import com.tracktosearch.ui.component.posterSharedKey
-import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import dev.chrisbanes.haze.HazeState
@@ -1982,9 +1979,8 @@ fun WatchlistScreen(
 
 /**
  * Watchlist 网格项包装器：基于 PosterCard 显示海报，并补充标题、状态角标、
- * 加载遮罩、多选遮罩以及共享元素转场。
+ * 加载遮罩、多选遮罩。
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun WatchlistPosterCard(
     item: MediaUiItem,
@@ -1994,10 +1990,7 @@ private fun WatchlistPosterCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    // 只有被点过的卡片才挂共享元素修饰符；origin 里带上 selectionKey，
-    // 追踪页允许同 tmdbId 的重复条目，只靠 tmdbId 分不出点的是哪一格。
-    var clicked by remember { mutableStateOf(false) }
+    // origin 里带上 selectionKey，继续记录追踪页里被点击的那一格。
     val origin = remember(item.selectionKey) {
         SharedOrigin.of(SharedOrigin.WATCHLIST, item.selectionKey)
     }
@@ -2005,20 +1998,12 @@ private fun WatchlistPosterCard(
     val wrappedOnClick = remember(onClick, item.tmdbId, isMultiSelectMode, origin) {
         {
             if (!isMultiSelectMode && item.tmdbId > 0) {
-                clicked = true
-                // 追踪页的海报详情页大多能 peek 到，这里只为把来源交给详情页拼出同一个 key
+                // 追踪页的海报详情页大多能 peek 到，这里继续记录点击来源
                 DetailSeedStore.remember(item.tmdbId, origin = origin)
             }
             onClick()
         }
     }
-
-    val posterModifier = Modifier
-        .appSharedBounds(
-            key = if (clicked) posterSharedKey(item.tmdbId, origin) else null,
-            animatedVisibilityScope = animatedVisibilityScope,
-            corner = SharedCorner.uniform(14.dp),
-        )
 
     Column {
         Box {
@@ -2029,8 +2014,7 @@ private fun WatchlistPosterCard(
                 genres = null,
                 imageSize = 264,
                 onClick = wrappedOnClick,
-                onLongClick = if (isMultiSelectMode) null else onLongClick,
-                posterModifier = posterModifier
+                onLongClick = if (isMultiSelectMode) null else onLongClick
             )
             // 海报缺失时在卡片内提示：TMDB 补充数据失败（tmdbId>0）或豆瓣条目本身无海报
             // （tmdbId=0，如详情抓取失败只留最低限度快照），避免空白卡没有任何解释

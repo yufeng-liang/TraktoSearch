@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.discover
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,10 +27,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,7 +46,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
@@ -64,8 +60,6 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.navigation.DetailSeedStore
 
@@ -73,13 +67,12 @@ import com.tracktosearch.ui.navigation.DetailSeedStore
  * 发现页某个栏目的 origin。
  *
  * 各栏目共用一套卡片，同一部片子同时出现在「热门」和「为你推荐」是常态，
- * 所以按栏目 id 再分一层，海报转场才只认被点击的那一栏里的那一张。
+ * 所以按栏目 id 再分一层，把点击来源记进详情页首帧种子。
  */
 internal fun discoverSectionOrigin(sectionId: String): String =
     SharedOrigin.of(SharedOrigin.DISCOVER, sectionId)
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun MovieCard(
     title: String,
@@ -93,14 +86,11 @@ internal fun MovieCard(
     tmdbId: Int = 0,
     /** 评分来源是否为豆瓣：true 显示绿色填充样式，false 显示带星星样式 */
     isDoubanRating: Boolean = false,
-    /** 本卡片所属栏目，见 [discoverSectionOrigin]；与 tmdbId 一起决定海报与详情页的配对。 */
+    /** 本卡片所属栏目，见 [discoverSectionOrigin]；与 tmdbId 一起写入详情页首帧种子。 */
     origin: String,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    // 只有被点过的卡片才挂共享元素修饰符；配对由 key 里的 origin 决定，不比对点击顺序。
-    var clicked by remember { mutableStateOf(false) }
     // posterUrl 仅依赖 posterPath，包进 remember 避免每次重组重复 toIntOrNull/TmdbImageUrls.build 解析
     val posterUrl = remember(posterPath) {
         posterPath?.let {
@@ -109,12 +99,11 @@ internal fun MovieCard(
             else TmdbImageUrls.build(it)
         }
     }
-    // 点击时登记参与转场，并把海报与来源交给详情页：本栏目卡片的海报来自 TMDB 列表接口，
+    // 点击时把海报与来源交给详情页：本栏目卡片的海报来自 TMDB 列表接口，
     // 详情页 peek 详情缓存必然落空
     val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin) {
         {
             if (tmdbId > 0) {
-                clicked = true
                 DetailSeedStore.remember(tmdbId, posterUrl, year.toIntOrNull(), origin)
             }
             onClick()
@@ -138,14 +127,9 @@ internal fun MovieCard(
             .width(105.dp)
             .scale(scale)
     ) {
-        // 海报 Box 与详情页头图配对
         val posterBoxModifier = Modifier
             .fillMaxWidth()
             .aspectRatio(2f / 3f)
-            .appSharedBounds(
-                key = if (clicked) posterSharedKey(tmdbId, origin) else null,
-                animatedVisibilityScope = animatedVisibilityScope,
-            )
             .clip(posterShape)
         AppVisualSurface(
             kind = VisualSurfaceKind.Content,

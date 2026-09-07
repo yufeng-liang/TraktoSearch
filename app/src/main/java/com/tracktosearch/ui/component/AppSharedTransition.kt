@@ -120,15 +120,6 @@ object SharedOrigin {
     fun of(base: String, slot: String): String = "$base:$slot"
 }
 
-/**
- * 影视海报配对键：列表卡片的海报与详情页头图。
- *
- * tmdbId 非正数时返回 null，即不参与转场。占位数据和只有豆瓣 id 的条目都会落在这里，
- * 若让它们共用 `poster-0` 这个键，同屏多个占位项会互相配对，转场会飞向一个随机条目。
- */
-fun posterSharedKey(tmdbId: Int, origin: String = SharedOrigin.ANY): SharedKey? =
-    if (tmdbId <= 0) null else SharedKey("poster-$tmdbId", origin, SharedElementType.Image)
-
 /** 人物头像配对键：演职员卡片与人物页头像。 */
 fun personAvatarSharedKey(personId: Int, origin: String = SharedOrigin.ANY): SharedKey? =
     if (personId <= 0) null else SharedKey("person-avatar-$personId", origin, SharedElementType.Image)

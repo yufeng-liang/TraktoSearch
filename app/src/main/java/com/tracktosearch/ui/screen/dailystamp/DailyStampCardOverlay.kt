@@ -8,7 +8,6 @@ import android.graphics.Picture
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -112,10 +111,7 @@ import coil.request.ImageRequest
 import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.SaveToAlbumResult
-import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -309,7 +305,7 @@ private fun CardCarousel(
     val onDetail = {
         line?.card?.let {
             // 卡片海报来自台词库自带的地址，进不了 TMDB 详情缓存，详情页 peek 会落空，
-            // 连同 origin 一起交给它：海报当首帧种子，origin 用来拼出与卡面海报相同的 key
+            // 连同 origin 一起交给它：海报当首帧种子
             DetailSeedStore.remember(it.tmdbId, it.posterUrl, it.year, origin = dailyStampOrigin(it.date))
             onQuoteClick(it.tmdbId, it.mediaType, it.title, it.year, it.posterUrl)
         }
@@ -640,7 +636,6 @@ private fun TicketHeader(tick: String, serial: String, palette: SplashPalette) {
  * 卡纸内侧还有一条发丝线：没有它海报是贴在卡纸上的另一张纸，有了它才像陷进卡纸
  * 开出来的窗里。
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CardPoster(
     card: DailyStampCardUi,
@@ -655,9 +650,6 @@ private fun CardPoster(
     // 都能把海报和卡纸分开，不必为此另兑颜色
     val hairline = palette.ink.copy(alpha = if (palette.isDark) 0.34f else 0.22f)
     val interactionSource = remember { MutableInteractionSource() }
-    // 只有被点过的那一张卡才挂共享元素修饰符：一排三张都挂的话，翻页时白付两份
-    // SharedContentState 与布局节点的开销
-    var clicked by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val posterRequest = remember(card.poster, context) {
         ImageRequest.Builder(context)
@@ -669,22 +661,13 @@ private fun CardPoster(
     Box(
         modifier = Modifier
             .size(width = 122.dp, height = 183.dp)
-            // 开窗连卡纸一起与详情页头图配对：配对两端都是 2:3，卡纸那 5dp 一起放大不露馅
-            .appSharedBounds(
-                key = if (clicked) posterSharedKey(card.tmdbId, dailyStampOrigin(card.date)) else null,
-                corner = SharedCorner.uniform(6.dp),
-            )
             .clip(RoundedCornerShape(6.dp))
             .background(palette.cream)
             .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 semantic = HapticSemantic.LIGHT_TAP,
-                onClick = {
-                    // 先登记本张卡参与转场，再走进详情页
-                    clicked = true
-                    onClick()
-                },
+                onClick = onClick,
             )
             .padding(5.dp)
     ) {

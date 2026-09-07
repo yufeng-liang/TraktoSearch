@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.detail
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,14 +84,10 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.backdropContentSource
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
-import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.theme.onColorFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -106,7 +101,6 @@ private val HEADER_POSTER_WIDTH = 118.dp
 /** 海报高度，由 2:3 比例算出。右列靠它撑到同高，见右列注释。 */
 private val HEADER_POSTER_HEIGHT = HEADER_POSTER_WIDTH * 1.5f
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun DetailHeaderContent(
     uiState: DetailUiState,
@@ -196,16 +190,8 @@ internal fun DetailHeaderContent(
                 ) {
                     if (uiState.posterUrl != null) {
                         var posterScale by remember { mutableFloatStateOf(1f) }
-                        // 来源侧点击时把 origin 记进了 DetailSeedStore，这里读回来拼出同一个 key。
-                        // remember 锁在 tmdbId 上：转场进行中若被别处覆写，key 变了会当场断掉配对。
-                        val posterOrigin = remember(tmdbId) {
-                            DetailSeedStore.peek(tmdbId)?.origin ?: SharedOrigin.ANY
-                        }
-                        val posterModifier = Modifier
-                            .appSharedBounds(key = posterSharedKey(tmdbId, posterOrigin))
-                            .fillMaxSize()
-                        // 用 Box 承载全屏查看转场的共享元素；AsyncImage 上保留导航用 sharedElement
-                        // （双 key 嵌套是文档支持的组合模式）。
+                        val posterModifier = Modifier.fillMaxSize()
+                        // Box 承载全屏查看转场的共享元素；图片本身不再挂导航海报配对。
                         // 全屏查看这一侧用 caller-managed visibility：全屏 overlay 打开该 key 时
                         // 本侧置不可见，避免与 overlay 侧同时是 target 导致转场方向反转。
                         Box(
@@ -223,7 +209,7 @@ internal fun DetailHeaderContent(
                                     ImageRequest.Builder(context)
                                         .data(uiState.posterUrl?.let { TmdbImageUrls.swapSize(it, "w780") })
                                         .size(780)
-                                        // 转场时不要图片淡入叠加在 sharedElement 容器动画上,避免双重动画看起来卡顿
+                                        // 页面淡入时不要图片再叠一层淡入，避免双重动画。
                                         .crossfade(false)
                                         .listener(
                                             onSuccess = { _, result ->

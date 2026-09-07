@@ -122,7 +122,6 @@ import com.tracktosearch.ui.component.DiscoverFilterCardKey
 import com.tracktosearch.ui.component.DiscoverFilterCardCorner
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
-import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -784,7 +783,6 @@ fun DiscoverFilterScreen(
  * 列表项：海报 + 标题 + 评分 + 年份 + 类型 + 地区
  * 背景使用海报主色沉浸渐变。
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DiscoverFilterListItem(
     item: TmdbSearchResult,
@@ -794,7 +792,6 @@ private fun DiscoverFilterListItem(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
     val year = if (isMovie) {
         item.release_date.takeIf { it.length >= 4 }?.substring(0, 4)
@@ -843,16 +840,9 @@ private fun DiscoverFilterListItem(
         label = "filter_item_on_bg_variant"
     )
 
-    // 海报与详情页头图配对；只有被点过的那一行才挂修饰符
-    var clicked by remember { mutableStateOf(false) }
     val posterModifier = Modifier
         .width(80.dp)
         .height(120.dp)
-        .appSharedBounds(
-            key = if (clicked) posterSharedKey(item.id, SharedOrigin.DISCOVER_FILTER) else null,
-            animatedVisibilityScope = animatedVisibilityScope,
-            corner = SharedCorner.uniform(8.dp),
-        )
         .clip(RoundedCornerShape(8.dp))
 
     val backgroundBrush = Brush.horizontalGradient(
@@ -880,10 +870,7 @@ private fun DiscoverFilterListItem(
                 indication = null,
                 // 结果列表项进详情
                 semantic = HapticSemantic.LIGHT_TAP,
-                onClick = {
-                    clicked = true
-                    onClick()
-                }
+                onClick = onClick
             )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)

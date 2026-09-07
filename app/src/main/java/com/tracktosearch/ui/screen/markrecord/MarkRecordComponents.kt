@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.markrecord
 
 import android.content.Context
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -59,10 +58,7 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
-import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -86,7 +82,7 @@ private const val MARK_RECORD_ORIGIN_BASE = "mark-record"
  * 同一部片子可以被反复标记（标了看过又取消，之后再标一次），列表里因此允许出现同 tmdbId 的
  * 多行，只靠 tmdbId 分不出点的是哪一行。槽位取与网格 item key 相同的三段组合，
  * [MarkRecordScreen] 的点击回调也用本函数写入 [com.tracktosearch.ui.navigation.DetailSeedStore]，
- * 两侧才拼得出同一个 key。
+ * 保持来源记录一致。
  */
 internal fun markRecordOrigin(item: MarkRecordItem): String =
     SharedOrigin.of(MARK_RECORD_ORIGIN_BASE, "${item.traktId}_${item.actedAt}_${item.actionType}")
@@ -154,7 +150,6 @@ fun MarkRecordItemSkeleton(modifier: Modifier = Modifier) {
  * @param item 记录数据
  * @param onClick 点击跳转详情页
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MarkRecordItemRow(
     item: MarkRecordItem,
@@ -163,10 +158,6 @@ fun MarkRecordItemRow(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 只有被点过的那一行才挂共享元素修饰符：每行都挂的话，滚动时白付一份 SharedContentState
-    // 与布局节点的开销，而其中至多一行会真的参与转场。
-    var clicked by remember { mutableStateOf(false) }
-    val origin = remember(item) { markRecordOrigin(item) }
     // 移除分类（已无标记）的卡片：通过外层透明度让整张卡片均匀变暗
     val isRemoved = item.currentStatus == CurrentMarkStatus.NONE
     var dominantColor by remember { mutableStateOf<Color?>(null) }
@@ -194,8 +185,6 @@ fun MarkRecordItemRow(
             .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
             .background(backgroundBrush)
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
-                // 先登记本行参与转场，再交给调用方导航
-                clicked = true
                 onClick()
             }
             .padding(horizontal = 6.dp, vertical = 6.dp)
@@ -214,11 +203,6 @@ fun MarkRecordItemRow(
                 modifier = Modifier
                     .width(posterWidth)
                     .height(posterHeight)
-                    // 海报与详情页头图配对
-                    .appSharedBounds(
-                        key = if (clicked) posterSharedKey(item.tmdbId, origin) else null,
-                        corner = SharedCorner.uniform(8.dp),
-                    )
                     .clip(RoundedCornerShape(8.dp))
             ) {
                 if (fullPosterUrl != null) {
