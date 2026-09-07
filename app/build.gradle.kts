@@ -426,7 +426,6 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.reorderable)
-    implementation(libs.telephoto.zoomable.image.coil)
     // OpenImage 成熟查看器（coil 模块自带 base，勿引 full/glide）
     implementation(libs.openimage.coil)
     implementation(libs.compose.mesh.gradient)

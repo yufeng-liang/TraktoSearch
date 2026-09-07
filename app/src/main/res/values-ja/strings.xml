@@ -2099,7 +2099,7 @@
     <string name="opensource_use_lottie">JSON ベクターアニメーションの再生（ロード中・空状態など）</string>
     <string name="opensource_use_richtext">Markdown リッチテキストの描画（更新履歴）</string>
     <string name="opensource_use_reorderable">リストの長押しドラッグ並べ替え</string>
-    <string name="opensource_use_telephoto">ポスター・シーンのピンチズームと大画像のサブサンプリング</string>
+    <string name="opensource_use_openimage">全画面画像ビューアー：トランジション、ピンチズーム、スワイプで閉じる、保存機能内蔵</string>
     <string name="opensource_use_backdrop">リキッドガラス効果のための画面単位サンプリング基盤</string>
     <string name="opensource_use_mesh_gradient">Android 12 以下での背景グロー代替（メッシュグラデーションアニメーション）</string>
     <string name="opensource_use_mirage">Android 13 以上の背景グロー（AGSL シェーダーアニメーション）</string>

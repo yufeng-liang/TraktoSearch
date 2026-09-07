@@ -239,12 +239,12 @@ object OpenSourceData {
                 repoUrl = "https://github.com/coil-kt/coil"
             ),
             OssLibrary(
-                name = "Telephoto",
-                versionAliases = versionAliases("telephoto"),
+                name = "OpenImage",
+                versionAliases = versionAliases("openImage"),
                 license = APACHE,
-                developer = "Saket Narayan",
-                usageRes = R.string.opensource_use_telephoto,
-                repoUrl = "https://github.com/saket/telephoto"
+                developer = "FlyJingFish",
+                usageRes = R.string.opensource_use_openimage,
+                repoUrl = "https://github.com/FlyJingFish/OpenImage"
             )
         )),
         OssGroup(R.string.opensource_group_text, listOf(

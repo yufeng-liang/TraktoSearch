@@ -8,17 +8,14 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,14 +91,6 @@ object SharedOrigin {
     const val TRAKT_LIST = "trakt-list"
     const val DISCOVER_FILTER = "discover-filter"
     const val FEEDBACK = "feedback"
-
-    /**
-     * 全屏图片查看器的缩略图/全屏配对。
-     *
-     * 这一族不需要 origin 消歧：同一时刻只可能开着一个查看器，由 [LocalFullscreenSharedElement]
-     * 指定哪一侧是 target，且调用点的字符串 id 里已经带了页面与索引。
-     */
-    const val FULLSCREEN_VIEWER = "fullscreen-viewer"
 
     /**
      * 同一屏里有多个可能撞 id 的列表时，用列表自己的 id 再分一层。
@@ -384,91 +373,4 @@ internal fun Modifier.appSkipToLookaheadSize(): Modifier {
     val scope = LocalSharedTransitionScope.current
     if (scope == null || !LocalSharedTransitionEnabled.current) return this
     return with(scope) { this@appSkipToLookaheadSize.skipToLookaheadSize() }
-}
-
-/** chrome 入场：等容器基本落位再淡入。 */
-private val AppChromeEnter: EnterTransition =
-    fadeIn(tween(durationMillis = 180, delayMillis = 250, easing = LinearOutSlowInEasing))
-
-/**
- * chrome 退场：几乎立即消失。
- *
- * 返回时容器要收回成一张卡片，顶栏若还跟着一起缩，用户会看到标题和按钮被压扁。
- */
-private val AppChromeExit: ExitTransition = fadeOut(tween(durationMillis = 20))
-
-/**
- * 延迟入场的 chrome，并把自己抬进共享转场的 overlay 层。
- *
- * 用于覆盖在共享元素之上的 chrome，例如全屏图片查看器的关闭按钮和页码。转场期间被配对的元素
- * 是画在 SharedTransitionScope 的 overlay 里的，普通兄弟节点无论 zIndex 多高都在它下面；
- * 于是「图片飞到一半时关闭按钮被图片盖住」。[zIndexInOverlay] 取 1 即排在被配对元素之上。
- *
- * 页面级 chrome（统计页、榜单页的顶栏）不走这条路：整页容器变形时顶栏是容器的子节点，改为与
- * 内容一样挂 [appSkipToLookaheadSize]，从第一帧就在最终位置上、跟着容器裁剪逐渐露出。延迟入场
- * 会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-internal fun Modifier.appSharedOverlayChrome(
-    animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
-): Modifier {
-    val scope = LocalSharedTransitionScope.current
-    if (animatedVisibilityScope == null || scope == null || !LocalSharedTransitionEnabled.current) {
-        return this
-    }
-    return with(scope) {
-        with(animatedVisibilityScope) {
-            this@appSharedOverlayChrome
-                .animateEnterExit(enter = AppChromeEnter, exit = AppChromeExit)
-        // 位置参数就是 zIndexInOverlay；被配对元素的默认值是 0，取 1 即排在它之上。
-        }.renderInSharedTransitionScopeOverlay(1f)
-    }
-}
-
-/**
- * 当前被全屏查看器打开的共享元素，未打开时为 null。
- *
- * 缩略图侧据此把自己置为「不可见」，保证同一 key 下同时只有一个 target。必须如此：缩略图侧挂的是
- * NavHost 目的地的 AnimatedVisibilityScope，停在该页面期间恒为 Visible。若全屏侧打开时两侧同时是
- * target，状态机会取「先注册」的缩略图作为目标边界提供者，打开时边界从全屏动到缩略图，方向反了，
- * 观感上等于没有缩放动画。
- */
-val LocalFullscreenSharedElement = compositionLocalOf<SharedKey?> { null }
-
-/**
- * 缩略图/源侧修饰符：全屏查看器打开的正是本 key 时，本侧置为不可见。
- *
- * 走 caller-managed visibility 而不是 sharedBounds，因此没有 resizeMode 可选（API 不暴露该参数），
- * 恒为逐帧重新测量。源侧尺寸小，且转场期的边界由目标侧提供，这个代价可以接受。
- *
- * @param corner 只取 [SharedCorner.rest]：本侧没有 EnterExitState 可驱动插值，圆角是静态的。
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-internal fun Modifier.appSharedSource(
-    key: SharedKey?,
-    corner: SharedCorner? = null,
-): Modifier {
-    val scope = LocalSharedTransitionScope.current
-    if (key == null || scope == null || !LocalSharedTransitionEnabled.current) return this
-    val openedKey = LocalFullscreenSharedElement.current
-    return with(scope) {
-        val state = rememberSharedContentState(key = key)
-        val shape = corner?.let { RoundedCornerShape(it.rest) }
-        if (shape == null) {
-            this@appSharedSource.sharedElementWithCallerManagedVisibility(
-                state,
-                visible = openedKey != key,
-                boundsTransform = AppBoundsTransform,
-            )
-        } else {
-            this@appSharedSource.sharedElementWithCallerManagedVisibility(
-                state,
-                visible = openedKey != key,
-                boundsTransform = AppBoundsTransform,
-                clipInOverlayDuringTransition = OverlayClip(shape),
-            )
-        }
-    }
 }
