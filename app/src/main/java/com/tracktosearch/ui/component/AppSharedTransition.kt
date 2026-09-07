@@ -414,7 +414,8 @@ internal fun Modifier.appMorphContentFade(): Modifier {
     }
     // 只在首帧采样一次：容器变形推入时 SharedTransitionLayout 正处于激活状态（与各页现有的
     // isAppSharedTransitionActive 用法一致）；非 morph 进入时为 false，内容不加延迟。
-    var startedWhileMorph by remember { mutableStateOf(isAppSharedTransitionActive()) }
+    val startedWhileMorphInitial = isAppSharedTransitionActive()
+    var startedWhileMorph by remember { mutableStateOf(startedWhileMorphInitial) }
     var revealed by remember { mutableStateOf(!startedWhileMorph) }
     LaunchedEffect(startedWhileMorph) {
         if (startedWhileMorph) {
