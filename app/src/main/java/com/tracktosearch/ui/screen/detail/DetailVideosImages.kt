@@ -2,14 +2,7 @@ package com.tracktosearch.ui.screen.detail
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -52,13 +45,12 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -74,14 +66,10 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
-import com.tracktosearch.ui.component.ZoomableImageOverlay
-import com.tracktosearch.ui.component.queryExistingFile
-import com.tracktosearch.ui.component.savePosterToGallery
-import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.component.recordOpenImageBounds
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 
 // ==================== 预告片与截图 ====================
@@ -93,7 +81,8 @@ internal fun VideosAndImagesSection(
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
     onShowAll: () -> Unit = {},
-    sharedKeyPrefix: String? = null
+    // 剧照缩略图矩形记录表（下标 = backdrops 下标），由详情页持有并作为 OpenImage 查看器转场起点
+    backdropBounds: MutableMap<Int, Rect>
 ) {
     val totalCount = videos.size + backdrops.size
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -114,8 +103,8 @@ internal fun VideosAndImagesSection(
                 BackdropCard(
                     backdropUrl = backdropUrl,
                     onClick = { onBackdropClick(index) },
-                    sharedKeyPrefix = sharedKeyPrefix,
-                    index = index
+                    index = index,
+                    bounds = backdropBounds
                 )
             }
             itemsIndexed(
@@ -247,13 +236,13 @@ internal fun VideoCard(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BackdropCard(
     backdropUrl: String,
     onClick: () -> Unit = {},
-    sharedKeyPrefix: String? = null,
-    index: Int = 0
+    index: Int = 0,
+    // 全屏查看已迁移 OpenImage：缩略图矩形记录到 bounds，点击由详情页读取作为转场起点
+    bounds: MutableMap<Int, Rect>
 ) {
     Box(
         modifier = Modifier
@@ -261,19 +250,16 @@ internal fun BackdropCard(
             .height(135.dp)
             .clip(RoundedCornerShape(8.dp))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            .recordOpenImageBounds(index, bounds)
             // 只给首张挂 tag：LazyRow 里每张都挂，By.res 匹配到的就是当时排在最前的任意一张，
-            // 基准点开的是哪张、配对的是哪个 key 都不确定。首张在栏目里位置固定，可重复。
+            // 基准点开的是哪张都不确定。首张在栏目里位置固定，可重复。
             .then(if (index == 0) Modifier.testTag("detail_backdrop_card") else Modifier)
     ) {
-        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场。
-        // 用 caller-managed visibility(zoomSharedSource):全屏端打开本 key 时缩略图侧置不可见,
-        // 保证同一 key 同时只有一侧是 target,否则转场方向会反。
+        // 不再需要 zoom 共享元素配对：OpenImage 以 recordOpenImageBounds 的矩形做打开/返回动画
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -673,61 +659,4 @@ internal fun YouTubePlayerOverlay(
             )
         }
     }
-}
-
-// ==================== 截图滑动查看 ====================
-
-@Composable
-internal fun BackdropPagerOverlay(
-    visible: Boolean,
-    backdrops: List<String>,
-    initialIndex: Int,
-    sharedKeyPrefix: String?,
-    onDismiss: () -> Unit,
-    enter: EnterTransition = fadeIn(animationSpec = tween(200)),
-    exit: ExitTransition = fadeOut(animationSpec = tween(200))
-) {
-    val context = LocalContext.current
-    val alreadySavedToast = stringResource(R.string.poster_already_saved)
-    val scope = rememberCoroutineScope()
-    // 追踪每张截图的保存状态
-    val savedBackdrops = remember { mutableStateOf<Set<Int>>(emptySet()) }
-    // 大图用 original 清晰度
-    val originalUrls = remember(backdrops) { backdrops.map { it.replace("/w780/", "/original/") } }
-
-    // 检查初始截图是否已保存（一次性检查，与原有按页检查语义近似）
-    // 键住 visible：详情页常驻组合时 initialIndex 恒为 0，未打开查看器不做磁盘查询
-    LaunchedEffect(visible, initialIndex) {
-        if (!visible) return@LaunchedEffect
-        val index = initialIndex
-        if (index in savedBackdrops.value) return@LaunchedEffect
-        val fileName = "TrackToSearch_backdrop_${index}.jpg"
-        val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
-        val exists = queryExistingFile(context, fileName, relativePath) != null
-        if (exists) {
-            savedBackdrops.value += index
-        }
-    }
-
-    // 图片展示与缩放逻辑委托给通用全屏组件，仅保留保存状态检查与保存逻辑
-    ZoomableImageOverlay(
-        visible = visible,
-        images = originalUrls,
-        initialIndex = initialIndex,
-        sharedKeyPrefix = sharedKeyPrefix,
-        onDismiss = onDismiss,
-        onSave = { idx ->
-            val url = originalUrls.getOrNull(idx) ?: return@ZoomableImageOverlay
-            if (idx in savedBackdrops.value) {
-                context.showToast(alreadySavedToast)
-            } else {
-                savePosterToGallery(context, scope, url, "backdrop_$idx") {
-                    savedBackdrops.value += idx
-                }
-            }
-        },
-        isSavedAt = { idx -> idx in savedBackdrops.value },
-        enter = enter,
-        exit = exit
-    )
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
@@ -99,6 +100,8 @@ class DetailHeaderContentTest {
                         isMarkedWatchlist = false,
                         isMarkingWatchlist = false,
                         onToggleWatchlist = {},
+                        posterBounds = remember { mutableMapOf() },
+                        backdropBounds = remember { mutableMapOf() },
                         posterColorExtractor = mockk(relaxed = true),
                         onPosterColorExtracted = {},
                         // 只组合上半区（海报/标题/胶囊/按钮/评分卡），演职员等分区不参与本测
