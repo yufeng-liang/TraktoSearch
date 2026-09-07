@@ -26,6 +26,14 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
 
 /**
  * 全 App 共享元素转场的统一入口。
@@ -384,6 +392,62 @@ internal fun Modifier.appSkipToLookaheadSize(): Modifier {
     val scope = LocalSharedTransitionScope.current
     if (scope == null || !LocalSharedTransitionEnabled.current) return this
     return with(scope) { this@appSkipToLookaheadSize.skipToLookaheadSize() }
+}
+
+/**
+ * 整页容器变形目标页的内容透明度（容器变形 + 内容淡入）。
+ *
+ * 用法：挂到「不透明底色 Box」内侧的内容根节点；若页内有多个直接子节点，先包一层
+ * Box(fillMaxSize) 再挂。只影响内容透明度，不影响随容器一起长大的不透明底色。
+ *
+ * 时序是非对称的：
+ * - 进场：容器先展开（底色 + 圆角动画），内容延迟 [MORPH_CONTENT_ENTER_DELAY_MS] 后用
+ *   [MORPH_CONTENT_ENTER_FADE_MS] 淡入，避免内容挤在小容器里、也避免「内容被边界裁剪」的旧观感。
+ * - 返回：内容先以 [MORPH_CONTENT_EXIT_FADE_MS] 快速淡出，容器再收回成卡片，避免文字被压扁。
+ *
+ * alpha 只在 graphicsLayer 的绘制阶段读动画值，不引入逐帧重组。若页面不是由容器变形推入
+ * （共享元素被关闭、深链直达、从更深页面返回），首帧采样不到激活中的共享转场，内容保持立即
+ * 可见，由 NavHost 默认转场接管。
+ */
+private const val MORPH_CONTENT_ENTER_DELAY_MS = 200
+private const val MORPH_CONTENT_ENTER_FADE_MS = 220
+private const val MORPH_CONTENT_EXIT_FADE_MS = 60
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun Modifier.appMorphContentFade(): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    if (scope == null || animatedVisibilityScope == null || !LocalSharedTransitionEnabled.current) {
+        return this
+    }
+    // 只在首帧采样一次：容器变形推入时 SharedTransitionLayout 正处于激活状态（与各页现有的
+    // isAppSharedTransitionActive 用法一致）；非 morph 进入时为 false，内容不加延迟。
+    var startedWhileMorph by remember { mutableStateOf(isAppSharedTransitionActive()) }
+    var revealed by remember { mutableStateOf(!startedWhileMorph) }
+    LaunchedEffect(startedWhileMorph) {
+        if (startedWhileMorph) {
+            delay(MORPH_CONTENT_ENTER_DELAY_MS.toLong())
+            revealed = true
+        }
+    }
+    val transition = animatedVisibilityScope.transition
+    val exiting = transition.currentState == EnterExitState.Visible &&
+        transition.targetState == EnterExitState.PostExit
+    val alpha = animateFloatAsState(
+        targetValue = when {
+            exiting -> 0f
+            revealed -> 1f
+            else -> 0f
+        },
+        animationSpec = if (exiting) {
+            tween(durationMillis = MORPH_CONTENT_EXIT_FADE_MS)
+        } else {
+            tween(durationMillis = MORPH_CONTENT_ENTER_FADE_MS)
+        },
+        label = "morphContentFade",
+    )
+    return this.graphicsLayer { alpha = alpha.value }
 }
 
 /** chrome 入场：等容器基本落位再淡入。 */
