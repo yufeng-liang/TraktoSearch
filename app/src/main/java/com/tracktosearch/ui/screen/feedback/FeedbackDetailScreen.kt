@@ -1,6 +1,9 @@
 package com.tracktosearch.ui.screen.feedback
 
+import android.app.Activity
+import android.content.Context
 import android.net.Uri
+import android.widget.ImageView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -47,20 +50,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.OpenImageViewerItem
+import com.tracktosearch.ui.component.openImageViewer
+import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.feedback.FeedbackDetail
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
-import com.tracktosearch.ui.component.LocalFullscreenSharedElement
-import com.tracktosearch.ui.component.fullscreenSharedElementKey
-import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SharedCorner
-import com.tracktosearch.ui.component.ZoomThumbnailCrop
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.feedbackCardSharedKey
@@ -72,6 +74,10 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val MAX_REPLY_SCREENSHOTS = 5
 private const val MAX_REPLY_LENGTH = 2000
@@ -117,15 +123,8 @@ fun FeedbackDetailScreen(
         }
     }
 
-    var fullscreenUrls by remember { mutableStateOf<List<String>>(emptyList()) }
-    var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
-    // 当前全屏图片来源前缀：原帖/回复气泡共用同一 fullscreen overlay，
-    // 点击时记录来源，确保全屏端 sharedElement key 与缩略图源配对
-    var fullscreenKeyPrefix by remember { mutableStateOf("fb-conv-$feedbackId") }
-
     var replyText by remember { mutableStateOf("") }
     var replyScreenshots by remember { mutableStateOf<List<Pair<ByteArray, String>>>(emptyList()) }
-    var replyFullscreenIndex by remember { mutableStateOf<Int?>(null) }
 
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -176,20 +175,6 @@ fun FeedbackDetailScreen(
             -> Unit
         }
     }
-
-    // 全屏查看器打开时把该 key 广播给缩略图源侧，让源侧置不可见。
-    // 同一 key 两侧同时是 target 时，SharedTransitionStateMachine 会取先注册的源侧作为
-    // 目标边界提供者，打开方向会反转，观感上等于没有缩放动画。
-    val fullscreenSharedKey = when {
-        fullscreenIndex != null && fullscreenUrls.isNotEmpty() && fullscreenKeyPrefix != null ->
-            "$fullscreenKeyPrefix-${fullscreenIndex!!.coerceIn(0, fullscreenUrls.size - 1)}"
-        replyFullscreenIndex != null && replyScreenshots.isNotEmpty() ->
-            "fb-compose-${replyFullscreenIndex!!.coerceIn(0, replyScreenshots.size - 1)}"
-        else -> null
-    }
-    CompositionLocalProvider(
-        LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
-    ) {
 
     Scaffold(
         contentWindowInsets = feedbackDetailScaffoldContentWindowInsets(),
@@ -281,13 +266,7 @@ fun FeedbackDetailScreen(
                             item(key = "original") {
                                 OriginalFeedbackCard(
                                     feedback = feedback,
-                                    timeLabels = timeLabels,
-                                    sharedKeyPrefix = "fb-conv-$feedbackId",
-                                    onScreenshotClick = { urls, index ->
-                                        fullscreenKeyPrefix = "fb-conv-$feedbackId"
-                                        fullscreenUrls = urls
-                                        fullscreenIndex = index
-                                    }
+                                    timeLabels = timeLabels
                                 )
                             }
                             if (replies.isNotEmpty() || state.isRefreshing) {
@@ -317,15 +296,9 @@ fun FeedbackDetailScreen(
                                     reply = reply,
                                     dayLabel = dayLabels.getOrNull(index),
                                     timeLabels = timeLabels,
-                                    sharedKeyPrefix = "fb-reply-${reply.id}",
                                     highlight = highlightReplyId == reply.id,
                                     onHighlightDone = {
                                         if (highlightReplyId == reply.id) highlightReplyId = null
-                                    },
-                                    onScreenshotClick = { urls, shotIndex ->
-                                        fullscreenKeyPrefix = "fb-reply-${reply.id}"
-                                        fullscreenUrls = urls
-                                        fullscreenIndex = shotIndex
                                     }
                                 )
                             }
@@ -337,14 +310,12 @@ fun FeedbackDetailScreen(
                                 text = replyText,
                                 onTextChange = { if (it.length <= MAX_REPLY_LENGTH) replyText = it },
                                 screenshots = replyScreenshots,
-                                sharedKeyPrefix = "fb-compose",
                                 enabled = !isReplying,
                                 onAddScreenshot = { pickImageLauncher.launch("image/*") },
                                 onRemoveScreenshot = { idx ->
                                     replyScreenshots = replyScreenshots.toMutableList()
                                         .apply { removeAt(idx) }
                                 },
-                                onScreenshotClick = { idx -> replyFullscreenIndex = idx },
                                 onSend = {
                                     if (replyText.isNotBlank()) {
                                         viewModel.reply(
@@ -378,27 +349,6 @@ fun FeedbackDetailScreen(
         }
     }
 
-    // 原帖截图全屏（fullscreenKeyPrefix 由点击来源决定：原帖 "fb-conv-$feedbackId" 或回复气泡 "fb-reply-${reply.id}"）
-    ZoomableImageOverlay(
-        visible = fullscreenIndex != null && fullscreenUrls.isNotEmpty(),
-        images = fullscreenUrls,
-        initialIndex = fullscreenIndex?.coerceIn(0, fullscreenUrls.size - 1) ?: 0,
-        sharedKeyPrefix = fullscreenKeyPrefix,
-        // 缩略图用 ContentScale.Fit（截图宽高比五花八门，裁切会切掉关键内容），
-        // 全屏侧因此只能逐帧重新测量，见 ZoomThumbnailCrop.Fit
-        thumbnailCrop = ZoomThumbnailCrop.Fit,
-        onDismiss = { fullscreenIndex = null }
-    )
-    // 回复框预览全屏
-    ZoomableImageOverlay(
-        visible = replyFullscreenIndex != null && replyScreenshots.isNotEmpty(),
-        images = replyScreenshots.map { it.first },
-        initialIndex = replyFullscreenIndex?.coerceIn(0, replyScreenshots.size - 1) ?: 0,
-        sharedKeyPrefix = "fb-compose",
-        thumbnailCrop = ZoomThumbnailCrop.Fit,
-        onDismiss = { replyFullscreenIndex = null }
-    )
-    } // CompositionLocalProvider(LocalFullscreenSharedElement)
 }
 
 /** 详情页顶栏：与消息页同一套 haze 贴顶写法，内容从下面穿过去。 */
@@ -485,16 +435,20 @@ private fun ClosedFeedbackFooter() {
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OriginalFeedbackCard(
     feedback: FeedbackDetail,
-    timeLabels: FeedbackTimeLabels,
-    sharedKeyPrefix: String? = null,
-    onScreenshotClick: (urls: List<String>, index: Int) -> Unit
+    timeLabels: FeedbackTimeLabels
 ) {
     val context = LocalContext.current
     val screenshots = remember(feedback.screenshots) { parseScreenshots(feedback.screenshots) }
+    // 服务端截图 URL（/feedback-api/screenshot/<key>）无尺寸段：查看器大图与缩略图同 URL
+    val screenshotViewerItems = remember(screenshots) {
+        screenshots.map { OpenImageViewerItem(largeUrl = screenshotUrl(it)) }
+    }
+    val screenshotBounds = rememberOpenImageBounds()
+    val activity = context as? Activity
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -541,8 +495,20 @@ private fun OriginalFeedbackCard(
                                 .height(160.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surface)
+                                // 记录该缩略图的 window 矩形，OpenImage 打开/返回动画以它为落点
+                                .recordOpenImageBounds(index, screenshotBounds)
                                 .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
-                                    onScreenshotClick(screenshots.map(::screenshotUrl), index)
+                                    val currentActivity = activity
+                                    if (currentActivity != null) {
+                                        // 反馈截图缩略图是 ContentScale.Fit，动画占位须用 FIT_CENTER 对齐
+                                        openImageViewer(
+                                            activity = currentActivity,
+                                            items = screenshotViewerItems,
+                                            bounds = screenshotBounds,
+                                            clickedIndex = index,
+                                            thumbnailScaleType = ImageView.ScaleType.FIT_CENTER
+                                        )
+                                    }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -552,11 +518,7 @@ private fun OriginalFeedbackCard(
                                 },
                                 contentDescription = stringResource(R.string.feedback_screenshots),
                                 contentScale = ContentScale.Fit,
-                                // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
-                                // 保证同一 key 同时只有一侧是 target
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
@@ -612,18 +574,16 @@ private fun OriginalFeedbackCard(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ConversationBubble(
     reply: FeedbackReply,
     dayLabel: String?,
     timeLabels: FeedbackTimeLabels,
-    sharedKeyPrefix: String? = null,
     highlight: Boolean,
-    onHighlightDone: () -> Unit,
-    onScreenshotClick: (urls: List<String>, index: Int) -> Unit
+    onHighlightDone: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val isDeveloper = reply.author_role == "developer"
     val arrangement = if (isDeveloper) Arrangement.Start else Arrangement.End
     val bubbleColor = if (isDeveloper) {
@@ -707,6 +667,11 @@ private fun ConversationBubble(
                     )
                     val screenshots = reply.screenshots
                     if (screenshots.isNotEmpty()) {
+                        // 每条回复气泡独立一份 bounds/items，下标只在本气泡内对齐
+                        val bubbleBounds = rememberOpenImageBounds()
+                        val bubbleViewerItems = remember(screenshots) {
+                            screenshots.map { OpenImageViewerItem(largeUrl = screenshotUrl(it)) }
+                        }
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(screenshots, key = { it }) { key ->
                                 val url = screenshotUrl(key)
@@ -721,11 +686,18 @@ private fun ConversationBubble(
                                         .size(64.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
-                                        // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
-                                        // 保证同一 key 同时只有一侧是 target
-                                        .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
+                                        .recordOpenImageBounds(index, bubbleBounds)
                                         .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
-                                            onScreenshotClick(screenshots.map(::screenshotUrl), index)
+                                            val currentActivity = activity
+                                            if (currentActivity != null) {
+                                                openImageViewer(
+                                                    activity = currentActivity,
+                                                    items = bubbleViewerItems,
+                                                    bounds = bubbleBounds,
+                                                    clickedIndex = index,
+                                                    thumbnailScaleType = ImageView.ScaleType.FIT_CENTER
+                                                )
+                                            }
                                         }
                                 )
                             }
@@ -751,22 +723,21 @@ private fun ConversationBubble(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ReplyBar(
     text: String,
     onTextChange: (String) -> Unit,
     screenshots: List<Pair<ByteArray, String>>,
-    sharedKeyPrefix: String? = null,
     enabled: Boolean,
     onAddScreenshot: () -> Unit,
     onRemoveScreenshot: (Int) -> Unit,
-    onScreenshotClick: (Int) -> Unit,
     onSend: () -> Unit,
     isSending: Boolean,
     replyState: FeedbackViewModel.ReplyState
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
+    val scope = rememberCoroutineScope()
     val haptics = rememberAppHaptics()
     Surface(
         modifier = Modifier
@@ -780,6 +751,8 @@ private fun ReplyBar(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (screenshots.isNotEmpty()) {
+                // 本地 ByteArray 截图：OpenImage 只收 URL，点开前先把整组截图落 cache 成文件
+                val previewBounds = rememberOpenImageBounds()
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     itemsIndexed(screenshots, key = { _, pair -> pair.first }) { index, (bytes, _) ->
                         Box(
@@ -787,8 +760,30 @@ private fun ReplyBar(
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .recordOpenImageBounds(index, previewBounds)
                                 .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
-                                    onScreenshotClick(index)
+                                    val currentActivity = activity
+                                    if (currentActivity != null) {
+                                        scope.launch {
+                                            // IO 线程落盘，完成后回主线程打开查看器（可横滑整组）
+                                            val files = withContext(Dispatchers.IO) {
+                                                screenshots.mapIndexedNotNull { i, (imageBytes, imageMime) ->
+                                                    writeScreenshotToCache(context, imageBytes, imageMime, "fb_reply", i)
+                                                }
+                                            }
+                                            if (files.size == screenshots.size) {
+                                                openImageViewer(
+                                                    activity = currentActivity,
+                                                    items = files.map {
+                                                        OpenImageViewerItem(largeUrl = Uri.fromFile(it).toString())
+                                                    },
+                                                    bounds = previewBounds,
+                                                    clickedIndex = index,
+                                                    thumbnailScaleType = ImageView.ScaleType.FIT_CENTER
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                         ) {
                             AsyncImage(
@@ -797,11 +792,7 @@ private fun ReplyBar(
                                 },
                                 contentDescription = stringResource(R.string.feedback_screenshots),
                                 contentScale = ContentScale.Fit,
-                                // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
-                                // 保证同一 key 同时只有一侧是 target
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
+                                modifier = Modifier.fillMaxSize()
                             )
                             if (enabled) {
                                 // 删除键原先是默认 48dp 的 IconButton，盖住整块缩略图，
@@ -944,6 +935,31 @@ internal fun parseScreenshots(json: String?): List<String> {
     } catch (_: Exception) {
         emptyList()
     }
+}
+
+/**
+ * 把本地 ByteArray 截图落到 cacheDir/openimage_preview/ 临时文件，供 OpenImage 查看器加载。
+ * OpenImage 只收 URL；cache 目录由系统管理可清理，查看器打开后不主动删文件。
+ * 落盘失败返回 null，调用方按实际写入数量决定是否打开查看器。
+ */
+private fun writeScreenshotToCache(
+    context: Context,
+    bytes: ByteArray,
+    mimeType: String,
+    tag: String,
+    index: Int,
+): File? = try {
+    val extension = when {
+        mimeType.equals("image/png", ignoreCase = true) -> "png"
+        mimeType.equals("image/webp", ignoreCase = true) -> "webp"
+        mimeType.equals("image/gif", ignoreCase = true) -> "gif"
+        else -> "jpg"
+    }
+    val dir = File(context.cacheDir, "openimage_preview").apply { mkdirs() }
+    File(dir, "${tag}_${System.currentTimeMillis()}_$index.$extension")
+        .apply { writeBytes(bytes) }
+} catch (_: Exception) {
+    null
 }
 
 

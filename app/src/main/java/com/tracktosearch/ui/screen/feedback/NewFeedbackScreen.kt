@@ -1,10 +1,11 @@
 package com.tracktosearch.ui.screen.feedback
 
+import android.app.Activity
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,11 +39,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.LocalFullscreenSharedElement
-import com.tracktosearch.ui.component.fullscreenSharedElementKey
-import com.tracktosearch.ui.component.ZoomableImageOverlay
+import com.tracktosearch.ui.component.OpenImageViewerItem
+import com.tracktosearch.ui.component.openImageViewer
+import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -50,6 +51,10 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -83,8 +88,6 @@ fun NewFeedbackScreen(
     var content by remember { mutableStateOf("") }
     var screenshots by remember { mutableStateOf<List<Pair<ByteArray, String>>>(emptyList()) }
 
-    // 截图全屏查看
-    var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
     var showDiscardDialog by remember { mutableStateOf(false) }
 
     // 图片选择器
@@ -134,15 +137,6 @@ fun NewFeedbackScreen(
         if (hasDraft && !isSubmitting) showDiscardDialog = true else onBack()
     }
     BackHandler(enabled = hasDraft && !isSubmitting) { showDiscardDialog = true }
-
-    // 全屏查看器打开时把该 key 广播给缩略图源侧，让源侧置不可见，
-    // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
-    val fullscreenSharedKey = fullscreenIndex
-        ?.takeIf { screenshots.isNotEmpty() }
-        ?.let { "fb-new-${it.coerceIn(0, screenshots.size - 1)}" }
-    CompositionLocalProvider(
-        LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
-    ) {
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -249,12 +243,10 @@ fun NewFeedbackScreen(
                 ScreenshotRow(
                     screenshots = screenshots,
                     enabled = !isSubmitting,
-                    sharedKeyPrefix = "fb-new",
                     onAddClick = { pickImageLauncher.launch("image/*") },
                     onRemoveClick = { index ->
                         screenshots = screenshots.toMutableList().apply { removeAt(index) }
                     },
-                    onImageClick = { index -> fullscreenIndex = index },
                     onReorder = { from, to ->
                         screenshots = screenshots.toMutableList().apply {
                             add(to, removeAt(from))
@@ -331,15 +323,6 @@ fun NewFeedbackScreen(
         )
     }
 
-    // 截图全屏查看
-    ZoomableImageOverlay(
-        visible = fullscreenIndex != null && screenshots.isNotEmpty(),
-        images = screenshots.map { it.first },
-        initialIndex = fullscreenIndex?.coerceIn(0, screenshots.size - 1) ?: 0,
-        sharedKeyPrefix = "fb-new",
-        onDismiss = { fullscreenIndex = null }
-    )
-    } // CompositionLocalProvider(LocalFullscreenSharedElement)
 }
 
 /** 小标题：类型 / 截图两段共用。 */
@@ -461,18 +444,19 @@ private fun SubmitFeedbackButton(
  * 截图行：支持添加、删除、点击查看大图、长按拖动排序（跟随手指 + 插入动画）。
  * 使用 sh.calvin.reorderable 库实现：被拖项跟随手指平移，其他项通过 animateItem 平滑插入。
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ScreenshotRow(
     screenshots: List<Pair<ByteArray, String>>,
     enabled: Boolean,
-    sharedKeyPrefix: String? = null,
     onAddClick: () -> Unit,
     onRemoveClick: (Int) -> Unit,
-    onImageClick: (Int) -> Unit,
     onReorder: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
+    val scope = rememberCoroutineScope()
+    // 预览缩略图矩形表（下标与 screenshots 对齐），点开时交给 OpenImage 做转场落点
+    val previewBounds = rememberOpenImageBounds()
     val haptics = rememberAppHaptics()
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -509,10 +493,34 @@ private fun ScreenshotRow(
                         }
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
                         .clip(RoundedCornerShape(10.dp))
+                        // 记录该格的 window 矩形，OpenImage 打开动画以点击那张为落点
+                        .recordOpenImageBounds(index, previewBounds)
                         .hapticClickable(
                             semantic = HapticSemantic.LIGHT_TAP,
                             enabled = enabled
-                        ) { onImageClick(index) },
+                        ) {
+                            val currentActivity = activity
+                            if (currentActivity != null) {
+                                scope.launch {
+                                    // 整组预览一起落 cache（OpenImage 只收 URL），完成后主线程打开查看器
+                                    val files = withContext(Dispatchers.IO) {
+                                        screenshots.mapIndexedNotNull { i, (imageBytes, imageMime) ->
+                                            writeScreenshotToCache(context, imageBytes, imageMime, "fb_new", i)
+                                        }
+                                    }
+                                    if (files.size == screenshots.size) {
+                                        openImageViewer(
+                                            activity = currentActivity,
+                                            items = files.map {
+                                                OpenImageViewerItem(largeUrl = Uri.fromFile(it).toString())
+                                            },
+                                            bounds = previewBounds,
+                                            clickedIndex = index,
+                                        )
+                                    }
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -526,9 +534,6 @@ private fun ScreenshotRow(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(80.dp)
-                            // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
-                            // 保证同一 key 同时只有一侧是 target
-                            .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
                     )
                     // 右上角删除按钮：原先 20dp 且没有 contentDescription，
                     // 手指点不准、读屏也念不出。放到 36dp——再大就会盖住缩略图中心，
@@ -618,12 +623,27 @@ private fun FeedbackTypeChip(
     )
 }
 
-
-
-
-
-
-
-
-
-
+/**
+ * 把本地 ByteArray 截图落到 cacheDir/openimage_preview/ 临时文件，供 OpenImage 查看器加载。
+ * OpenImage 只收 URL；cache 目录由系统管理可清理，查看器打开后不主动删文件。
+ * 落盘失败返回 null，调用方按实际写入数量决定是否打开查看器。
+ */
+private fun writeScreenshotToCache(
+    context: Context,
+    bytes: ByteArray,
+    mimeType: String,
+    tag: String,
+    index: Int,
+): File? = try {
+    val extension = when {
+        mimeType.equals("image/png", ignoreCase = true) -> "png"
+        mimeType.equals("image/webp", ignoreCase = true) -> "webp"
+        mimeType.equals("image/gif", ignoreCase = true) -> "gif"
+        else -> "jpg"
+    }
+    val dir = File(context.cacheDir, "openimage_preview").apply { mkdirs() }
+    File(dir, "${tag}_${System.currentTimeMillis()}_$index.$extension")
+        .apply { writeBytes(bytes) }
+} catch (_: Exception) {
+    null
+}

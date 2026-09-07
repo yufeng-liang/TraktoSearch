@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.person
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
@@ -34,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,11 +53,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.OpenImageViewerItem
+import com.tracktosearch.ui.component.openImageViewer
+import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.GlassScene
-import com.tracktosearch.ui.component.LocalFullscreenSharedElement
-import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.rememberPosterPrefetch
@@ -72,7 +74,6 @@ import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.component.appSharedBounds
@@ -114,6 +115,7 @@ fun PersonScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val activity = context as? Activity
 
     BackHandler(enabled = true) { onBack() }
 
@@ -152,9 +154,6 @@ fun PersonScreen(
     var showAllMovies by rememberSaveable { mutableStateOf(false) }
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
     var showAllPersonImages by rememberSaveable { mutableStateOf(false) }
-    var selectedPersonImageIndex by rememberSaveable { mutableIntStateOf(-1) }
-    // 当前全屏图片来源前缀：决定 sharedElement 与哪端缩略图配对
-    var personImageFullscreenKey by remember { mutableStateOf<String?>(null) }
     // 将 gridState 提升到屏幕级，使用 rememberSaveable 保留导航往返后的滚动位置
     val movieCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val tvCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
@@ -163,15 +162,6 @@ fun PersonScreen(
     val tvCreditsRowState = rememberLazyListState()
 
     Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
-        // 全屏查看器打开时，把「正在被查看」的 key 广播给缩略图源侧，让源侧置不可见。
-        // 同一 key 若两侧同时是 target，SharedTransitionStateMachine 会取先注册的源侧作为
-        // 目标边界提供者，打开时边界从全屏动到缩略图，方向反了，观感上等于没有缩放动画。
-        val fullscreenSharedKey = personImageFullscreenKey
-            ?.takeIf { selectedPersonImageIndex >= 0 }
-            ?.let { "$it-$selectedPersonImageIndex" }
-        CompositionLocalProvider(
-            LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
-        ) {
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
@@ -268,6 +258,16 @@ fun PersonScreen(
                                             }
                                         }
                                     } else if (uiState.personImages.isNotEmpty()) {
+                                        // 顶部人物图横栏的查看器数据与缩略图矩形（下标与 uiState.personImages 对齐）
+                                        val personRowViewerItems = remember(uiState.personImages) {
+                                            uiState.personImages.map {
+                                                OpenImageViewerItem(
+                                                    largeUrl = TmdbImageUrls.swapSize(it, "original"),
+                                                    coverUrl = it
+                                                )
+                                            }
+                                        }
+                                        val personRowBounds = rememberOpenImageBounds()
                                         LazyRow(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
@@ -277,8 +277,16 @@ fun PersonScreen(
                                                     imageUrl = url,
                                                     title = uiState.person?.name ?: personName,
                                                     onClick = {
-                                                        personImageFullscreenKey = "person-row-$personId"
-                                                        selectedPersonImageIndex = index
+                                                        val currentActivity = activity
+                                                        if (currentActivity != null) {
+                                                            // 点开即 OpenImage：大图 original，cover 用横栏当前 URL
+                                                            openImageViewer(
+                                                                activity = currentActivity,
+                                                                items = personRowViewerItems,
+                                                                bounds = personRowBounds,
+                                                                clickedIndex = index
+                                                            )
+                                                        }
                                                     },
                                                     modifier = Modifier
                                                         .width(110.dp)
@@ -286,11 +294,8 @@ fun PersonScreen(
                                                             MaterialTheme.colorScheme.surfaceVariant,
                                                             RoundedCornerShape(14.dp)
                                                         ),
-                                                    // caller-managed visibility：全屏查看器打开本 key 时源侧置不可见，
-                                                    // 保证同一 key 同时只有一侧是 target，否则缩放方向会反
-                                                    posterModifier = Modifier.zoomSharedSource(
-                                                        key = "person-row-$personId-$index"
-                                                    ),
+                                                    // 记录每张海报的 window 矩形，打开动画以点击那张为落点
+                                                    posterModifier = Modifier.recordOpenImageBounds(index, personRowBounds),
                                                     imageSize = 200
                                                 )
                                             }
@@ -570,33 +575,15 @@ fun PersonScreen(
                     }
 
                     // 全部人物图片面板（内联，替代原 ModalBottomSheet）
-                    // 必须排在全屏查看器之前：查看器要绘制在面板之上，且 BackHandler 后注册者优先，
-                    // 查看器的返回拦截必须晚于面板注册，否则返回键会先把面板关掉
+                    // 面板与页面同 window：网格缩略图矩形有效，单元点击直接带转场打开查看器
                     AllPersonImagesPanel(
                         visible = showAllPersonImages && uiState.personImages.isNotEmpty(),
                         images = uiState.personImages,
-                        personId = personId,
-                        onImageClick = { index ->
-                            // 面板保持打开：源侧改用 caller-managed visibility 后不再需要关面板来
-                            // 让出 target，返回时可直接回到网格原位
-                            personImageFullscreenKey = "person-grid-$personId"
-                            selectedPersonImageIndex = index
-                        },
                         onDismiss = { showAllPersonImages = false }
-                    )
-
-                    // 人物图片大图查看（内联，共享转场需同 window）
-                    PersonImagePagerOverlay(
-                        visible = selectedPersonImageIndex >= 0 && uiState.personImages.isNotEmpty() && personImageFullscreenKey != null,
-                        images = uiState.personImages,
-                        initialIndex = selectedPersonImageIndex.coerceAtLeast(0),
-                        sharedKeyPrefix = personImageFullscreenKey,
-                        onDismiss = { selectedPersonImageIndex = -1 }
                     )
                 }
             }
         }
-        } // CompositionLocalProvider(LocalFullscreenSharedElement)
     }
 }
 
@@ -674,4 +661,4 @@ private fun CreditPosterCard(
 // - PersonSkeletonContent.kt: PersonSkeletonContent
 // - PersonHeaderContent.kt: PersonHeaderContent
 // - PersonCreditCard.kt: CreditCard
-// - PersonImageOverlay.kt: PersonImagePagerOverlay, AllPersonImagesPanel
+// - PersonImageOverlay.kt: AllPersonImagesPanel
