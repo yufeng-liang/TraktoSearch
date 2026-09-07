@@ -10,11 +10,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.ViewCompat
 import com.flyjingfish.openimagelib.OpenImage
 import com.flyjingfish.openimagelib.beans.ClickViewParam
 import com.flyjingfish.openimagelib.beans.CloseParams
+import com.flyjingfish.openimagelib.beans.DownloadParams
 import com.flyjingfish.openimagelib.beans.OpenImageUrl
 import com.flyjingfish.openimagelib.enums.MediaType
+import com.tracktosearch.R
 
 /**
  * OpenImage 成熟查看器的 Compose 桥接层。
@@ -83,7 +87,7 @@ internal fun openImageViewer(
         .setSrcImageViewScaleType(thumbnailScaleType, true)
         .setImageUrlList(items)
         // 内置保存按钮（底部右侧小圆钮 + 进度环），不再手写相册逻辑
-        .setShowDownload()
+        .setShowDownload(bottomEndDownloadParams(activity))
         // 关闭按钮放左上角，拖动图片时隐藏
         .setShowClose(topStartCloseParams(activity))
         .setOnExitListener { onExit() }
@@ -130,20 +134,73 @@ internal fun openImageViewerNoTransition(
         .setClickPosition(clickedIndex.coerceIn(0, items.lastIndex))
         .setSrcImageViewScaleType(ImageView.ScaleType.CENTER_CROP, true)
         .setImageUrlList(items)
-        .setShowDownload()
+        .setShowDownload(bottomEndDownloadParams(activity))
         .setShowClose(topStartCloseParams(activity))
         .setOnExitListener { onExit() }
         .show()
 }
 
-/** 关闭按钮：36dp 白图标放左上（Telegram 风格），触摸图片时隐藏。 */
+/**
+ * 关闭按钮：36dp 白图标放左上（Telegram 风格），触摸图片时隐藏。
+ *
+ * OpenImage 查看器是沉浸式（内容延伸到状态栏底下），按钮坐标相对整窗计算；
+ * 只留 margin 会把按钮顶进状态栏，视觉压住系统图标且点击被状态栏消费。
+ * 因此 topMargin 额外加状态栏高度，让按钮落在状态栏下方。
+ */
 private fun topStartCloseParams(activity: Activity): CloseParams {
     val density = activity.resources.displayMetrics.density
-    val size = (36 * density).toInt()
-    val margin = (10 * density).toInt()
+    val size = (44 * density).toInt()
+    val margin = (16 * density).toInt()
     val lp = FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.START).apply {
-        topMargin = margin
+        topMargin = systemBarInsetTop(activity) + margin
         leftMargin = margin
     }
-    return CloseParams().setTouchingHide(true).setCloseLayoutParams(lp)
+    return CloseParams()
+        .setCloseSrc(R.drawable.open_image_btn_close)
+        .setTouchingHide(true)
+        .setCloseLayoutParams(lp)
 }
+
+/**
+ * 下载/保存按钮：36dp 白图标放右下（Telegram 风格），触摸图片时隐藏。
+ *
+ * 与关闭按钮同理，查看器整窗布局会贴到屏幕底；默认下载按钮不带导航条 inset，
+ * 会压住手势条/三键导航。bottomMargin 额外加导航条高度，让按钮浮在安全区之上。
+ */
+private fun bottomEndDownloadParams(activity: Activity): DownloadParams {
+    val density = activity.resources.displayMetrics.density
+    val size = (44 * density).toInt()
+    val margin = (16 * density).toInt()
+    val lp = FrameLayout.LayoutParams(size, size, Gravity.BOTTOM or Gravity.END).apply {
+        bottomMargin = systemBarInsetBottom(activity) + margin
+        rightMargin = margin
+    }
+    return DownloadParams()
+        .setDownloadSrc(R.drawable.open_image_btn_download)
+        .setTouchingHide(true)
+        .setDownloadLayoutParams(lp)
+}
+
+/**
+ * 状态栏高度（px）。优先取主窗口 insets（edge-to-edge 下更准），
+ * 取不到再退回系统资源里的 status_bar_height。
+ */
+private fun systemBarInsetTop(activity: Activity): Int {
+    val inset = ViewCompat.getRootWindowInsets(activity.window.decorView)
+        ?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
+    if (inset != null && inset > 0) return inset
+    return systemDimen(activity, "status_bar_height")
+}
+
+/** 导航条高度（px），逻辑同 [systemBarInsetTop]。 */
+private fun systemBarInsetBottom(activity: Activity): Int {
+    val inset = ViewCompat.getRootWindowInsets(activity.window.decorView)
+        ?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom
+    if (inset != null && inset > 0) return inset
+    return systemDimen(activity, "navigation_bar_height")
+}
+
+private fun systemDimen(activity: Activity, name: String): Int = runCatching {
+    val id = activity.resources.getIdentifier(name, "dimen", "android")
+    if (id > 0) activity.resources.getDimensionPixelSize(id) else 0
+}.getOrDefault(0)
