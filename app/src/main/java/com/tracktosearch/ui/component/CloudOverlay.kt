@@ -28,7 +28,6 @@ import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import kotlinx.coroutines.delay
 
@@ -79,10 +78,11 @@ fun CloudOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                // 纯展示层的背景点击关闭：不是操作面，不震（3 秒也会自动关）
                 .hapticClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    semantic = HapticSemantic.LIGHT_TAP,
+                    semantic = null,
                     onClick = onDismiss
                 ),
             contentAlignment = Alignment.Center

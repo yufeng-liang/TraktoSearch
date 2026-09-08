@@ -1632,7 +1632,9 @@ fun WatchlistScreen(
                             NeumorphicFrostedSurface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                    // 触感交给守卫里那一记（完成态不震）；外层再挂一记
+                                    // 就是运行态双震、完成态白震
+                                    .hapticClickable(semantic = null) {
                                         // 完成态点击无操作（横幅 5 秒后自动消失）
                                         if (removalProgress.isRunning && !removalProgress.isCancelling) {
                                             // 触感留在守卫里：完成态点下去什么也不做，不该震

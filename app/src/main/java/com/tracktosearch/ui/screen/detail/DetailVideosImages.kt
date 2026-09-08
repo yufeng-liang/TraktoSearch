@@ -261,7 +261,8 @@ internal fun BackdropCard(
             .width(240.dp)
             .height(135.dp)
             .clip(RoundedCornerShape(8.dp))
-            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            // 点剧照是看图，不震
+            .hapticClickable(semantic = null, onClick = onClick)
             // 只给首张挂 tag：LazyRow 里每张都挂，By.res 匹配到的就是当时排在最前的任意一张，
             // 基准点开的是哪张、配对的是哪个 key 都不确定。首张在栏目里位置固定，可重复。
             .then(if (index == 0) Modifier.testTag("detail_backdrop_card") else Modifier)
@@ -520,7 +521,8 @@ internal fun FullBackdropItem(
             .fillMaxWidth()
             .height(120.dp)
             .clip(RoundedCornerShape(8.dp))
-            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            // 点剧照是看图，不震
+            .hapticClickable(semantic = null, onClick = onClick)
     ) {
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
@@ -553,7 +555,8 @@ internal fun YouTubePlayerOverlay(
             .hapticClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                semantic = HapticSemantic.LIGHT_TAP,
+                // 黑背景不是操作面（有显式 × 与播放按钮），不震
+                semantic = null,
                 onClick = onDismiss
             ),
         contentAlignment = Alignment.Center

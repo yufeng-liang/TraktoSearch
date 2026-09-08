@@ -679,7 +679,8 @@ private fun CardPoster(
             .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                semantic = HapticSemantic.LIGHT_TAP,
+                // 日签卡是图片卡，进详情不震（用户规则：点击图片无触感）
+                semantic = null,
                 onClick = {
                     // 先登记本张卡参与转场，再走进详情页
                     clicked = true

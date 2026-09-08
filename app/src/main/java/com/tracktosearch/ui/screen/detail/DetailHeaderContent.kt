@@ -189,7 +189,8 @@ internal fun DetailHeaderContent(
                         .fillMaxSize()
                         .then(
                             if (uiState.posterUrl != null) {
-                                Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                                // 点海报是看图，不震（用户规则：点击图片无触感）
+                                Modifier.hapticClickable(semantic = null) { onPosterClick() }
                             } else Modifier
                         )
                         .testTag("detail_header_poster")

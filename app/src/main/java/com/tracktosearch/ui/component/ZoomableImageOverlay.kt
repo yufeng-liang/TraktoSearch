@@ -49,7 +49,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import kotlinx.coroutines.launch
@@ -269,10 +268,9 @@ internal fun rememberFullscreenZoomableImageState(): ZoomableImageState =
  * 图片本体的单击、返回键，以及 [ContentScale.Fit] 留出的黑边区域的单击都要走这里；
  * 黑边直接接 onDismiss 会让放大状态下点到边上就整个关掉。
  *
- * **这一记 `lightTap()` 也收口在这里**，调用方不要再各自挂一层触感 —— 三条入口
- * （图片单击、黑边单击、返回键）落到同一个回调上，谁再补一记就是同一次点击震两下。
- * 复位与关闭两个分支用同一记：两者都是「这一下被收下了」，落点不同却手感不同才是怪的。
- * 返回键那条也发：收覆盖层不是弹导航栈，按 T8 的界线该给一记轻的。
+ * **这里一记触感都不发**：三条入口点到的都是图片/非按钮区域，用户规则「点击图片
+ * 不应该有触感」—— 关闭走显式的 × 按钮（那里有自己的 lightTap）。调用方也不要
+ * 再各自挂触感，同一次点击两记是双震。
  */
 @Composable
 internal fun rememberResetOrDismiss(
@@ -280,11 +278,9 @@ internal fun rememberResetOrDismiss(
     onDismiss: (() -> Unit)?,
 ): () -> Unit {
     val scope = rememberCoroutineScope()
-    val haptics = rememberAppHaptics()
     val currentOnDismiss by rememberUpdatedState(onDismiss)
-    return remember(state, scope, haptics) {
+    return remember(state, scope) {
         {
-            haptics.lightTap()
             val zoomed = state.zoomableState.zoomFraction?.let { it > 0f } == true
             if (zoomed) scope.launch { state.zoomableState.resetZoom() } else currentOnDismiss?.invoke()
         }

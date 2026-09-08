@@ -69,7 +69,6 @@ import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 
@@ -101,8 +100,8 @@ private fun SheetMediaCard(
                 .hapticClickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    // 弹窗网格里成片出现的媒体卡片，与共享 MovieCard/PosterCard 同档
-                    semantic = HapticSemantic.LIGHT_TAP,
+                    // 弹窗网格里的海报卡是看图/导航，不震（用户规则：点击图片无触感）
+                    semantic = null,
                     onClick = onClick
                 ),
             shape = posterShape,

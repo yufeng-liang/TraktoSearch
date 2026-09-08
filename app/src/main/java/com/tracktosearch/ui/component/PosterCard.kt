@@ -32,7 +32,6 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -142,11 +141,12 @@ fun PosterCard(
                 )
                 .then(
                     if (onClick != null) {
+                        // 点击海报是「看图/导航」，用户规则不震；长按（多选/预览）仍是操作，保留
                         if (onLongClick != null) {
                             Modifier.hapticCombinedClickable(
                                 interactionSource = interactionSource,
                                 indication = null,
-                                semantic = HapticSemantic.LIGHT_TAP,
+                                semantic = null,
                                 onClick = onClick,
                                 onLongClick = onLongClick
                             )
@@ -154,7 +154,7 @@ fun PosterCard(
                             Modifier.hapticClickable(
                                 interactionSource = interactionSource,
                                 indication = null,
-                                semantic = HapticSemantic.LIGHT_TAP,
+                                semantic = null,
                                 onClick = onClick
                             )
                         }

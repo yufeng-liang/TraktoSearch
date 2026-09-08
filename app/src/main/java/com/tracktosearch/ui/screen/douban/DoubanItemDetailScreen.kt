@@ -2186,7 +2186,8 @@ private fun DoubanItemHeader(
                     .size(width = 120.dp, height = 180.dp)
                     .then(
                         if (failure.posterUrl != null) {
-                            Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                            // 点海报是看图，不震（用户规则：点击图片无触感）
+                            Modifier.hapticClickable(semantic = null) { onPosterClick() }
                         } else Modifier
                     )
             ) {
@@ -3066,8 +3067,9 @@ private fun DoubanDetailInfoTab(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = {
+                                    // 头像卡进豆瓣人物页是看图导航，不震（用户规则：
+                                    // 点击图片无触感）；没有链接的人物点了也不该有事
                                     if (!celebrity.doubanPersonageUrl.isNullOrBlank()) {
-                                        haptics.lightTap()
                                         onCelebrityClick(celebrity.doubanPersonageUrl, celebrity.name)
                                     }
                                 }

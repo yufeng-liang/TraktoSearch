@@ -49,7 +49,6 @@ import com.tracktosearch.ui.component.ZoomableImageOverlay
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.showToast
@@ -193,8 +192,8 @@ internal fun AllPersonImagesPanel(
                             // caller-managed visibility：查看器打开本 key 时网格项置不可见，
                             // 面板本身可以保持打开，返回即回到网格原位
                             .zoomSharedSource(key = "person-grid-$personId-$index")
-                            // 网格项进全屏查看器，按列表项给轻一档
-                            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onImageClick(index) }
+                            // 网格项进全屏查看器是看图，不震（用户规则：点击图片无触感）
+                            .hapticClickable(semantic = null) { onImageClick(index) }
                     )
                 }
             }

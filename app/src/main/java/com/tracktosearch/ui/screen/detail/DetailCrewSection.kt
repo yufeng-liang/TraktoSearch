@@ -63,7 +63,6 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.personAvatarSharedKey
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.floatingSheetColor
@@ -193,7 +192,8 @@ internal fun CastCard(
             .hapticClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                semantic = HapticSemantic.LIGHT_TAP,
+                // 头像卡是看图/导航，不震（用户规则：点击图片无触感）
+                semantic = null,
                 onClick = onClick
             ),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -439,8 +439,8 @@ internal fun FullCastItem(
     val context = LocalContext.current
     var extractedColor by remember { mutableStateOf<Color?>(null) }
     val scope = rememberCoroutineScope()
-    // 头像 Surface 与整行都可点、且都走同一个 onClick：内层 Surface 会消费点击，两者不会同时发
-    val haptics = rememberAppHaptics()
+    // 头像 Surface 与整行都可点、且都走同一个 onClick：内层 Surface 会消费点击。
+    // 两者都是看图导航，一记触感也不发（用户规则：点击图片无触感）
     val posterColorExtractor = remember {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
@@ -453,13 +453,15 @@ internal fun FullCastItem(
             .hapticClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                semantic = HapticSemantic.LIGHT_TAP,
+                // 整行以海报/头像为主导，进人物页是看图导航，不震
+                semantic = null,
                 onClick = onClick
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
-            onClick = { haptics.lightTap(); onClick() },
+            // 内层 Surface 只消费头像上的点击防止行点击穿透；同为看图，不震
+            onClick = onClick,
             shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.size(width = 72.dp, height = 100.dp)

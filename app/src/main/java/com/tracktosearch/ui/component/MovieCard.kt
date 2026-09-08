@@ -50,7 +50,6 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import dagger.hilt.EntryPoint
@@ -201,11 +200,12 @@ fun MovieCard(
             .fillMaxWidth()
             .scale(scale)
             .then(
+                // 点击海报卡是「看图/导航」，用户规则不震；长按（多选/预览）仍是操作，保留
                 if (onLongClick != null) {
                     Modifier.hapticCombinedClickable(
                         interactionSource = interactionSource,
                         indication = null,
-                        semantic = HapticSemantic.LIGHT_TAP,
+                        semantic = null,
                         onClick = wrappedOnClick,
                         onLongClick = onLongClick
                     )
@@ -213,7 +213,7 @@ fun MovieCard(
                     Modifier.hapticClickable(
                         interactionSource = interactionSource,
                         indication = null,
-                        semantic = HapticSemantic.LIGHT_TAP,
+                        semantic = null,
                         onClick = wrappedOnClick
                     )
                 }
