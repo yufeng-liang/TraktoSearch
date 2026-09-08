@@ -466,6 +466,7 @@ class RichTapStopThreadGuardTest {
         envelopeSupported = false,
         envelopeMaxSize = 0,
         richTapSupported = false,
+        hapticPlayerSupported = false,
         miuiSupported = true,
         oplusSupported = false,
     )

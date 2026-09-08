@@ -161,6 +161,7 @@ class PopupShowEffectTest {
             envelopeSupported = false,
             envelopeMaxSize = 0,
             richTapSupported = false,
+            hapticPlayerSupported = false,
             miuiSupported = false,
             oplusSupported = false,
         )

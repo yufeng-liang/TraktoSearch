@@ -100,6 +100,7 @@ class HapticCapabilitiesTest {
                 envelopeSupported = false,
                 envelopeMaxSize = 0,
                 richTapSupported = false,
+                hapticPlayerSupported = false,
                 miuiSupported = false,
                 oplusSupported = false,
             )
@@ -163,8 +164,10 @@ class HapticCapabilitiesTest {
         assertThat(caps.envelopeSupported).isFalse()
         assertThat(caps.envelopeMaxSize).isEqualTo(0)
         // JVM 上没有 ROM 侧的 richtap-api、没有 miui.util.HapticFeedbackUtil、
-        // 也没有 linearmotor 服务，三条都探不到；重点是探不到也不许带崩整份探测
+        // 没有 linearmotor 服务，也没有 android.os.HapticPlayer —— 四条都探不到；
+        // 重点是探不到也不许带崩整份探测
         assertThat(caps.richTapSupported).isFalse()
+        assertThat(caps.hapticPlayerSupported).isFalse()
         assertThat(caps.miuiSupported).isFalse()
         assertThat(caps.oplusSupported).isFalse()
     }
@@ -379,6 +382,7 @@ class HapticCapabilitiesTest {
         envelopeSupported = false,
         envelopeMaxSize = 0,
         richTapSupported = false,
+        hapticPlayerSupported = false,
         miuiSupported = false,
         oplusSupported = false,
     )

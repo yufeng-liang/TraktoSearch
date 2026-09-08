@@ -246,13 +246,16 @@ class AppHapticsModeTest {
 
         assertWithMessage("本机播不了包络就返 false，调用方据此退成每段起点一记 tick 的稀疏编排")
             .that(played).isFalse()
-        assertWithMessage("包络链是老实的 tier 降序，不套离散链那个把 tier 2 提到 tier 3 前面的换位")
+        assertWithMessage(
+            "包络链按 tier 降序，不套离散链那个把 tier 2 提到 tier 3 前面的换位；" +
+                "tier 1 被跳过是「厂商层可用时不发通用波形」的策略（真机反馈：通用振幅台阶" +
+                "在线性马达上是普通震动），见 AppHaptics.playEnvelope",
+        )
             .that(journal.filter { it.endsWith(ENVELOPE_CALL) })
             .containsExactly(
                 NAME_RICHTAP + ENVELOPE_CALL,
                 NAME_MIUI + ENVELOPE_CALL,
                 NAME_OPLUS + ENVELOPE_CALL,
-                NAME_WAVEFORM + ENVELOPE_CALL,
                 NAME_CONSTANTS + ENVELOPE_CALL,
             ).inOrder()
         assertWithMessage("包络不问 supports —— 那是离散语义的判据")
@@ -266,20 +269,25 @@ class AppHapticsModeTest {
         engine(fiveLayers(richTapEnvelope = true)).also { topAccepts ->
             assertThat(topAccepts.playEnvelope(TIMINGS, AMPLITUDES)).isTrue()
         }
-        assertWithMessage("tier 3 接下就停在 tier 3，不该再往下问")
+        assertWithMessage("tier 3 接下就停在 tier 3，不该再往下问（连厂商层都不必问）")
             .that(journal.filter { it.endsWith(ENVELOPE_CALL) })
             .containsExactly(NAME_RICHTAP + ENVELOPE_CALL)
 
-        // engine() 会把上一段流水清掉，下面只看第二个引擎的动静
-        engine(fiveLayers(waveformEnvelope = true)).also { waveformAccepts ->
+        // engine() 会把上一段流水清掉，下面只看第二个引擎的动静。
+        // 没有厂商层的机器（Pixel 一类）：tier 3 拒绝后 tier 1 正常兜底
+        engine(
+            listOf(
+                FakeBackend(tier = TIER_RICHTAP, name = NAME_RICHTAP),
+                FakeBackend(tier = TIER_WAVEFORM, name = NAME_WAVEFORM, envelopeResult = true),
+                FakeBackend(tier = TIER_CONSTANTS, name = NAME_CONSTANTS),
+            ),
+        ).also { waveformAccepts ->
             assertThat(waveformAccepts.playEnvelope(TIMINGS, AMPLITUDES)).isTrue()
         }
-        assertWithMessage("tier 3 与两个 tier 2 都拒绝就落到 tier 1，落定之后 tier 0 不该再被问")
+        assertWithMessage("tier 3 拒绝后落到 tier 1，落定之后 tier 0 不该再被问")
             .that(journal.filter { it.endsWith(ENVELOPE_CALL) })
             .containsExactly(
                 NAME_RICHTAP + ENVELOPE_CALL,
-                NAME_MIUI + ENVELOPE_CALL,
-                NAME_OPLUS + ENVELOPE_CALL,
                 NAME_WAVEFORM + ENVELOPE_CALL,
             ).inOrder()
     }
@@ -394,6 +402,7 @@ class AppHapticsModeTest {
         envelopeSupported = false,
         envelopeMaxSize = 0,
         richTapSupported = true,
+        hapticPlayerSupported = true,
         miuiSupported = true,
         oplusSupported = false,
     )

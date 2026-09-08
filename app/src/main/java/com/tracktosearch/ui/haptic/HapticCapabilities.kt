@@ -11,8 +11,8 @@ import com.apprichtap.haptic.RichTapUtils
  * 一台设备的触感能力快照：四层引擎靠它决定哪几层能上场。
  *
  * 设备能力在运行期不变，所以整个进程只需 [probe] 一次，结果由调用方（引擎）持有 ——
- * 本类自己不缓存。九个字段的名字与顺序是与四个 backend 的契约，构造时全部具名传入，
- * backend 侧也按名取用：九个 Boolean / Int 挤在一起，位置传参改一次顺序就是一场静默事故。
+ * 本类自己不缓存。十个字段的名字与顺序是与各 backend 的契约，构造时全部具名传入，
+ * backend 侧也按名取用：十个 Boolean / Int 挤在一起，位置传参改一次顺序就是一场静默事故。
  *
  * 探测只描述事实，不含策略。唯一的策略是 [lockedToConstants]：无振幅控制的转子马达锁 tier 0。
  * 「哪个语义走哪一层」由各 backend 的 `supports` 结合本快照判断，本类不掺和；
@@ -97,6 +97,20 @@ data class HapticCapabilities(
      */
     val richTapSupported: Boolean,
     /**
+     * MiHaptic / IEEE 2861.3 的 HE 波形通路可用否。反射静态无参
+     * `android.os.HapticPlayer.isAvailable()`。
+     *
+     * 小米 HyperOS、vivo OriginOS、三星 One UI 等把 `DynamicEffect` / `HapticPlayer`
+     * 放进了 framework（微信的细腻触感走的就是它）。目标机实测为 true，而这台机上
+     * RichTap 的包络通路不存在（`createEnvelope` 三个候选类全缺）—— HE 因此是它
+     * 唯一画得出连续包络的通路，`HapticPlayerBackend` 的存在理由。
+     *
+     * 为 true 只代表类在且静态判定通过；`DynamicEffect.create` / 构造器 / `start`
+     * 的方法签名由 `HapticPlayerBackend` 在自己的单线程上逐个解析，任何一个查不到
+     * 整层禁用。
+     */
+    val hapticPlayerSupported: Boolean,
+    /**
      * MIUI / HyperOS 的线性马达通路可用否。反射静态无参
      * `miui.util.HapticFeedbackUtil.isSupportLinearMotorVibrate()`。
      *
@@ -148,6 +162,7 @@ data class HapticCapabilities(
                     envelopeSupported = false,
                     envelopeMaxSize = 0,
                     richTapSupported = false,
+                    hapticPlayerSupported = false,
                     miuiSupported = false,
                     oplusSupported = false,
                 )
@@ -163,6 +178,7 @@ data class HapticCapabilities(
                 envelopeSupported = envelopeSupported,
                 envelopeMaxSize = probeEnvelopeMaxSize(vibrator, envelopeSupported),
                 richTapSupported = probeRichTapSupported(),
+                hapticPlayerSupported = probeHapticPlayerSupported(),
                 miuiSupported = probeMiuiSupported(),
                 oplusSupported = probeOplusSupported(context),
             )
@@ -176,6 +192,9 @@ data class HapticCapabilities(
 
         /** ColorOS 波形效果类，只做存在性判定，不触发静态初始化。 */
         private const val OPLUS_WAVEFORM_EFFECT = "com.oplus.os.WaveformEffect"
+
+        /** MiHaptic / IEEE 2861.3 的播放器类，反射用；类名是协议规定死的。 */
+        private const val HAPTIC_PLAYER = "android.os.HapticPlayer"
 
         /**
          * 反射拿不到 `getCompositionSizeMax()` 时用的保守容量。
@@ -369,6 +388,20 @@ data class HapticCapabilities(
         private fun probeMiuiSupported(): Boolean = try {
             val method = Class.forName(MIUI_HAPTIC_FEEDBACK_UTIL)
                 .getMethod("isSupportLinearMotorVibrate")
+            (method.invoke(null) as? Boolean) == true
+        } catch (_: Throwable) {
+            false
+        }
+
+        /**
+         * 反射静态无参 `android.os.HapticPlayer.isAvailable()`（IEEE 2861.3 规定的类名）。
+         *
+         * 类不在（非 MiHaptic 机型）抛 `ClassNotFoundException`，静态判定返 false 的
+         * （ROM 有类但马达通路没就绪）都退成 false。方法签名由 `HapticPlayerBackend`
+         * 在自己的单线程上继续解析，这里只做这一道便宜的总闸。
+         */
+        private fun probeHapticPlayerSupported(): Boolean = try {
+            val method = Class.forName(HAPTIC_PLAYER).getMethod("isAvailable")
             (method.invoke(null) as? Boolean) == true
         } catch (_: Throwable) {
             false

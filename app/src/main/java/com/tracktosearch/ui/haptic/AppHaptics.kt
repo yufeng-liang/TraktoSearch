@@ -26,8 +26,9 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * - [perform] 走离散链：tier 2 排在 tier 3 前面（见 [discreteRank]），
  *   厂商自己调过的预置效果优先，tier 2 不可用时才轮到 RichTap。
- * - [playEnvelope] 走包络链：老实的 tier 降序。tier 2 与 tier 0 对连续包络恒返 false，
- *   所以实际落点只会是 tier 3 或 tier 1。
+ * - [playEnvelope] 走包络链：tier 降序，但**有厂商预置效果（tier 2）可用时跳过 tier 1**
+ *   （真机反馈定的规矩，理由见 [playEnvelope]）。tier 2 与 tier 0 对连续包络恒返 false，
+ *   所以实际落点只可能是 tier 3、tier 1，或「整体返 false 让调用方退离散替身」。
  *
  * ### 三态开关
  *
@@ -227,7 +228,19 @@ class AppHaptics(
     }
 
     /**
-     * 播一段连续振幅包络（彩蛋用），沿包络链按 tier 降序找第一个接下的。
+     * 播一段连续振幅包络（彩蛋用），沿包络链按 tier 降序找第一个接下的 ——
+     * 只有一条例外：**有厂商预置效果（tier 2）可用的机器上跳过 tier 1**。
+     *
+     * 这条例外是真机反馈定的（小米 14 Pro / HyperOS，2026-09-08）：tier 1 的
+     * `createWaveform` 走的是无过驱动、无制动的通用驱动路径，线性马达机型上体感是
+     * 转子式的「普通震动」，不是马达调过的手感。与其播一段糟蹋彩蛋的嗡鸣，宁可整段
+     * 返 false —— 调用方的谱子里每段包络都排好了离散替身，替身沿 [perform] 的离散链
+     * 走，正落在厂商调过的预置效果上。tier 3 的两条波形通路（RichTap SDK 与 MiHaptic
+     * HE）接得下的机器不受影响；没有 tier 2 的机器（Pixel 等）也仍由 tier 1 兜底。
+     *
+     * 「厂商层可用」按调用时的 [HapticBackend.isAvailable] 判而不是构造期定死，且是
+     * **惰性查** —— 只有真的轮到 tier 1 才去问厂商层：tier 2 在运行中因派发失败整层
+     * 禁用后，tier 1 立刻恢复兜底，包络不会两头落空；tier 3 接得住的机器一次都不多问。
      *
      * 返回 false 是**要处理的结果**而不是错误：调用方据此退成「每段起点一记 tick」的
      * 稀疏编排。正因为 false 是有人接住的信号，这里不像 [perform] 那样记 [onMiss]。
@@ -238,12 +251,19 @@ class AppHaptics(
      * @param timingsMs 每个控制点的持续毫秒
      * @param amplitudes 每个控制点的目标振幅 0f..1f，与 [timingsMs] 等长。
      *   长度不等或振幅越界由各 backend 自己判成 false，本方法不抛异常
-     * @return true 已有一层接下；false 本机播不了这段包络
+     * @return true 已有一层接下；false 本机播不了这段包络（或本机有更好的离散替身可退）
      */
     fun playEnvelope(timingsMs: IntArray, amplitudes: FloatArray): Boolean {
         if (released) return false
         if (allowedMode() == null) return false
         for (backend in envelopeChain) {
+            // 厂商预置效果可用时跳过 tier 1（策略理由见上）。**惰性查**：只有真的轮到
+            // tier 1 才去问厂商层 —— tier 3 接得住的机器一次都不多问，流水与开销都干净
+            if (backend.tier == TIER_WAVEFORM &&
+                envelopeChain.any { it.tier == TIER_VENDOR && it.isAvailable() }
+            ) {
+                continue
+            }
             if (backend.isAvailable() && backend.playEnvelope(timingsMs, amplitudes)) return true
         }
         return false
@@ -332,6 +352,9 @@ class AppHaptics(
 
 /** tier 2：厂商语义效果层（MIUI 与 OPlus） */
 private const val TIER_VENDOR = 2
+
+/** tier 1：AOSP 振幅波形层。包络链在厂商层可用时会跳过它，见 [AppHaptics.playEnvelope] */
+private const val TIER_WAVEFORM = 1
 
 /** 换位后 tier 2 的排序权重。只需大于最高的真实 tier（3），取 4 */
 private const val DISCRETE_RANK_VENDOR = 4
