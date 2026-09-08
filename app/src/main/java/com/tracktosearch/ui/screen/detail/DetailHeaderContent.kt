@@ -130,8 +130,6 @@ internal fun DetailHeaderContent(
     posterColorExtractor: PosterColorExtractor,
     onPosterColorExtracted: (Color) -> Unit,
     sectionVisible: DetailSectionVisibility = DetailSectionVisibility(),
-    // false 时只组合共享海报、标题和操作按钮，避免转场首帧创建不可见的整页内容。
-    contentReady: Boolean = true,
     // 头部下方内容(cast/视频/简介/季集)的透明度,用于"沉浸背景先现,内容后显"淡入效果
     // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
     contentAlpha: Float = 1f,
@@ -413,7 +411,6 @@ internal fun DetailHeaderContent(
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
         // 演职员/预告片/简介三处骨架共享一份 shimmer 动画，避免各跑一条无限动画
         val headerShimmer = rememberShimmer()
-        if (contentReady) {
         Column(modifier = Modifier.alpha(contentAlpha)) {
         // 纯豆瓣条目(tmdbId=0)没有 TMDB 演职员数据(cast/crew 只来自 TMDB),直接隐藏整栏,
         // 否则骨架卡与「全部」按钮永远等不到内容,永久空挂
@@ -542,7 +539,6 @@ internal fun DetailHeaderContent(
             }
         }
         } // end Column(alpha = contentAlpha)
-        } // end if (contentReady)
     }
     } // end CompositionLocalProvider(LocalContentColor)
 }
