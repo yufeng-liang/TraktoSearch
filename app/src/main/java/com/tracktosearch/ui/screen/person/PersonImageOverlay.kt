@@ -1,31 +1,27 @@
 package com.tracktosearch.ui.screen.person
 
 import android.app.Activity
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -49,20 +45,23 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 
-// ==================== 全部人物图片内联网格面板 ====================
+// ==================== 全部人物图片底部弹窗 ====================
 
 /**
- * 全部人物图片内联面板（替代原 ModalBottomSheet）。
+ * 全部人物图片弹窗（ModalBottomSheet）。
  *
- * 用 AnimatedVisibility 包全屏网格；面板与页面同 window，网格缩略图的 window 矩形有效，
- * 单元点击直接带缩略图缩放转场打开 OpenImage 查看器，面板保持打开，返回即回到网格原位。
+ * 与详情页 FullVideosImagesSheet 同款：ModalBottomSheet 的 Dialog 是全屏窗口，网格缩略图的
+ * boundsInWindow 就是屏幕坐标，点击直接带转场打开 OpenImage 查看器；sheet 保持打开，
+ * 返回即回到网格原位（真机验证通过）。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AllPersonImagesPanel(
     visible: Boolean,
     images: List<String>,
     onDismiss: () -> Unit
 ) {
+    if (!visible) return
     val context = LocalContext.current
     val activity = context as? Activity
     // 网格缩略图矩形表：与图片数据下标一一对应，点开时交给 OpenImage 做转场落点
@@ -73,19 +72,16 @@ internal fun AllPersonImagesPanel(
             OpenImageViewerItem(largeUrl = TmdbImageUrls.swapSize(it, "original"), coverUrl = it)
         }
     }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(200))
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        dragHandle = null
     ) {
-        // 返回键关闭面板（OpenImage 查看器是独立 Activity，在它之上时返回键先关查看器）
-        BackHandler(enabled = true) { onDismiss() }
         val haptics = rememberAppHaptics()
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .statusBarsPadding()
+                .fillMaxWidth()
                 .testTag("person_images_panel")
         ) {
             Row(
@@ -100,7 +96,7 @@ internal fun AllPersonImagesPanel(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                // 面板的「关闭」按取消档给轻一记；上面那个 BackHandler 与返回手势照旧静默
+                // 弹窗「关闭」按取消档给轻一记；滑动手势/系统返回照旧静默
                 IconButton(onClick = {
                     haptics.lightTap()
                     onDismiss()
@@ -111,7 +107,8 @@ internal fun AllPersonImagesPanel(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.8f)
                     .testTag("person_images_grid"),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
