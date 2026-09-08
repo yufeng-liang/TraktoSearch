@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -412,11 +415,18 @@ internal fun FullVideosImagesSheet(
                         }
                     }
                     showBackdrops -> {
-                        LazyColumn(
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
+                            gridItemsIndexed(
+                                backdrops,
+                                key = { index, url -> "backdrop_grid_${index}_$url" },
+                                contentType = { _, _ -> "backdrop" }
+                            ) { index, backdropUrl ->
                                 FullBackdropItem(
                                     backdropUrl = backdropUrl,
                                     index = index,
@@ -510,7 +520,7 @@ internal fun FullBackdropItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(8.dp))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
             .recordOpenImageBounds(index, bounds)
