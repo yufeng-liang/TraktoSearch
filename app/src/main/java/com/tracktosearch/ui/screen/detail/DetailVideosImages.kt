@@ -307,6 +307,9 @@ private fun ProgressiveBackdrop(
 internal fun FullVideosImagesSheet(
     videos: List<TmdbVideo>,
     backdrops: List<String>,
+    // 剧照缩略图矩形记录表（下标 = backdrops 下标）；sheet 内容在自己的 Dialog window 里，
+    // 这里与页面共用同一张表会覆盖为 sheet 内的坐标，作为查看器转场落点
+    backdropBounds: MutableMap<Int, Rect>,
     onDismiss: () -> Unit,
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {}
@@ -416,6 +419,8 @@ internal fun FullVideosImagesSheet(
                             itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
                                 FullBackdropItem(
                                     backdropUrl = backdropUrl,
+                                    index = index,
+                                    bounds = backdropBounds,
                                     onClick = { onBackdropClick(index) }
                                 )
                             }
@@ -498,6 +503,8 @@ internal fun FullVideoItem(
 @Composable
 internal fun FullBackdropItem(
     backdropUrl: String,
+    index: Int,
+    bounds: MutableMap<Int, Rect>,
     onClick: () -> Unit
 ) {
     Box(
@@ -506,6 +513,7 @@ internal fun FullBackdropItem(
             .height(120.dp)
             .clip(RoundedCornerShape(8.dp))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            .recordOpenImageBounds(index, bounds)
     ) {
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,

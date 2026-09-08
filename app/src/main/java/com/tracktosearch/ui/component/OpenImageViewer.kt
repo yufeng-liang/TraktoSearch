@@ -118,29 +118,6 @@ internal fun openImageViewer(
 }
 
 /**
- * 无转场降级启动：用于 ModalBottomSheet/Dialog（独立 window）等拿不到主 window 缩略图坐标的场景。
- * 契约限制：OpenImage 的共享元素叠在 Activity decorView 上，而独立 window 里 boundsInWindow
- * 不是主 window 坐标，强行带转场会错位；此入口保留完整查看器（横滑/缩放/拖拽关闭/保存），
- * 只是打开/返回没有缩略图缩放动画。
- */
-internal fun openImageViewerNoTransition(
-    activity: Activity,
-    items: List<OpenImageViewerItem>,
-    clickedIndex: Int,
-    onExit: () -> Unit = {},
-) {
-    OpenImage.with(activity)
-        .setNoneClickView()
-        .setClickPosition(clickedIndex.coerceIn(0, items.lastIndex))
-        .setSrcImageViewScaleType(ImageView.ScaleType.CENTER_CROP, true)
-        .setImageUrlList(items)
-        .setShowDownload(bottomEndDownloadParams(activity))
-        .setShowClose(topStartCloseParams(activity))
-        .setOnExitListener { onExit() }
-        .show()
-}
-
-/**
  * 关闭按钮：36dp 白图标放左上（Telegram 风格），触摸图片时隐藏。
  *
  * OpenImage 查看器是沉浸式（内容延伸到状态栏底下），按钮坐标相对整窗计算；

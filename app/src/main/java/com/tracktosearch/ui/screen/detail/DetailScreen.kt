@@ -114,7 +114,6 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
-import com.tracktosearch.ui.component.openImageViewerNoTransition
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
@@ -1207,17 +1206,18 @@ fun DetailScreen(
                 FullVideosImagesSheet(
                     videos = uiState.videos,
                     backdrops = uiState.backdrops,
+                    backdropBounds = backdropBounds,
                     onDismiss = { showAllVideos = false },
                     onVideoClick = { video ->
                         playingVideoKey = video.key
                     },
                     onBackdropClick = { index ->
-                        // sheet 是独立 Dialog window，OpenImage 叠在 Activity decorView 上会被它盖住；
-                        // 先收起 sheet，再用无转场入口打开（独立 window 拿不到主 window 缩略图坐标）
-                        showAllVideos = false
+                        // sheet 保持打开直接走带转场入口：ModalBottomSheet 的 Dialog 是全屏窗口，
+                        // 缩略图 boundsInWindow 就是屏幕坐标，OpenImage 能精确落到 sheet 内的缩略图；
+                        // 返回时 sheet 仍开着，动画缩回原位。
                         val host = activity
                         if (host != null && index in uiState.backdrops.indices) {
-                            openImageViewerNoTransition(
+                            openImageViewer(
                                 activity = host,
                                 items = uiState.backdrops.map { url ->
                                     OpenImageViewerItem(
@@ -1225,7 +1225,9 @@ fun DetailScreen(
                                         coverUrl = url
                                     )
                                 },
-                                clickedIndex = index
+                                bounds = backdropBounds,
+                                clickedIndex = index,
+                                onExit = { /* sheet 保持打开，返回即回到缩略图原位 */ }
                             )
                         }
                     }
