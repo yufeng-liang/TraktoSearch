@@ -478,7 +478,8 @@ internal fun DetailHeaderContent(
                     onVideoClick = onVideoClick,
                     onBackdropClick = onBackdropClick,
                     onShowAll = onShowAllVideos,
-                    backdropBounds = backdropBounds
+                    backdropBounds = backdropBounds,
+                    shimmer = headerShimmer
                 )
             } else if (uiState.videosError) {
                 // 加载失败：与评分区一致的 Inline 错误态，带重试入口

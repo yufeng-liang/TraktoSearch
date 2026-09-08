@@ -69,7 +69,10 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -85,7 +88,9 @@ internal fun VideosAndImagesSection(
     onBackdropClick: (Int) -> Unit = {},
     onShowAll: () -> Unit = {},
     // 剧照缩略图矩形记录表（下标 = backdrops 下标），由详情页持有并作为 OpenImage 查看器转场起点
-    backdropBounds: MutableMap<Int, Rect>
+    backdropBounds: MutableMap<Int, Rect>,
+    // 与页面其他骨架共享的同一条 shimmer，避免每格各跑一条无限动画
+    shimmer: ShimmerState
 ) {
     val totalCount = videos.size + backdrops.size
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -107,7 +112,8 @@ internal fun VideosAndImagesSection(
                     backdropUrl = backdropUrl,
                     onClick = { onBackdropClick(index) },
                     index = index,
-                    bounds = backdropBounds
+                    bounds = backdropBounds,
+                    shimmer = shimmer
                 )
             }
             itemsIndexed(
@@ -245,7 +251,8 @@ internal fun BackdropCard(
     onClick: () -> Unit = {},
     index: Int = 0,
     // 全屏查看已迁移 OpenImage：缩略图矩形记录到 bounds，点击由详情页读取作为转场起点
-    bounds: MutableMap<Int, Rect>
+    bounds: MutableMap<Int, Rect>,
+    shimmer: ShimmerState
 ) {
     Box(
         modifier = Modifier
@@ -262,6 +269,7 @@ internal fun BackdropCard(
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
+            shimmer = shimmer,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -270,13 +278,14 @@ internal fun BackdropCard(
 /**
  * 剧照渐进占位：加载大图期间先用 w300 小尺寸版本垫底。
  * 小图通常在列表预取或上次浏览时已进 Coil 磁盘缓存，可即时显示，避免大图回源前留白。
- * 若 URL 非 TMDB 结构（豆瓣剧照、Trakt fanart，无尺寸可换），只用纯色垫底不额外发请求，
+ * 若 URL 非 TMDB 结构（豆瓣剧照、Trakt fanart，无尺寸可换），加载期间铺 shimmer 垫底不额外发请求，
  * 但主图照常加载——早先版本在这种情况下直接 return 掉了主图，导致豆瓣来源的截图永远空白。
  */
 @Composable
 private fun ProgressiveBackdrop(
     backdropUrl: String,
     contentScale: ContentScale,
+    shimmer: ShimmerState,
     modifier: Modifier = Modifier
 ) {
     val smallUrl = remember(backdropUrl) {
@@ -289,14 +298,31 @@ private fun ProgressiveBackdrop(
         contentScale = contentScale,
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         loading = {
-            // 非 TMDB /t/p/ 结构（豆瓣剧照、Trakt fanart）没有小尺寸可换，
-            // 只留纯色底，不额外发请求；但主图一定要照常加载。
-            if (smallUrl != null) {
-                AsyncImage(
-                    model = smallUrl,
+            // 小图也没命中（加载中/失败）时先看到 shimmer，避免整格留白；
+            // 小图先到就叠在上面继续渐进放大，shimmer 被盖住。
+            Box(modifier = Modifier.fillMaxSize().shimmer(shimmer)) {
+                if (smallUrl != null) {
+                    AsyncImage(
+                        model = smallUrl,
+                        contentDescription = null,
+                        contentScale = contentScale,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        },
+        error = {
+            // 加载失败：低调断图图标，让用户区分「还没加载」和「这张没拉下来」；
+            // 格子仍可点击进 OpenImage 看大图侧的失败处理
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.BrokenImage,
                     contentDescription = null,
-                    contentScale = contentScale,
-                    modifier = Modifier.fillMaxSize()
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -335,6 +361,8 @@ internal fun FullVideosImagesSheet(
     ) {
         // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
         val sheetHaptics = rememberAppHaptics()
+        // 三列网格共享一条 shimmer，避免每格各跑一条无限动画
+        val sheetShimmer = rememberShimmer()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -431,6 +459,7 @@ internal fun FullVideosImagesSheet(
                                     backdropUrl = backdropUrl,
                                     index = index,
                                     bounds = backdropBounds,
+                                    shimmer = sheetShimmer,
                                     onClick = { onBackdropClick(index) }
                                 )
                             }
@@ -515,6 +544,7 @@ internal fun FullBackdropItem(
     backdropUrl: String,
     index: Int,
     bounds: MutableMap<Int, Rect>,
+    shimmer: ShimmerState,
     onClick: () -> Unit
 ) {
     Box(
@@ -528,6 +558,7 @@ internal fun FullBackdropItem(
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
+            shimmer = shimmer,
             modifier = Modifier.fillMaxSize()
         )
     }
