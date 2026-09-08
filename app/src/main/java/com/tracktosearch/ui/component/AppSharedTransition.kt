@@ -308,9 +308,7 @@ internal fun Modifier.appSharedBounds(
     exit: ExitTransition? = null,
 ): Modifier {
     val scope = LocalSharedTransitionScope.current
-    if (key == null || scope == null || animatedVisibilityScope == null ||
-        !LocalSharedTransitionEnabled.current
-    ) {
+    if (key == null || scope == null || animatedVisibilityScope == null) {
         return this
     }
     // 同一个圆角值同时喂 clip 与 OverlayClip：转场期元素被抬到 overlay 里绘制，
@@ -366,7 +364,7 @@ internal fun Modifier.appSharedBounds(
 @Composable
 internal fun isAppSharedTransitionActive(): Boolean {
     val scope = LocalSharedTransitionScope.current ?: return false
-    return LocalSharedTransitionEnabled.current && scope.isTransitionActive
+    return scope.isTransitionActive
 }
 
 /**
@@ -381,7 +379,7 @@ internal fun isAppSharedTransitionActive(): Boolean {
 @Composable
 internal fun Modifier.appSkipToLookaheadSize(): Modifier {
     val scope = LocalSharedTransitionScope.current
-    if (scope == null || !LocalSharedTransitionEnabled.current) return this
+    if (scope == null) return this
     return with(scope) { this@appSkipToLookaheadSize.skipToLookaheadSize() }
 }
 
@@ -397,7 +395,7 @@ internal fun Modifier.appSkipToLookaheadSize(): Modifier {
  * - 返回：内容先以 [MORPH_CONTENT_EXIT_FADE_MS] 快速淡出，容器再收回成卡片，避免文字被压扁。
  *
  * alpha 只在 graphicsLayer 的绘制阶段读动画值，不引入逐帧重组。若页面不是由容器变形推入
- * （共享元素被关闭、深链直达、从更深页面返回），首帧采样不到激活中的共享转场，内容保持立即
+ * （深链直达、从更深页面返回），首帧采样不到激活中的共享转场，内容保持立即
  * 可见，由 NavHost 默认转场接管。
  */
 private const val MORPH_CONTENT_ENTER_DELAY_MS = 200
@@ -409,7 +407,7 @@ private const val MORPH_CONTENT_EXIT_FADE_MS = 60
 internal fun Modifier.appMorphContentFade(): Modifier {
     val scope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    if (scope == null || animatedVisibilityScope == null || !LocalSharedTransitionEnabled.current) {
+    if (scope == null || animatedVisibilityScope == null) {
         return this
     }
     // 只在首帧采样一次：容器变形推入时 SharedTransitionLayout 正处于激活状态（与各页现有的
@@ -471,7 +469,7 @@ internal fun Modifier.appSharedOverlayChrome(
     animatedVisibilityScope: AnimatedVisibilityScope? = LocalAnimatedVisibilityScope.current,
 ): Modifier {
     val scope = LocalSharedTransitionScope.current
-    if (animatedVisibilityScope == null || scope == null || !LocalSharedTransitionEnabled.current) {
+    if (animatedVisibilityScope == null || scope == null) {
         return this
     }
     return with(scope) {
@@ -508,7 +506,7 @@ internal fun Modifier.appSharedSource(
     corner: SharedCorner? = null,
 ): Modifier {
     val scope = LocalSharedTransitionScope.current
-    if (key == null || scope == null || !LocalSharedTransitionEnabled.current) return this
+    if (key == null || scope == null) return this
     val openedKey = LocalFullscreenSharedElement.current
     return with(scope) {
         val state = rememberSharedContentState(key = key)

@@ -544,8 +544,6 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_appearance">Appearance</string>
-    <string name="settings_shared_transition">Shared Element Transitions</string>
-    <string name="settings_shared_transition_subtitle">Animate shared elements between screens, including the zoom transition when opening a full-screen image.</string>
     <string name="settings_splash_quote">Daily Movie Line</string>
     <string name="settings_splash_quote_subtitle">Show a classic movie line with its poster on the splash screen. Tap anywhere to skip.</string>
     <string name="settings_haptic">Haptic Feedback</string>

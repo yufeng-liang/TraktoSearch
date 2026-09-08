@@ -25,7 +25,7 @@ private val Context.splashQuoteDataStore: DataStore<Preferences> by preferencesD
  * 开屏「每日一句」开关与固定序列进度持久化存储。
  *
  * 默认开启：台词层是启动体验的一部分，关掉后系统场记板结束就直接进主页。
- * 与 [SharedTransitionStorage] 同样用 StateFlow 镜像磁盘值——开屏读值发生在
+ * 同样用 StateFlow 镜像磁盘值——开屏读值发生在
  * setContent 之前，必须是同步可得的真实值，否则会先闪一下默认态。
  */
 @Singleton

@@ -123,9 +123,6 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var traktRepository: com.tracktosearch.data.repository.TraktRepository
 
-    @Inject
-    lateinit var sharedTransitionStorage: com.tracktosearch.data.local.SharedTransitionStorage
-
     // 触感三档：必须在任何界面能发出触感之前读到磁盘首值，否则用户选的「关闭」在启动那段窗口不生效
     @Inject
     lateinit var hapticStorage: com.tracktosearch.data.local.HapticStorage
@@ -260,11 +257,6 @@ class MainActivity : AppCompatActivity() {
                 languageStorage.language.first()
             }
             applyLanguage(language)
-
-            // 只读取首页启动所需的本地设置；影视/榜单缓存由当前页面首次使用时按需加载。
-            StartupTrace.measure("local.shared_transition") {
-                sharedTransitionStorage.preloadAndGetValue()
-            }
 
             // 触感档位：一次 DataStore 读，必须落在 isReady 之前 ——
             // 之后任何一次点击都可能发触感，而 modeState 的初值是「跟随系统」，

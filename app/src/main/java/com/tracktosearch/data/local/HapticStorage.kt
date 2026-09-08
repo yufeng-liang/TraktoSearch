@@ -26,7 +26,7 @@ private val Context.hapticDataStore: DataStore<Preferences> by preferencesDataSt
  * 只存一个 [HapticMode] 枚举，没有强度数值 —— 绝对强度归系统的触感强度档位，
  * 应用侧只决定「发哪个语义」与「发不发」，ROM 自带滑条，应用内再造一条只会互相打架。
  *
- * 形状照 [SharedTransitionStorage]：用 StateFlow 镜像磁盘值，而不是让调用方收裸 DataStore Flow。
+ * 用 StateFlow 镜像磁盘值，而不是让调用方收裸 DataStore Flow。
  * 触感读值落在每一次点击的主线程路径上，必须同步可得（`modeState.value`），
  * 等一次 Flow 收集就迟了；Compose 侧 collectAsStateWithLifecycle 也因此不需要 initialValue。
  *

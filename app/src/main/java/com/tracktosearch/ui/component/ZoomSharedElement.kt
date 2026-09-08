@@ -46,7 +46,7 @@ internal data class ZoomTransitionPhase(val running: Boolean, val opening: Boole
  * - AnimatedVisibility 自己的端点差异：查看器的 enter 是 `fadeIn(snap())`，一帧就结束。
  *
  * 只看后者会在打开动画的第二帧就判定「转场结束」，于是手势提前解锁、telephoto 提前挂载，
- * 等于这两个防护完全没生效。只看前者则在共享转场被关掉时恒为 false，也不对。
+ * 等于这两个防护完全没生效。只看前者在未发生共享边界动画的开合（如无源图配对、纯 fade）时会漏判，也不对。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

@@ -544,8 +544,6 @@
     <!-- Settings -->
     <string name="settings_title">设置</string>
     <string name="settings_appearance">外观</string>
-    <string name="settings_shared_transition">共享元素转场动画</string>
-    <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画，包括点开大图时的缩放过渡。</string>
     <string name="settings_splash_quote">开屏每日台词</string>
     <string name="settings_splash_quote_subtitle">启动时展示一句经典电影台词和它的海报，轻触任意位置可跳过。</string>
     <string name="settings_haptic">触感反馈</string>

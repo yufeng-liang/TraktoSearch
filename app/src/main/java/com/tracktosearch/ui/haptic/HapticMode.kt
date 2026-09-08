@@ -7,7 +7,7 @@ package com.tracktosearch.ui.haptic
  * 应用内再造一条只会跟系统档位互相打架。绝对强度一律交给系统，
  * 应用侧只决定「发哪个语义」与「发不发」。
  *
- * 持久化在 DataStore（形状照 [com.tracktosearch.data.local.SharedTransitionStorage]）。
+ * 持久化在 DataStore（存储类用 StateFlow 镜像磁盘值）。
  * 存储层请写枚举的 `name` 而不是 `ordinal`，读到缺值或无法识别的旧值时回落 [DEFAULT]。
  *
  * 设计依据见 docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「三态开关」一节。

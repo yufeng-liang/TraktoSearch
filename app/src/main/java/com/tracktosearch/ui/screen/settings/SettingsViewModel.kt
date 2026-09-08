@@ -24,7 +24,6 @@ import com.tracktosearch.data.local.HapticStorage
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
-import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.SwiftieEggStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
@@ -158,7 +157,6 @@ class SettingsViewModel @Inject constructor(
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanSyncManager: DoubanSyncManager,
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
-    private val sharedTransitionStorage: SharedTransitionStorage,
     private val hapticStorage: HapticStorage,
     private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
@@ -285,10 +283,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setZresoEnabled(enabled: Boolean) {
         viewModelScope.launch { searchSourceStorage.setZresoEnabled(enabled) }
-    }
-
-    fun setSharedTransitionEnabled(enabled: Boolean) {
-        viewModelScope.launch { sharedTransitionStorage.setEnabled(enabled) }
     }
 
     fun setSplashQuoteEnabled(enabled: Boolean) {
