@@ -238,7 +238,8 @@ private fun QuizQuestionScreen(
             ) {
                 OutlinedButton(
                     onClick = {
-                        haptics.tap()
+                        // 回退是次级导航，比「下一题」轻一档
+                        haptics.lightTap()
                         viewModel.previousQuestion()
                     },
                     enabled = questionIndex > 0,

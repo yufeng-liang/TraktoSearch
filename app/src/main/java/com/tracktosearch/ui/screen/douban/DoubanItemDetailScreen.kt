@@ -2658,6 +2658,9 @@ private fun DoubanDetailInfoTab(
         ) {
             Button(
                 onClick = {
+                    // 外跳不静默：跳出去看豆瓣然后回来，与 DetailVideosImages 播放按钮同一条规则
+                    // （静默的是「回不来」的跳转，见 DiscoverSections 登录卡的注释）
+                    haptics.tap()
                     onOpenDouban()
                 },
                 modifier = Modifier.weight(1f)
@@ -3144,7 +3147,7 @@ private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (copyable) Modifier.hapticClickable(semantic = HapticSemantic.TAP) {
+                if (copyable) Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
                     context.showToast(copiedToast)

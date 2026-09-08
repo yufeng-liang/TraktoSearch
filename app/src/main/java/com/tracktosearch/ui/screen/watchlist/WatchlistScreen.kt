@@ -2478,7 +2478,8 @@ private fun WatchlistFilterSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 TextButton(onClick = {
-                    haptics.tap()
+                    // 重置是次要位，比「应用」轻一档（全仓 TextButton 次要位惯例）
+                    haptics.lightTap()
                     onReset()
                 }) {
                     Text(stringResource(R.string.filter_reset))

@@ -40,6 +40,8 @@ import org.robolectric.annotation.Config
  * 「语义词表」的 tier 1 列抄：文档钉死了 `toggleOn` 0.7、`toggleOff` 0.5、`gestureEnd` 0.5、
  * `scrollEdge` 0.4，其余未标 scale 的按满幅算；`frequentTick` 文档只写「低 scale」没给数，
  * 实现取 0.35，这里按 0.35 钉住并另有一条不变式说明它必须低于 `scrollEdge`。
+ * `popupShow` 是后来补的半幅 TICK（0.5，对齐 tier 3 的 128/255）：梯度要求它比
+ * `lightTap` 轻一档，满幅时两个语义在这层是同一个手感。
  *
  * 刻意不断言各段台阶的绝对振幅：那些数值取自标称峰值 `NOMINAL_PEAK = 210 / 255`，
  * 是唯一一处等着上真机复核的手感参数，钉死它只会让调音的人来删测试。
@@ -76,7 +78,7 @@ class AospWaveformMappingTest {
         HapticSemantic.THRESHOLD_ARMED to listOf(PrimitiveStep(QUICK_RISE, 1f, 0)),
         HapticSemantic.GESTURE_END to listOf(PrimitiveStep(THUD, 0.5f, 0)),
         HapticSemantic.SCROLL_EDGE to listOf(PrimitiveStep(LOW_TICK, 0.4f, 0)),
-        HapticSemantic.POPUP_SHOW to listOf(PrimitiveStep(TICK, 1f, 0)),
+        HapticSemantic.POPUP_SHOW to listOf(PrimitiveStep(TICK, 0.5f, 0)),
     )
 
     @Test

@@ -559,8 +559,10 @@ internal fun tierOneRecipeOf(semantic: HapticSemantic): TierOneRecipe = when (se
     HapticSemantic.GESTURE_END -> thudRecipe(SCALE_GESTURE_END)
     // 撞墙，会被连着顶，比 SEGMENT_TICK 明显轻
     HapticSemantic.SCROLL_EDGE -> lowTickRecipe(SCALE_SCROLL_EDGE)
-    // 面板落出来，与 LIGHT_TAP 在 tier 1 上同形；两者的区别要到 tier 2 / tier 3 才体现
-    HapticSemantic.POPUP_SHOW -> tickRecipe(FULL_SCALE)
+    // 面板落出来，TICK 半幅：梯度要求 POPUP_SHOW 比 LIGHT_TAP 轻（boosted 的上移关系），
+    // 与 tier 3 的 RichTapStrength.LIGHT（128/255 ≈ 0.5）对齐。原先满幅 TICK 把两个语义
+    // 在这层压成同一个手感
+    HapticSemantic.POPUP_SHOW -> tickRecipe(SCALE_POPUP_SHOW)
 }
 
 /** 单 primitive 配方：Composition 一笔，振幅台阶一段。 */
@@ -777,6 +779,12 @@ private const val SCALE_TOGGLE_ON = 0.7f
 
 /** `toggleOff` = `PRIMITIVE_TICK` scale 0.5，同上。 */
 private const val SCALE_TOGGLE_OFF = 0.5f
+
+/**
+ * `popupShow` = `PRIMITIVE_TICK` scale 0.5，与 tier 3 的 128/255 对齐：
+ * 梯度要求它比 LIGHT_TAP（满幅 TICK）轻一档，又不轻到「面板出现没有存在感」。
+ */
+private const val SCALE_POPUP_SHOW = 0.5f
 
 /** `gestureEnd` = `PRIMITIVE_THUD` scale 0.5，同上。 */
 private const val SCALE_GESTURE_END = 0.5f
