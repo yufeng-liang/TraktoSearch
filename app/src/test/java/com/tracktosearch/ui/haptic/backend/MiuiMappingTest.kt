@@ -6,20 +6,22 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import org.junit.Test
 
 /**
- * tier 2（MIUI）那两个纯函数与 26 个效果 ID 的判定单测。
+ * tier 2（MIUI）那三个纯函数、26 个效果 ID 与 String 键字段表的判定单测。
  *
- * 这一层的全部产品行为就是「哪个语义发哪个 ID」这张表，而这张表抄错一位是**静默失败**：
- * 不崩、不报错、日志里一个字都没有，只会让 `isSupportExtHapticFeedback` 对着一个不存在的
- * 效果返回 false，从此这个语义永远降级到 tier 1 或 tier 0 —— 手上只觉得「好像轻了点」。
+ * 这一层的全部产品行为就是「哪个语义发哪个效果」的两张表（ext ID 与 String 键字段），
+ * 而这两张表抄错一位都是**静默失败**：不崩、不报错，只会让探测对着一个不存在的效果/
+ * 字段返回 false，从此这个语义永远降级 —— 手上只觉得「好像轻了点」。
  *
- * 所以期望值一律写成十六进制字面量，照设计文档
- * docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「MIUI 语义效果表（tier 2）」重抄，
+ * 所以期望值一律写成字面量，照设计文档
+ * docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「MIUI 语义效果表（tier 2）」
+ * 与 2026-09-09 真机实测的 51 个 `EFFECT_KEY_*` 字段全表重抄，
  * 刻意不写成 `MiuiHapticEffects.MIUI_TAP_NORMAL` 那种从被测代码取值的形式：
  * 期望值与实现同源时，常量被改坏期望值跟着一起变，这个测试永远是绿的。
  *
- * 只测纯函数。[miuiEffectFor] 与 [miuiProbeIds] 都是文件顶层函数，零 Context、零反射、
- * 零 android 依赖，纯 JVM 可跑，不用 Robolectric。MiuiBackend 类本身要 Context 加一整套
- * `miui.util.HapticFeedbackUtil` 反射，JVM 里起不来，不在本文件射程内。
+ * 只测纯函数。[miuiEffectFor]、[miuiProbeIds] 与 [miuiEffectKeyFieldFor] 都是文件顶层
+ * 函数，零 Context、零反射、零 android 依赖，纯 JVM 可跑，不用 Robolectric。
+ * MiuiBackend 类本身要 Context 加一整套 `miui.util.HapticFeedbackUtil` 反射，
+ * JVM 里起不来，不在本文件射程内。
  */
 class MiuiMappingTest {
 
@@ -99,6 +101,62 @@ class MiuiMappingTest {
     fun `13 条语义映射逐条对上设计文档的 tier 2 效果表`() {
         val actual = HapticSemantic.entries.associateWith { miuiEffectFor(it) }
         assertThat(actual).containsExactlyEntriesIn(expectedEffect)
+    }
+
+    /**
+     * 13 个语义在 String 键通路上各用哪个 `EFFECT_KEY_*` 字段。
+     *
+     * HyperOS 3 上 ext ID 通路对三方 App 全关，这张表才是那类机器真正跑的映射 ——
+     * 抄错一个字段名，`Class.getField` 抛 `NoSuchFieldException`，String 通路的探测返回
+     * null，整层悄悄退回 ext 通路再继续空转 —— 和 ext 表抄错一样是静默失败，
+     * 所以期望值照 ROM 实测的 51 字段全表逐字重抄。
+     */
+    private val expectedKeyField: Map<HapticSemantic, String> = mapOf(
+        HapticSemantic.TAP to "EFFECT_KEY_TAP_NORMAL",
+        HapticSemantic.LIGHT_TAP to "EFFECT_KEY_TAP_LIGHT",
+        HapticSemantic.SEGMENT_TICK to "EFFECT_KEY_GEAR_LIGHT",
+        HapticSemantic.FREQUENT_TICK to "EFFECT_KEY_MESH_LIGHT",
+        HapticSemantic.TOGGLE_ON to "EFFECT_KEY_SWITCH",
+        HapticSemantic.TOGGLE_OFF to "EFFECT_KEY_SWITCH", // 与 ext 表同口径：这层表达不出方向
+        HapticSemantic.CONFIRM to "EFFECT_KEY_BUTTON_LARGE",
+        HapticSemantic.REJECT to "EFFECT_KEY_ALERT",
+        HapticSemantic.DRAG_START to "EFFECT_KEY_HOLD",
+        HapticSemantic.THRESHOLD_ARMED to "EFFECT_KEY_BOUNDARY_SPATIAL",
+        HapticSemantic.GESTURE_END to "EFFECT_KEY_FLICK",
+        HapticSemantic.SCROLL_EDGE to "EFFECT_KEY_SCROLL_EDGE",
+        HapticSemantic.POPUP_SHOW to "EFFECT_KEY_POPUP_NORMAL",
+    )
+
+    @Test
+    fun `13 条语义的 String 键字段逐字对上 ROM 实测的常量表`() {
+        val actual = HapticSemantic.entries.associateWith { miuiEffectKeyFieldFor(it) }
+        assertThat(actual).containsExactlyEntriesIn(expectedKeyField)
+    }
+
+    @Test
+    fun `String 键与 ext ID 两条映射选的是同一个效果`() {
+        // 同一个语义在两条通路上必须指向同名效果：老 MIUI（ext 通路）与 HyperOS
+        // （String 键通路）之间换机时，同一个交互不该换手感。缺映射会 getValue 抛异常判红，
+        // 逼着往这张对照表补一行
+        val idToField = mapOf(
+            MiuiHapticEffects.MIUI_TAP_NORMAL to "EFFECT_KEY_TAP_NORMAL",
+            MiuiHapticEffects.MIUI_TAP_LIGHT to "EFFECT_KEY_TAP_LIGHT",
+            MiuiHapticEffects.MIUI_GEAR_LIGHT to "EFFECT_KEY_GEAR_LIGHT",
+            MiuiHapticEffects.MIUI_MESH_LIGHT to "EFFECT_KEY_MESH_LIGHT",
+            MiuiHapticEffects.MIUI_SWITCH to "EFFECT_KEY_SWITCH",
+            MiuiHapticEffects.MIUI_BUTTON_LARGE to "EFFECT_KEY_BUTTON_LARGE",
+            MiuiHapticEffects.MIUI_ALERT to "EFFECT_KEY_ALERT",
+            MiuiHapticEffects.MIUI_HOLD to "EFFECT_KEY_HOLD",
+            MiuiHapticEffects.MIUI_BOUNDARY_SPATIAL to "EFFECT_KEY_BOUNDARY_SPATIAL",
+            MiuiHapticEffects.MIUI_FLICK to "EFFECT_KEY_FLICK",
+            MiuiHapticEffects.MIUI_SCROLL_EDGE to "EFFECT_KEY_SCROLL_EDGE",
+            MiuiHapticEffects.MIUI_POPUP_NORMAL to "EFFECT_KEY_POPUP_NORMAL",
+        )
+        HapticSemantic.entries.forEach { semantic ->
+            assertWithMessage("$semantic 在两条通路上选了不同名的效果")
+                .that(miuiEffectKeyFieldFor(semantic))
+                .isEqualTo(idToField.getValue(miuiEffectFor(semantic)))
+        }
     }
 
     @Test
