@@ -68,7 +68,10 @@ export async function callAgnesJson(
     if (options.responseFormat === true) {
         body.response_format = { type: 'json_object' };
     }
-    return callAgnesPayload(env, body, '/chat/completions');
+    // 文本生成（尤其 quiz 两段长 JSON）上游可能长时间不响应；
+    // Workers fetch 无超时会挂到平台上限，App 端 90s 读超时早已断开。
+    // 这里 90s 主动断，失败交给调用方回退另一家或确定性兜底。
+    return callAgnesPayload(env, body, '/chat/completions', 90_000);
 }
 
 /**

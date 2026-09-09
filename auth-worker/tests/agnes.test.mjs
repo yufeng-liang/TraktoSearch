@@ -255,7 +255,7 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
     }
 });
 
-test('Agnes text upstream failure uses deterministic fallbacks without calling MiMo text', async () => {
+test('Agnes text upstream failure falls back to MiMo text once, then deterministic output', async () => {
     const originalFetch = globalThis.fetch;
     const calls = [];
     let mimoTextRequests = 0;
@@ -266,8 +266,10 @@ test('Agnes text upstream failure uses deterministic fallbacks without calling M
             return new Response('Agnes temporarily unavailable', { status: 503 });
         }
         if (url.startsWith('https://api.xiaomimimo.com/')) {
+            // Agnes 失败后回退 MiMo 一次是预期行为（限频是暂态）；这里让 MiMo 也失败，
+            // 验证两家都失败时仍走业务确定性兜底且不抛错。
             mimoTextRequests += 1;
-            throw new Error('Agnes failure must not spend MiMo text balance');
+            return new Response('MiMo also unavailable', { status: 503 });
         }
         // daily 还会额外用 HEAD 检查来源链接。
         return new Response(null, { status: 204 });
@@ -306,8 +308,11 @@ test('Agnes text upstream failure uses deterministic fallbacks without calling M
             assert.equal(response.status, 200, `${path} should use its deterministic fallback`);
         }
         assert.ok(calls.some(url => url === 'https://apihub.agnes-ai.com/v1/chat/completions'));
-        assert.equal(mimoTextRequests, 0);
-        assert.equal(calls.some(url => url.startsWith('https://api.xiaomimimo.com/')), false);
+        // 三条路由（taste/quiz/daily）各自先打 Agnes、失败后各回退 MiMo；
+        // quiz 走两段（候选单元 + 二审），taste 无缓存击穿时也可能多次触发，
+        // 因此不锁精确次数，只要求「确实发生了 MiMo 回退」且最终走确定性兜底。
+        assert.ok(mimoTextRequests >= 3);
+        assert.ok(calls.some(url => url.startsWith('https://api.xiaomimimo.com/')));
     } finally {
         globalThis.fetch = originalFetch;
     }

@@ -28,6 +28,12 @@ import {
     type AgnesEnvironment,
 } from './agnes.ts';
 import {
+    callZhipuJson,
+    ZHIPU_MODELS,
+    type ZhipuMessage,
+    type ZhipuEnvironment,
+} from './zhipu.ts';
+import {
     dailyCandidateMessages,
     dailyReviewMessages,
     DAILY_LOCALES,
@@ -77,7 +83,7 @@ const QUIZ_DIFFICULTY_EASY_HINT = '用户反馈近期题目偏简单：本轮适
 const AI_TEXT_CACHE_VERSION = 'v2';
 const LEGACY_AI_CACHE_VERSION = 'v1';
 
-export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, DailyIllustrationEnvironment {
+export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, ZhipuEnvironment, DailyIllustrationEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
     // 概念插图优先使用专用绑定；未配置时由 daily-illustration 复用现有私有媒体桶。
     AI_IMAGE_CACHE?: R2Bucket;
@@ -192,9 +198,18 @@ interface TasteEvidence {
     confidence: 'high' | 'medium' | 'low';
 }
 
+// 文本供应商三梯队：agnes > zhipu > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
+type TextProvider = 'mimo' | 'agnes' | 'zhipu';
+
+const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
+    agnes: 'agnes-2.5-flash',
+    zhipu: 'glm-5.3-flash',
+    mimo: 'mimo-v2.5-pro',
+};
+
 interface LlmJsonResult {
     payload: unknown;
-    provider: 'mimo' | 'agnes';
+    provider: TextProvider;
     model: string;
 }
 
@@ -554,7 +569,7 @@ async function handleQuiz(
  */
 async function generateQuiz(
     env: AiEnvironment,
-    provider: 'mimo' | 'agnes',
+    provider: TextProvider,
     model: string,
     fallbackModel: string,
     selectedMovies: WatchMovie[],
@@ -843,7 +858,7 @@ async function handleDaily(
  */
 async function generateDailyKnowledgeUnit(
     env: AiEnvironment,
-    provider: 'mimo' | 'agnes',
+    provider: TextProvider,
     model: string,
     fallbackModel: string,
     day: string,
@@ -2252,7 +2267,7 @@ function assertAction(body: Record<string, unknown>, expected: string | string[]
 }
 
 interface ResolvedTextModel {
-    provider: 'mimo' | 'agnes';
+    provider: TextProvider;
     model: string;
     // 仅兼容 MiMo 主路径上游失败时尝试 Agnes 的默认模型；Agnes 路径失败由业务确定性兜底。
     fallbackModel: string;
@@ -2294,6 +2309,9 @@ function resolveTextModel(
         if (typeof requested === 'string' && (AGNES_MODELS as readonly string[]).includes(requested)) {
             return { provider: 'agnes', model: requested, fallbackModel: mimoDefault };
         }
+        if (typeof requested === 'string' && (ZHIPU_MODELS as readonly string[]).includes(requested)) {
+            return { provider: 'zhipu', model: requested, fallbackModel: mimoDefault };
+        }
         return { provider: 'mimo', model: validateMimoModel(requested), fallbackModel: agnesDefault };
     }
     // 配置缺失、空白或拼写错误都不能静默切到没有余额的 MiMo 文本模型。
@@ -2308,21 +2326,30 @@ function resolveTextModel(
 // 统一文本生成入口：Agnes 失败交给业务确定性 fallback；显式/兼容 MiMo 路径仍可回退 Agnes 一次。
 async function callLlmJson(
     env: AiEnvironment,
-    provider: 'mimo' | 'agnes',
+    provider: TextProvider,
     model: string,
     messages: MimoMessage[],
     options: Record<string, unknown>,
     fallbackModel: string,
     context: LlmRequestContext,
 ): Promise<LlmJsonResult | null> {
-    const order: Array<'mimo' | 'agnes'> = provider === 'agnes' ? ['agnes'] : ['mimo', 'agnes'];
+    // 三家互备，固定优先级 agnes > zhipu > mimo：主供应商失败（常见：Agnes 共享池 429 把
+    // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
+    // GLM 实测可用且独立计费，插在 MiMo 之前兜容量。
+    const order: TextProvider[] = provider === 'agnes'
+        ? ['agnes', 'zhipu', 'mimo']
+        : provider === 'zhipu'
+            ? ['agnes', 'mimo']
+            : ['mimo', 'agnes', 'zhipu'];
     let lastError: unknown = null;
     for (const p of order) {
-        const m = p === provider ? model : (p === 'agnes' ? 'agnes-2.5-flash' : fallbackModel);
+        const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
         try {
             const result = p === 'agnes'
                 ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
-                : await callMimoJson(env, m as MimoModel, messages, options);
+                : p === 'zhipu'
+                    ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
+                    : await callMimoJson(env, m as MimoModel, messages, options);
             // 未配置/测试模式下供应商返回 null 表示不可用：主供应商直接走离线兜底，回退供应商则上抛原错误。
             if (result === null) {
                 if (p === provider) return null;
@@ -2333,11 +2360,12 @@ async function callLlmJson(
             // 模型非法属于请求错误，不回退，直接上抛。
             if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
             logAiDiagnostic('upstream_failure', context, p, m, error);
-            // Agnes 文本余额/上游不可用时不能消耗 MiMo 文本额度，交给各业务的确定性 fallback。
-            if (provider === 'agnes') return null;
             lastError = error;
         }
     }
+    // 主供应商是 agnes 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
+    // （taste/daily/quiz 都有本地 fallback，不向用户抛错）；mimo 主路径维持上抛语义。
+    if (provider === 'agnes') return null;
     throw lastError ?? new AppError('AI_UPSTREAM_ERROR', 'All AI providers failed', 502);
 }
 
@@ -2362,7 +2390,7 @@ function parseTextResultOrFallback<T>(
 function logAiDiagnostic(
     event: 'upstream_failure' | 'invalid_output',
     context: LlmRequestContext,
-    provider: 'mimo' | 'agnes',
+    provider: TextProvider,
     model: string,
     error: unknown,
 ): void {

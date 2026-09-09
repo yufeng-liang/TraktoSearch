@@ -141,6 +141,8 @@ async function callMimoPayload(
                     'Content-Type': 'application/json',
                     'api-key': apiKey,
                 },
+                // 同 Agnes：上游可能长时间不响应，90s 主动断避免挂死整场出题
+                signal: AbortSignal.timeout(90_000),
                 body: JSON.stringify(body),
             });
             // 仅在网络失败或服务端 5xx 时重试；4xx（含限流 429）属确定性错误，重试只会放大供应商费用
