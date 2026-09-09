@@ -549,10 +549,12 @@
     <string name="settings_haptic">触感反馈</string>
     <string name="settings_haptic_follow_system">跟随系统</string>
     <string name="settings_haptic_off">关闭</string>
-    <string name="settings_haptic_boost">增强</string>
-    <string name="settings_haptic_follow_system_desc">正常的触感反馈，强度由系统触感设置决定。</string>
+    <string name="settings_haptic_light">轻</string>
+    <string name="settings_haptic_boost">强</string>
+    <string name="settings_haptic_follow_system_desc">正常触感，强度跟随系统触感设置。</string>
     <string name="settings_haptic_off_desc">应用内不再有任何震动，彩蛋也不震。</string>
-    <string name="settings_haptic_boost_desc">每个效果都上移一档。绝对强度仍由系统触感设置决定。</string>
+    <string name="settings_haptic_light_desc">所有触感轻一档，适合觉得震动偏强的时候。</string>
+    <string name="settings_haptic_boost_desc">所有触感整体加重，仍受系统触感开关约束。</string>
     <string name="settings_haptic_system_disabled">系统已关闭触感反馈，应用无法震动。</string>
     <string name="settings_haptic_no_vibrator">本机没有振动马达。</string>
     <string name="settings_haptic_open_system_settings">打开系统设置</string>

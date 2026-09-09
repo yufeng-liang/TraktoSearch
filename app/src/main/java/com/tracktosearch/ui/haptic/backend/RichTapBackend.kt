@@ -7,9 +7,11 @@ import com.apprichtap.haptic.base.PrebakedEffectId
 import com.tracktosearch.ui.haptic.HapticBackend
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 
 /**
  * tier 3：RichTap 波形通路，走 vendored 的 `richtap_sdk_lite.aar`（`ApiInfo.VERSION_NAME`
@@ -109,9 +111,9 @@ class RichTapBackend(
     override fun supports(semantic: HapticSemantic): Boolean = isAvailable()
 
     /** @param view 本层不需要 View 通道，忽略。 */
-    override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+    override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
         if (!isAvailable()) return false
-        val effect = richTapEffectFor(semantic)
+        val effect = richTapEffectFor(semantic).atStrength(strength)
         return submit {
             if (ensureInitialized()) {
                 RichTapUtils.getInstance().playExtPrebaked(effect.effectId, effect.strength)
@@ -358,7 +360,26 @@ internal object RichTapStrength {
  *   当 AOSP `EFFECT_` 常量用的通路，手感完全不同。
  * @param strength 强度 0..255，见 [RichTapStrength]
  */
-internal data class RichTapEffect(val effectId: Int, val strength: Int)
+internal data class RichTapEffect(val effectId: Int, val strength: Int) {
+    /**
+     * 档位强度缩放：轻 ×0.6、强 ×1.3（封顶 255、触底至少 1）。
+     *
+     * [HapticStrength.SYSTEM] 原样返回——那档的强度是「厂商调好的」，不干预。
+     * 缩放只动强度位不动效果 ID：轻/强改的是同一个效果的轻重，不是换效果
+     * （换效果 = 换性格，滑块连发的轻滴答被顶成重击，2026-09-09 裁定废止）。
+     */
+    fun atStrength(strength: HapticStrength): RichTapEffect = when (strength) {
+        HapticStrength.SYSTEM -> this
+        HapticStrength.LIGHT -> RichTapEffect(
+            effectId,
+            (this.strength * RICHTAP_LIGHT_FACTOR).roundToInt().coerceIn(1, 255),
+        )
+        HapticStrength.STRONG -> RichTapEffect(
+            effectId,
+            (this.strength * RICHTAP_STRONG_FACTOR).roundToInt().coerceIn(1, 255),
+        )
+    }
+}
 
 /**
  * RichTap 的四点包络，三个数组长度恒为 [RICHTAP_ENVELOPE_POINTS]。
@@ -389,6 +410,12 @@ internal const val RICHTAP_ENVELOPE_POINTS = 4
  */
 internal const val RICHTAP_ENVELOPE_MIN_DURATION_MS = 3
 
+/** 轻/强档对 `playExtPrebaked` 强度位（0..255）的缩放系数，见 [RichTapEffect.atStrength]。 */
+internal const val RICHTAP_LIGHT_FACTOR = 0.6f
+
+/** 同上，强档。×1.3 后封顶 255。 */
+internal const val RICHTAP_STRONG_FACTOR = 1.3f
+
 /**
  * 频率参数固定传 0，含义是「不覆盖频率」而不是「0 Hz」。
  *
@@ -413,9 +440,8 @@ internal const val RICHTAP_ENVELOPE_DEFAULT_FREQUENCY = 0
  * 设计文档里标了「低幅」但没给数值的四个语义（`frequentTick`、`toggleOff`、`scrollEdge`，
  * 以及和 `lightTap` 撞同一个效果的 `gestureEnd` 与 `popupShow`），强度按两条约束定：
  * 一是对齐 tier 1 列已给出的 scale（见 [RichTapStrength]），二是同一个效果 ID 内部的轻重
- * 次序必须和 `HapticSemantic.boosted()` 隐含的梯度一致 —— `boosted()` 把
- * `GESTURE_END` 升成 `TAP`、把 `POPUP_SHOW` 升成 `LIGHT_TAP`，说明 `GESTURE_END` 比
- * `POPUP_SHOW` 重一档，于是同为 `RT_SOFT_CLICK` 时前者拿 MEDIUM、后者拿 LIGHT。
+ * 次序必须和 [HapticSemantic] 的梯度一致 —— `gestureEnd` 比 `popupShow` 重一档，
+ * 于是同为 `RT_SOFT_CLICK` 时前者拿 MEDIUM、后者拿 LIGHT。
  *
  * `when` 穷举、不写 `else`：以后往枚举里加语义，编译器会逼着补映射。
  */

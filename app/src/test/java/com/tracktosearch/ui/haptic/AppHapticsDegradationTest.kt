@@ -21,7 +21,9 @@ import org.junit.Test
  * 设计文档「厂商通路矩阵」末段钉死：同一台机上 RichTap 与厂商反射通路都可用时，
  * **离散语义走厂商预置效果**（厂商自己调过的手感比我们拼的波形好），
  * **彩蛋那两段连续包络走 RichTap**（唯一画得出包络的一层）。实现把这条落在 `discreteRank()`：
- * 离散链 tier 2、3、1、0，包络链才是老实的 3、2、1、0。所以本文件对两条链断言的次序不同。
+ * 离散链 tier 2、3、1、0；包络链 tier 降序 3、2、1、0，但**厂商层可用时跳过 tier 1**
+ * （真机反馈：`createWaveform` 的通用波形在线性马达机型上是「普通震动」，包络宁可
+ * 整体返 false 让调用方退离散替身）。所以本文件对两条链断言的次序不同。
  * 哪天有人把离散链「修」回单纯 tier 降序，目标机（RichTap 与 MIUI 都可用）上的手感会整片变掉，
  * 而 tier 降序读起来完全合理 —— 这正是要钉住它的理由。
  *
@@ -256,13 +258,65 @@ class AppHapticsDegradationTest {
     }
 
     @Test
-    fun `包络链是老实的 tier 降序，RichTap 排在厂商层前面`() {
+    fun `包络链按 tier 降序，但厂商层可用时跳过 tier 1`() {
+        // 全层都「发不出去」所以整条链被走满：次序断言看的是谁被问到，不是谁接下。
+        // tier 1 被跳过是真机反馈定的策略（见 AppHaptics.playEnvelope）：厂商预置效果
+        // 可用的机器上，通用振幅波形在线性马达上是「普通震动」，宁可整段拒收。
         INPUT_ORDERS.forEach { order ->
             assertWithMessage("入参顺序 $order 改变了包络链的尝试次序")
                 .that(attemptOrder(order) { engine -> engine.playEnvelope(TIMINGS_MS, AMPLITUDES) })
-                .containsExactly(NAME_RICHTAP, NAME_MIUI, NAME_WAVEFORM, NAME_CONSTANTS)
+                .containsExactly(NAME_RICHTAP, NAME_MIUI, NAME_CONSTANTS)
                 .inOrder()
         }
+    }
+
+    @Test
+    fun `没有厂商层的机器，包络链老实地走到 tier 1`() {
+        val ordersWithoutVendor = INPUT_ORDERS.map { order -> order.filterNot { it == TIER_VENDOR } }
+        ordersWithoutVendor.forEach { order ->
+            assertWithMessage("入参顺序 $order 改变了包络链的尝试次序")
+                .that(attemptOrder(order) { engine -> engine.playEnvelope(TIMINGS_MS, AMPLITUDES) })
+                .containsExactly(NAME_RICHTAP, NAME_WAVEFORM, NAME_CONSTANTS)
+                .inOrder()
+        }
+    }
+
+    @Test
+    fun `厂商层可用时，包络宁可拒绝也不落 tier 1 的通用波形`() {
+        // 目标机（小米 14 Pro）布局：RichTap 在（预置效果可用）但包络通路不可用
+        val richTap = fake(TIER_RICHTAP, NAME_RICHTAP)
+        val vendor = fake(TIER_VENDOR, NAME_MIUI)
+        val waveform = fake(TIER_WAVEFORM, NAME_WAVEFORM, envelopeResult = true)
+        val constants = fake(TIER_CONSTANTS, NAME_CONSTANTS)
+        val engine = engine(listOf(richTap, vendor, waveform, constants))
+
+        assertWithMessage(
+            "厂商层可用的机器上包络被 tier 1 接走：createWaveform 的通用波形在线性马达" +
+                "机型上是「普通震动」，返 false 让调用方退离散替身才是更好的落点",
+        )
+            .that(engine.playEnvelope(TIMINGS_MS, AMPLITUDES))
+            .isFalse()
+        assertWithMessage("tier 1 连 isAvailable 都不该被问（跳过发生在问之前）")
+            .that(waveform.availableCalls)
+            .isEqualTo(1) // 只剩构造期焐热那一次
+        assertThat(waveform.envelopeCalls).isEqualTo(0)
+        assertThat(richTap.envelopeCalls).isEqualTo(1)
+        assertThat(vendor.envelopeCalls).isEqualTo(1)
+    }
+
+    @Test
+    fun `厂商层运行中被禁用后，tier 1 恢复包络兜底`() {
+        val vendor = fake(TIER_VENDOR, NAME_MIUI)
+        val waveform = fake(TIER_WAVEFORM, NAME_WAVEFORM, envelopeResult = true)
+        val engine = engine(listOf(vendor, waveform))
+
+        // 模拟 MIUI 派发失败后整层禁用：isAvailable 单向 true→false，契约允许
+        vendor.available = false
+
+        assertWithMessage("tier 2 被禁用后包络两头落空：tier 1 应立刻恢复兜底")
+            .that(engine.playEnvelope(TIMINGS_MS, AMPLITUDES))
+            .isTrue()
+        assertThat(waveform.envelopeCalls).isEqualTo(1)
     }
 
     @Test
@@ -433,8 +487,10 @@ class AppHapticsDegradationTest {
             envelopeSupported = false,
             envelopeMaxSize = 0,
             richTapSupported = true,
+            hapticPlayerSupported = true,
             miuiSupported = true,
             oplusSupported = false,
+            huaweiSupported = false,
         )
 
     /**
@@ -503,7 +559,7 @@ class AppHapticsDegradationTest {
             return semantic in supported
         }
 
-        override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+        override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
             performCalls++
             dispatchTrace += "$name$SUFFIX_PERFORM"
             performedSemantics += semantic

@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
@@ -124,15 +125,15 @@ class RichTapMappingTest {
     }
 
     @Test
-    fun `共用同一效果的三组语义靠强度分档，次序与 boosted 梯度一致`() {
+    fun `共用同一效果的三组语义靠强度分档，次序与语义梯度一致`() {
         val shared = HapticSemantic.entries
             .groupBy { richTapEffectFor(it).effectId }
             .filterValues { it.size > 1 }
         assertWithMessage("共用同一效果 ID 的语义组应当只有软点击、刻度、开关这三组，实际是 $shared")
             .that(shared.keys)
             .containsExactly(10003, 10004, 10009)
-        // RT_SOFT_CLICK 三档：boosted() 把 GESTURE_END 升成 TAP、把 POPUP_SHOW 只升到 LIGHT_TAP，
-        // 说明 GESTURE_END 重一档，同一效果内的强度必须照这个次序排
+        // RT_SOFT_CLICK 三档：词表把 GESTURE_END 排得比 POPUP_SHOW 重一档，
+        // 同一效果内的强度必须照这个次序排
         assertStrengthDescending(
             HapticSemantic.LIGHT_TAP,
             HapticSemantic.GESTURE_END,
@@ -144,7 +145,7 @@ class RichTapMappingTest {
             HapticSemantic.SCROLL_EDGE,
             HapticSemantic.FREQUENT_TICK,
         )
-        // RT_TOGGLE_SWITCH 两档：开比关重，boosted() 也是先把 TOGGLE_OFF 升成 TOGGLE_ON
+        // RT_TOGGLE_SWITCH 两档：开比关重，词表把 TOGGLE_OFF 直接排在开关族的轻半边
         assertStrengthDescending(HapticSemantic.TOGGLE_ON, HapticSemantic.TOGGLE_OFF)
         val lightest = HapticSemantic.entries.minBy { richTapEffectFor(it).strength }
         assertWithMessage("一次手势里连发几十次的语义必须是全表最轻的一档，否则一次滑块拖动累出几十记重震")
@@ -344,6 +345,29 @@ class RichTapMappingTest {
         }
     }
 
+    @Test
+    fun `档位强度只缩放强度位，效果 ID 与边界都守住`() {
+        val base = RichTapEffect(10007, 200)
+
+        assertWithMessage("跟随系统档不干预：原样返回")
+            .that(base.atStrength(HapticStrength.SYSTEM))
+            .isEqualTo(base)
+        assertWithMessage("轻档 ×0.6：200 → 120")
+            .that(base.atStrength(HapticStrength.LIGHT))
+            .isEqualTo(RichTapEffect(10007, 120))
+        assertWithMessage("强档 ×1.3 封顶 255：200 → 260 → 255")
+            .that(base.atStrength(HapticStrength.STRONG))
+            .isEqualTo(RichTapEffect(10007, 255))
+
+        val feather = RichTapEffect(10004, 76)
+        assertWithMessage("轻档触底至少 1：76×0.6=45.6→46 正常；换 1 档也不许缩成 0")
+            .that(RichTapEffect(10004, 1).atStrength(HapticStrength.LIGHT).strength)
+            .isEqualTo(1)
+        assertWithMessage("效果 ID 一个都不许动：动 ID 就是换效果=换性格")
+            .that(feather.atStrength(HapticStrength.STRONG).effectId)
+            .isEqualTo(10004)
+    }
+
     private companion object {
         /** 语义总数，与设计文档「语义词表」一致。 */
         const val EXPECTED_SEMANTIC_COUNT = 13
@@ -466,8 +490,10 @@ class RichTapStopThreadGuardTest {
         envelopeSupported = false,
         envelopeMaxSize = 0,
         richTapSupported = false,
+        hapticPlayerSupported = false,
         miuiSupported = true,
         oplusSupported = false,
+        huaweiSupported = false,
     )
 
     /**

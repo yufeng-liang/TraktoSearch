@@ -1729,12 +1729,13 @@ private fun HapticModeCard(
     )
 }
 
-/** 触感副标题：五种互斥情况各一句，映射本身穷举、不写 else */
+/** 触感副标题：六种互斥情况各一句，映射本身穷举、不写 else */
 @Composable
 private fun hapticSummaryText(summary: HapticModeSummary): String = when (summary) {
     HapticModeSummary.NO_VIBRATOR -> stringResource(R.string.settings_haptic_no_vibrator)
     HapticModeSummary.SYSTEM_DISABLED -> stringResource(R.string.settings_haptic_system_disabled)
     HapticModeSummary.FOLLOW_SYSTEM -> stringResource(R.string.settings_haptic_follow_system)
+    HapticModeSummary.LIGHT -> stringResource(R.string.settings_haptic_light)
     HapticModeSummary.OFF -> stringResource(R.string.settings_haptic_off)
     HapticModeSummary.BOOST -> stringResource(R.string.settings_haptic_boost)
 }

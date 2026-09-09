@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 
 @Composable
@@ -47,12 +46,12 @@ internal fun CreditCard(
     Column(
         modifier = Modifier
             .width(100.dp)
-            // 网格里的作品卡进详情，按列表项给轻一档。本卡是本包自绘的，
-            // 不走 MovieCard / PosterCard，所以触感得自己发
+            // 网格里的作品卡（海报主导）进详情，按用户规则「点击图片不震」静音。
+            // 本卡是本包自绘的，不走 MovieCard / PosterCard，语义得自己声明
             .hapticClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                semantic = HapticSemantic.LIGHT_TAP,
+                semantic = null,
                 enabled = !isResolving,
                 onClick = onClick
             ),

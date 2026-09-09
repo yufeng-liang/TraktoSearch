@@ -1731,7 +1731,8 @@ fun DoubanHotCard(
                 .hapticClickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    semantic = HapticSemantic.LIGHT_TAP,
+                    // 豆瓣封面卡是图片卡，进详情不震（用户规则：点击图片无触感）
+                    semantic = null,
                     enabled = !isResolving,
                     onClick = onClick
                 )
@@ -1921,14 +1922,10 @@ private fun DoubanHotGridItem(
     // 评分直接用接口返回的 rating 字段；标题仅去除排名前缀（不再从标题正则提取评分）
     val rating = remember(item.rating) { parseDoubanRating(item.rating) }
     val displayTitle = remember(item.title) { cleanDoubanTitle(item.title) }
-    // 本 composable 整体在 sheet 的 subcomposition 里，这里取到的就是 sheet 那个宿主 View
-    val haptics = rememberAppHaptics()
 
     Card(
-        onClick = {
-            haptics.lightTap()
-            onClick()
-        },
+        // 豆瓣结果卡以封面为主导，进详情不震（用户规则：点击图片无触感）
+        onClick = onClick,
         enabled = !isResolving,
         // 与评分徽章统一 13.dp 圆角，保持豆瓣栏目卡片风格一致
         shape = RoundedCornerShape(13.dp),

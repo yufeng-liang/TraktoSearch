@@ -3,23 +3,26 @@ package com.tracktosearch.ui.haptic.backend
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import org.junit.Test
 
 /**
- * tier 2（MIUI）那两个纯函数与 26 个效果 ID 的判定单测。
+ * tier 2（MIUI）那三个纯函数、26 个效果 ID 与 String 键字段表的判定单测。
  *
- * 这一层的全部产品行为就是「哪个语义发哪个 ID」这张表，而这张表抄错一位是**静默失败**：
- * 不崩、不报错、日志里一个字都没有，只会让 `isSupportExtHapticFeedback` 对着一个不存在的
- * 效果返回 false，从此这个语义永远降级到 tier 1 或 tier 0 —— 手上只觉得「好像轻了点」。
+ * 这一层的全部产品行为就是「哪个语义发哪个效果」的两张表（ext ID 与 String 键字段），
+ * 而这两张表抄错一位都是**静默失败**：不崩、不报错，只会让探测对着一个不存在的效果/
+ * 字段返回 false，从此这个语义永远降级 —— 手上只觉得「好像轻了点」。
  *
- * 所以期望值一律写成十六进制字面量，照设计文档
- * docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「MIUI 语义效果表（tier 2）」重抄，
+ * 所以期望值一律写成字面量，照设计文档
+ * docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「MIUI 语义效果表（tier 2）」
+ * 与 2026-09-09 真机实测的 51 个 `EFFECT_KEY_*` 字段全表重抄，
  * 刻意不写成 `MiuiHapticEffects.MIUI_TAP_NORMAL` 那种从被测代码取值的形式：
  * 期望值与实现同源时，常量被改坏期望值跟着一起变，这个测试永远是绿的。
  *
- * 只测纯函数。[miuiEffectFor] 与 [miuiProbeIds] 都是文件顶层函数，零 Context、零反射、
- * 零 android 依赖，纯 JVM 可跑，不用 Robolectric。MiuiBackend 类本身要 Context 加一整套
- * `miui.util.HapticFeedbackUtil` 反射，JVM 里起不来，不在本文件射程内。
+ * 只测纯函数。[miuiEffectFor]、[miuiProbeIds] 与 [miuiEffectKeyFieldFor] 都是文件顶层
+ * 函数，零 Context、零反射、零 android 依赖，纯 JVM 可跑，不用 Robolectric。
+ * MiuiBackend 类本身要 Context 加一整套 `miui.util.HapticFeedbackUtil` 反射，
+ * JVM 里起不来，不在本文件射程内。
  */
 class MiuiMappingTest {
 
@@ -35,11 +38,11 @@ class MiuiMappingTest {
         HapticSemantic.TOGGLE_OFF to 0x10000004, // 同一个 ID：这一层表达不出开关方向
         HapticSemantic.CONFIRM to 0x10000012, // MIUI_BUTTON_LARGE 大按钮
         HapticSemantic.REJECT to 0x10000018, // MIUI_ALERT 警示
-        HapticSemantic.DRAG_START to 0x1000000f, // MIUI_HOLD 保持
+        HapticSemantic.DRAG_START to 0x1000000b, // MIUI_PICK_UP 拾起（2026-09-09 改档，原 hold）
         HapticSemantic.THRESHOLD_ARMED to 0x10000010, // MIUI_BOUNDARY_SPATIAL 空间边界
         HapticSemantic.GESTURE_END to 0x10000003, // MIUI_FLICK 甩动
         HapticSemantic.SCROLL_EDGE to 0x1000000c, // MIUI_SCROLL_EDGE 滚动到边
-        HapticSemantic.POPUP_SHOW to 0x10000009, // MIUI_POPUP_NORMAL 弹窗
+        HapticSemantic.POPUP_SHOW to 0x1000000a, // MIUI_POPUP_LIGHT 轻弹窗（2026-09-09 改档，原 popup_normal）
     )
 
     /**
@@ -88,17 +91,73 @@ class MiuiMappingTest {
         0x10000004, // TOGGLE_ON，TOGGLE_OFF 在这里被去重掉
         0x10000012, // CONFIRM
         0x10000018, // REJECT
-        0x1000000f, // DRAG_START
+        0x1000000b, // DRAG_START（PICK_UP，2026-09-09 改档）
         0x10000010, // THRESHOLD_ARMED
         0x10000003, // GESTURE_END
         0x1000000c, // SCROLL_EDGE
-        0x10000009, // POPUP_SHOW
+        0x1000000a, // POPUP_SHOW（POPUP_LIGHT，2026-09-09 改档）
     )
 
     @Test
     fun `13 条语义映射逐条对上设计文档的 tier 2 效果表`() {
         val actual = HapticSemantic.entries.associateWith { miuiEffectFor(it) }
         assertThat(actual).containsExactlyEntriesIn(expectedEffect)
+    }
+
+    /**
+     * 13 个语义在 String 键通路上各用哪个 `EFFECT_KEY_*` 字段。
+     *
+     * HyperOS 3 上 ext ID 通路对三方 App 全关，这张表才是那类机器真正跑的映射 ——
+     * 抄错一个字段名，`Class.getField` 抛 `NoSuchFieldException`，String 通路的探测返回
+     * null，整层悄悄退回 ext 通路再继续空转 —— 和 ext 表抄错一样是静默失败，
+     * 所以期望值照 ROM 实测的 51 字段全表逐字重抄。
+     */
+    private val expectedKeyField: Map<HapticSemantic, String> = mapOf(
+        HapticSemantic.TAP to "EFFECT_KEY_TAP_NORMAL",
+        HapticSemantic.LIGHT_TAP to "EFFECT_KEY_TAP_LIGHT",
+        HapticSemantic.SEGMENT_TICK to "EFFECT_KEY_GEAR_LIGHT",
+        HapticSemantic.FREQUENT_TICK to "EFFECT_KEY_MESH_LIGHT",
+        HapticSemantic.TOGGLE_ON to "EFFECT_KEY_SWITCH",
+        HapticSemantic.TOGGLE_OFF to "EFFECT_KEY_SWITCH", // 与 ext 表同口径：这层表达不出方向
+        HapticSemantic.CONFIRM to "EFFECT_KEY_BUTTON_LARGE",
+        HapticSemantic.REJECT to "EFFECT_KEY_ALERT",
+        HapticSemantic.DRAG_START to "EFFECT_KEY_PICKUP", // 拾起（2026-09-09 改档，原 hold）
+        HapticSemantic.THRESHOLD_ARMED to "EFFECT_KEY_BOUNDARY_SPATIAL",
+        HapticSemantic.GESTURE_END to "EFFECT_KEY_FLICK",
+        HapticSemantic.SCROLL_EDGE to "EFFECT_KEY_SCROLL_EDGE",
+        HapticSemantic.POPUP_SHOW to "EFFECT_KEY_POPUP_LIGHT", // 轻弹窗（2026-09-09 改档）
+    )
+
+    @Test
+    fun `13 条语义的 String 键字段逐字对上 ROM 实测的常量表`() {
+        val actual = HapticSemantic.entries.associateWith { miuiEffectKeyFieldFor(it) }
+        assertThat(actual).containsExactlyEntriesIn(expectedKeyField)
+    }
+
+    @Test
+    fun `String 键与 ext ID 两条映射选的是同一个效果`() {
+        // 同一个语义在两条通路上必须指向同名效果：老 MIUI（ext 通路）与 HyperOS
+        // （String 键通路）之间换机时，同一个交互不该换手感。缺映射会 getValue 抛异常判红，
+        // 逼着往这张对照表补一行
+        val idToField = mapOf(
+            MiuiHapticEffects.MIUI_TAP_NORMAL to "EFFECT_KEY_TAP_NORMAL",
+            MiuiHapticEffects.MIUI_TAP_LIGHT to "EFFECT_KEY_TAP_LIGHT",
+            MiuiHapticEffects.MIUI_GEAR_LIGHT to "EFFECT_KEY_GEAR_LIGHT",
+            MiuiHapticEffects.MIUI_MESH_LIGHT to "EFFECT_KEY_MESH_LIGHT",
+            MiuiHapticEffects.MIUI_SWITCH to "EFFECT_KEY_SWITCH",
+            MiuiHapticEffects.MIUI_BUTTON_LARGE to "EFFECT_KEY_BUTTON_LARGE",
+            MiuiHapticEffects.MIUI_ALERT to "EFFECT_KEY_ALERT",
+            MiuiHapticEffects.MIUI_PICK_UP to "EFFECT_KEY_PICKUP",
+            MiuiHapticEffects.MIUI_BOUNDARY_SPATIAL to "EFFECT_KEY_BOUNDARY_SPATIAL",
+            MiuiHapticEffects.MIUI_FLICK to "EFFECT_KEY_FLICK",
+            MiuiHapticEffects.MIUI_SCROLL_EDGE to "EFFECT_KEY_SCROLL_EDGE",
+            MiuiHapticEffects.MIUI_POPUP_LIGHT to "EFFECT_KEY_POPUP_LIGHT",
+        )
+        HapticSemantic.entries.forEach { semantic ->
+            assertWithMessage("$semantic 在两条通路上选了不同名的效果")
+                .that(miuiEffectKeyFieldFor(semantic))
+                .isEqualTo(idToField.getValue(miuiEffectFor(semantic)))
+        }
     }
 
     @Test
@@ -164,6 +223,8 @@ class MiuiMappingTest {
             MiuiHapticEffects.MIUI_MESH_HEAVY to "连发语义只许走轻网格，重网格会在一次拖动里累出几十下重震",
             MiuiHapticEffects.MIUI_MESH_NORMAL to "同上，普通网格也偏重",
             MiuiHapticEffects.MIUI_LONG_PRESS to "长按刻意不入语义表：combinedClickable 在 onLongClick 之前已自行发过一次",
+            MiuiHapticEffects.MIUI_POPUP_NORMAL to "2026-09-09 改档弃用：被动弹窗走更轻的 POPUP_LIGHT（HyperOS 属性 6,1 vs 6,2），改回来先过设计文档",
+            MiuiHapticEffects.MIUI_HOLD to "2026-09-09 改档弃用：hold 语义是「保持」且原生默认弱档（属性 4,0），起手那记要沉的，走 PICK_UP",
             MiuiHapticEffects.MIUI_GEAR_HEAVY to "刻度感只许走轻齿轮，重齿轮会把 Tab 切换震成撞击",
             MiuiHapticEffects.MIUI_KEYBOARD to "留给彩蛋答题期的键盘反馈，不归这 13 个语义",
         )
@@ -173,6 +234,15 @@ class MiuiMappingTest {
                 .that(used)
                 .doesNotContain(id)
         }
+    }
+
+    @Test
+    fun `档位强度映射成 MIUI 官方强度档`() {
+        // 取值出处：MIUI 12 HapticFeedbackUtil 源码的 EFFECT_STRENGTH_* 常量
+        // 与 HyperOS 3 sys.haptic.* 属性表（「效果ID, 强度档」的逗号后那一位）
+        assertThat(miuiStrengthInt(HapticStrength.LIGHT)).isEqualTo(0)
+        assertThat(miuiStrengthInt(HapticStrength.SYSTEM)).isEqualTo(-100)
+        assertThat(miuiStrengthInt(HapticStrength.STRONG)).isEqualTo(2)
     }
 
     /** 失败信息里把 ID 印成 `0x1000000f` 这种形状，比十进制的 268435471 好认。 */

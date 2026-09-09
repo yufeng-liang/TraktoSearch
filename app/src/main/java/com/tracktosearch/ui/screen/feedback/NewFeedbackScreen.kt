@@ -496,8 +496,10 @@ private fun ScreenshotRow(
                         .clip(RoundedCornerShape(10.dp))
                         // 记录该格的 window 矩形，OpenImage 打开动画以点击那张为落点
                         .recordOpenImageBounds(index, previewBounds)
+                        // 点缩略图是看图预览，不震（用户规则：点击图片无触感）；
+                        // 角标的删除 × 与末尾的加号是操作，各自保留触感
                         .hapticClickable(
-                            semantic = HapticSemantic.LIGHT_TAP,
+                            semantic = null,
                             enabled = enabled
                         ) {
                             val currentActivity = activity

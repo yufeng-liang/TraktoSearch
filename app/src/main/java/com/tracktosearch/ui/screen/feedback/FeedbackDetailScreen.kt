@@ -68,7 +68,6 @@ import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.feedbackCardSharedKey
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
@@ -504,7 +503,8 @@ private fun OriginalFeedbackCard(
                                 .background(MaterialTheme.colorScheme.surface)
                                 // 记录该缩略图的 window 矩形，OpenImage 打开/返回动画以它为落点
                                 .recordOpenImageBounds(index, screenshotBounds)
-                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                // 点图是看图，不震（用户规则：点击图片无触感）
+                                .hapticClickable(semantic = null) {
                                     val currentActivity = activity
                                     if (currentActivity != null) {
                                         // 反馈截图缩略图是 ContentScale.Fit，动画占位须用 FIT_CENTER 对齐
@@ -694,7 +694,8 @@ private fun ConversationBubble(
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
                                         .recordOpenImageBounds(index, bubbleBounds)
-                                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                        // 点图是看图，不震（用户规则：点击图片无触感）
+                                        .hapticClickable(semantic = null) {
                                             val currentActivity = activity
                                             if (currentActivity != null) {
                                                 openImageViewer(
@@ -768,7 +769,8 @@ private fun ReplyBar(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .recordOpenImageBounds(index, previewBounds)
-                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                // 点图是看图，不震（用户规则：点击图片无触感）
+                                .hapticClickable(semantic = null) {
                                     val currentActivity = activity
                                     if (currentActivity != null) {
                                         scope.launch {

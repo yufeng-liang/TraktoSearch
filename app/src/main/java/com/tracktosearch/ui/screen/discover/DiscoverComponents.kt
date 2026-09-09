@@ -56,7 +56,6 @@ import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -137,8 +136,8 @@ internal fun MovieCard(
                 enabled = !isResolving,
                 interactionSource = interactionSource,
                 indication = null,
-                // 一屏里横滑几十张的媒体卡片，与共享的 ui/component/MovieCard、PosterCard 同档
-                semantic = HapticSemantic.LIGHT_TAP,
+                // 点海报卡是看图/导航，不震（用户规则：点击图片无触感）
+                semantic = null,
                 onClick = wrappedOnClick
             ),
             shape = posterShape,

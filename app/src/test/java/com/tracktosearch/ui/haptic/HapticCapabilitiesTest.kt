@@ -100,8 +100,10 @@ class HapticCapabilitiesTest {
                 envelopeSupported = false,
                 envelopeMaxSize = 0,
                 richTapSupported = false,
+                hapticPlayerSupported = false,
                 miuiSupported = false,
                 oplusSupported = false,
+                huaweiSupported = false,
             )
         )
         // 短路：不再问振幅、不再发 primitive 查询、也不去碰 OPPO 那个系统服务
@@ -163,10 +165,13 @@ class HapticCapabilitiesTest {
         assertThat(caps.envelopeSupported).isFalse()
         assertThat(caps.envelopeMaxSize).isEqualTo(0)
         // JVM 上没有 ROM 侧的 richtap-api、没有 miui.util.HapticFeedbackUtil、
-        // 也没有 linearmotor 服务，三条都探不到；重点是探不到也不许带崩整份探测
+        // 没有 linearmotor 服务，也没有 android.os.HapticPlayer 与华为 VibratorEx —— 五条都探不到；
+        // 重点是探不到也不许带崩整份探测
         assertThat(caps.richTapSupported).isFalse()
+        assertThat(caps.hapticPlayerSupported).isFalse()
         assertThat(caps.miuiSupported).isFalse()
         assertThat(caps.oplusSupported).isFalse()
+        assertThat(caps.huaweiSupported).isFalse()
     }
 
     @Test
@@ -287,6 +292,7 @@ class HapticCapabilitiesTest {
         // 判据是「服务非空」与「com.oplus.os.WaveformEffect 能加载」两条同时成立，
         // 服务在而类不在照样一步都走不下去
         assertThat(caps.oplusSupported).isFalse()
+        assertThat(caps.huaweiSupported).isFalse()
         // 且这个 false 是真的问过服务之后得出的，不是被前面某处短路掉的
         verify { context.getSystemService(OPLUS_LINEAR_MOTOR_SERVICE) }
     }
@@ -379,8 +385,10 @@ class HapticCapabilitiesTest {
         envelopeSupported = false,
         envelopeMaxSize = 0,
         richTapSupported = false,
+        hapticPlayerSupported = false,
         miuiSupported = false,
         oplusSupported = false,
+        huaweiSupported = false,
     )
 
     /**

@@ -630,10 +630,9 @@ fun TraktSearchScreen(
                                     } else Modifier,
                                     onClick = {
                                         interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                                        // 触感放进守卫里：没有 tmdbId 的人物点了什么也不会发生，
-                                        // 那种情况不该震（PersonSearchCard 用 Card(onClick=)，拦不到 Modifier）
+                                        // 人物卡以头像为主导，进人物页不震（用户规则：点击图片
+                                        // 无触感）；没有 tmdbId 的人物点了也不会发生任何事
                                         if (item.tmdbId > 0) {
-                                            haptics.lightTap()
                                             onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "", item.avatarColor)
                                         }
                                     }

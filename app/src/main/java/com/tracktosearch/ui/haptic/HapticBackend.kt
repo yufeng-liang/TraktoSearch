@@ -8,7 +8,8 @@ import android.view.View
  * 引擎持有一组后端，排成**两条**次序不同的降级链（规则见 [tier]：离散那条不是单纯的
  * tier 降序），对一个语义沿链逐个尝试：先看 [isAvailable] 与 [supports]，再调 [perform]，
  * 谁先返回 true 就停在谁那里；全部返回 false 就是本机发不出这个语义，静默放过，不抛异常。
- * 实现分布在四层上：RichTap 波形、厂商语义效果（MIUI 与 OPlus）、AOSP 振幅波形、AOSP 常量。
+ * 实现分布在四层上：RichTap / HapticPlayer 两条波形通路、厂商语义效果（MIUI 与 OPlus）、
+ * AOSP 振幅波形、AOSP 常量。
  *
  * 所有实现共享的红线：
  *
@@ -33,20 +34,27 @@ import android.view.View
  */
 interface HapticBackend {
     /**
-     * 3 = RichTap 波形；2 = 厂商语义效果；1 = 振幅波形；0 = AOSP 常量。
+     * 3 = 波形层（RichTap SDK 与 MiHaptic HE 两条通路）；2 = 厂商语义效果；
+     * 1 = 振幅波形；0 = AOSP 常量。
      *
-     * 数字越大表达力越强：tier 3 是唯一能画自定义波形与连续包络的一层；tier 2 是厂商自己
-     * 调过的预置效果，手感好但只能选不能画；tier 1 能自己拼振幅数组；tier 0 由 ROM 把常量
-     * 映射到线性马达，是降级链的最后一站，在 minSdk 26 上必须能独立工作。
+     * 数字越大表达力越强：tier 3 是唯一能画自定义波形与连续包络的一层（RichTap 走
+     * vendored SDK 的四点包络，HapticPlayer 走 framework 的 HE JSON —— 两条通路不同、
+     * 能力同级，哪条可用取决于 ROM：OPPO 类机器 RichTap 真包络在，小米 14 Pro 上
+     * 则只有 HE）；tier 2 是厂商自己调过的预置效果，手感好但只能选不能画；
+     * tier 1 能自己拼振幅数组；tier 0 由 ROM 把常量映射到线性马达，
+     * 是降级链的最后一站，在 minSdk 26 上必须能独立工作。
      *
      * ### 引擎的两条链，只有包络那条是 tier 降序
      *
      * 1. **离散语义**（[perform]）按 `AppHaptics.kt` 里的 `discreteRank()` 排：
      *    **tier 2 优先于 tier 3**，其余按 tier 降序 —— 实际次序是 2、3、1、0。
      *    理由是 tier 2 那些预置效果经过厂商自己调音，手感好过我们在 tier 3 上拼出来的波形。
-     * 2. **连续包络**（[playEnvelope]）严格按 tier 降序 —— 次序 3、2、1、0。
-     *    只有 tier 3 与 tier 1 真能播（tier 2 是固定预置效果、tier 0 只有常量，两者恒返
-     *    false），而 tier 3 的 [playEnvelope] 表达力更强，所以两层都可用时落在 tier 3。
+     * 2. **连续包络**（[playEnvelope]）按 tier 降序 —— 次序 3、2、1、0，但**厂商层
+     *    （tier 2）可用时跳过 tier 1**（真机反馈：`createWaveform` 的通用波形在线性
+     *    马达机型上是转子式的「普通震动」，宁可让引擎返 false 退离散替身，见
+     *    `AppHaptics.playEnvelope`）。只有 tier 3 与 tier 1 真能播（tier 2 是固定预置
+     *    效果、tier 0 只有常量，两者恒返 false），而 tier 3 的 [playEnvelope] 表达力
+     *    更强，所以两层都可用时落在 tier 3。
      *
      * 第 1 条不是笔误：**改这个顺序前先读设计文档
      * docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「厂商通路矩阵」末段那条裁定**
@@ -109,11 +117,19 @@ interface HapticBackend {
      * 反射与厂商 IPC 投到单线程 `Executor` 后本方法立即返回，
      * 所以 true 表示"已派发"，不表示"马达已经震完"。
      *
+     * [strength] 是档位带来的强度（轻/跟随系统/强），各层自行映射：MIUI String 通路
+     * 传官方强度档 0/-100/2，RichTap 与 tier 1 乘系数，tier 0 没有强度通道则忽略。
+     * [HapticStrength.SYSTEM] 是「不干预」——用 ROM 自己的默认强度，那才是厂商调好的。
+     * 强度**不改变语义**：`LIGHT` 档下发的是同一个语义、同一个效果，只是更轻；
+     * 用语义上移去实现轻重（换效果）会改变效果性格，已被 2026-09-09 裁定废止。
+     *
      * @param view 需要 View 通道的后端（AOSP 常量）用它；其余后端可忽略。
      *   为 null 时依赖 View 通道的后端返回 false，不要自己去翻找一个 View。
+     * @param semantic 派发的语义，引擎不做改写
+     * @param strength 档位强度；由引擎按 [HapticMode] 算出（或调用方显式指定用于试听）
      * @return true 已派发；false 本次失败，调用方应降级
      */
-    fun perform(view: View?, semantic: HapticSemantic): Boolean
+    fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean
 
     /**
      * 播一段连续振幅包络（彩蛋用）。

@@ -549,10 +549,12 @@
     <string name="settings_haptic">Haptic Feedback</string>
     <string name="settings_haptic_follow_system">Follow system</string>
     <string name="settings_haptic_off">Off</string>
-    <string name="settings_haptic_boost">Enhanced</string>
+    <string name="settings_haptic_light">Light</string>
+    <string name="settings_haptic_boost">Strong</string>
     <string name="settings_haptic_follow_system_desc">Normal app haptics, at the strength set in your system settings.</string>
     <string name="settings_haptic_off_desc">No vibration anywhere in the app, including the easter egg.</string>
-    <string name="settings_haptic_boost_desc">Move every effect up one step. Absolute strength still comes from your system settings.</string>
+    <string name="settings_haptic_light_desc">All haptics one step lighter, for when vibrations feel too strong.</string>
+    <string name="settings_haptic_boost_desc">All haptics one step heavier, still limited by the system haptic switch.</string>
     <string name="settings_haptic_system_disabled">System haptics are off, so the app cannot vibrate.</string>
     <string name="settings_haptic_no_vibrator">This device has no vibration motor.</string>
     <string name="settings_haptic_open_system_settings">Open system settings</string>

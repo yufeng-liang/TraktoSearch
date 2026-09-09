@@ -171,13 +171,17 @@ class ComposeHaptics internal constructor(
      * 直接调它的是那些手里只有一个 [HapticSemantic] 值的调用方 —— 主要是
      * [hapticClickable] 这类把语义当参数收的 `Modifier` 扩展。
      *
+     * [strength] 只给试听场景用：设置页选中某档那一刻新档位还没落盘到引擎，
+     * 传该档的强度先放一记，当场对比轻重。日常调用不传，引擎按档位现值算；
+     * 显式强度同样过档位与系统总开关两道闸。
+     *
      * 不返回是否成功，理由见类注释第 2 条。
      *
      * 注意本方法**不过 [frequentTick] 那道节流**：传 [HapticSemantic.FREQUENT_TICK] 进来
      * 是原样派发的。连发场景请调 [frequentTick]。
      */
-    fun perform(semantic: HapticSemantic) {
-        engine()?.perform(view, semantic)
+    fun perform(semantic: HapticSemantic, strength: HapticStrength? = null) {
+        engine()?.perform(view, semantic, strength)
     }
 
     private companion object {
@@ -239,16 +243,28 @@ fun rememberAppHaptics(): ComposeHaptics {
  *
  * @param semantic 这次点击是什么交互。默认 [HapticSemantic.TAP]，也就是「普通按钮」那一档；
  *   一屏里反复出现的列表项请显式传 [HapticSemantic.LIGHT_TAP]，不然整屏都是顶档点击。
+ *   **传 null 表示这一次是「看图」类点击（海报、剧照、头像、全屏查看器）**：
+ *   用户规则「点击图片不应该有触感」—— 点图是浏览不是操作，不震；参数保持原样透传，
+ *   只是不发那一记。长按（[hapticCombinedClickable]）不受影响，长按进多选/预览仍是操作。
  */
 @Composable
 fun Modifier.hapticClickable(
-    semantic: HapticSemantic = HapticSemantic.TAP,
+    semantic: HapticSemantic? = HapticSemantic.TAP,
     enabled: Boolean = true,
     onClickLabel: String? = null,
     role: Role? = null,
     interactionSource: MutableInteractionSource? = null,
     onClick: () -> Unit,
 ): Modifier {
+    if (semantic == null) {
+        return this.clickable(
+            enabled = enabled,
+            onClickLabel = onClickLabel,
+            role = role,
+            interactionSource = interactionSource,
+            onClick = onClick,
+        )
+    }
     val haptics = rememberAppHaptics()
     return this.clickable(
         enabled = enabled,
@@ -270,20 +286,32 @@ fun Modifier.hapticClickable(
  * [interactionSource] 与 [indication] 无默认值，正是它们把这个重载和另一个区分开：
  * 少了任一个都只有另一个重载适用，编译器不会歧义。
  *
- * 触感时机、`enabled` 与挡板的注意事项同另一个重载。
+ * 触感时机、`enabled` 与挡板的注意事项同另一个重载；`semantic` 的 null 语义也相同
+ * （看图类点击不震）。
  *
- * @param semantic 这次点击是什么交互，默认 [HapticSemantic.TAP]。
+ * @param semantic 这次点击是什么交互，默认 [HapticSemantic.TAP]；传 null 表示「看图」类
+ *   点击，不震。
  */
 @Composable
 fun Modifier.hapticClickable(
     interactionSource: MutableInteractionSource?,
     indication: Indication?,
-    semantic: HapticSemantic = HapticSemantic.TAP,
+    semantic: HapticSemantic? = HapticSemantic.TAP,
     enabled: Boolean = true,
     onClickLabel: String? = null,
     role: Role? = null,
     onClick: () -> Unit,
 ): Modifier {
+    if (semantic == null) {
+        return this.clickable(
+            interactionSource = interactionSource,
+            indication = indication,
+            enabled = enabled,
+            onClickLabel = onClickLabel,
+            role = role,
+            onClick = onClick,
+        )
+    }
     val haptics = rememberAppHaptics()
     return this.clickable(
         interactionSource = interactionSource,
@@ -324,7 +352,8 @@ fun Modifier.hapticClickable(
  * `onDoubleClick` lambda 里调 [rememberAppHaptics] 拿到的实例发一记，别往本函数加参数 ——
  * 加了就得先在语义词表里给双击定个位置。
  *
- * @param semantic 普通点击的语义，默认 [HapticSemantic.TAP]。
+ * @param semantic 普通点击的语义，默认 [HapticSemantic.TAP]。**传 null 表示「看图」类点击
+ *   不震**（海报卡、剧照、头像等）—— 长按那一记不受影响，长按进多选/预览仍是操作。
  * @param longPressSemantic 长按的语义，默认 [HapticSemantic.DRAG_START]（沉的一记「抓住了」）。
  *   传 null 表示长按静默 —— 长按之后紧接着弹出的面板自己会发 [HapticSemantic.POPUP_SHOW] 时用得上，
  *   否则两记会挤在一起。[onLongClick] 为 null 时本参数无效。
@@ -333,7 +362,7 @@ fun Modifier.hapticClickable(
 fun Modifier.hapticCombinedClickable(
     interactionSource: MutableInteractionSource?,
     indication: Indication?,
-    semantic: HapticSemantic = HapticSemantic.TAP,
+    semantic: HapticSemantic? = HapticSemantic.TAP,
     longPressSemantic: HapticSemantic? = HapticSemantic.DRAG_START,
     enabled: Boolean = true,
     onClickLabel: String? = null,
@@ -361,7 +390,7 @@ fun Modifier.hapticCombinedClickable(
         // 见 KDoc：关掉 Compose 内建的长按触感，那一记改由上面的 onLongClick 包装发
         hapticFeedbackEnabled = false,
     ) {
-        haptics.perform(semantic)
+        semantic?.let(haptics::perform)
         onClick()
     }
 }

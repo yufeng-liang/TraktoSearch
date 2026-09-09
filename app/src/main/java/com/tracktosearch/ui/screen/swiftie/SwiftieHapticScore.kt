@@ -385,8 +385,11 @@ private fun signatureHapticWindows(): List<SignatureWindow> = buildSignatureWind
  * 与屏幕上笔尖的走停严格同步。
  *
  * 这条包络**必然是多峰的**（0.25 / 0 / 0.25 / 0 …），所以 RichTap 那层接不下 ——
- * `richTapEnvelopeOf` 只收单峰、且会重采样成 4 个控制点。它会返回 false，
- * 引擎接着往下降到 tier 1 的 `createWaveform`，那条路对控制点数与形状都不设限。
+ * `richTapEnvelopeOf` 只收单峰、且会重采样成 4 个控制点，老实返回 false。多峰在
+ * MiHaptic 的 HE 通路上不是问题：`hapticPlayerPatternOf` 把每个非零段转成一个
+ * continuous event，归零间隙天然成为静默 —— 目标机（小米 14 Pro）上这条包络正落在
+ * 那里（2026-09-08 真机实播验证）。HE 也不可用的机器由引擎按「厂商层可用时跳过
+ * tier 1」的策略定落点，见 `AppHaptics.playEnvelope`。
  *
  * 频率没有通道可用：目标机的 `frequencyProfile` 全是 NaN，`playEnvelope` 只接振幅，
  * 所以设计文档里「`tipYAt()` 映射到频率」这一半落不了地，见回报。
@@ -455,7 +458,8 @@ private fun signatureCues(): List<SwiftieHapticCue> {
  *
  * 余震包络的振幅直接取 `braceletSwayDegrees` 的绝对值除以 `BRACELET_SWAY_MAX_DEG` ——
  * 和屏幕上那条 `exp(-2.4t) · sin(4πt)` 是同一条曲线，不另抄一份。
- * 它同样是多峰的（|sin| 在 1700ms 里过四个峰），所以也只有 tier 1 接得下。
+ * 它同样是多峰的（|sin| 在 1700ms 里过四个峰），RichTap 接不下；HE 通路上它反而整段
+ * 保留 —— |sin| 的采样不过零，整条是一个非零 run，转成一条 16 点曲线。落点规则同签名段。
  * **起点比末记落地晚一格**，理由见下面的行内注释。
  *
  * 表里还有一行「可拖交互逐珠划过」不在谱子里：那是手指驱动的，不是时间驱动的，
@@ -539,7 +543,8 @@ private fun rewindCues(): List<SwiftieHapticCue> {
  * Lover 绽放：全曲最重一笔，一条 0→0.85→0 的慢升包络压着配乐里那句 Lover。
  *
  * 这一条是单峰的，所以 RichTap 那层接得下（重采样成 4 点，峰值落在中间两位）；
- * 也是整条序列里唯一一段两层都播得出来的包络。
+ * RichTap 包络通路不存在的机器上还有 MiHaptic HE 兜着（单 event 曲线），两头都没有
+ * 才按引擎侧 `AppHaptics.playEnvelope` 的规则退替身。
  *
  * 替身按表里的「最低层」`PRIMITIVE_SLOW_RISE` + `CLICK` 拆成两记：起点一记
  * `thresholdArmed()`（tier 1 的 `QUICK_RISE`，四层里最接近 `SLOW_RISE` 的上冲），

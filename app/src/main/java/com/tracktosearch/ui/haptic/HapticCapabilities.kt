@@ -11,8 +11,8 @@ import com.apprichtap.haptic.RichTapUtils
  * 一台设备的触感能力快照：四层引擎靠它决定哪几层能上场。
  *
  * 设备能力在运行期不变，所以整个进程只需 [probe] 一次，结果由调用方（引擎）持有 ——
- * 本类自己不缓存。九个字段的名字与顺序是与四个 backend 的契约，构造时全部具名传入，
- * backend 侧也按名取用：九个 Boolean / Int 挤在一起，位置传参改一次顺序就是一场静默事故。
+ * 本类自己不缓存。十一个字段的名字与顺序是与各 backend 的契约，构造时全部具名传入，
+ * backend 侧也按名取用：十一个 Boolean / Int 挤在一起，位置传参改一次顺序就是一场静默事故。
  *
  * 探测只描述事实，不含策略。唯一的策略是 [lockedToConstants]：无振幅控制的转子马达锁 tier 0。
  * 「哪个语义走哪一层」由各 backend 的 `supports` 结合本快照判断，本类不掺和；
@@ -97,6 +97,20 @@ data class HapticCapabilities(
      */
     val richTapSupported: Boolean,
     /**
+     * MiHaptic / IEEE 2861.3 的 HE 波形通路可用否。反射静态无参
+     * `android.os.HapticPlayer.isAvailable()`。
+     *
+     * 小米 HyperOS、vivo OriginOS、三星 One UI 等把 `DynamicEffect` / `HapticPlayer`
+     * 放进了 framework（微信的细腻触感走的就是它）。目标机实测为 true，而这台机上
+     * RichTap 的包络通路不存在（`createEnvelope` 三个候选类全缺）—— HE 因此是它
+     * 唯一画得出连续包络的通路，`HapticPlayerBackend` 的存在理由。
+     *
+     * 为 true 只代表类在且静态判定通过；`DynamicEffect.create` / 构造器 / `start`
+     * 的方法签名由 `HapticPlayerBackend` 在自己的单线程上逐个解析，任何一个查不到
+     * 整层禁用。
+     */
+    val hapticPlayerSupported: Boolean,
+    /**
      * MIUI / HyperOS 的线性马达通路可用否。反射静态无参
      * `miui.util.HapticFeedbackUtil.isSupportLinearMotorVibrate()`。
      *
@@ -114,6 +128,16 @@ data class HapticCapabilities(
      * 并在首次调用失败后整层禁用，不要每次重试。
      */
     val oplusSupported: Boolean,
+    /**
+     * 华为（EMUI / AOSP 底的 HarmonyOS）的线性马达通路可用否。
+     *
+     * 判据只有类存在性：`Class.forName("com.huawei.android.os.VibratorEx")` 能加载。
+     * 真类在华为 framework 的 boot classpath 上；官方 hapticskit aar 里那个同名类是
+     * 空壳 stub，我们没有打包，所以非华为机型这一步就抛 `ClassNotFoundException`
+     * 出局，整层零开销。逐效果可用性由 backend 对 `haptic.*` 键逐个调
+     * `isSupportHwVibrator` 探测并缓存——华为是三家里唯一给了逐效果探测接口的。
+     */
+    val huaweiSupported: Boolean,
 ) {
     /** 转子马达：无振幅控制 → 锁 tier 0（硬规则 1） */
     val lockedToConstants: Boolean get() = !hasAmplitudeControl
@@ -148,8 +172,10 @@ data class HapticCapabilities(
                     envelopeSupported = false,
                     envelopeMaxSize = 0,
                     richTapSupported = false,
+                    hapticPlayerSupported = false,
                     miuiSupported = false,
                     oplusSupported = false,
+                    huaweiSupported = false,
                 )
             }
             // 先算出被后面几项复用的两个结果，避免重复 IPC
@@ -163,8 +189,10 @@ data class HapticCapabilities(
                 envelopeSupported = envelopeSupported,
                 envelopeMaxSize = probeEnvelopeMaxSize(vibrator, envelopeSupported),
                 richTapSupported = probeRichTapSupported(),
+                hapticPlayerSupported = probeHapticPlayerSupported(),
                 miuiSupported = probeMiuiSupported(),
                 oplusSupported = probeOplusSupported(context),
+                huaweiSupported = probeHuaweiSupported(),
             )
         }
 
@@ -176,6 +204,12 @@ data class HapticCapabilities(
 
         /** ColorOS 波形效果类，只做存在性判定，不触发静态初始化。 */
         private const val OPLUS_WAVEFORM_EFFECT = "com.oplus.os.WaveformEffect"
+
+        /** 华为线性马达扩展类，boot classpath 上的真类；非华为机 forName 即失败。 */
+        private const val HUAWEI_VIBRATOR_EX = "com.huawei.android.os.VibratorEx"
+
+        /** MiHaptic / IEEE 2861.3 的播放器类，反射用；类名是协议规定死的。 */
+        private const val HAPTIC_PLAYER = "android.os.HapticPlayer"
 
         /**
          * 反射拿不到 `getCompositionSizeMax()` 时用的保守容量。
@@ -375,6 +409,20 @@ data class HapticCapabilities(
         }
 
         /**
+         * 反射静态无参 `android.os.HapticPlayer.isAvailable()`（IEEE 2861.3 规定的类名）。
+         *
+         * 类不在（非 MiHaptic 机型）抛 `ClassNotFoundException`，静态判定返 false 的
+         * （ROM 有类但马达通路没就绪）都退成 false。方法签名由 `HapticPlayerBackend`
+         * 在自己的单线程上继续解析，这里只做这一道便宜的总闸。
+         */
+        private fun probeHapticPlayerSupported(): Boolean = try {
+            val method = Class.forName(HAPTIC_PLAYER).getMethod("isAvailable")
+            (method.invoke(null) as? Boolean) == true
+        } catch (_: Throwable) {
+            false
+        }
+
+        /**
          * ColorOS：`getSystemService("linearmotor")` 非空 **且** `com.oplus.os.WaveformEffect` 可加载。
          *
          * 顺序有意如此 —— 先问服务，非 ColorOS 机型第一步就出局，省一次
@@ -388,6 +436,23 @@ data class HapticCapabilities(
                 Class.forName(OPLUS_WAVEFORM_EFFECT, false, context.classLoader)
                 true
             }
+        } catch (_: Throwable) {
+            false
+        }
+
+        /**
+         * 华为：`Class.forName("com.huawei.android.os.VibratorEx")` 能加载即这一层有戏。
+         *
+         * 只判类存在性，不实例化、不逐键问——那两步是 `HuaweiBackend` 在自己的单线程上
+         * 做的（13 个键的 `isSupportHwVibrator` 是 13 次 binder 往返，不该让所有机型
+         * 在启动预热里陪着付）。类查找传 `initialize = false`：这里用不到静态成员，
+         * 不触发对方的静态初始化。loader 传 `null`（bootstrap）：真类在华为 framework
+         * 的 boot classpath 上，本来就归它加载；华为设备解析到真类，非华为设备直接
+         * `ClassNotFoundException` 退 false。
+         */
+        private fun probeHuaweiSupported(): Boolean = try {
+            Class.forName(HUAWEI_VIBRATOR_EX, false, null)
+            true
         } catch (_: Throwable) {
             false
         }

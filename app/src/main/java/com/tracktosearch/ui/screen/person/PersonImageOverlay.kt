@@ -41,7 +41,6 @@ import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.recordOpenImageBounds
 import com.tracktosearch.ui.component.rememberOpenImageBounds
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 
@@ -131,8 +130,8 @@ internal fun AllPersonImagesPanel(
                             .clip(RoundedCornerShape(6.dp))
                             // 记录该格的 window 矩形，OpenImage 打开动画以它为落点
                             .recordOpenImageBounds(index, gridBounds)
-                            // 网格项进查看器，按列表项给轻一档
-                            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                            // 网格项进全屏查看器是看图，不震（用户规则：点击图片无触感）
+                            .hapticClickable(semantic = null) {
                                 val currentActivity = activity
                                 if (currentActivity != null) {
                                     openImageViewer(
