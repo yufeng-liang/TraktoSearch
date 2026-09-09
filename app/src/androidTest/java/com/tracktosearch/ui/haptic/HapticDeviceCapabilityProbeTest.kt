@@ -9,6 +9,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.backend.AospConstantsBackend
 import com.tracktosearch.ui.haptic.backend.AospWaveformBackend
+import com.tracktosearch.ui.haptic.backend.HapticPlayerBackend
 import com.tracktosearch.ui.haptic.backend.MiuiBackend
 import com.tracktosearch.ui.haptic.backend.OplusBackend
 import com.tracktosearch.ui.haptic.backend.RichTapBackend
@@ -60,16 +61,17 @@ class HapticDeviceCapabilityProbeTest {
     }
 
     /**
-     * 五层各自的 `isAvailable()` 与语义覆盖。
+     * 六层各自的 `isAvailable()` 与语义覆盖。
      *
      * 逐层问而不是只问 [AppHaptics]：门面只告诉你「有人接了」，
      * 而计划里要记的是「**哪一层**接的、每层各覆盖了哪些语义」。
      */
     @Test
-    fun 打印五层的可用性与语义覆盖() {
+    fun 打印六层的可用性与语义覆盖() {
         val capabilities = HapticCapabilities.probe(context)
         val backends = listOf(
             RichTapBackend(context, capabilities),
+            HapticPlayerBackend(capabilities),
             MiuiBackend(context, capabilities),
             OplusBackend(context, capabilities),
             AospWaveformBackend(context, capabilities),
@@ -90,6 +92,21 @@ class HapticDeviceCapabilityProbeTest {
                     "tier=${backend.tier} ${backend.javaClass.simpleName} " +
                         "available=$available supports=${supported.size}/${HapticSemantic.entries.size} $supported"
                 )
+            }
+
+            // 包络链的两条 tier 3 通路谁真的接得住包络，顺带问一句
+            runCatching {
+                val he = HapticPlayerBackend(capabilities)
+                try {
+                    he.isAvailable()
+                    Thread.sleep(PROBE_SETTLE_MS)
+                    report(
+                        "HapticPlayerBackend.playEnvelope 两段包络=" +
+                            he.playEnvelope(intArrayOf(60, 60), floatArrayOf(0.3f, 0f)),
+                    )
+                } finally {
+                    he.release()
+                }
             }
 
             val covered = HapticSemantic.entries.filter { semantic ->
@@ -212,6 +229,178 @@ class HapticDeviceCapabilityProbeTest {
             if (capabilities.lockedToConstants) {
                 assertWithMessage("转子马达机型上 tier 1 不该可用").that(available).isFalse()
             }
+        } finally {
+            backend.release()
+        }
+    }
+
+    /**
+     * HyperOS 上 26 个 0x10000000 段 ID 全被拒时的诊断实验（2026-09-09 真机发现）：
+     * 1) 构造器第二参换成 false 再探一遍；
+     * 2) 小整数段 0..64 逐个探——微信在 dumpsys 里是 `effectId=8;keyword=MIUI_SDK`，
+     *    怀疑 HyperOS 3 的扩展 ID 换了段；
+     * 3) 打印 HapticFeedbackUtil 的全部公开方法（找 isSupportHapticVersion2 这类新口子）；
+     * 4) 无视探测结果直接 performExtHapticFeedback(0x10000001) 一次，事后用
+     *    dumpsys vibrator_manager 查有没有真震（isSupport 可能只是口径变了）。
+     */
+    @Test
+    fun 诊断MIUI扩展ID被全拒的原因() {
+        val failure = runCatching {
+            val clazz = Class.forName("miui.util.HapticFeedbackUtil")
+            report("methods=${clazz.methods.map { "${it.name}(${it.parameterTypes.joinToString(",") { p -> p.simpleName }})" }.sorted().joinToString(" | ")}")
+
+            val ctorFlagFalse = clazz
+                .getConstructor(Context::class.java, Boolean::class.javaPrimitiveType)
+                .newInstance(context, false)
+            val isSupportExt = clazz.getMethod("isSupportExtHapticFeedback", Int::class.javaPrimitiveType)
+
+            val extIdsWithFalseCtor = (MIUI_ID_FIRST..MIUI_ID_LAST).count {
+                runCatching { isSupportExt.invoke(ctorFlagFalse, it) as? Boolean == true }.getOrDefault(false)
+            }
+            report("ctor=false 时 26 个 0x10000000 段 ID 支持=$extIdsWithFalseCtor")
+
+            val smallSupported = (0..64).filter { id ->
+                runCatching { isSupportExt.invoke(ctorFlagFalse, id) as? Boolean == true }.getOrDefault(false)
+            }
+            report("ctor=false 时 0..64 段支持的 ID=$smallSupported")
+
+            val ctorFlagTrue = clazz
+                .getConstructor(Context::class.java, Boolean::class.javaPrimitiveType)
+                .newInstance(context, true)
+            val smallSupportedTrue = (0..64).filter { id ->
+                runCatching { isSupportExt.invoke(ctorFlagTrue, id) as? Boolean == true }.getOrDefault(false)
+            }
+            report("ctor=true 时 0..64 段支持的 ID=$smallSupportedTrue")
+
+            // 无视探测直接派一记标准点击，之后在 PC 侧用 dumpsys 查结果
+            val performExt = clazz.getMethod("performExtHapticFeedback", Int::class.javaPrimitiveType)
+            val fired = runCatching { performExt.invoke(ctorFlagTrue, MIUI_ID_FIRST + 1) }.exceptionOrNull()
+            report("performExtHapticFeedback(0x10000001) 异常=${fired?.let { "${it.javaClass.simpleName}: ${it.message}" } ?: "无（看 dumpsys 有没有真震）"}")
+        }.exceptionOrNull()
+        if (failure != null) report("诊断失败：${failure.javaClass.simpleName}: ${failure.message}")
+    }
+
+    /**
+     * HyperOS 小整数段 ID 的名字表与实弹验证：
+     * 1) 反射打印 HapticFeedbackUtil / miui.view.MiuiHapticFeedbackConstants /
+     *    miuix.view.HapticFeedbackConstants 的全部 public static 字段（官方常量名与取值）；
+     * 2) isSupportedEffect(0..64) 与 isSupportExtHapticFeedback 的对照；
+     * 3) performExtHapticFeedback(8) 实弹一记（dumpsys 里微信就是 effectId=8）。
+     */
+    @Test
+    fun 打印MIUI常量表并实弹小ID() {
+        runCatching {
+            for (name in listOf(
+                "miui.util.HapticFeedbackUtil",
+                "miui.view.MiuiHapticFeedbackConstants",
+                "miuix.view.HapticFeedbackConstants",
+                "miui.view.HapticFeedbackConstants",
+            )) {
+                val clazz = runCatching { Class.forName(name) }.getOrNull() ?: continue
+                val fields = clazz.fields
+                    .filter { java.lang.reflect.Modifier.isStatic(it.modifiers) }
+                    .sortedBy { runCatching { it.get(null).toString() }.getOrDefault("") }
+                report("${clazz.name} 共 ${fields.size} 个静态字段")
+                fields.forEach { field ->
+                    runCatching { report("  ${clazz.simpleName}.${field.name} = ${field.get(null)}") }
+                }
+            }
+
+            val utilClass = Class.forName("miui.util.HapticFeedbackUtil")
+            val instance = utilClass
+                .getConstructor(Context::class.java, Boolean::class.javaPrimitiveType)
+                .newInstance(context, true)
+            val isSupportedEffect = utilClass.getMethod("isSupportedEffect", Int::class.javaPrimitiveType)
+            val supportedEffect = (0..64).filter { id ->
+                runCatching { isSupportedEffect.invoke(instance, id) as? Boolean == true }.getOrDefault(false)
+            }
+            report("isSupportedEffect(0..64) 支持的 ID=$supportedEffect")
+
+            // 实弹：小 ID 8 走 ext 通路（之后在 PC 侧查 dumpsys）
+            val performExt = utilClass.getMethod("performExtHapticFeedback", Int::class.javaPrimitiveType)
+            val fired8 = runCatching { performExt.invoke(instance, 8) }.exceptionOrNull()
+            report(
+                "performExtHapticFeedback(8) 异常=" +
+                    (fired8?.let { "${it.javaClass.simpleName}: ${it.message}" } ?: "无（看 dumpsys）"),
+            )
+        }.onFailure { report("诊断失败：${it.javaClass.simpleName}: ${it.message}") }
+    }
+
+    /**
+     * String 键 API（HyperOS 3 现行口子）实弹：`performHapticFeedback(key, boolean)` 与
+     * `(key, boolean, int strength)`。微信 dumpsys 里 `keyword=MIUI_SDK;effectId=8;
+     * TAG=haptic_feedback_config_strength` 疑似就是这条路的框架侧痕迹。
+     * 每个变体打返回值，之后在 PC 侧查 dumpsys 是否出现 keyword=MIUI_SDK 的新记录。
+     */
+    @Test
+    fun 实弹MIUI字符串键API() {
+        runCatching {
+            // MIUI 疑似按「进程有没有前台 Activity」抑制三方触感（instrumentation 默认
+            // 无界面）。异步把主界面拉起来再开火；startActivitySync 会等主线程空闲，
+            // 开屏动画不放行，45 秒必超时。
+            context.startActivity(
+                android.content.Intent(context, Class.forName("com.tracktosearch.MainActivity"))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            Thread.sleep(4000)
+
+            val utilClass = Class.forName("miui.util.HapticFeedbackUtil")
+            val instance = utilClass
+                .getConstructor(Context::class.java, Boolean::class.javaPrimitiveType)
+                .newInstance(context, true)
+
+            fun fire(method: String, vararg args: Any?) {
+                val m = when (args.size) {
+                    2 -> utilClass.getMethod(method, String::class.java, Boolean::class.javaPrimitiveType)
+                    3 -> utilClass.getMethod(
+                        method,
+                        String::class.java,
+                        Boolean::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                    )
+                    else -> error("只支持两参/三参")
+                }
+                val result = runCatching { m.invoke(instance, *args) }
+                report(
+                    "$method(${args.joinToString(",")}) -> " +
+                        (result.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }
+                            ?: "返回 ${result.getOrNull()}"),
+                )
+            }
+
+            fire("performHapticFeedback", "tap_normal", true)
+            Thread.sleep(600)
+            fire("performHapticFeedback", "tap_normal", false)
+            Thread.sleep(600)
+            fire("performHapticFeedback", "gear_light", true)
+            Thread.sleep(600)
+            fire("performHapticFeedback", "switch", true, 50)
+            Thread.sleep(600)
+            fire("performHapticFeedback", "button_large", true)
+        }.onFailure { report("诊断失败：${it.javaClass.simpleName}: ${it.message}") }
+    }
+
+    /**
+     * 对照组：同条件下打一记 RichTap 预置效果（昨晚已验证这条通路能震、能进 dumpsys）。
+     * 用于区分「String 键 API 没震」到底是锁屏抑制还是通路本身死。
+     */
+    @Test
+    fun 对照实弹RichTap预置() {
+        val capabilities = HapticCapabilities.probe(context)
+        // 同样先拉起前台 Activity，排除「无前台界面被 MIUI 抑制」的干扰；
+        // 异步启动 + 等待，理由见上
+        context.startActivity(
+            android.content.Intent(context, Class.forName("com.tracktosearch.MainActivity"))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        Thread.sleep(4000)
+        val backend = RichTapBackend(context, capabilities)
+        try {
+            backend.isAvailable()
+            Thread.sleep(PROBE_SETTLE_MS)
+            val dispatched = backend.perform(null, HapticSemantic.CONFIRM)
+            report("RichTap perform(CONFIRM) 派发=$dispatched（等 dumpsys 对照）")
+            Thread.sleep(1500)
         } finally {
             backend.release()
         }
