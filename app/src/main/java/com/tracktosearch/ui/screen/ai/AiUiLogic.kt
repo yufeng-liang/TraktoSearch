@@ -14,6 +14,7 @@ import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.ai.AiWatchedTitleDto
+import java.util.Locale
 import kotlin.math.log10
 import kotlin.random.Random
 
@@ -607,8 +608,8 @@ fun quizCorrectAnswerText(
     val optionLabels = result.correctOptionIds.mapNotNull { correctId ->
         question?.options?.firstOrNull { it.id == correctId }?.text
     }
-    return optionLabels.joinToString(separator).takeIf { it.isNotBlank() }
-        ?: result.correctAnswer?.trim()?.takeIf { it.isNotBlank() }
+    return joinQuizOptionTexts(optionLabels, separator).takeIf { it.isNotBlank() }
+        ?: result.correctAnswer?.trim()?.takeIf { it.isNotBlank() }?.let(::cleanLegacyJoinedAnswerText)
 }
 
 fun quizProgress(current: Int, total: Int): Float {
@@ -623,3 +624,91 @@ fun localQuestionScore(type: AiQuizQuestionType, answered: Boolean): Int {
         AiQuizQuestionType.MULTIPLE, AiQuizQuestionType.SHORT -> 10
     }
 }
+
+
+/**
+ * 复盘/答案拼接：逐项去掉选项文本末尾的句读标点再连接。
+ * 服务端多选题选项可能以「。」等结尾，直接拼会得到「A。、B。」。
+ */
+fun stripTrailingOptionPunctuation(text: String): String =
+    text.trim().trimEnd('。', '．', '.', '！', '!', '？', '?', '；', ';', '，', ',', '、')
+
+/**
+ * 兼容老缓存：服务端数组答案可能已拼成「A。、B。」一整段（选项以句号结尾再插分隔符）。
+ * 先清掉紧贴分隔符前面的句读标点，再去掉整段尾部标点。
+ */
+fun cleanLegacyJoinedAnswerText(text: String): String =
+    stripTrailingOptionPunctuation(
+        text.replace(Regex("[。．.!！?？]+(?=[、,，;；])"), "")
+    )
+
+fun joinQuizOptionTexts(labels: List<String>, separator: String): String =
+    labels.joinToString(separator) { stripTrailingOptionPunctuation(it) }
+
+/**
+ * 预览列表只替换展示标题；传给 Worker 的仍是 [AiWatchedTitleDto.title] 原始值。
+ * 类型参与 key，避免电影和剧集使用相同 ID 时互相覆盖本地化标题。
+ */
+fun localizedQuizPreviewTitle(
+    movie: AiWatchedTitleDto,
+    localizedTitles: Map<String, String>
+): String = localizedTitles[quizMediaKey(movie.mediaType, movie.mediaId)]
+    ?.takeIf { it.isNotBlank() }
+    // 兼容旧状态中仍以原始 mediaType 保存的标题映射。
+    ?: localizedTitles["${movie.mediaType}:${movie.mediaId}"]
+        ?.takeIf { it.isNotBlank() }
+    ?: movie.title
+
+/**
+ * 答题页顶部「本轮涉及」片名清单：优先复用选题页的本地化标题，
+ * 让顶部语言与选题页一致；匹配不到本地化数据时保留服务端原标题。
+ * 顺序跟随 mediaTitles，并做去重（模型偶尔会重复列出同一部片）。
+ */
+fun localizedQuizRoundTitles(
+    mediaTitles: List<String>,
+    movies: List<AiWatchedTitleDto>,
+    localizedTitles: Map<String, String>
+): List<String> {
+    if (mediaTitles.isEmpty()) return emptyList()
+    val byTitle = movies.associateBy { it.title.trim().lowercase(Locale.ROOT) }
+    val byOriginalTitle = movies.associateBy { it.originalTitle.trim().lowercase(Locale.ROOT) }
+    val seen = mutableSetOf<String>()
+    return mediaTitles.mapNotNull { rawTitle ->
+        val key = rawTitle.trim().lowercase(Locale.ROOT)
+        val movie = byTitle[key] ?: byOriginalTitle[key]
+        val display = movie?.let { localizedQuizPreviewTitle(it, localizedTitles) }
+            ?.takeIf { it.isNotBlank() }
+            ?: rawTitle.trim()
+        if (display.isBlank()) {
+            null
+        } else if (seen.add(display.lowercase(Locale.ROOT))) {
+            display
+        } else {
+            null
+        }
+    }
+}
+
+/**
+ * 顶部标题去重：模型 subtitle 往往是「本轮涉及：…」的开场白，只有它把
+ * mediaTitles 里的全部片名都复述了一遍，才判定为重复行，交给本地化片名清单统一展示；
+ * 只提个别片名或另有补充信息的副标题保留，避免误删有效说明。
+ */
+fun quizRoundSubtitleDuplicatesMediaTitles(subtitle: String, mediaTitles: List<String>): Boolean {
+    val titles = mediaTitles.map { it.trim() }.filter { it.isNotBlank() }
+    if (subtitle.isBlank() || titles.isEmpty()) return false
+    val text = subtitle.lowercase(Locale.ROOT)
+    return titles.all { text.contains(it.lowercase(Locale.ROOT)) }
+}
+
+/**
+ * 来源区块渲染条件：name/url/证据/发布日期四项全空时不留空壳，
+ * 有任意一项就渲染（url 为空时退化为纯文字来源，不展示可点击链接）。
+ */
+fun dailySourceBlockHasContent(
+    sourceName: String,
+    sourceUrl: String,
+    sourceEvidence: String,
+    publishedAt: Long?
+): Boolean = sourceName.isNotBlank() || sourceUrl.isNotBlank() ||
+    sourceEvidence.isNotBlank() || publishedAt != null

@@ -51,11 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiQuiz
@@ -73,7 +75,9 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 
 /** 单选题选中后展示选中态的时长，之后自动进入下一题。 */
-private const val QUIZ_AUTO_ADVANCE_DELAY_MS = 600L
+// 权衡：单选没有本地判分反馈，600ms 实测看不清选中就跳；提到 1000ms 并配合
+// ChoiceRow 的选中高亮，用户来得及确认自己选了哪项，又不必每题手动「下一题」拖慢 13 题节奏。
+private const val QUIZ_AUTO_ADVANCE_DELAY_MS = 1000L
 
 /** 闯关流程阶段，AnimatedContent 按 phase 切换预览/答题/出分。 */
 private enum class QuizPhase { PREVIEW, QUESTIONS, RESULT, UNAVAILABLE }
@@ -161,7 +165,7 @@ private fun QuizQuestionScreen(
     }
 
     // 自动跳题是加速路径不是替换：仅单选题从无到有选中时触发，
-    // 600ms 展示选中态（判分在服务端，本地没有对错反馈）后切下一题；手动「下一题」仍保留。
+    // 展示选中态（判分在服务端，本地没有对错反馈）后切下一题；手动「下一题」仍保留。
     // 回头改已答的题不自动跳，最后一题答完停在「提交」前。
     val initiallyAnswered = remember(question.id) {
         answer?.selectedOptionIds?.isNotEmpty() == true
@@ -181,42 +185,43 @@ private fun QuizQuestionScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            Text(quiz.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-            Spacer(Modifier.height(5.dp))
-            if (quiz.subtitle.isNotBlank()) {
-                Text(quiz.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (quiz.mediaTitles.isNotEmpty()) {
-                Text(
-                    stringResource(
-                        R.string.ai_quiz_spoiler,
-                        quiz.mediaTitles.joinToString(stringResource(R.string.ai_quiz_media_separator))
-                    ),
-                    modifier = Modifier.padding(top = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-        item {
+            // 顶栏已是功能标题，页内不再重复 quiz.title（Worker 与顶栏同串，纯重复）。
+            // 进度 + 已答数合并一行放最上面，先给位置感再看内容。
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f))
                     Text(stringResource(R.string.ai_quiz_progress, questionIndex + 1, quiz.questions.size), style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        stringResource(
+                            R.string.ai_quiz_answered_count,
+                            requiredQuestionCount - unansweredRequired,
+                            requiredQuestionCount
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                // 已答数常驻，用户能看出自己漏了几题，不用翻回去数
-                Text(
-                    stringResource(
-                        R.string.ai_quiz_answered_count,
-                        requiredQuestionCount - unansweredRequired,
-                        requiredQuestionCount
-                    ),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // 片名全空时不渲染剧透行，避免出现「本轮会涉及：，包含剧透」的空壳文案
+                val roundTitles = localizedQuizRoundTitles(
+                    mediaTitles = quiz.mediaTitles,
+                    movies = state.quizPreviewMovies,
+                    localizedTitles = state.quizPreviewLocalizedTitles
+                ).ifEmpty { quiz.mediaTitles.filter { it.isNotBlank() } }
+                if (roundTitles.isNotEmpty()) {
+                    Text(
+                        stringResource(
+                            R.string.ai_quiz_spoiler,
+                            roundTitles.joinToString(stringResource(R.string.ai_quiz_media_separator))
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         item {
@@ -324,10 +329,13 @@ private fun QuizPreviewScreen(
         return
     }
     val haptics = rememberAppHaptics()
+    // 一屏预算：7 行候选 + 标题 + 底部操作必须完整落在首屏，
+    // 否则「开始本轮闯关」被挤出屏幕外，手势导航机上还点不到（只能靠滚动救）。
+    // 行内边距 8dp + 34dp 序号圈 + 8dp 行距 + 双按钮并排，总高 ~605dp，640dp 级屏幕也放得下。
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
             Text(
@@ -335,7 +343,7 @@ private fun QuizPreviewScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 stringResource(R.string.ai_quiz_preview_count, movies.size),
                 style = MaterialTheme.typography.bodyMedium,
@@ -345,17 +353,17 @@ private fun QuizPreviewScreen(
         itemsIndexed(movies, key = { _, movie -> quizMediaKey(movie.mediaType, movie.mediaId) }) { index, movie ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 tonalElevation = 1.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Surface(
-                        modifier = Modifier.size(42.dp),
+                        modifier = Modifier.size(34.dp),
                         shape = androidx.compose.foundation.shape.CircleShape,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
@@ -380,7 +388,10 @@ private fun QuizPreviewScreen(
                             onReplace(index)
                         },
                         // 候选被用光（已看正好 7 部）时必须禁用，否则是个点了没反应的死按钮
-                        enabled = replaceAvailable && !isLoading
+                        enabled = replaceAvailable && !isLoading,
+                        // 压到 32dp 内容高度配合紧凑行，按钮默认 40dp 最小高会把行撑到 88dp+
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(stringResource(R.string.ai_quiz_replace))
                     }
@@ -399,13 +410,18 @@ private fun QuizPreviewScreen(
             )
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // 已看不足 7 部时开始按钮禁用，得说明原因而不是留一个死按钮
+            // 主/次操作并排一行：竖排两颗全宽按钮会把选题页总高再抬 56dp，
+            // 正是「开始」被挤出首屏的最后一根稻草；横排后两者同屏可见。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 已看不足 7 部时开始按钮禁用，占满整行说明原因而不是留一个死按钮
                 if (movies.size < 7) {
                     Text(
                         text = stringResource(R.string.ai_quiz_need_more_movies),
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -416,9 +432,9 @@ private fun QuizPreviewScreen(
                         onStart()
                     },
                     enabled = movies.size == 7 && !isLoading,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.weight(1.4f)
                 ) {
-                    Text(stringResource(R.string.ai_quiz_start))
+                    Text(stringResource(R.string.ai_quiz_start), maxLines = 1)
                 }
                 // 「全部重抽」是次级操作：OutlinedButton 不抢主按钮视觉；非破坏性（还没作答），无需二次确认
                 OutlinedButton(
@@ -428,28 +444,15 @@ private fun QuizPreviewScreen(
                     },
                     // 与「换一部」共用可用性判断：没有未用候选时重抽必然原样返回，禁用免得变死按钮
                     enabled = replaceAvailable && !isLoading,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(stringResource(R.string.ai_quiz_redraw_all))
+                    Text(stringResource(R.string.ai_quiz_redraw_all), maxLines = 1)
                 }
             }
         }
     }
 }
 
-/**
- * 预览列表只替换展示标题；传给 Worker 的仍是 [AiWatchedTitleDto.title] 原始值。
- * 类型参与 key，避免电影和剧集使用相同 ID 时互相覆盖本地化标题。
- */
-private fun localizedQuizPreviewTitle(
-    movie: AiWatchedTitleDto,
-    localizedTitles: Map<String, String>
-): String = localizedTitles[quizMediaKey(movie.mediaType, movie.mediaId)]
-    ?.takeIf { it.isNotBlank() }
-    // 兼容旧状态中仍以原始 mediaType 保存的标题映射。
-    ?: localizedTitles["${movie.mediaType}:${movie.mediaId}"]
-        ?.takeIf { it.isNotBlank() }
-    ?: movie.title
 
 
 private fun quizDifficultyLabelRes(difficulty: String): Int = when (difficulty.trim().lowercase(Locale.ROOT)) {
@@ -471,6 +474,8 @@ private fun quizStageLabelRes(index: Int, count: Int): Int {
 
 @Composable
 private fun QuizQuestionMeta(question: AiQuizQuestion, stageRes: Int) {
+    // 答题期元信息只给「阶段 + 难度 + 依据片名」三样：考点/学习视角/takeaway/证据
+    // 都在答题前剧透答案方向，还把题目挤到首屏外；它们属于解析，复盘页再看。
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -492,42 +497,15 @@ private fun QuizQuestionMeta(question: AiQuizQuestion, stageRes: Int) {
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
         }
-    }
-    val concept = question.concept.trim().ifBlank { question.knowledgePoint.trim() }
-    if (concept.isNotBlank()) {
-        Text(
-            stringResource(R.string.ai_quiz_knowledge_point_format, concept),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-    (question.sourceTitle ?: question.mediaTitle)?.takeIf { it.isNotBlank() }?.let { sourceTitle ->
-        Text(
-            stringResource(R.string.ai_quiz_source_format, sourceTitle),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-    question.subject.trim().takeIf { it.isNotBlank() }?.let { subject ->
-        Text(
-            stringResource(R.string.ai_quiz_subject_format, subject),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.secondary
-        )
-    }
-    question.learningTakeaway.trim().takeIf { it.isNotBlank() }?.let { takeaway ->
-        Text(
-            stringResource(R.string.ai_quiz_learning_takeaway_format, takeaway),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-    question.evidenceUsed.trim().takeIf { it.isNotBlank() }?.let { evidence ->
-        Text(
-            stringResource(R.string.ai_quiz_evidence_used_format, evidence),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        (question.sourceTitle ?: question.mediaTitle)?.takeIf { it.isNotBlank() }?.let { sourceTitle ->
+            Text(
+                stringResource(R.string.ai_quiz_source_format, sourceTitle),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -627,11 +605,19 @@ private fun ChoiceRow(
     // 勾选框 / 单选钮自己消费点击，命中它们时父行的 clickable 不会跟着触发，
     // 所以两边各发一记不会双震；反过来只给父行会漏掉「正好点在钮上」这条路
     val haptics = rememberAppHaptics()
+    // 选中行给整块浅色底：单选自动跳题前有明确高亮，多选也能看清已勾选项
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        Color.Transparent
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(containerColor)
             .hapticClickable(semantic = rowSemantic, onClick = onClick)
-            .padding(vertical = 3.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -788,7 +774,7 @@ private fun QuizResultScreen(
             val answer = answers[item.questionId]
             val selectedLabels = if (question != null) quizAnswerLabels(question, answer) else emptyList()
             val userAnswerText = when {
-                selectedLabels.isNotEmpty() -> selectedLabels.joinToString(answerSeparator)
+                selectedLabels.isNotEmpty() -> joinQuizOptionTexts(selectedLabels, answerSeparator)
                 !answer?.textAnswer.isNullOrBlank() -> answer.textAnswer.trim()
                 else -> null
             }
@@ -878,6 +864,14 @@ private fun QuizResultScreen(
                         Text(
                             stringResource(R.string.ai_quiz_explanation_format, item.explanation),
                             style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    // 从答题页挪来的学习结论：答题前展示会剧透方向，复盘时它是「带走的知识点」
+                    question?.learningTakeaway?.trim()?.takeIf { it.isNotBlank() }?.let { takeaway ->
+                        Text(
+                            stringResource(R.string.ai_quiz_learning_takeaway_format, takeaway),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     if (distractorRationale.isNotBlank()) {

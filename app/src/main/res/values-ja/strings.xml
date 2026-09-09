@@ -1957,6 +1957,9 @@
     <string name="ai_daily_spoiler_warning">ネタバレ注意：物語の細部に触れる可能性があります。</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">最近学んだこと</string>
+    <string name="ai_daily_history_open_description">最近学んだ一覧を開く</string>
+    <string name="ai_daily_source_section_title">出典</string>
+    <string name="ai_daily_source_open_url">出典リンクを開く</string>
     <string name="ai_daily_history_empty">まだ学んだ内容はありません</string>
     <string name="ai_daily_illustration_caption">AIコンセプトイラスト（理解の補助のみ）</string>
     <string name="ai_daily_illustration_description">%1$sのコンセプトイラスト</string>

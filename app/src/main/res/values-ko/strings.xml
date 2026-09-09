@@ -1957,6 +1957,9 @@
     <string name="ai_daily_spoiler_warning">스포일러 안내: 이야기의 일부가 드러날 수 있어요.</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">최근에 배운 것</string>
+    <string name="ai_daily_history_open_description">최근에 배운 목록 열기</string>
+    <string name="ai_daily_source_section_title">출처</string>
+    <string name="ai_daily_source_open_url">출처 링크 열기</string>
     <string name="ai_daily_history_empty">아직 학습한 내용이 없어요</string>
     <string name="ai_daily_illustration_caption">AI 컨셉 일러스트, 이해 돕기용</string>
     <string name="ai_daily_illustration_description">%1$s 컨셉 일러스트</string>

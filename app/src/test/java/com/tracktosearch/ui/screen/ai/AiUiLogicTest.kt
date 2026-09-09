@@ -14,6 +14,7 @@ import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiRecommendation
+import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
 import org.junit.Test
 
@@ -530,6 +531,110 @@ class AiUiLogicTest {
         assertThat(quizCorrectAnswerText(question, result)).isEqualTo("答案 A")
     }
 
+    @Test
+    fun quizOptionJoining_stripsTrailingSentencePunctuationPerItem() {
+        assertThat(joinQuizOptionTexts(listOf("甲。", "乙。", "丙"), "、"))
+            .isEqualTo("甲、乙、丙")
+        assertThat(joinQuizOptionTexts(listOf("甲。", "乙？", "丙！"), "、"))
+            .isEqualTo("甲、乙、丙")
+        assertThat(joinQuizOptionTexts(listOf("A.", "B!"), ", "))
+            .isEqualTo("A, B")
+        // 正文内部标点保留，只清句尾
+        assertThat(stripTrailingOptionPunctuation("他说「很好。」。")).isEqualTo("他说「很好。」")
+    }
+
+    @Test
+    fun legacyJoinedAnswerText_cleansPunctuationNextToSeparators() {
+        assertThat(cleanLegacyJoinedAnswerText("A。、B。、C")).isEqualTo("A、B、C")
+        assertThat(cleanLegacyJoinedAnswerText("甲。、乙。")).isEqualTo("甲、乙")
+        assertThat(cleanLegacyJoinedAnswerText("A.、B.、C.。")).isEqualTo("A、B、C")
+        assertThat(cleanLegacyJoinedAnswerText("普通文本。")).isEqualTo("普通文本")
+        assertThat(cleanLegacyJoinedAnswerText("")).isEmpty()
+    }
+
+    @Test
+    fun quizCorrectAnswerText_cleansTrailingPunctuationInOptionLabels() {
+        val question = AiQuizQuestion(
+            id = "q2",
+            type = AiQuizQuestionType.MULTIPLE,
+            prompt = "问题",
+            options = listOf(
+                AiQuizOption("a", "答案甲。"),
+                AiQuizOption("b", "答案乙。")
+            )
+        )
+        val result = AiQuizQuestionResult(
+            questionId = "q2",
+            score = 0,
+            correct = true,
+            explanation = "解析",
+            correctOptionIds = listOf("a", "b")
+        )
+
+        assertThat(quizCorrectAnswerText(question, result)).isEqualTo("答案甲、答案乙")
+    }
+
+    @Test
+    fun quizRoundSubtitleDuplicates_OnlySuppressesSubtitleThatRepeatsTitles() {
+        assertThat(
+            quizRoundSubtitleDuplicatesMediaTitles(
+                "本轮涉及：The Shawshank Redemption、The Godfather",
+                listOf("The Shawshank Redemption", "The Godfather")
+            )
+        ).isTrue()
+        assertThat(quizRoundSubtitleDuplicatesMediaTitles("本轮涉及：电影 A", listOf("电影 A"))).isTrue()
+        assertThat(quizRoundSubtitleDuplicatesMediaTitles("subtitle", listOf("电影 A"))).isFalse()
+        // 只复述其中一部不算整段重复：副标题若还带补充说明不能误删
+        assertThat(
+            quizRoundSubtitleDuplicatesMediaTitles(
+                "本题参考了电影 A 的手法",
+                listOf("电影 A", "电影 B")
+            )
+        ).isFalse()
+        assertThat(quizRoundSubtitleDuplicatesMediaTitles("  ", listOf("电影 A"))).isFalse()
+        assertThat(quizRoundSubtitleDuplicatesMediaTitles("本轮涉及：电影 A", emptyList())).isFalse()
+    }
+
+    @Test
+    fun localizedQuizRoundTitles_reusesPreviewLocalizedTitlesAndDropsDuplicates() {
+        val movies = listOf(
+            AiWatchedTitleDto(mediaId = "1", mediaType = "movie", title = "Film A"),
+            AiWatchedTitleDto(mediaId = "2", mediaType = "movie", title = "Film B")
+        )
+        val localized = mapOf(
+            quizMediaKey("movie", "1") to "电影甲",
+            quizMediaKey("movie", "2") to "电影乙"
+        )
+
+        // 顺序跟随 mediaTitles，命中的用选题页中文标题，未命中的保留原标题
+        assertThat(
+            localizedQuizRoundTitles(
+                listOf("Film B", "Film A", "Unknown Film"),
+                movies,
+                localized
+            )
+        ).containsExactly("电影乙", "电影甲", "Unknown Film").inOrder()
+        // 模型重复列出同一部片时只展示一次
+        assertThat(
+            localizedQuizRoundTitles(listOf("Film A", "Film A", "Film B"), movies, localized)
+        ).containsExactly("电影甲", "电影乙").inOrder()
+        // 空列表直接返回，避免渲染空壳
+        assertThat(localizedQuizRoundTitles(emptyList(), movies, localized)).isEmpty()
+    }
+
+    @Test
+    fun dailySourceBlockHasContent_requiresAtLeastOneField() {
+        // 全空不渲染空壳
+        assertThat(dailySourceBlockHasContent("", "", "", null)).isFalse()
+        assertThat(dailySourceBlockHasContent("  ", "", "", null)).isFalse()
+        // 只有名称：纯文字来源，无链接也可展示
+        assertThat(dailySourceBlockHasContent("维基百科", "", "", null)).isTrue()
+        // 只有链接：缺名称时直接展示 URL
+        assertThat(dailySourceBlockHasContent("", "https://example.com", "", null)).isTrue()
+        // 只有证据文本或发布日期也应展示
+        assertThat(dailySourceBlockHasContent("", "", "片尾职员表", null)).isTrue()
+        assertThat(dailySourceBlockHasContent("", "", "", 1_700_000_000_000L)).isTrue()
+    }
 
     @Test
     fun dailyKnowledgeLocaleFollowsAppLanguageAndSafeSystemFallback() {

@@ -1944,6 +1944,9 @@
     <string name="ai_daily_spoiler_warning">剧透提示：这条知识可能会透露剧情细节。</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">最近学过</string>
+    <string name="ai_daily_history_open_description">打开最近学过列表</string>
+    <string name="ai_daily_source_section_title">来源</string>
+    <string name="ai_daily_source_open_url">打开来源链接</string>
     <string name="ai_daily_history_empty">还没有学过的内容</string>
     <string name="ai_daily_illustration_caption">AI 概念插图，仅辅助理解</string>
     <string name="ai_daily_illustration_description">%1$s 的概念插图</string>

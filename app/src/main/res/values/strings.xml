@@ -1952,6 +1952,9 @@ Config:
     <string name="ai_daily_spoiler_warning">Spoiler note: this fact may reveal a story detail.</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">Recently learned</string>
+    <string name="ai_daily_history_open_description">Open recently learned list</string>
+    <string name="ai_daily_source_section_title">Source</string>
+    <string name="ai_daily_source_open_url">Open source link</string>
     <string name="ai_daily_history_empty">Nothing learned yet</string>
     <string name="ai_daily_illustration_caption">AI concept illustration, for understanding only</string>
     <string name="ai_daily_illustration_description">Concept illustration for %1$s</string>

@@ -1,6 +1,9 @@
 package com.tracktosearch.ui.screen.ai
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -34,6 +37,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -79,6 +84,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -89,6 +96,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
@@ -204,6 +212,9 @@ fun AiFeatureScreen(
         !offlineUi &&
         !state.isLoading
     val haptics = rememberAppHaptics()
+    // 底部安全区：宿主页面可能先消费过系统栏 insets，让 WindowInsets.navigationBars 归零；
+    // 直接读窗口根 View 的真实 insets，保证答题/每日内容底部不落到手势区下（仍保持沉浸背景）。
+    val contentBottomInset = rememberRootNavigationBarBottomInset()
 
     LaunchedEffect(canShowRefreshConfirm) {
         if (!canShowRefreshConfirm) {
@@ -293,7 +304,7 @@ fun AiFeatureScreen(
                     .padding(paddingValues)
                     // 简答题输入框在 LazyColumn 里，没有这层 imePadding 会被软键盘完全盖住
                     .imePadding()
-                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                    .padding(bottom = contentBottomInset)
             ) {
                 // 离线是功能页自己的占位状态，不使用 Overlay 错误卡片；否则遮罩会把这句文案盖住。
                 // 有内容刷新时给加载条预留高度，避免它压住首段标题或试听入口。
@@ -997,6 +1008,12 @@ private fun DailyFeature(
     val sourceUrl = daily.source?.url?.trim().orEmpty()
         .ifBlank { daily.sourceUrl.trim() }
     val sourceEvidence = daily.source?.evidence?.trim().orEmpty()
+    val hasSourceData = dailySourceBlockHasContent(
+        sourceName = sourceName,
+        sourceUrl = sourceUrl,
+        sourceEvidence = sourceEvidence,
+        publishedAt = daily.publishedAt
+    )
     val hasSpoilerMarker = daily.containsSpoiler ||
         daily.spoilerLevel == "light" ||
         daily.spoilerLevel == "heavy"
@@ -1018,7 +1035,19 @@ private fun DailyFeature(
     var historySheetVisible by rememberSaveable { mutableStateOf(false) }
     val illustration = daily.illustration
     val illustrationUrl = illustration?.takeIf { it.isReady }?.url
+    var illustrationLoadFailed by remember(illustrationUrl) { mutableStateOf(false) }
     val mediaImageUrl = state.dailyMediaImageUrl
+    val context = LocalContext.current
+    // 沿用项目外链约定：ACTION_VIEW + NEW_TASK 交给系统浏览器；只放行 http(s) 防止服务端下发异常 scheme
+    val openSourceLink: (String) -> Unit = { url ->
+        if (url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)) {
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        }
+    }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -1066,7 +1095,7 @@ private fun DailyFeature(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.History,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.ai_daily_history_open_description),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(4.dp))
@@ -1209,14 +1238,16 @@ private fun DailyFeature(
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        if (illustrationUrl != null) {
+                        if (illustrationUrl != null && !illustrationLoadFailed) {
                             // AI 概念插图只辅助理解，不承担事实证明责任；角色与来源在 caption 里声明。
+                            // 失败（如 10 分钟签名 URL 已过期）时降级为不渲染空槽，避免大片空白。
                             AsyncImage(
                                 model = illustrationUrl,
                                 contentDescription = stringResource(
                                     R.string.ai_daily_illustration_description,
                                     daily.concept.orEmpty()
                                 ),
+                                onError = { illustrationLoadFailed = true },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(16f / 9f)
@@ -1292,6 +1323,19 @@ private fun DailyFeature(
                         }
                     }
                 }
+            }
+        }
+
+        if (hasSourceData) {
+            item {
+                // 来源区块独立成卡：有 name/url/证据/日期才渲染；数据缺失时不留空壳。
+                DailySourceBlock(
+                    sourceName = sourceName,
+                    sourceUrl = sourceUrl,
+                    sourceEvidence = sourceEvidence,
+                    publishedAt = daily.publishedAt,
+                    onOpenUrl = openSourceLink
+                )
             }
         }
 
@@ -1438,23 +1482,6 @@ private fun DailyFeature(
             }
         }
 
-        if (sourceEvidence.isNotBlank()) {
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Text(
-                        text = stringResource(R.string.ai_daily_source_evidence_format, sourceEvidence),
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
         item {
             DailyFeedbackSection(
                 selectedContentFeedback = state.dailyKnowledgeFeedback,
@@ -1543,26 +1570,6 @@ private fun DailyFeature(
             }
         }
 
-        if (sourceName.isNotBlank() || sourceUrl.isNotBlank() || daily.publishedAt != null) {
-            item {
-                val sourceAndDate = listOfNotNull(
-                    sourceName.takeIf { it.isNotBlank() }
-                        ?.let { stringResource(R.string.ai_daily_source_format, it) },
-                    sourceUrl.takeIf { it.isNotBlank() },
-                    daily.publishedAt?.let { publishedAt ->
-                        stringResource(
-                            R.string.ai_daily_published_at_format,
-                            formatDailyPublishedAt(publishedAt)
-                        )
-                    }
-                ).joinToString(stringResource(R.string.ai_daily_metadata_separator))
-                Text(
-                    text = sourceAndDate,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 
     if (historySheetVisible) {
@@ -1576,6 +1583,9 @@ private fun DailyFeature(
                 records = state.dailyKnowledgeHistory,
                 onOpenRecord = { record ->
                     historySheetVisible = false
+                    // 收起 sheet 后把每日列表拉回顶部：切换成旧内容时若停在原滚动位置，
+                    // 会看起来像「没打开任何东西」，回到顶部让新内容从标题起可见。
+                    scope.launch { listState.scrollToItem(0) }
                     viewModel.openDailyKnowledgeRecord(record)
                 }
             )
@@ -1589,9 +1599,11 @@ private fun DailyKnowledgeHistorySheet(
     records: List<AiDailyKnowledgeHistoryRecord>,
     onOpenRecord: (AiDailyKnowledgeHistoryRecord) -> Unit
 ) {
+    val sheetHaptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1617,7 +1629,11 @@ private fun DailyKnowledgeHistorySheet(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onOpenRecord(record) }
+                            .clickable {
+                                // 轻触回执：sheet 收起 + 内容切换前的即时反馈
+                                sheetHaptics.lightTap()
+                                onOpenRecord(record)
+                            }
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -1936,6 +1952,106 @@ private fun readAiReducedMotion(context: Context): Boolean {
         )
     }.getOrDefault(0)
     return animatorScale == 0f || a11yDisabled == 1
+}
+
+@Composable
+private fun DailySourceBlock(
+    sourceName: String,
+    sourceUrl: String,
+    sourceEvidence: String,
+    publishedAt: Long?,
+    onOpenUrl: (String) -> Unit
+) {
+    val name = sourceName.trim()
+    val url = sourceUrl.trim()
+    val evidence = sourceEvidence.trim()
+    val hasSourceContent = name.isNotEmpty() || url.isNotEmpty() || evidence.isNotEmpty()
+    if (!hasSourceContent && publishedAt == null) return
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (hasSourceContent) {
+                // 只有发布日期而没有来源内容时不再显示「来源」标题，避免空壳语义
+                Text(
+                    text = stringResource(R.string.ai_daily_source_section_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (url.isNotEmpty()) {
+                // 有链接时整行可点：优先展示来源名，缺名时直接展示 URL 本身
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onOpenUrl(url) }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = name.ifEmpty { url },
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Icon(
+                        imageVector = Icons.Rounded.OpenInNew,
+                        contentDescription = stringResource(R.string.ai_daily_source_open_url),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else if (name.isNotEmpty()) {
+                Text(name, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (evidence.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.ai_daily_source_evidence_format, evidence),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            publishedAt?.let {
+                Text(
+                    text = stringResource(R.string.ai_daily_published_at_format, formatDailyPublishedAt(it)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberRootNavigationBarBottomInset(): Dp {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    // 先取 Compose 消费链外的窗口根 insets（宿主消费过系统栏时 Compose 值会被清零）；
+    // 拿不到根值时回退到 Compose 的 navigationBars，两个值取大者。
+    val rootBottomPx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        view.rootWindowInsets
+            ?.getInsets(android.view.WindowInsets.Type.navigationBars())
+            ?.bottom ?: 0
+    } else {
+        @Suppress("DEPRECATION")
+        view.rootWindowInsets?.stableInsetBottom ?: 0
+    }
+    val composeBottom = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    return with(density) {
+        maxOf(rootBottomPx.toDp(), composeBottom)
+    }
 }
 
 private fun formatDailyPublishedAt(timestamp: Long): String {
