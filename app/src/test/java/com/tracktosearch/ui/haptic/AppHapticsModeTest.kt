@@ -16,14 +16,14 @@ import org.junit.Test
  * 挑的都是改坏了既不崩也不报错、只会静默走偏的判定：
  *
  * - 「关闭」档漏一层，用户明确关掉的触感照样震；
- * - 「增强」档少调一次 [HapticSemantic.boosted] 就等于开关没作用，多调一次会把滑块拖动的
- *   `FREQUENT_TICK` 一路顶成 `TAP`，一次拖动累出几十记实心点击；
- * - 「增强」档若绕过系统总开关，就是变相的 `FLAG_IGNORE_GLOBAL_SETTING`，红线；
+ * - 轻/强档把语义改写了（换效果=换性格，滑块轻网格变齿轮那种）或强度没传到 backend，
+ *   档位就等于没作用；显式试听强度若能越过 OFF 档，就成了绕过开关的后门；
+ * - 「强」档若绕过系统总开关，就是变相的 `FLAG_IGNORE_GLOBAL_SETTING`，红线；
  * - 包络链排序错了，本该走 RichTap 的彩蛋波形落到播不了的一层，整段无声；
  * - `release` 漏掉被降级链摘掉的那层，就是线程泄漏 —— 每层都持着自己的单线程 `Executor`。
  *
- * 期望值刻意不从被测代码推导：上移一档的 13 条期望写死在 [BOOSTED_ORDER]，照设计文档
- * 「语义词表」抄，不写成 `it.boosted()` —— 那样实现被改坏期望值跟着一起变，测试永远是绿的。
+ * 期望值刻意不从被测代码推导：13 个语义的原样期望写死在 [NAMED_METHOD_ORDER]，
+ * 语义被档位改写时这张表能当场判红。
  *
  * 纯 JVM 跑，不上 Robolectric：五个 backend 全用本地假实现，档位、系统开关、静音钩子与 onMiss
  * 都是构造参数注进去的，被测路径上一个平台调用都没有。唯一的 android 类是 `View`，只为验
@@ -128,7 +128,7 @@ class AppHapticsModeTest {
     }
 
     @Test
-    fun `增强档派发上移一档后的语义，五个顶档原样不动`() {
+    fun `强档派发原语义加 STRONG 强度，一个语义都不改写`() {
         mode.value = HapticMode.BOOST
         val only = FakeBackend(tier = TIER_RICHTAP, name = NAME_RICHTAP)
         val haptics = engine(listOf(only))
@@ -136,23 +136,53 @@ class AppHapticsModeTest {
         val results = dispatchAll(haptics, hapticView())
 
         assertThat(results).doesNotContain(false)
-        assertWithMessage("增强档要把语义整体上移一档，期望表照设计文档「语义词表」抄")
-            .that(only.performed).containsExactlyElementsIn(BOOSTED_ORDER).inOrder()
-        assertWithMessage("supports 要用上移之后的语义问，不能拿原语义问完却发上移后的")
-            .that(only.supportsAsked).containsExactlyElementsIn(BOOSTED_ORDER).inOrder()
-
-        val dispatched = NAMED_METHOD_ORDER.zip(only.performed).toMap()
-        TOP_TIER.forEach { semantic ->
-            assertWithMessage("$semantic 已是顶档，增强档必须原样发，不能再往上找")
-                .that(dispatched.getValue(semantic)).isEqualTo(semantic)
-        }
-        assertWithMessage("boosted() 只许调一次：连着调会把 FREQUENT_TICK 一路顶成 TAP，一次拖动几十记实心点击")
-            .that(dispatched.getValue(HapticSemantic.FREQUENT_TICK))
-            .isEqualTo(HapticSemantic.SEGMENT_TICK)
+        assertWithMessage("强档不许改写语义：改写=换效果=换性格（滑块轻网格变齿轮那种），2026-09-09 裁定废止语义上移")
+            .that(only.performed).containsExactlyElementsIn(NAMED_METHOD_ORDER).inOrder()
+        assertWithMessage("supports 与派发必须是同一个语义")
+            .that(only.supportsAsked).containsExactlyElementsIn(NAMED_METHOD_ORDER).inOrder()
+        assertWithMessage("强档的全部 13 次派发都带 STRONG")
+            .that(only.strengths)
+            .containsExactlyElementsIn(List(HapticSemantic.entries.size) { HapticStrength.STRONG })
+            .inOrder()
     }
 
     @Test
-    fun `增强档先上移再问 supports，上一层表达不了就往下降级`() {
+    fun `轻档派发原语义加 LIGHT 强度`() {
+        mode.value = HapticMode.LIGHT
+        val only = FakeBackend(tier = TIER_WAVEFORM, name = NAME_WAVEFORM)
+        val haptics = engine(listOf(only))
+
+        assertThat(haptics.tap(hapticView())).isTrue()
+        assertWithMessage("轻档同样不许改写语义")
+            .that(only.performed).containsExactly(HapticSemantic.TAP)
+        assertThat(only.strengths).containsExactly(HapticStrength.LIGHT)
+    }
+
+    @Test
+    fun `显式强度只用于试听，且不越过档位与系统总开关`() {
+        // 设置页选档那一刻的试听路径：新档位还没落盘，显式传强度先放一记
+        val only = FakeBackend(tier = TIER_RICHTAP, name = NAME_RICHTAP)
+        val haptics = engine(listOf(only))
+        val view = hapticView()
+
+        assertThat(haptics.perform(view, HapticSemantic.SEGMENT_TICK, HapticStrength.STRONG)).isTrue()
+        assertWithMessage("显式强度要原样到达 backend")
+            .that(only.strengths).containsExactly(HapticStrength.STRONG)
+
+        mode.value = HapticMode.OFF
+        assertWithMessage("OFF 档连显式强度也拦：试听不能变成绕过开关的后门")
+            .that(haptics.perform(view, HapticSemantic.SEGMENT_TICK, HapticStrength.STRONG))
+            .isFalse()
+
+        mode.value = HapticMode.FOLLOW_SYSTEM
+        systemEnabled = false
+        assertWithMessage("系统总开关关着，显式强度同样不震")
+            .that(haptics.perform(view, HapticSemantic.SEGMENT_TICK, HapticStrength.STRONG))
+            .isFalse()
+    }
+
+    @Test
+    fun `强档沿链降级时强度原样带到下一层`() {
         mode.value = HapticMode.BOOST
         // 一层「什么都能发，就是发不了 TAP」的通路。现实里就是某个 ROM 缺了那一个效果 ID
         val high = FakeBackend(
@@ -163,14 +193,15 @@ class AppHapticsModeTest {
         val low = FakeBackend(tier = TIER_WAVEFORM, name = NAME_WAVEFORM)
         val haptics = engine(listOf(high, low))
 
-        val handled = haptics.lightTap(hapticView())
+        val handled = haptics.tap(hapticView())
 
         assertThat(handled).isTrue()
-        assertWithMessage("LIGHT_TAP 上移成 TAP，问上层的必须是 TAP 而不是 LIGHT_TAP")
+        assertWithMessage("问上层的必须是原语义 TAP —— 强度档不改写语义")
             .that(high.supportsAsked).containsExactly(HapticSemantic.TAP)
         assertWithMessage("上层报了表达不了就不该被派发").that(high.performed).isEmpty()
-        assertWithMessage("要落到下一层，且落下去的仍是上移后的语义")
+        assertWithMessage("要落到下一层，语义与强度都原样")
             .that(low.performed).containsExactly(HapticSemantic.TAP)
+        assertThat(low.strengths).containsExactly(HapticStrength.STRONG)
     }
 
     @Test
@@ -232,9 +263,12 @@ class AppHapticsModeTest {
 
         assertThat(listOf(off, offAgain)).doesNotContain(true)
         assertThat(listOf(follow, boost)).doesNotContain(false)
-        assertWithMessage("档位每次派发同步读：关→跟随→增强→关，只有中间两次落到 backend，且第二次是上移后的")
+        assertWithMessage("档位每次派发同步读：关→跟随→强→关，只有中间两次落到 backend，强度跟着档位走")
+            .that(only.strengths)
+            .containsExactly(HapticStrength.SYSTEM, HapticStrength.STRONG).inOrder()
+        assertWithMessage("语义一个都不改写")
             .that(only.performed)
-            .containsExactly(HapticSemantic.SEGMENT_TICK, HapticSemantic.LIGHT_TAP).inOrder()
+            .containsExactly(HapticSemantic.SEGMENT_TICK, HapticSemantic.SEGMENT_TICK).inOrder()
     }
 
     @Test
@@ -479,8 +513,11 @@ class AppHapticsModeTest {
         private val envelopeResult: Boolean = false,
     ) : HapticBackend {
 
-        /** 收到 perform 的语义，按调用序。增强档这里应当是上移之后那个 */
+        /** 收到 perform 的语义，按调用序。档位不许改写语义，这里应当与调用侧一字不差 */
         val performed = mutableListOf<HapticSemantic>()
+
+        /** 收到 perform 的强度，按调用序。与 [performed] 一一对应 */
+        val strengths = mutableListOf<HapticStrength>()
 
         /** 被问 supports 的语义，按调用序 */
         val supportsAsked = mutableListOf<HapticSemantic>()
@@ -505,10 +542,11 @@ class AppHapticsModeTest {
             return semantic in supported
         }
 
-        override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+        override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
             journal += name + PERFORM_CALL
             views += view
             performed += semantic
+            strengths += strength
             return performResult
         }
 
@@ -540,37 +578,6 @@ class AppHapticsModeTest {
             HapticSemantic.GESTURE_END,
             HapticSemantic.SCROLL_EDGE,
             HapticSemantic.POPUP_SHOW,
-        )
-
-        /**
-         * 增强档下 13 个方法各自真正派发的语义，与 [NAMED_METHOD_ORDER] 逐项对齐。
-         *
-         * 照设计文档「语义词表」逐条抄，刻意不写成 `NAMED_METHOD_ORDER.map { it.boosted() }`：
-         * 期望值与实现同源时，实现被改坏期望值跟着一起变，这条断言就永远是绿的。
-         */
-        val BOOSTED_ORDER = listOf(
-            HapticSemantic.TAP,             // TAP 顶档
-            HapticSemantic.TAP,             // LIGHT_TAP 升成主操作那记实心点击
-            HapticSemantic.LIGHT_TAP,       // SEGMENT_TICK
-            HapticSemantic.SEGMENT_TICK,    // FREQUENT_TICK 只升一档，连发场景不能累出重震
-            HapticSemantic.TAP,             // TOGGLE_ON
-            HapticSemantic.TOGGLE_ON,       // TOGGLE_OFF 先升到同族的开
-            HapticSemantic.CONFIRM,         // CONFIRM 顶档
-            HapticSemantic.REJECT,          // REJECT 顶档
-            HapticSemantic.DRAG_START,      // DRAG_START 顶档
-            HapticSemantic.THRESHOLD_ARMED, // THRESHOLD_ARMED 顶档
-            HapticSemantic.TAP,             // GESTURE_END 要「到位」的实感
-            HapticSemantic.SEGMENT_TICK,    // SCROLL_EDGE 会被连着顶，升太重变惩罚
-            HapticSemantic.LIGHT_TAP,       // POPUP_SHOW
-        )
-
-        /** 五个顶档：增强档必须原样发 */
-        val TOP_TIER = setOf(
-            HapticSemantic.TAP,
-            HapticSemantic.CONFIRM,
-            HapticSemantic.REJECT,
-            HapticSemantic.DRAG_START,
-            HapticSemantic.THRESHOLD_ARMED,
         )
 
         /** 彩蛋包络的三个控制点，够验「原样传下去」 */

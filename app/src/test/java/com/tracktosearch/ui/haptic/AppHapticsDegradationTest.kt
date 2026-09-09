@@ -558,7 +558,7 @@ class AppHapticsDegradationTest {
             return semantic in supported
         }
 
-        override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+        override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
             performCalls++
             dispatchTrace += "$name$SUFFIX_PERFORM"
             performedSemantics += semantic

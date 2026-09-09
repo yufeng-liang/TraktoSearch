@@ -4,6 +4,7 @@ import android.view.View
 import com.tracktosearch.ui.haptic.HapticBackend
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import java.util.concurrent.ExecutorService
@@ -125,8 +126,8 @@ class HapticPlayerBackend(
     /** 恒 false：离散语义归厂商 tier 2 的预置效果，本层只画包络（见类注释）。 */
     override fun supports(semantic: HapticSemantic): Boolean = false
 
-    /** 恒 false，理由同 [supports]。 */
-    override fun perform(view: View?, semantic: HapticSemantic): Boolean = false
+    /** 恒 false，理由同 [supports]（本层只画包络，离散归厂商 tier 2 预置）。 */
+    override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean = false
 
     /**
      * 把一段控制点台阶包络转成 HE JSON 播出去。

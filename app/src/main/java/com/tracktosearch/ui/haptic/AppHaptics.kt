@@ -30,22 +30,23 @@ import kotlinx.coroutines.flow.StateFlow
  *   （真机反馈定的规矩，理由见 [playEnvelope]）。tier 2 与 tier 0 对连续包络恒返 false，
  *   所以实际落点只可能是 tier 3、tier 1，或「整体返 false 让调用方退离散替身」。
  *
- * ### 三态开关
+ * ### 四态开关
  *
  * 档位从 [modeState] 同步读，每次派发读一次：
  *
- * - [HapticMode.FOLLOW_SYSTEM]：正常走链。
+ * - [HapticMode.FOLLOW_SYSTEM]：正常走链，强度用 ROM 默认（不传强度参数）。
+ * - [HapticMode.LIGHT] / [HapticMode.BOOST]：走链但强度整体降/升一档
+ *   （[HapticMode.strength] 映射成 [HapticStrength] 随语义下发）。
+ *   **不改变语义**——2026-09-09 裁定废止旧的语义上移：上移会改效果性格
+ *   （滑块连发的轻网格被顶成齿轮 = 一次拖动几十下重震），强度通道行为可预期。
  * - [HapticMode.OFF]：整体短路，一次都不发；进入 OFF 之后的第一次调用还会调一次
  *   [quietDown]，把已经排出去的连续波形停掉。
- * - [HapticMode.BOOST]：派发 [HapticSemantic.boosted] 的结果，只上移一档。
- *   **不乘任何系数**（系统的 `VibrationScaler` 已按用户档位乘过 0.6 到 1.4），
- *   **也不绕过系统总开关**。
  *
- * 系统总开关有两道，一道都不许绕（红线：禁止 `FLAG_IGNORE_GLOBAL_SETTING`）：
- * [systemHapticEnabled] 这个注入的判定，以及传进来的 View 自己的 `isHapticFeedbackEnabled`。
- * tier 0 走 `View.performHapticFeedback`，系统本来会替我们判一遍；tier 1 标了
- * `USAGE_TOUCH`，也归系统缩放；但 tier 2 与 tier 3 走的是厂商 IPC 与 RichTap 自己的通路，
- * 那两道判定在那条路上根本不存在 —— 所以必须在这里判。
+ * 任何一档**都不绕过系统总开关**。系统总开关有两道，一道都不许绕（红线：禁止
+ * `FLAG_IGNORE_GLOBAL_SETTING`）：[systemHapticEnabled] 这个注入的判定，以及传进来的
+ * View 自己的 `isHapticFeedbackEnabled`。tier 0 走 `View.performHapticFeedback`，
+ * 系统本来会替我们判一遍；tier 1 标了 `USAGE_TOUCH`，也归系统缩放；但 tier 2 与 tier 3
+ * 走厂商 IPC 与 RichTap 自己的通路，那两道判定在那条路上根本不存在 —— 所以必须在这里判。
  *
  * ### 构造成本与预热
  *
@@ -203,27 +204,37 @@ class AppHaptics(
      * `AospConstantsBackend.perform` 里那句同样的 `isHapticFeedbackEnabled` 判定，
      * 经本方法进来时永远为真 —— 它挡的是有人绕过本类直接驱动 tier 0 的情况（单测就是这么做的）。
      *
+     * 语义沿链**原样传递**，任何一档都不改写（轻/强改的是强度，不是效果选择，见类注释
+     * 「四态开关」）；强度同理一次性算好，各层拿到的是同一个值。
+     *
      * @param view tier 0 靠它走 `View.performHapticFeedback`，其余层忽略。
      *   传 null 等于把 tier 0 摘掉，而转子马达机型只剩 tier 0 —— 那种机器上传 null
      *   就是整个 App 一点触感都没有。所以这个参数刻意不给默认值，
      *   Compose 侧请从 `LocalView.current` 取一个传进来。
+     * @param strength 显式强度，仅试听场景用（设置页选中某档那一刻，新档位还没落盘到
+     *   引擎，拿档位的强度先放一记当场对比轻重）；日常调用不传，按 [modeState] 现值算。
+     *   显式给强度也照样过档位与系统总开关两道闸 —— OFF 档或系统关着时照样不震。
      * @return true 已有一层接下（**不表示马达已经震完**：厂商层与 tier 1 都是投到自己的
      *   单线程上之后就返回的）；false 本次无声
      */
-    fun perform(view: View?, semantic: HapticSemantic): Boolean {
+    fun perform(
+        view: View?,
+        semantic: HapticSemantic,
+        strengthOverride: HapticStrength? = null,
+    ): Boolean {
         if (released) return false
-        val effective = effectiveSemantic(semantic) ?: return false
+        val strength = effectiveStrength(strengthOverride) ?: return false
         // View 自己的触感开关也是用户设置的一部分，关着就不震
         if (view != null && !view.isHapticFeedbackEnabled) return false
         for (backend in discreteChain) {
             if (backend.isAvailable() &&
-                backend.supports(effective) &&
-                backend.perform(view, effective)
+                backend.supports(semantic) &&
+                backend.perform(view, semantic, strength)
             ) {
                 return true
             }
         }
-        onMiss(effective)
+        onMiss(semantic)
         return false
     }
 
@@ -245,8 +256,8 @@ class AppHaptics(
      * 返回 false 是**要处理的结果**而不是错误：调用方据此退成「每段起点一记 tick」的
      * 稀疏编排。正因为 false 是有人接住的信号，这里不像 [perform] 那样记 [onMiss]。
      *
-     * [HapticMode.BOOST] 对本方法没有影响：包络的振幅是调用方给的曲线，
-     * 「增强」只上移语义档位，不乘系数。
+     * 轻/强档对本方法没有影响：包络的振幅是调用方谱子给的曲线（签名段 0.25 的「笔压」
+     * 是编排的一部分，乘系数会破坏手感），档位只管离散交互的强度。
      *
      * @param timingsMs 每个控制点的持续毫秒
      * @param amplitudes 每个控制点的目标振幅 0f..1f，与 [timingsMs] 等长。
@@ -320,25 +331,29 @@ class AppHaptics(
             if (silenced.compareAndSet(false, true)) quietDown()
             null
         }
-        HapticMode.FOLLOW_SYSTEM, HapticMode.BOOST -> {
+        HapticMode.FOLLOW_SYSTEM, HapticMode.LIGHT, HapticMode.BOOST -> {
             silenced.set(false)
             if (systemHapticEnabled()) mode else null
         }
     }
 
     /**
-     * 按档位算出真正要派发的语义；返回 null 表示这次不该震。
+     * 这一次派发到底允不允许、用哪档强度；返回 null 表示这次不该震。
      *
-     * 「增强」只调**一次** [HapticSemantic.boosted]：连着调会把滑块拖动的 `FREQUENT_TICK`
-     * 一路顶成 `TAP`，一次拖动几十记实心点击。
+     * 两道闸都在 [allowedMode] 里：OFF 档整体短路（顺带管那道静音闩——进入 OFF 的
+     * 第一次调用停一次已排出去的波形，之后不再重复；离开 OFF 时重新武装。之所以是
+     * 「下一次派发时才停」而不是订阅 [modeState] —— 本类没有协程作用域也不该有，
+     * 而切到 OFF 之后调用方照样会调进来（短路在引擎内部），所以这个惰性边沿足够用）；
+     * 系统总开关关了也不震。
+     *
+     * 强度取「显式传入的」或「档位算出的」——显式值只来自设置页试听，且不越过两道闸。
+     *
+     * `when` 穷举、不写 `else`：往 [HapticMode] 加档位时编译器会逼着表态。
      */
-    private fun effectiveSemantic(semantic: HapticSemantic): HapticSemantic? =
-        when (allowedMode()) {
-            HapticMode.BOOST -> semantic.boosted()
-            HapticMode.FOLLOW_SYSTEM -> semantic
-            // allowedMode() 不会返回 OFF；和 null 并在一起只为让 when 保持穷举
-            HapticMode.OFF, null -> null
-        }
+    private fun effectiveStrength(override: HapticStrength?): HapticStrength? {
+        val allowed = allowedMode() ?: return null
+        return override ?: allowed.strength
+    }
 
     private companion object {
         /** tier 0：AOSP 常量层。转子马达锁在这一层（硬规则 1） */

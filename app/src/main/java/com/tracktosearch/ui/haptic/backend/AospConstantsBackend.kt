@@ -6,6 +6,7 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import com.tracktosearch.ui.haptic.HapticBackend
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 
 /**
  * tier 0：`View.performHapticFeedback(constant)`，整条降级链的地板。
@@ -26,7 +27,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
  *   用户重开系统触感后整个 App 再也不震。厂商层那条整层禁用规则不适用于本层。
  *
  * 语义到常量的映射（含低版本退化目标）全在 [aospConstantFor] 里，纯函数、可单测。
- * 三态开关与「增强」档的语义上移都归引擎：本层收到的已是最终语义，不再调 `boosted()`。
+ * 档位与强度都归引擎：本层收到的已是最终语义；常量通路没有强度参数，轻/强档在这层不生效。
  *
  * 依据见 docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「四层引擎」与「语义词表」两节。
  */
@@ -71,6 +72,10 @@ class AospConstantsBackend : HapticBackend {
     /**
      * 发一次常量触感，把 `View.performHapticFeedback` 的返回值原样交回。
      *
+     * [strength] 刻意忽略：常量通路没有强度参数（ROM 拿常量自己去映射波形，应用侧
+     * 无从插手），轻/强档在本层不生效——本层是转子马达机型与兜底场景的地板，
+     * 那两类机器上「档位只改强度」退化为「档位不改什么」，可接受且已写进设计文档。
+     *
      * 三处提前返回 false：已 [release]；[view] 为 null（本层必须有 View，不去别处翻一个）；
      * View 自己的触感开关关着。最后一条框架内部也会查一遍并返回 false，这里先查是为了省掉
      * 那次到 WindowSession 的 binder 往返。
@@ -80,7 +85,7 @@ class AospConstantsBackend : HapticBackend {
      *
      * 返回 false 时引擎已无更低的层可退。最常见的原因是用户关了系统触感，属预期结果，不是缺陷。
      */
-    override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+    override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
         if (released || view == null || !view.isHapticFeedbackEnabled) return false
         return view.performHapticFeedback(aospConstantFor(semantic, Build.VERSION.SDK_INT))
     }

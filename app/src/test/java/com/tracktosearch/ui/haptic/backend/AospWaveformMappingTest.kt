@@ -9,6 +9,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
@@ -52,6 +53,43 @@ import org.robolectric.annotation.Config
  * 免得把这十一条纯函数断言也拖进沙箱。
  */
 class AospWaveformMappingTest {
+
+    @Test
+    fun `档位强度等比缩放配方，SYSTEM 原样且边界守住`() {
+        val confirm = tierOneRecipeOf(HapticSemantic.CONFIRM)
+
+        assertWithMessage("跟随系统档不干预：原样返回")
+            .that(tierOneRecipeScaled(confirm, HapticStrength.SYSTEM))
+            .isEqualTo(confirm)
+
+        val light = tierOneRecipeScaled(confirm, HapticStrength.LIGHT)
+        light.primitives.forEachIndexed { index, step ->
+            assertWithMessage("轻档第 $index 笔 primitive scale 应为原值 ×0.6，实际 ${step.scale}")
+                .that(step.scale)
+                .isWithin(0.001f)
+                .of(confirm.primitives[index].scale * 0.6f)
+        }
+        light.steps.forEachIndexed { index, step ->
+            assertWithMessage("轻档第 $index 段台阶振幅应为原值 ×0.6，实际 ${step.amplitude}")
+                .that(step.amplitude)
+                .isWithin(0.001f)
+                .of(confirm.steps[index].amplitude * 0.6f)
+        }
+
+        val strong = tierOneRecipeScaled(
+            tierOneRecipeOf(HapticSemantic.TAP),
+            HapticStrength.STRONG,
+        )
+        assertWithMessage("强档满幅 scale 不许越出 1（addPrimitive 越界会抛）")
+            .that(strong.primitives.all { it.scale <= 1f })
+            .isTrue()
+        assertWithMessage("时长与停顿一个都不许动：动形状=换性格")
+            .that(strong.primitives.map { it.delayMs })
+            .containsExactlyElementsIn(
+                tierOneRecipeOf(HapticSemantic.TAP).primitives.map { it.delayMs },
+            )
+            .inOrder()
+    }
 
     /**
      * 13 个语义在 Composition 子通路上的完整表达：primitive ID、scale、起播前的停顿。
@@ -324,22 +362,6 @@ class AospWaveformMappingTest {
     }
 
     @Test
-    fun `增强档不许把语义换成更轻的效果`() {
-        // 「增强」只改效果的选择、不乘系数（系统 VibrationScaler 已经按用户档位乘过一轮），
-        // 所以唯一能验的就是：换过去的那个语义在 tier 1 上不能比原来更轻。
-        // 破了这条，用户在设置里选「增强」反而变轻，而两边都有震动，没人会去查
-        HapticSemantic.entries.forEach { semantic ->
-            val boosted = semantic.boosted()
-            assertWithMessage(
-                "$semantic 增强后换成 $boosted，峰值从 ${peakOf(semantic)} 掉到 ${peakOf(boosted)}，" +
-                    "增强档反而更轻",
-            )
-                .that(peakOf(boosted))
-                .isAtLeast(peakOf(semantic))
-        }
-    }
-
-    @Test
     fun `FREQUENT_TICK 是唯一最轻的一档，升级链严格变重`() {
         val peaks = HapticSemantic.entries.associateWith { peakOf(it) }
         val lightest = peaks.values.min()
@@ -349,7 +371,7 @@ class AospWaveformMappingTest {
         assertWithMessage("FREQUENT_TICK 应是全表唯一最轻的一档，它一次手势里要连发几十次")
             .that(peaks.filterValues { it == lightest }.keys)
             .containsExactly(HapticSemantic.FREQUENT_TICK)
-        // boosted() 的最长一条链，四档必须严格拉开：任意相邻两档等值，那一步升级就白升了
+        // 词表梯度上最长的一条链，四档必须严格拉开：相邻两档等值，那一级轻重就白排了
         listOf(
             HapticSemantic.FREQUENT_TICK,
             HapticSemantic.SEGMENT_TICK,
@@ -598,7 +620,7 @@ class AospWaveformEnvelopeGuardTest {
                 .that(rotary.playEnvelope(intArrayOf(20, 20), floatArrayOf(0.3f, 0.6f)))
                 .isFalse()
             assertThat(rotary.supports(HapticSemantic.TAP)).isFalse()
-            assertThat(rotary.perform(null, HapticSemantic.TAP)).isFalse()
+            assertThat(rotary.perform(null, HapticSemantic.TAP, HapticStrength.SYSTEM)).isFalse()
         } finally {
             rotary.release()
         }

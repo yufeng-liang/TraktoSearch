@@ -69,6 +69,7 @@ import com.tracktosearch.ui.haptic.HapticSystemState
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.haptic.strength
 import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
@@ -154,7 +155,7 @@ private fun ThemeOptionRow(
     }
 }
 
-/** 触感三档选择对话框：跟随系统 / 关闭 / 增强 */
+/** 触感四档选择对话框：关闭 / 轻 / 跟随系统 / 强 */
 @Composable
 internal fun HapticModeSelectionDialog(
     currentMode: HapticMode,
@@ -168,21 +169,28 @@ internal fun HapticModeSelectionDialog(
         containerColor = floatingDialogColor(),
         title = { Text(stringResource(R.string.settings_haptic)) },
         text = {
-            // 三行都带一句说明，加上底部可能出现的限制提示，小屏放不下，给一条竖向滚动
+            // 四行都带一句说明，加上底部可能出现的限制提示，小屏放不下，给一条竖向滚动
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                HapticModeOptionRow(
-                    label = stringResource(R.string.settings_haptic_follow_system),
-                    description = stringResource(R.string.settings_haptic_follow_system_desc),
-                    mode = HapticMode.FOLLOW_SYSTEM,
-                    selected = currentMode == HapticMode.FOLLOW_SYSTEM,
-                    onClick = { onModeSelected(HapticMode.FOLLOW_SYSTEM) }
-                )
                 HapticModeOptionRow(
                     label = stringResource(R.string.settings_haptic_off),
                     description = stringResource(R.string.settings_haptic_off_desc),
                     mode = HapticMode.OFF,
                     selected = currentMode == HapticMode.OFF,
                     onClick = { onModeSelected(HapticMode.OFF) }
+                )
+                HapticModeOptionRow(
+                    label = stringResource(R.string.settings_haptic_light),
+                    description = stringResource(R.string.settings_haptic_light_desc),
+                    mode = HapticMode.LIGHT,
+                    selected = currentMode == HapticMode.LIGHT,
+                    onClick = { onModeSelected(HapticMode.LIGHT) }
+                )
+                HapticModeOptionRow(
+                    label = stringResource(R.string.settings_haptic_follow_system),
+                    description = stringResource(R.string.settings_haptic_follow_system_desc),
+                    mode = HapticMode.FOLLOW_SYSTEM,
+                    selected = currentMode == HapticMode.FOLLOW_SYSTEM,
+                    onClick = { onModeSelected(HapticMode.FOLLOW_SYSTEM) }
                 )
                 HapticModeOptionRow(
                     label = stringResource(R.string.settings_haptic_boost),
@@ -213,12 +221,14 @@ internal fun HapticModeSelectionDialog(
 /**
  * 触感档位单选行。
  *
- * 与 [ThemeOptionRow] 唯一的区别是**「关闭」那一行不发触感**：选「关闭」还震一记，
- * 用户会以为设置没生效。另两档照常发 `segmentTick()`，等于「选完立刻试听一下」——
- * 选「增强」当场就能感到比原来重，这是这个开关最需要的即时反馈。
+ * 与 [ThemeOptionRow] 的区别有两处：
  *
- * 为什么靠 [mode] 显式判而不是让引擎自己静默：`AppHaptics` 确实遵守档位，但档位是经 DataStore
- * 异步落盘的，点下去那一刻新值还没到引擎，仍会按旧档位响一记。显式判掉是确定的。
+ * 1. **「关闭」那一行不发触感**：选「关闭」还震一记，用户会以为设置没生效。
+ * 2. **其余三档的试听用同一效果按该档强度放**（[HapticMode.strength] 显式传下去）：
+ *    轻档放轻的、强档放重的，当场对比出三档差异 —— 这是这套档位最直观的说明书。
+ *
+ * 为什么显式传强度而不是让引擎自己按档位放：档位经 DataStore 异步落盘，
+ * 点下去那一刻新值还没到引擎，仍会按旧档位响。显式传是确定的。
  */
 @Composable
 private fun HapticModeOptionRow(
@@ -230,7 +240,7 @@ private fun HapticModeOptionRow(
 ) {
     val haptics = rememberAppHaptics()
     val onClickWithHaptic = {
-        if (mode != HapticMode.OFF) haptics.segmentTick()
+        mode.strength?.let { strength -> haptics.perform(HapticSemantic.SEGMENT_TICK, strength) }
         onClick()
     }
     Row(

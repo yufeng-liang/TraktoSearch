@@ -141,7 +141,7 @@ class PopupShowEffectTest {
 
         override fun supports(semantic: HapticSemantic): Boolean = true
 
-        override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+        override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
             performed += semantic
             return true
         }

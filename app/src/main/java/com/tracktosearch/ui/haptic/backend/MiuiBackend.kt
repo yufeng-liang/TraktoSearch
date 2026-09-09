@@ -5,6 +5,7 @@ import android.view.View
 import com.tracktosearch.ui.haptic.HapticBackend
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import java.lang.reflect.Method
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -175,12 +176,14 @@ class MiuiBackend(
      * 那边失败只能把整层禁用、让后续调用降级，这一次已经报了 true —— 反射与 IPC 不能在主线程
      * 同步做，这是接口的固有限制。所以本层靠 [supports] 的探测缓存在主线程侧先行拦截。
      */
-    override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+    override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
         val dispatch = stringDispatch
         if (dispatch != null) {
             val key = dispatch.keys[semantic] ?: return false
-            return submit { dispatchKey(dispatch, key) }
+            return submit { dispatchKey(dispatch, key, strength) }
         }
+        // ext ID 通路（老 MIUI）没有强度参数：performExtHapticFeedback(int) 一个 int 只够装
+        // 效果 ID。轻/强档在老机器上不生效，只保语义正确 —— 那些机器本来也轮不到多数用户
         if (!supports(semantic)) return false
         val effectId = miuiEffectFor(semantic)
         return submit { dispatch(effectId) }
@@ -283,6 +286,15 @@ class MiuiBackend(
             String::class.java,
             Boolean::class.javaPrimitiveType,
         )
+        // 三参重载（带强度）能解析就一并收下；解析不出按 null 存，派发时退两参
+        val performKeyWithStrength = runCatching {
+            clazz.getMethod(
+                METHOD_PERFORM_KEY,
+                String::class.java,
+                Boolean::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+            )
+        }.getOrNull()
         val instance = clazz
             .getConstructor(Context::class.java, Boolean::class.javaPrimitiveType)
             .newInstance(appContext, MIUI_UTIL_CTOR_FLAG)
@@ -294,21 +306,27 @@ class MiuiBackend(
                 put(semantic, value)
             }
         }
-        MiuiStringDispatch(instance, performKey, keys)
+        MiuiStringDispatch(instance, performKey, performKeyWithStrength, keys)
     } catch (_: Throwable) {
         null
     }
 
     /**
-     * 在 Executor 线程上真正调 `performHapticFeedback(key, flag)`（String 键通路）。
+     * 在 Executor 线程上调 String 键派发，强度按档映射成官方强度档。
      *
+     * 三参重载（带强度）解析不出来时退两参（那台 ROM 不支持强度，档位不生效）。
      * 首次抛错即整层禁用，与 [dispatch] 同一策略：ROM 侧一旦不认这个调用，重试只是重复
      * 付反射与 IPC 的钱。
      */
-    private fun dispatchKey(dispatch: MiuiStringDispatch, key: String) {
+    private fun dispatchKey(dispatch: MiuiStringDispatch, key: String, strength: HapticStrength) {
         if (disabled) return
         try {
-            dispatch.performKey.invoke(dispatch.instance, key, MIUI_KEY_FLAG)
+            val performKey3 = dispatch.performKeyWithStrength
+            if (performKey3 != null) {
+                performKey3.invoke(dispatch.instance, key, MIUI_KEY_FLAG, miuiStrengthInt(strength))
+            } else {
+                dispatch.performKey.invoke(dispatch.instance, key, MIUI_KEY_FLAG)
+            }
         } catch (_: Throwable) {
             markDisabled()
         }
@@ -347,6 +365,8 @@ class MiuiBackend(
     private class MiuiStringDispatch(
         val instance: Any,
         val performKey: Method,
+        /** `performHapticFeedback(String, boolean, int)` 重载；null = 这台 ROM 没有强度参数 */
+        val performKeyWithStrength: Method?,
         /** 语义 → `EFFECT_KEY_*` 的字段值（从 ROM 现读，不写死）。13 个语义一表齐全 */
         val keys: Map<HapticSemantic, String>,
     )
@@ -472,6 +492,21 @@ internal fun miuiEffectKeyFieldFor(semantic: HapticSemantic): String = when (sem
     // popup_normal 的 6,2 低一档强度），SoundHaptic 调校组也把 popup_light 归在
     // 「轻」档；2026-09-09 由 popup_normal 改档
     HapticSemantic.POPUP_SHOW -> "EFFECT_KEY_POPUP_LIGHT"
+}
+
+/**
+ * 档位强度 → MIUI 官方强度档（`performHapticFeedback(key, flag, strength)` 第三参）。
+ * 纯函数，可单测。
+ *
+ * 取值出处（2026-09-09 调研，MIUI 12 `HapticFeedbackUtil` 源码 + HyperOS 3 属性表交叉验证）：
+ * `EFFECT_STRENGTH_DEFAULT = -100`（跟随系统设置）、0 = 弱、1 = 中、2 = 强，
+ * 即 `sys.haptic.<key>` 属性值里逗号后那一位。[HapticStrength.SYSTEM] 走 -100，
+ * 效果强度完全交给系统触感设置 —— 也就是「跟随系统」档的本意。
+ */
+internal fun miuiStrengthInt(strength: HapticStrength): Int = when (strength) {
+    HapticStrength.LIGHT -> 0
+    HapticStrength.SYSTEM -> -100
+    HapticStrength.STRONG -> 2
 }
 
 /**

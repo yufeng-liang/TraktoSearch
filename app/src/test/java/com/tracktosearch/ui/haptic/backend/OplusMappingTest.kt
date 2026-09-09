@@ -164,31 +164,6 @@ class OplusMappingTest {
     }
 
     @Test
-    fun `BOOST 上移一档后不许比原档更轻`() {
-        // 「增强」档只调一次 boosted()，换的是更重的那个语义。要是上一档在本层反而配了更轻的
-        // 落点，用户选了增强反而震得更轻，且不崩不报 —— 只有对着两层映射一起看才能发现
-        HapticSemantic.entries.forEach { semantic ->
-            val boostedSemantic = semantic.boosted()
-            val base = oplusEffectFor(semantic)
-            val boosted = oplusEffectFor(boostedSemantic)
-            assertWithMessage(
-                "$semantic 上移一档到 $boostedSemantic 之后强度档从 ${base.strength} 掉到 ${boosted.strength}",
-            )
-                .that(boosted.strength)
-                .isAtLeast(base.strength)
-            if (base.effectType in SHORT_VIBRATE_FAMILY && boosted.effectType in SHORT_VIBRATE_FAMILY) {
-                // 只有同在 0..3 这个短振族里才有可比性：族内 ID 越大越重，跨族的 ID 大小无意义
-                assertWithMessage(
-                    "$semantic 与上移一档的 $boostedSemantic 同在短振族里，" +
-                        "效果 ID 却从 ${base.effectType} 掉到 ${boosted.effectType}，方向反了",
-                )
-                    .that(boosted.effectType)
-                    .isAtLeast(base.effectType)
-            }
-        }
-    }
-
-    @Test
     fun `短振族内的效果 ID 次序与语义梯度一致`() {
         // 0 / 1 / 2 / 3 这一族是同一个波形的四档轻重，ID 越大越重，所以族内可以直接比大小。
         // 抄反两格不会红也不会崩，只会让「列表项比按钮还重」这种手感悄悄反过来
@@ -215,7 +190,7 @@ class OplusMappingTest {
     @Test
     fun `共用落点的只有开关族与弹窗两组，其余语义各占一个`() {
         // 两个不相干的语义撞到同一个落点，梯度就塌了一档：体感上两种交互变得一模一样。
-        // 共用落点还有第二重后果 —— boosted() 指向同落点的语义时，BOOST 在本层是空操作：
+        // 共用落点还有第二重后果 —— 换成只调强度后同一落点在轻/强档也只是同一效果的轻重变化：
         // TOGGLE_ON 上移到 TAP、POPUP_SHOW 上移到 LIGHT_TAP，两组在 ColorOS 上都是原地不动。
         // 这是设计文档钉死 toggleOn 与 tap 同为 2 的固有结果，不是实现的错，但改这两条时要知道
         val shared = HapticSemantic.entries

@@ -21,20 +21,21 @@ import javax.inject.Singleton
 private val Context.hapticDataStore: DataStore<Preferences> by preferencesDataStore(name = "haptic")
 
 /**
- * 触感三态开关持久化存储：跟随系统（默认）、关闭、增强。
+ * 触感四态开关持久化存储：跟随系统（默认）、轻、关闭、强。
  *
- * 只存一个 [HapticMode] 枚举，没有强度数值 —— 绝对强度归系统的触感强度档位，
- * 应用侧只决定「发哪个语义」与「发不发」，ROM 自带滑条，应用内再造一条只会互相打架。
+ * 只存一个 [HapticMode] 枚举，没有强度数值 —— 轻/强是两档固定档位，绝对强度仍以
+ * 系统触感设置为准（跟随系统档不传强度，就是 ROM 调好的默认）。
  *
  * 形状照 [SharedTransitionStorage]：用 StateFlow 镜像磁盘值，而不是让调用方收裸 DataStore Flow。
  * 触感读值落在每一次点击的主线程路径上，必须同步可得（`modeState.value`），
  * 等一次 Flow 收集就迟了；Compose 侧 collectAsStateWithLifecycle 也因此不需要 initialValue。
  *
  * 本类只管持久化。系统总开关（`View.isHapticFeedbackEnabled`、
- * `Settings.System.HAPTIC_FEEDBACK_ENABLED`）与「增强」档的语义上移都在引擎层判定，
+ * `Settings.System.HAPTIC_FEEDBACK_ENABLED`）与档位到强度的映射都在引擎层判定，
  * 这里不掺和，也不提供任何绕过系统设置的口子。
  *
- * 设计依据见 docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「三态开关」一节。
+ * 设计依据见 docs/superpowers/plans/2026-09-01-haptics-overhaul.md 的「三态开关」
+ * 与 2026-09-09 增补（档位重设计）两节。
  */
 @Singleton
 class HapticStorage @Inject constructor(

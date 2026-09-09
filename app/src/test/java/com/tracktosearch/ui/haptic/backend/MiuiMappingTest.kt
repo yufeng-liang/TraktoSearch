@@ -3,6 +3,7 @@ package com.tracktosearch.ui.haptic.backend
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import org.junit.Test
 
 /**
@@ -233,6 +234,15 @@ class MiuiMappingTest {
                 .that(used)
                 .doesNotContain(id)
         }
+    }
+
+    @Test
+    fun `档位强度映射成 MIUI 官方强度档`() {
+        // 取值出处：MIUI 12 HapticFeedbackUtil 源码的 EFFECT_STRENGTH_* 常量
+        // 与 HyperOS 3 sys.haptic.* 属性表（「效果ID, 强度档」的逗号后那一位）
+        assertThat(miuiStrengthInt(HapticStrength.LIGHT)).isEqualTo(0)
+        assertThat(miuiStrengthInt(HapticStrength.SYSTEM)).isEqualTo(-100)
+        assertThat(miuiStrengthInt(HapticStrength.STRONG)).isEqualTo(2)
     }
 
     /** 失败信息里把 ID 印成 `0x1000000f` 这种形状，比十进制的 268435471 好认。 */

@@ -307,10 +307,12 @@
     <string name="settings_haptic">햅틱 피드백</string>
     <string name="settings_haptic_follow_system">시스템 설정 따르기</string>
     <string name="settings_haptic_off">끄기</string>
+    <string name="settings_haptic_light">약하게</string>
     <string name="settings_haptic_boost">강하게</string>
     <string name="settings_haptic_follow_system_desc">기본 햅틱을 사용하며 세기는 시스템 설정을 따릅니다.</string>
     <string name="settings_haptic_off_desc">이스터에그를 포함해 앱 안의 모든 진동을 끕니다.</string>
-    <string name="settings_haptic_boost_desc">각 효과를 한 단계 강한 효과로 바꿉니다. 절대적인 세기는 시스템 설정을 따릅니다.</string>
+    <string name="settings_haptic_light_desc">모든 햅틱을 한 단계 가볍게. 진동이 강하게 느껴질 때 사용하세요.</string>
+    <string name="settings_haptic_boost_desc">모든 햅틱을 한 단계 무겁게. 시스템 햅틱 스위치는 여전히 따릅니다.</string>
     <string name="settings_haptic_system_disabled">시스템 햅틱 피드백이 꺼져 있어 앱에서 진동할 수 없습니다.</string>
     <string name="settings_haptic_no_vibrator">이 기기에는 진동 모터가 없습니다.</string>
     <string name="settings_haptic_open_system_settings">시스템 설정 열기</string>

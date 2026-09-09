@@ -27,7 +27,7 @@ import org.junit.Test
 class HapticStorageTest {
 
     /** 枚举名与顺序的黄金副本。刻意写死，不从 [HapticMode.entries] 推导 —— 那样改名后期望值跟着变，永远绿 */
-    private val expectedNames = listOf("FOLLOW_SYSTEM", "OFF", "BOOST")
+    private val expectedNames = listOf("FOLLOW_SYSTEM", "LIGHT", "OFF", "BOOST")
 
     @Test
     fun `缺值回落跟随系统`() {
@@ -37,11 +37,12 @@ class HapticStorageTest {
     }
 
     @Test
-    fun `三个档位的枚举名各自解析回自己那一档`() {
+    fun `四个档位的枚举名各自解析回自己那一档`() {
         assertThat(HapticStorage.decodeMode("FOLLOW_SYSTEM")).isEqualTo(HapticMode.FOLLOW_SYSTEM)
         // 这两条是唯一能区分「真的解析了」与「恒返默认档」的用例
         assertThat(HapticStorage.decodeMode("OFF")).isEqualTo(HapticMode.OFF)
         assertThat(HapticStorage.decodeMode("BOOST")).isEqualTo(HapticMode.BOOST)
+        assertThat(HapticStorage.decodeMode("LIGHT")).isEqualTo(HapticMode.LIGHT)
     }
 
     @Test

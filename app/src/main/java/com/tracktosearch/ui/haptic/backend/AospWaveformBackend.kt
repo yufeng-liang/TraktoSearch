@@ -12,6 +12,7 @@ import androidx.annotation.RequiresApi
 import com.tracktosearch.ui.haptic.HapticBackend
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -146,16 +147,21 @@ class AospWaveformBackend(
         isAvailable() && recipes[semantic]?.steps?.isNotEmpty() == true
 
     /**
-     * 发一次离散触感。返回 true 只表示「已派发」—— 效果对象的构造与 `vibrate` 都在
+     * 发一次离散触感，档位强度乘在振幅与 primitive scale 上（轻 ×0.6 / 强 ×1.2）。
+     * 返回 true 只表示「已派发」—— 效果对象的构造与 `vibrate` 都在
      * executor 线程上完成，本方法立刻返回。
+     *
+     * 只缩放离散配方，**不碰 [playEnvelope]**：包络振幅是调用方谱子定的（签名段 0.25
+     * 的「笔压」是编排的一部分），档位只管交互反馈的轻重。
      *
      * @param view 本层不需要 View 通道（不走 `performHapticFeedback`），忽略。
      */
-    override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+    override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
         if (!isAvailable()) return false
         val recipe = recipes[semantic] ?: return false
         if (recipe.steps.isEmpty()) return false
-        return dispatch { target -> vibrateThrough(target, discreteEffectFor(target, recipe)) }
+        val scaled = tierOneRecipeScaled(recipe, strength)
+        return dispatch { target -> vibrateThrough(target, discreteEffectFor(target, scaled)) }
     }
 
     /**
@@ -559,10 +565,34 @@ internal fun tierOneRecipeOf(semantic: HapticSemantic): TierOneRecipe = when (se
     HapticSemantic.GESTURE_END -> thudRecipe(SCALE_GESTURE_END)
     // 撞墙，会被连着顶，比 SEGMENT_TICK 明显轻
     HapticSemantic.SCROLL_EDGE -> lowTickRecipe(SCALE_SCROLL_EDGE)
-    // 面板落出来，TICK 半幅：梯度要求 POPUP_SHOW 比 LIGHT_TAP 轻（boosted 的上移关系），
+    // 面板落出来，TICK 半幅：梯度要求 POPUP_SHOW 比 LIGHT_TAP 轻（语义词表的轻重次序），
     // 与 tier 3 的 RichTapStrength.LIGHT（128/255 ≈ 0.5）对齐。原先满幅 TICK 把两个语义
     // 在这层压成同一个手感
     HapticSemantic.POPUP_SHOW -> tickRecipe(SCALE_POPUP_SHOW)
+}
+
+/**
+ * 档位强度对 tier 1 配方的缩放：轻 ×0.6、强 ×1.2，[HapticStrength.SYSTEM] 原样返回。
+ * 纯函数，可单测。
+ *
+ * 振幅台阶与 primitive 的 scale 同乘一个系数（primitive scale 夹回 0..1——
+ * `addPrimitive` 越界会抛）。效果形状不动：轻/强是同一个配方更轻/更重，
+ * 不是换配方（换配方 = 换性格，2026-09-09 裁定废止语义上移后落在这里的对应规则）。
+ */
+internal fun tierOneRecipeScaled(recipe: TierOneRecipe, strength: HapticStrength): TierOneRecipe {
+    val factor = when (strength) {
+        HapticStrength.SYSTEM -> return recipe
+        HapticStrength.LIGHT -> TIER_ONE_LIGHT_FACTOR
+        HapticStrength.STRONG -> TIER_ONE_STRONG_FACTOR
+    }
+    return TierOneRecipe(
+        primitives = recipe.primitives.map {
+            PrimitiveStep(it.primitiveId, (it.scale * factor).coerceIn(0f, 1f), it.delayMs)
+        },
+        steps = recipe.steps.map {
+            WaveformStep(it.durationMs, (it.amplitude * factor).coerceIn(0f, 1f))
+        },
+    )
 }
 
 /** 单 primitive 配方：Composition 一笔，振幅台阶一段。 */
@@ -748,6 +778,12 @@ private const val MIN_ON_AMPLITUDE = 1
 
 /** 满幅，语义词表里没标 scale 的都按这个算。 */
 private const val FULL_SCALE = 1f
+
+/** 轻/强档对 tier 1 振幅与 primitive scale 的缩放系数，见 [tierOneRecipeScaled]。 */
+private const val TIER_ONE_LIGHT_FACTOR = 0.6f
+
+/** 同上，强档。台阶振幅以 [NOMINAL_PEAK] 为天花板，×1.2 仍在其下。 */
+private const val TIER_ONE_STRONG_FACTOR = 1.2f
 
 /**
  * 我们画振幅台阶时的标称峰值，占硬件最大振幅（255）的比例。

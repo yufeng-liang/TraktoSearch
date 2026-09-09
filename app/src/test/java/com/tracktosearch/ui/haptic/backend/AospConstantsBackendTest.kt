@@ -5,6 +5,7 @@ import android.view.View
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
@@ -60,7 +61,7 @@ class AospConstantsBackendTest {
     fun `View 返 false 时 perform 也返 false，13 个语义一个都不许被吞成 true`() {
         val view = hapticView(accepts = false)
 
-        val results = HapticSemantic.entries.map { backend.perform(view, it) }
+        val results = HapticSemantic.entries.map { backend.perform(view, it, HapticStrength.SYSTEM) }
 
         assertWithMessage(
             "performHapticFeedback 返 false 就是「这一记没发出去」；吞掉改返 true 之后" +
@@ -78,7 +79,7 @@ class AospConstantsBackendTest {
         val view = hapticView()
         every { view.performHapticFeedback(any<Int>()) } returnsMany answers
 
-        val results = HapticSemantic.entries.map { backend.perform(view, it) }
+        val results = HapticSemantic.entries.map { backend.perform(view, it, HapticStrength.SYSTEM) }
 
         assertWithMessage("每次派发的结果只由那一次 performHapticFeedback 的返回值决定")
             .that(results).containsExactlyElementsIn(answers).inOrder()
@@ -88,7 +89,7 @@ class AospConstantsBackendTest {
     fun `view 为 null 时 perform 返 false，一个 View 都不碰`() {
         val view = hapticView()
 
-        val results = HapticSemantic.entries.map { backend.perform(null, it) }
+        val results = HapticSemantic.entries.map { backend.perform(null, it, HapticStrength.SYSTEM) }
 
         assertWithMessage("本层唯一的通路是 View，没有 View 就是发不出去，返 false 让引擎收工")
             .that(results).doesNotContain(true)
@@ -99,8 +100,8 @@ class AospConstantsBackendTest {
 
         // 上面那串 false 得是 null 造成的，不是这一层本身坏了；再传一次 null 计数也不许涨，
         // 说明实现没有把上一次用过的 View 悄悄缓存下来顶替 null
-        assertThat(backend.perform(view, HapticSemantic.TAP)).isTrue()
-        assertThat(backend.perform(null, HapticSemantic.TAP)).isFalse()
+        assertThat(backend.perform(view, HapticSemantic.TAP, HapticStrength.SYSTEM)).isTrue()
+        assertThat(backend.perform(null, HapticSemantic.TAP, HapticStrength.SYSTEM)).isFalse()
         verify(exactly = 1) { view.performHapticFeedback(any<Int>()) }
     }
 
@@ -108,7 +109,7 @@ class AospConstantsBackendTest {
     fun `View 关掉触感就不发，也不因这次 false 把地板永久关掉`() {
         val view = hapticView(enabled = false)
 
-        val results = HapticSemantic.entries.map { backend.perform(view, it) }
+        val results = HapticSemantic.entries.map { backend.perform(view, it, HapticStrength.SYSTEM) }
 
         assertWithMessage("View 上的触感开关也是用户设置的一部分，关着就不震")
             .that(results).doesNotContain(true)
@@ -121,7 +122,7 @@ class AospConstantsBackendTest {
         // 用户把 View 的触感打开，下一次点击就该有：返 false 的原因会恢复，
         // 不许照厂商层那条「首次失败即整层禁用」处理，那会让重开触感之后整个 App 再也不震
         every { view.isHapticFeedbackEnabled } returns true
-        assertThat(backend.perform(view, HapticSemantic.TAP)).isTrue()
+        assertThat(backend.perform(view, HapticSemantic.TAP, HapticStrength.SYSTEM)).isTrue()
         assertWithMessage("刚才那串 false 不该把地板关掉").that(backend.isAvailable()).isTrue()
     }
 
@@ -136,7 +137,7 @@ class AospConstantsBackendTest {
 
         assertWithMessage("release 幂等，第二次也只是把同一个标志位再置一遍")
             .that(backend.isAvailable()).isFalse()
-        val results = HapticSemantic.entries.map { backend.perform(view, it) }
+        val results = HapticSemantic.entries.map { backend.perform(view, it, HapticStrength.SYSTEM) }
         assertWithMessage("release 之后 13 个语义一律返 false").that(results).doesNotContain(true)
         // 进程正在收尾，马达不该再动：返回值对了但照样调下去，就是 release 形同虚设
         verify(exactly = 0) { view.performHapticFeedback(any<Int>()) }
@@ -184,7 +185,7 @@ class AospConstantsBackendTest {
     fun `只调不带 flag 的单参重载，View 上没有第二种动静`() {
         val view = hapticView()
 
-        val results = HapticSemantic.entries.map { backend.perform(view, it) }
+        val results = HapticSemantic.entries.map { backend.perform(view, it, HapticStrength.SYSTEM) }
 
         assertWithMessage("View 接下了就该返 true").that(results).doesNotContain(false)
         verify(exactly = HapticSemantic.entries.size) { view.isHapticFeedbackEnabled }
@@ -204,7 +205,7 @@ class AospConstantsBackendTest {
         every { view.isHapticFeedbackEnabled } returns true
         every { view.performHapticFeedback(capture(constants)) } returns true
 
-        HapticSemantic.entries.forEach { backend.perform(view, it) }
+        HapticSemantic.entries.forEach { backend.perform(view, it, HapticStrength.SYSTEM) }
 
         assertWithMessage("13 个语义都该抵达平台调用").that(constants)
             .hasSize(HapticSemantic.entries.size)

@@ -117,11 +117,19 @@ interface HapticBackend {
      * 反射与厂商 IPC 投到单线程 `Executor` 后本方法立即返回，
      * 所以 true 表示"已派发"，不表示"马达已经震完"。
      *
+     * [strength] 是档位带来的强度（轻/跟随系统/强），各层自行映射：MIUI String 通路
+     * 传官方强度档 0/-100/2，RichTap 与 tier 1 乘系数，tier 0 没有强度通道则忽略。
+     * [HapticStrength.SYSTEM] 是「不干预」——用 ROM 自己的默认强度，那才是厂商调好的。
+     * 强度**不改变语义**：`LIGHT` 档下发的是同一个语义、同一个效果，只是更轻；
+     * 用语义上移去实现轻重（换效果）会改变效果性格，已被 2026-09-09 裁定废止。
+     *
      * @param view 需要 View 通道的后端（AOSP 常量）用它；其余后端可忽略。
      *   为 null 时依赖 View 通道的后端返回 false，不要自己去翻找一个 View。
+     * @param semantic 派发的语义，引擎不做改写
+     * @param strength 档位强度；由引擎按 [HapticMode] 算出（或调用方显式指定用于试听）
      * @return true 已派发；false 本次失败，调用方应降级
      */
-    fun perform(view: View?, semantic: HapticSemantic): Boolean
+    fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean
 
     /**
      * 播一段连续振幅包络（彩蛋用）。

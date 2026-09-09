@@ -5,6 +5,7 @@ import android.view.View
 import com.tracktosearch.ui.haptic.HapticBackend
 import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.HapticStrength
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import java.util.concurrent.ExecutorService
@@ -164,11 +165,15 @@ class OplusBackend(
      *
      * 映射在调用线程上算（纯 `when`，零成本），只把算好的 [OplusEffectSpec] 带进队列。
      *
+     * [strength] 刻意忽略：`setEffectStrength` 的合法区间没有公开文档，瞎猜偏移可能
+     * 在某些机型上拼不出效果。轻/强档在这层不生效，只保语义正确——
+     * 与 ext ID 通路的老 MIUI 同一取舍。
+     *
      * 返回 true 只表示「已排进单线程队列」，不表示马达震了。真正的调用在 Executor 上，
      * 那边失败只能把整层禁用、让后续调用降级，这一次已经报了 true —— 反射与 IPC 不能在主线程
      * 同步做，这是接口的固有限制。所以本层靠 [supports] 在主线程侧先行拦截。
      */
-    override fun perform(view: View?, semantic: HapticSemantic): Boolean {
+    override fun perform(view: View?, semantic: HapticSemantic, strength: HapticStrength): Boolean {
         if (!supports(semantic)) return false
         val spec = oplusEffectFor(semantic)
         return submit { dispatch(spec) }

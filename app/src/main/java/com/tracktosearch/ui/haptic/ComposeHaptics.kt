@@ -171,13 +171,17 @@ class ComposeHaptics internal constructor(
      * 直接调它的是那些手里只有一个 [HapticSemantic] 值的调用方 —— 主要是
      * [hapticClickable] 这类把语义当参数收的 `Modifier` 扩展。
      *
+     * [strength] 只给试听场景用：设置页选中某档那一刻新档位还没落盘到引擎，
+     * 传该档的强度先放一记，当场对比轻重。日常调用不传，引擎按档位现值算；
+     * 显式强度同样过档位与系统总开关两道闸。
+     *
      * 不返回是否成功，理由见类注释第 2 条。
      *
      * 注意本方法**不过 [frequentTick] 那道节流**：传 [HapticSemantic.FREQUENT_TICK] 进来
      * 是原样派发的。连发场景请调 [frequentTick]。
      */
-    fun perform(semantic: HapticSemantic) {
-        engine()?.perform(view, semantic)
+    fun perform(semantic: HapticSemantic, strength: HapticStrength? = null) {
+        engine()?.perform(view, semantic, strength)
     }
 
     private companion object {
