@@ -78,6 +78,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SearchSourcesEntryKey
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.hazeTopBar
@@ -178,94 +179,100 @@ fun SearchSourcesScreen(
                 // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
-                    // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
-                    .appSkipToLookaheadSize()
-                    .hazeSource(hazeState),
-                contentPadding = PaddingValues(
-                    start = 0.dp,
-                    end = 0.dp,
-                    top = 65.dp + statusBarHeight,
-                    bottom = 80.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .appMorphContentFade()
             ) {
-                item(key = "builtin") {
-                    BuiltinSourcesSection(
-                        pansouEnabled = pansouEnabled,
-                        panhubEnabled = panhubEnabled,
-                        zresoEnabled = zresoEnabled,
-                        onPansouChange = viewModel::setPansouEnabled,
-                        onPanhubChange = viewModel::setPanhubEnabled,
-                        onZresoChange = viewModel::setZresoEnabled,
-                        onOpenPanHubConfig = { showPanHubConfig = true }
-                    )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
+                        // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                        .appSkipToLookaheadSize()
+                        .hazeSource(hazeState),
+                    contentPadding = PaddingValues(
+                        start = 0.dp,
+                        end = 0.dp,
+                        top = 65.dp + statusBarHeight,
+                        bottom = 80.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item(key = "builtin") {
+                        BuiltinSourcesSection(
+                            pansouEnabled = pansouEnabled,
+                            panhubEnabled = panhubEnabled,
+                            zresoEnabled = zresoEnabled,
+                            onPansouChange = viewModel::setPansouEnabled,
+                            onPanhubChange = viewModel::setPanhubEnabled,
+                            onZresoChange = viewModel::setZresoEnabled,
+                            onOpenPanHubConfig = { showPanHubConfig = true }
+                        )
+                    }
+
+                    item(key = "custom_label") {
+                        Column(
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.search_sources_custom),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    if (customSources.isEmpty()) {
+                        item(key = "custom_empty") {
+                            EmptyCustomSourceCard(
+                                onAddFromTemplate = onAddFromTemplate,
+                                onImport = { showImportDialog = true }
+                            )
+                        }
+                    } else {
+                        items(
+                            count = customSources.size,
+                            key = { index -> "custom_${customSources[index].id}" }
+                        ) { index ->
+                            val source = customSources[index]
+                            val testState = testResults[source.id]
+                            CustomSourceRow(
+                                source = source,
+                                testState = testState,
+                                onEnabledChange = { viewModel.setCustomSourceEnabled(source.id, it) },
+                                onTest = { viewModel.testCustomSource(source) },
+                                onEdit = { onEditSource(source.id) },
+                                onDelete = { viewModel.deleteCustomSource(source.id) },
+                                onShare = { showShareSource = source }
+                            )
+                        }
+                    }
+
+                    if (customSources.isNotEmpty()) {
+                        item(key = "add_card") {
+                            AddSourceCard(
+                                onAddFromTemplate = onAddFromTemplate,
+                                onImport = { showImportDialog = true }
+                            )
+                        }
+                    }
                 }
 
-                item(key = "custom_label") {
-                    Column(
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.search_sources_custom),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-
-                if (customSources.isEmpty()) {
-                    item(key = "custom_empty") {
-                        EmptyCustomSourceCard(
-                            onAddFromTemplate = onAddFromTemplate,
-                            onImport = { showImportDialog = true }
-                        )
-                    }
-                } else {
-                    items(
-                        count = customSources.size,
-                        key = { index -> "custom_${customSources[index].id}" }
-                    ) { index ->
-                        val source = customSources[index]
-                        val testState = testResults[source.id]
-                        CustomSourceRow(
-                            source = source,
-                            testState = testState,
-                            onEnabledChange = { viewModel.setCustomSourceEnabled(source.id, it) },
-                            onTest = { viewModel.testCustomSource(source) },
-                            onEdit = { onEditSource(source.id) },
-                            onDelete = { viewModel.deleteCustomSource(source.id) },
-                            onShare = { showShareSource = source }
-                        )
-                    }
-                }
-
-                if (customSources.isNotEmpty()) {
-                    item(key = "add_card") {
-                        AddSourceCard(
-                            onAddFromTemplate = onAddFromTemplate,
-                            onImport = { showImportDialog = true }
-                        )
-                    }
-                }
+                HeaderBar(
+                    hazeState = hazeState,
+                    isContentUnderTopBar = hasContentUnderTopBar,
+                    onBack = onBack,
+                    onImport = { showImportDialog = true },
+                    // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+                    // 但它必须从第一帧就在，与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出；
+                    // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
+                    modifier = Modifier.appSkipToLookaheadSize(),
+                    onHelpClick = onHelpClick
+                )
             }
-
-            HeaderBar(
-                hazeState = hazeState,
-                isContentUnderTopBar = hasContentUnderTopBar,
-                onBack = onBack,
-                onImport = { showImportDialog = true },
-                // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-                // 但它必须从第一帧就在，与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出；
-                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
-                modifier = Modifier.appSkipToLookaheadSize(),
-                onHelpClick = onHelpClick
-            )
         }
     }
 

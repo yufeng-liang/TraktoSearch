@@ -300,8 +300,6 @@
     <!-- Settings -->
     <string name="settings_title">設定</string>
     <string name="settings_appearance">外観</string>
-    <string name="settings_shared_transition">共有要素トランジション</string>
-    <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用（全画面表示時のズーム遷移も含む）。</string>
     <string name="settings_splash_quote">起動時の名セリフ</string>
     <string name="settings_splash_quote_subtitle">起動時に名作映画のセリフとポスターを表示します。画面をタップするとスキップできます。</string>
     <string name="settings_haptic">触覚フィードバック</string>

@@ -144,12 +144,6 @@ interface DefaultTabEntryPoint {
     fun defaultTabStorage(): com.tracktosearch.data.local.DefaultTabStorage
 }
 
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface SharedTransitionEntryPoint {
-    fun sharedTransitionStorage(): com.tracktosearch.data.local.SharedTransitionStorage
-}
-
 /** EntryPoint 用于在 AppNavigation 读取豆瓣登录态（计算豆瓣独立模式） */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -456,9 +450,6 @@ fun AppNavigation(
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
     val storedDefaultTab by defaultTabStorage.defaultTab.collectAsStateWithLifecycle()
-    // 共享元素转场动画开关：StateFlow 在 MainActivity 预加载后已持有磁盘真实值，collectAsStateWithLifecycle 无需 initialValue，首次组合即为真实值
-    val sharedTransitionStorage = EntryPointAccessors.fromApplication(context, SharedTransitionEntryPoint::class.java).sharedTransitionStorage()
-    val sharedTransitionEnabled by sharedTransitionStorage.enabledState.collectAsStateWithLifecycle()
     // 使用初始 tab（已由 MainActivity 根据登录状态和用户设置决定）
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
     // 标记登录成功后设置的 tab，避免被 storedDefaultTab 的异步加载覆盖
@@ -676,8 +667,7 @@ fun AppNavigation(
     // 挂在这里而不是 Activity 根：需要被定位的节点全都在 NavHost 之内，且这一层只加语义、不动布局。
     SharedTransitionLayout(modifier = Modifier.semantics { testTagsAsResourceId = true }) {
         CompositionLocalProvider(
-            LocalSharedTransitionScope provides this@SharedTransitionLayout,
-            com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
+            LocalSharedTransitionScope provides this@SharedTransitionLayout
         ) {
             BackdropProvider(modifier = Modifier.fillMaxSize()) {
                 Box(
@@ -699,18 +689,16 @@ fun AppNavigation(
                 // 去容器变形页时不给来源页叠淡出：目标页第一帧就不透明地盖住它，这层全屏 alpha
                 // 白画一遍。返回方向见下面的 popEnterTransition，那一侧是真的会看出问题。
                 exitTransition = {
-                    if (sharedTransitionEnabled &&
-                        Routes.routeId(targetState.destination.route) in Routes.ContainerMorphRouteIds
-                    ) ExitTransition.None
+                    if (Routes.routeId(targetState.destination.route) in Routes.ContainerMorphRouteIds)
+                        ExitTransition.None
                     else fadeOut(animationSpec = tween(220))
                 },
                 // 从容器变形页返回时不给目标页叠淡入：整页收回成卡片的动画由 SharedTransitionLayout
                 // 接管，目标页应当立即完整可见。再叠 120ms 淡入就是两层半透明相叠，收缩中的整页
                 // 与列表页互相穿透，观感上像列表卡片里残留着上一页的内容。
                 popEnterTransition = {
-                    if (sharedTransitionEnabled &&
-                        Routes.routeId(initialState.destination.route) in Routes.ContainerMorphRouteIds
-                    ) EnterTransition.None
+                    if (Routes.routeId(initialState.destination.route) in Routes.ContainerMorphRouteIds)
+                        EnterTransition.None
                     else fadeIn(animationSpec = tween(120))
                 },
                 popExitTransition = { fadeOut(animationSpec = tween(120)) },
@@ -1182,15 +1170,15 @@ fun AppNavigation(
                     // 卡片长成整页已经把页面显示出来了，再叠 NavHost 淡入就是同一页淡两次。
                     // 「查看全部」弹窗那条路配不上共享元素，必须保留常规淡入。
                     enterTransition = {
-                        if (sharedTransitionEnabled &&
-                            targetState.arguments?.getBoolean("morph") == true
-                        ) EnterTransition.None else null
+                        if (targetState.arguments?.getBoolean("morph") == true)
+                            EnterTransition.None
+                        else null
                     },
                     // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出发现页
                     popExitTransition = {
-                        if (sharedTransitionEnabled &&
-                            initialState.arguments?.getBoolean("morph") == true
-                        ) ExitTransition.None else null
+                        if (initialState.arguments?.getBoolean("morph") == true)
+                            ExitTransition.None
+                        else null
                     }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -1215,9 +1203,8 @@ fun AppNavigation(
                     route = Routes.STATISTICS,
                     // 容器变形自带进出：卡片长成整页的过程已经把页面「显示」出来了，
                     // NavHost 再叠一层淡入等于同一个页面淡两次，落地时能看出一层灰。
-                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入。
-                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
-                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                    enterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None }
                 ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         StatisticsScreen(
@@ -1369,15 +1356,15 @@ fun AppNavigation(
                     // 卡片长成整页已经把页面显示出来了，再叠 NavHost 淡入就是同一页淡两次。
                     // 漏斗图标入口不配对，必须保留常规淡入，否则页面会毫无动画地直接出现。
                     enterTransition = {
-                        if (sharedTransitionEnabled &&
-                            targetState.arguments?.getString("entry") == "card"
-                        ) EnterTransition.None else null
+                        if (targetState.arguments?.getString("entry") == "card")
+                            EnterTransition.None
+                        else null
                     },
                     // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出发现页
                     popExitTransition = {
-                        if (sharedTransitionEnabled &&
-                            initialState.arguments?.getString("entry") == "card"
-                        ) ExitTransition.None else null
+                        if (initialState.arguments?.getString("entry") == "card")
+                            ExitTransition.None
+                        else null
                     }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -1473,9 +1460,8 @@ fun AppNavigation(
                 composable(
                     route = Routes.MARK_RECORDS,
                     // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
-                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
-                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
-                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                    enterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         MarkRecordScreen(
@@ -1496,9 +1482,8 @@ fun AppNavigation(
                 composable(
                     route = Routes.SEARCH_SOURCES,
                     // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
-                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入，否则这个页面会毫无动画地直接出现。
-                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
-                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                    enterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None }
                 ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         SearchSourcesScreen(
@@ -1592,9 +1577,8 @@ fun AppNavigation(
                     ),
                     // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
                     // 这个页面只有反馈页崩溃日志卡片一个入口，去掉淡入不会让别的入口失去动画。
-                    // 共享转场被关掉时返回 null，落回 NavHost 的全局淡入。
-                    enterTransition = { if (sharedTransitionEnabled) EnterTransition.None else null },
-                    popExitTransition = { if (sharedTransitionEnabled) ExitTransition.None else null }
+                    enterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None }
                 ) { backStackEntry ->
                     val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -1613,15 +1597,15 @@ fun AppNavigation(
                     // 只有从反馈页那张卡片进来才是容器变形，那条路不再叠 NavHost 淡入。
                     // 消息页也通向这个详情页，那条路没有可配对的源侧卡片，必须保留常规淡入。
                     enterTransition = {
-                        if (sharedTransitionEnabled &&
-                            initialState.destination.route == Routes.FEEDBACK
-                        ) EnterTransition.None else null
+                        if (initialState.destination.route == Routes.FEEDBACK)
+                            EnterTransition.None
+                        else null
                     },
                     // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出反馈页
                     popExitTransition = {
-                        if (sharedTransitionEnabled &&
-                            targetState.destination.route == Routes.FEEDBACK
-                        ) ExitTransition.None else null
+                        if (targetState.destination.route == Routes.FEEDBACK)
+                            ExitTransition.None
+                        else null
                     }
                 ) { backStackEntry ->
                     val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable

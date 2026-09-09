@@ -13,7 +13,6 @@ import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
-import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.haptic.HapticMode
 import com.tracktosearch.ui.haptic.HapticOutcome
@@ -102,7 +101,6 @@ class SettingsViewModelTest {
     private lateinit var statusConsistencyChecker: DoubanTraktStatusConsistencyChecker
     private lateinit var doubanSyncManager: DoubanSyncManager
     private lateinit var doubanBatchRemovalManager: DoubanBatchRemovalManager
-    private lateinit var sharedTransitionStorage: SharedTransitionStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
     private lateinit var aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage
@@ -139,7 +137,6 @@ class SettingsViewModelTest {
         statusConsistencyChecker = mockk(relaxed = true)
         doubanSyncManager = mockk(relaxed = true)
         doubanBatchRemovalManager = mockk(relaxed = true)
-        sharedTransitionStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
         aiTasteStorage = mockk(relaxed = true)
@@ -202,7 +199,6 @@ class SettingsViewModelTest {
             statusConsistencyChecker = statusConsistencyChecker,
             doubanSyncManager = doubanSyncManager,
             doubanBatchRemovalManager = doubanBatchRemovalManager,
-            sharedTransitionStorage = sharedTransitionStorage,
             // 触感档位：构造期就会读 modeState，relaxed mock 的返回值不是真 Flow，这里给真的
             hapticStorage = mockk(relaxed = true) {
                 every { modeState } returns MutableStateFlow(HapticMode.DEFAULT)

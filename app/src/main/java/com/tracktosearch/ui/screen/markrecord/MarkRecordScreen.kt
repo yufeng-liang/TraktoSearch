@@ -123,6 +123,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.MarkRecordsEntryKey
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
@@ -318,382 +319,388 @@ fun MarkRecordScreen(
                 }
             }
     ) {
-        // ========== 网格内容 ==========
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            state = listState,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                // 整页参与容器变形时按落定尺寸布局：否则网格会跟着容器逐帧变宽，
-                // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
-                .appSkipToLookaheadSize()
-                .hazeSource(state = hazeState)
-                .backdropContentSource(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            contentPadding = PaddingValues(
-                start = 12.dp, end = 12.dp,
-                top = stickyHeaderHeight + 5.dp,
-                bottom = 40.dp
-            )
+                .appMorphContentFade()
         ) {
-            when {
-                uiState.isLoading && uiState.items.isEmpty() -> {
-                    // 骨架屏而非居中转圈：布局与真实卡片一致，数据到达时不跳动
-                    items(SKELETON_ITEM_COUNT) {
-                        MarkRecordItemSkeleton()
+            // ========== 网格内容 ==========
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 整页参与容器变形时按落定尺寸布局：否则网格会跟着容器逐帧变宽，
+                    // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
+                    .appSkipToLookaheadSize()
+                    .hazeSource(state = hazeState)
+                    .backdropContentSource(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(
+                    start = 12.dp, end = 12.dp,
+                    top = stickyHeaderHeight + 5.dp,
+                    bottom = 40.dp
+                )
+            ) {
+                when {
+                    uiState.isLoading && uiState.items.isEmpty() -> {
+                        // 骨架屏而非居中转圈：布局与真实卡片一致，数据到达时不跳动
+                        items(SKELETON_ITEM_COUNT) {
+                            MarkRecordItemSkeleton()
+                        }
                     }
-                }
-                uiState.error != null && uiState.items.isEmpty() -> {
-                    item(span = { GridItemSpan(2) }) {
-                        AppErrorState(
-                            message = uiState.error!!,
-                            onRetry = { viewModel.retry() },
-                            modifier = Modifier.padding(32.dp),
-                            retryLabel = stringResource(R.string.mark_records_retry)
-                        )
-                    }
-                }
-                else -> {
-                    itemsIndexed(
-                        uiState.items,
-                        key = { _, it -> "${it.traktId}_${it.actedAt}_${it.actionType}" }
-                    ) { index, item ->
-                        Box(modifier = Modifier.cardEnter(
-                            id = "${item.traktId}_${item.actedAt}_${item.actionType}".hashCode().toLong(),
-                            index = index,
-                            enterMode = enterMode,
-                            animatedIds = animatedIds
-                        )) {
-                            MarkRecordItemRow(
-                            item = item,
-                            posterColorExtractor = viewModel.posterColorExtractor,
-                            onClick = {
-                                val onClick = if (item.mediaType == "movie") onMovieClick else onShowClick
-                                // 标记记录卡片已有海报与年份，交给详情页做首帧种子；
-                                // origin 让详情页拼出与本行海报相同的共享元素 key
-                                DetailSeedStore.remember(
-                                    item.tmdbId,
-                                    item.posterUrl,
-                                    item.year,
-                                    origin = markRecordOrigin(item)
-                                )
-                                onClick(
-                                    item.traktId, item.tmdbId,
-                                    item.displayTitle.ifBlank { item.title },
-                                    item.imdbId, 0.0
-                                )
-                            }
+                    uiState.error != null && uiState.items.isEmpty() -> {
+                        item(span = { GridItemSpan(2) }) {
+                            AppErrorState(
+                                message = uiState.error!!,
+                                onRetry = { viewModel.retry() },
+                                modifier = Modifier.padding(32.dp),
+                                retryLabel = stringResource(R.string.mark_records_retry)
                             )
                         }
                     }
-                    item(span = { GridItemSpan(2) }, key = "load_more_footer") {
-                        LoadMoreFooter(
-                            state = when {
-                                uiState.isLoadingMore -> LoadMoreFooterState.Loading
-                                uiState.error != null -> LoadMoreFooterState.Error
-                                !uiState.hasMore -> LoadMoreFooterState.Complete
-                                else -> LoadMoreFooterState.Hidden
-                            },
-                            onRetry = { viewModel.loadNextPage() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    else -> {
+                        itemsIndexed(
+                            uiState.items,
+                            key = { _, it -> "${it.traktId}_${it.actedAt}_${it.actionType}" }
+                        ) { index, item ->
+                            Box(modifier = Modifier.cardEnter(
+                                id = "${item.traktId}_${item.actedAt}_${item.actionType}".hashCode().toLong(),
+                                index = index,
+                                enterMode = enterMode,
+                                animatedIds = animatedIds
+                            )) {
+                                MarkRecordItemRow(
+                                item = item,
+                                posterColorExtractor = viewModel.posterColorExtractor,
+                                onClick = {
+                                    val onClick = if (item.mediaType == "movie") onMovieClick else onShowClick
+                                    // 标记记录卡片已有海报与年份，交给详情页做首帧种子；
+                                    // origin 让详情页拼出与本行海报相同的共享元素 key
+                                    DetailSeedStore.remember(
+                                        item.tmdbId,
+                                        item.posterUrl,
+                                        item.year,
+                                        origin = markRecordOrigin(item)
+                                    )
+                                    onClick(
+                                        item.traktId, item.tmdbId,
+                                        item.displayTitle.ifBlank { item.title },
+                                        item.imdbId, 0.0
+                                    )
+                                }
+                                )
+                            }
+                        }
+                        item(span = { GridItemSpan(2) }, key = "load_more_footer") {
+                            LoadMoreFooter(
+                                state = when {
+                                    uiState.isLoadingMore -> LoadMoreFooterState.Loading
+                                    uiState.error != null -> LoadMoreFooterState.Error
+                                    !uiState.hasMore -> LoadMoreFooterState.Complete
+                                    else -> LoadMoreFooterState.Hidden
+                                },
+                                onRetry = { viewModel.loadNextPage() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if (!uiState.isLoading && uiState.error == null && uiState.items.isEmpty()) {
-            // 空态不再作为 LazyVerticalGrid 的首个自然高度 item：那会把卡片固定在内容顶部。
-            // 单独覆盖在标题栏以下的可用内容区域，确保横向与纵向都真正居中。
-            val filteredEmpty = uiState.hasActiveFilterOrSearch
-            val needTraktHint = !traktConnected && !filteredEmpty
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = stickyHeaderHeight + 5.dp, bottom = 40.dp)
-            ) {
+            if (!uiState.isLoading && uiState.error == null && uiState.items.isEmpty()) {
+                // 空态不再作为 LazyVerticalGrid 的首个自然高度 item：那会把卡片固定在内容顶部。
+                // 单独覆盖在标题栏以下的可用内容区域，确保横向与纵向都真正居中。
+                val filteredEmpty = uiState.hasActiveFilterOrSearch
+                val needTraktHint = !traktConnected && !filteredEmpty
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .testTag("mark_record_empty_state_container"),
-                    contentAlignment = Alignment.Center
+                        .padding(top = stickyHeaderHeight + 5.dp, bottom = 40.dp)
                 ) {
-                    EmptyStateCard(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp)
-                            .testTag("mark_record_empty_state_card"),
-                        isDark = isDark,
-                        hazeState = hazeState,
-                        hazeStyle = hazeStyle,
-                        icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
-                        title = if (needTraktHint) {
-                            stringResource(R.string.douban_import_require_trakt_title)
-                        } else if (filteredEmpty) {
-                            stringResource(R.string.mark_records_empty_filtered)
-                        } else {
-                            stringResource(when (uiState.currentTab) {
-                                MarkRecordTab.ALL -> R.string.mark_records_empty_all
-                                MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
-                                MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
-                                MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
-                            })
-                        },
-                        description = if (needTraktHint) {
-                            stringResource(R.string.douban_import_require_trakt_desc)
-                        } else null,
-                        actions = {
-                            if (filteredEmpty) {
-                                TextButton(onClick = {
-                                    haptics.tap()
-                                    collapseSearch()
-                                    viewModel.updateSearchQuery("")
-                                    viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
-                                }) {
-                                    Text(stringResource(R.string.mark_records_clear_filter))
+                            .fillMaxSize()
+                            .testTag("mark_record_empty_state_container"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyStateCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 32.dp)
+                                .testTag("mark_record_empty_state_card"),
+                            isDark = isDark,
+                            hazeState = hazeState,
+                            hazeStyle = hazeStyle,
+                            icon = if (filteredEmpty) Icons.Rounded.FilterList else Icons.Rounded.Inbox,
+                            title = if (needTraktHint) {
+                                stringResource(R.string.douban_import_require_trakt_title)
+                            } else if (filteredEmpty) {
+                                stringResource(R.string.mark_records_empty_filtered)
+                            } else {
+                                stringResource(when (uiState.currentTab) {
+                                    MarkRecordTab.ALL -> R.string.mark_records_empty_all
+                                    MarkRecordTab.WATCHLIST -> R.string.mark_records_empty_watchlist
+                                    MarkRecordTab.WATCHED -> R.string.mark_records_empty_watched
+                                    MarkRecordTab.REMOVED -> R.string.mark_records_empty_removed
+                                })
+                            },
+                            description = if (needTraktHint) {
+                                stringResource(R.string.douban_import_require_trakt_desc)
+                            } else null,
+                            actions = {
+                                if (filteredEmpty) {
+                                    TextButton(onClick = {
+                                        haptics.tap()
+                                        collapseSearch()
+                                        viewModel.updateSearchQuery("")
+                                        viewModel.updateFilter(emptySet(), DatePreset.ALL, null, uiState.sortAscending)
+                                    }) {
+                                        Text(stringResource(R.string.mark_records_clear_filter))
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
-        }
 
-        // ========== 吸顶栏（Blur + 半透明背景） ==========
-        // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-        // 但它必须从第一帧就在，与网格一样按落定尺寸布局，跟着容器裁剪逐渐露出；延迟入场会让容器
-        // 长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期间仍让 haze 停采样。
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .appSkipToLookaheadSize()
-                .hazeTopBar(
-                    state = hazeState,
-                    style = hazeStyle,
-                    blurRadius = 24.dp,
-                    isContentUnderTopBar = if (transitionActive) false else hasContentUnderTopBar,
-                    scene = markRecordGlassScene
-                )
-                // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项
-                .clickable(enabled = false, onClick = {})
-        ) {
-            Spacer(modifier = Modifier.statusBarsPadding())
-
-            // 标题栏 + 搜索/筛选
-            Row(
+            // ========== 吸顶栏（Blur + 半透明背景） ==========
+            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
+            // 但它必须从第一帧就在，与网格一样按落定尺寸布局，跟着容器裁剪逐渐露出；延迟入场会让容器
+            // 长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期间仍让 haze 停采样。
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 1.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .appSkipToLookaheadSize()
+                    .hazeTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = if (transitionActive) false else hasContentUnderTopBar,
+                        scene = markRecordGlassScene
+                    )
+                    // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项
+                    .clickable(enabled = false, onClick = {})
             ) {
-                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                    IconButton(onClick = {
-                        if (searchExpanded) collapseSearch() else onBack()
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    AnimatedVisibility(
-                        visible = !searchExpanded,
-                        enter = androidx.compose.animation.fadeIn(tween(240)),
-                        exit = androidx.compose.animation.fadeOut(tween(240)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.mark_records_title),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    BoxWithConstraints(
-                        modifier = if (searchExpanded) Modifier.weight(1f).height(42.dp)
-                        else Modifier.height(42.dp).width(42.dp),
-                        contentAlignment = Alignment.CenterEnd
-                    ) {
-                        val searchWidth by animateDpAsState(
-                            targetValue = if (searchExpanded) maxWidth else 42.dp,
-                            animationSpec = tween(durationMillis = 240),
-                            label = "mark_record_search_width"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(searchWidth)
-                                .fillMaxHeight()
-                                .onGloballyPositioned { searchBoundsInRoot = it.boundsInRoot() }
+                Spacer(modifier = Modifier.statusBarsPadding())
+
+                // 标题栏 + 搜索/筛选
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                        IconButton(onClick = {
+                            if (searchExpanded) collapseSearch() else onBack()
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.content_desc_back),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = !searchExpanded,
+                            enter = androidx.compose.animation.fadeIn(tween(240)),
+                            exit = androidx.compose.animation.fadeOut(tween(240)),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            if (searchExpanded) {
-                                NeumorphicFrostedSurface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    isDark = isDark,
-                                    shape = RoundedCornerShape(21.dp),
-                                    backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
-                                    borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
-                                    elevation = 4.dp,
-                                    blurRadius = 16.dp,
-                                    hazeState = hazeState,
-                                    hazeStyle = HazeMaterials.thin(),
-                                    scene = markRecordGlassScene
-                                ) {
-                                    BasicTextField(
-                                        value = uiState.searchQuery,
-                                        onValueChange = viewModel::updateSearchQuery,
-                                        singleLine = true,
-                                        textStyle = TextStyle(
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 14.sp
-                                        ),
-                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .then(Modifier.focusRequester(focusRequester))
-                                            .testTag("mark_record_search_input")
-                                            .padding(horizontal = 12.dp),
-                                        keyboardOptions = KeyboardOptions(
-                                            capitalization = KeyboardCapitalization.None,
-                                            imeAction = ImeAction.Search
-                                        ),
-                                        keyboardActions = KeyboardActions(onSearch = {
-                                            focusManager.clearFocus()
-                                            keyboardController?.hide()
-                                        }),
-                                        decorationBox = { innerTextField ->
-                                            Row(
-                                                modifier = Modifier.fillMaxSize(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    Icons.Rounded.Search,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Box(
-                                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                                    contentAlignment = Alignment.CenterStart
+                            Text(
+                                text = stringResource(R.string.mark_records_title),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        BoxWithConstraints(
+                            modifier = if (searchExpanded) Modifier.weight(1f).height(42.dp)
+                            else Modifier.height(42.dp).width(42.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            val searchWidth by animateDpAsState(
+                                targetValue = if (searchExpanded) maxWidth else 42.dp,
+                                animationSpec = tween(durationMillis = 240),
+                                label = "mark_record_search_width"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(searchWidth)
+                                    .fillMaxHeight()
+                                    .onGloballyPositioned { searchBoundsInRoot = it.boundsInRoot() }
+                            ) {
+                                if (searchExpanded) {
+                                    NeumorphicFrostedSurface(
+                                        modifier = Modifier.fillMaxSize(),
+                                        isDark = isDark,
+                                        shape = RoundedCornerShape(21.dp),
+                                        backgroundColor = if (isDark) GlassFillDark else Color.White.copy(alpha = 0.55f),
+                                        borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.75f),
+                                        elevation = 4.dp,
+                                        blurRadius = 16.dp,
+                                        hazeState = hazeState,
+                                        hazeStyle = HazeMaterials.thin(),
+                                        scene = markRecordGlassScene
+                                    ) {
+                                        BasicTextField(
+                                            value = uiState.searchQuery,
+                                            onValueChange = viewModel::updateSearchQuery,
+                                            singleLine = true,
+                                            textStyle = TextStyle(
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontSize = 14.sp
+                                            ),
+                                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .then(Modifier.focusRequester(focusRequester))
+                                                .testTag("mark_record_search_input")
+                                                .padding(horizontal = 12.dp),
+                                            keyboardOptions = KeyboardOptions(
+                                                capitalization = KeyboardCapitalization.None,
+                                                imeAction = ImeAction.Search
+                                            ),
+                                            keyboardActions = KeyboardActions(onSearch = {
+                                                focusManager.clearFocus()
+                                                keyboardController?.hide()
+                                            }),
+                                            decorationBox = { innerTextField ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    if (uiState.searchQuery.isEmpty()) {
-                                                        Text(
-                                                            stringResource(R.string.mark_records_search_hint),
-                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                                                            fontSize = 14.sp
-                                                        )
-                                                    }
-                                                    innerTextField()
-                                                }
-                                                if (uiState.searchQuery.isNotEmpty()) {
-                                                    IconButton(
-                                                        onClick = {
-                                                            haptics.lightTap()
-                                                            viewModel.updateSearchQuery("")
-                                                        },
-                                                        modifier = Modifier.size(28.dp)
+                                                    Icon(
+                                                        Icons.Rounded.Search,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                                        contentAlignment = Alignment.CenterStart
                                                     ) {
-                                                        Icon(
-                                                            Icons.Rounded.Close,
-                                                            contentDescription = stringResource(R.string.content_desc_clear),
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
+                                                        if (uiState.searchQuery.isEmpty()) {
+                                                            Text(
+                                                                stringResource(R.string.mark_records_search_hint),
+                                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                                                fontSize = 14.sp
+                                                            )
+                                                        }
+                                                        innerTextField()
+                                                    }
+                                                    if (uiState.searchQuery.isNotEmpty()) {
+                                                        IconButton(
+                                                            onClick = {
+                                                                haptics.lightTap()
+                                                                viewModel.updateSearchQuery("")
+                                                            },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Rounded.Close,
+                                                                contentDescription = stringResource(R.string.content_desc_clear),
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                    )
-                                }
-                            } else {
-                                NeumorphicIconButton(
-                                    onClick = { searchExpanded = true },
-                                    isDark = isDark,
-                                    lightBorderAlpha = 0.35f,
-                                    hazeState = hazeState,
-                                    scene = markRecordGlassScene
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Search,
-                                        contentDescription = stringResource(R.string.mark_records_search_hint),
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                        )
+                                    }
+                                } else {
+                                    NeumorphicIconButton(
+                                        onClick = { searchExpanded = true },
+                                        isDark = isDark,
+                                        lightBorderAlpha = 0.35f,
+                                        hazeState = hazeState,
+                                        scene = markRecordGlassScene
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Search,
+                                            contentDescription = stringResource(R.string.mark_records_search_hint),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    NeumorphicIconButton(
-                        onClick = {
-                            collapseSearch()
-                            showFilterSheet = true
-                        },
-                        isDark = isDark,
-                        lightBorderAlpha = 0.35f,
-                        hazeState = hazeState,
-                        scene = markRecordGlassScene
-                    ) {
-                        Icon(
-                            Icons.Rounded.FilterList,
-                            contentDescription = stringResource(R.string.filter_title),
-                            // 筛选生效时保持主色：弹窗关上后没有别的地方能看出条件还开着
-                            tint = if (uiState.hasActiveFilter) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                LocalContentColor.current
+                        Spacer(modifier = Modifier.width(8.dp))
+                        NeumorphicIconButton(
+                            onClick = {
+                                collapseSearch()
+                                showFilterSheet = true
                             },
-                            modifier = Modifier.size(20.dp)
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f,
+                            hazeState = hazeState,
+                            scene = markRecordGlassScene
+                        ) {
+                            Icon(
+                                Icons.Rounded.FilterList,
+                                contentDescription = stringResource(R.string.filter_title),
+                                // 筛选生效时保持主色：弹窗关上后没有别的地方能看出条件还开着
+                                tint = if (uiState.hasActiveFilter) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    LocalContentColor.current
+                                },
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Tab 切换栏（透明背景）
+                PrimaryTabRow(
+                    selectedTabIndex = uiState.currentTab.ordinal,
+                    containerColor = Color.Transparent
+                ) {
+                    MarkRecordTab.entries.forEach { tab ->
+                        Tab(
+                            selected = uiState.currentTab == tab,
+                            onClick = {
+                                haptics.segmentTick()
+                                collapseSearch()
+                                viewModel.switchTab(tab)
+                            },
+                            text = {
+                                Text(stringResource(when (tab) {
+                                    MarkRecordTab.ALL -> R.string.mark_records_tab_all
+                                    MarkRecordTab.WATCHLIST -> R.string.mark_records_tab_watchlist
+                                    MarkRecordTab.WATCHED -> R.string.mark_records_tab_watched
+                                    MarkRecordTab.REMOVED -> R.string.mark_records_tab_removed
+                                }))
+                            }
                         )
                     }
                 }
-            }
 
-            // Tab 切换栏（透明背景）
-            PrimaryTabRow(
-                selectedTabIndex = uiState.currentTab.ordinal,
-                containerColor = Color.Transparent
-            ) {
-                MarkRecordTab.entries.forEach { tab ->
-                    Tab(
-                        selected = uiState.currentTab == tab,
-                        onClick = {
-                            haptics.segmentTick()
-                            collapseSearch()
-                            viewModel.switchTab(tab)
-                        },
-                        text = {
-                            Text(stringResource(when (tab) {
-                                MarkRecordTab.ALL -> R.string.mark_records_tab_all
-                                MarkRecordTab.WATCHLIST -> R.string.mark_records_tab_watchlist
-                                MarkRecordTab.WATCHED -> R.string.mark_records_tab_watched
-                                MarkRecordTab.REMOVED -> R.string.mark_records_tab_removed
-                            }))
-                        }
+                // 已展示旧数据但仍在加载时的细进度条：不遮挡内容，只提示数据可能不是最新。
+                // 放在吸顶栏最底部，出现/消失不会推动上方的标题与 Tab。
+                // isLoading 也算：改筛选/搜索时列表保留旧内容不进骨架屏，这里是唯一的进度提示。
+                if ((uiState.isRefreshing || uiState.isLoading) && uiState.items.isNotEmpty()) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .testTag("mark_record_refresh_indicator")
                     )
                 }
             }
 
-            // 已展示旧数据但仍在加载时的细进度条：不遮挡内容，只提示数据可能不是最新。
-            // 放在吸顶栏最底部，出现/消失不会推动上方的标题与 Tab。
-            // isLoading 也算：改筛选/搜索时列表保留旧内容不进骨架屏，这里是唯一的进度提示。
-            if ((uiState.isRefreshing || uiState.isLoading) && uiState.items.isNotEmpty()) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .testTag("mark_record_refresh_indicator")
-                )
-            }
+            ScrollToTopButton(
+                gridState = listState,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp, end = 16.dp),
+                hazeState = hazeState,
+                hazeStyle = hazeStyle,
+                scene = markRecordGlassScene
+            )
         }
-
-        ScrollToTopButton(
-            gridState = listState,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp),
-            hazeState = hazeState,
-            hazeStyle = hazeStyle,
-            scene = markRecordGlassScene
-        )
     }
 
     // 筛选弹窗

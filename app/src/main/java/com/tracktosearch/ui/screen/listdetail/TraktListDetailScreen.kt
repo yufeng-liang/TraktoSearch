@@ -72,6 +72,7 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.traktListSharedKey
 import com.tracktosearch.ui.component.SharedOrigin
@@ -179,12 +180,95 @@ fun TraktListDetailScreen(
                 // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            when {
-                // 首次加载：骨架屏
-                uiState.isLoading && uiState.items.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .appMorphContentFade()
+            ) {
+                when {
+                    // 首次加载：骨架屏
+                    uiState.isLoading && uiState.items.isEmpty() -> {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .appSkipToLookaheadSize()
+                                    .hazeSource(state = hazeState)
+                                    .backdropContentSource(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
+                            ) {
+                                // 3 列，铺满首屏需要 9 个；6 个会在屏幕下方留一段空白
+                                items(9) {
+                                    MovieCardSkeleton(shimmer = shimmer)
+                                }
+                            }
+
+                            // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
+                            // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
+                            // 骨架阶段列表还没滚过，顶栏按透明处理，与真实内容态的未滚动状态一致
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .appSkipToLookaheadSize()
+                                    .hazeTopBar(
+                                        state = hazeState,
+                                        style = hazeStyle,
+                                        blurRadius = TopBarBackdropBlurRadius,
+                                        isContentUnderTopBar = false,
+                                        scene = listGlassScene
+                                    )
+                                    .clickable(enabled = false, onClick = {})
+                            ) {
+                                Spacer(modifier = Modifier.statusBarsPadding())
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = onBack) {
+                                        Icon(
+                                            Icons.AutoMirrored.Rounded.ArrowBack,
+                                            contentDescription = stringResource(R.string.search_back),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        // 榜单名是导航参数，进页就有；骨架阶段直接显示，避免「加载中」再跳成真名闪一下。
+                                        // 从别处进来没带名字时才退回「加载中」
+                                        text = uiState.listName.ifBlank { stringResource(R.string.common_loading) },
+                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 错误且无数据
+                    uiState.error != null && uiState.items.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AppErrorState(
+                                message = uiState.error!!,
+                                onRetry = { viewModel.retry() }
+                            )
+                        }
+                    }
+
+                    // 正常内容
+                    else -> {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
+                            state = gridState,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .appSkipToLookaheadSize()
@@ -194,15 +278,57 @@ fun TraktListDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
                         ) {
-                            // 3 列，铺满首屏需要 9 个；6 个会在屏幕下方留一段空白
-                            items(9) {
-                                MovieCardSkeleton(shimmer = shimmer)
+                            itemsIndexed(uiState.items, key = { _, item -> "${item.type}-${item.traktId}" }) { _, item ->
+                                val isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, item.type) == true
+                                val isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, item.type) == true
+                                MovieCard(
+                                    title = item.title,
+                                    year = item.year,
+                                    genres = "",
+                                    // posterUrl 已是完整 URL（ViewModel 统一），不要再拼尺寸前缀
+                                    posterUrl = item.posterUrl,
+                                    tmdbId = item.tmdbId,
+                                    origin = SharedOrigin.of(SharedOrigin.TRAKT_LIST, uiState.listId.toString()),
+                                    isInWatchlist = isInWatchlist,
+                                    isWatched = isWatched,
+                                    posterShimmer = shimmer,
+                                    onClick = {
+                                        when (item.type) {
+                                            MediaType.MOVIE -> onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
+                                            MediaType.SHOW -> onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
+                                            else -> {}
+                                        }
+                                    }
+                                )
+                            }
+
+                            item(span = { GridItemSpan(3) }, key = "load_more_footer") {
+                                LoadMoreFooter(
+                                    state = when {
+                                        uiState.isLoadingMore -> LoadMoreFooterState.Loading
+                                        uiState.error != null && uiState.items.isNotEmpty() -> LoadMoreFooterState.Error
+                                        uiState.items.isNotEmpty() && !uiState.hasMore -> LoadMoreFooterState.Complete
+                                        else -> LoadMoreFooterState.Hidden
+                                    },
+                                    onRetry = viewModel::loadMore,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
 
+                        // 快速回顶按钮
+                        ScrollToTopButton(
+                            gridState = gridState,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 16.dp, end = 16.dp),
+                            hazeState = hazeState,
+                            scene = listGlassScene
+                        )
+
                         // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
                         // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
-                        // 骨架阶段列表还没滚过，顶栏按透明处理，与真实内容态的未滚动状态一致
+                        // 未滚动时透明、滚动后显玻璃底，转场期仍停 haze 采样
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -211,7 +337,7 @@ fun TraktListDetailScreen(
                                     state = hazeState,
                                     style = hazeStyle,
                                     blurRadius = TopBarBackdropBlurRadius,
-                                    isContentUnderTopBar = false,
+                                    isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
                                     scene = listGlassScene
                                 )
                                 .clickable(enabled = false, onClick = {})
@@ -226,14 +352,12 @@ fun TraktListDetailScreen(
                                 IconButton(onClick = onBack) {
                                     Icon(
                                         Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = stringResource(R.string.search_back),
+                                        contentDescription = stringResource(R.string.content_desc_back),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
                                 Text(
-                                    // 榜单名是导航参数，进页就有；骨架阶段直接显示，避免「加载中」再跳成真名闪一下。
-                                    // 从别处进来没带名字时才退回「加载中」
-                                    text = uiState.listName.ifBlank { stringResource(R.string.common_loading) },
+                                    text = uiState.listName,
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
@@ -241,134 +365,17 @@ fun TraktListDetailScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                             }
-                        }
-                    }
-                }
 
-                // 错误且无数据
-                uiState.error != null && uiState.items.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AppErrorState(
-                            message = uiState.error!!,
-                            onRetry = { viewModel.retry() }
-                        )
-                    }
-                }
-
-                // 正常内容
-                else -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        state = gridState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .appSkipToLookaheadSize()
-                            .hazeSource(state = hazeState)
-                            .backdropContentSource(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
-                    ) {
-                        itemsIndexed(uiState.items, key = { _, item -> "${item.type}-${item.traktId}" }) { _, item ->
-                            val isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, item.type) == true
-                            val isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, item.type) == true
-                            MovieCard(
-                                title = item.title,
-                                year = item.year,
-                                genres = "",
-                                // posterUrl 已是完整 URL（ViewModel 统一），不要再拼尺寸前缀
-                                posterUrl = item.posterUrl,
-                                tmdbId = item.tmdbId,
-                                origin = SharedOrigin.of(SharedOrigin.TRAKT_LIST, uiState.listId.toString()),
-                                isInWatchlist = isInWatchlist,
-                                isWatched = isWatched,
-                                posterShimmer = shimmer,
-                                onClick = {
-                                    when (item.type) {
-                                        MediaType.MOVIE -> onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
-                                        MediaType.SHOW -> onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
-                                        else -> {}
-                                    }
-                                }
-                            )
-                        }
-
-                        item(span = { GridItemSpan(3) }, key = "load_more_footer") {
-                            LoadMoreFooter(
-                                state = when {
-                                    uiState.isLoadingMore -> LoadMoreFooterState.Loading
-                                    uiState.error != null && uiState.items.isNotEmpty() -> LoadMoreFooterState.Error
-                                    uiState.items.isNotEmpty() && !uiState.hasMore -> LoadMoreFooterState.Complete
-                                    else -> LoadMoreFooterState.Hidden
-                                },
-                                onRetry = viewModel::loadMore,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-
-                    // 快速回顶按钮
-                    ScrollToTopButton(
-                        gridState = gridState,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 16.dp, end = 16.dp),
-                        hazeState = hazeState,
-                        scene = listGlassScene
-                    )
-
-                    // Haze 模糊标题栏：不参与配对，但从第一帧就在 —— 与网格一样按落定尺寸布局，
-                    // 跟着容器裁剪逐渐露出；延迟入场会让顶栏位置先空着，落位时再整片闪出来。
-                    // 未滚动时透明、滚动后显玻璃底，转场期仍停 haze 采样
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .appSkipToLookaheadSize()
-                            .hazeTopBar(
-                                state = hazeState,
-                                style = hazeStyle,
-                                blurRadius = TopBarBackdropBlurRadius,
-                                isContentUnderTopBar = hasContentUnderTopBar && !transitionActive,
-                                scene = listGlassScene
-                            )
-                            .clickable(enabled = false, onClick = {})
-                    ) {
-                        Spacer(modifier = Modifier.statusBarsPadding())
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = onBack) {
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.ArrowBack,
-                                    contentDescription = stringResource(R.string.content_desc_back),
-                                    tint = MaterialTheme.colorScheme.primary
+                            // 磁盘快照已经渲染、远端第一页还在飞时的细进度条：不遮挡内容，只提示数据可能不是最新。
+                            // 放在标题栏最底部，出现/消失不会推动上方的标题。
+                            if (uiState.isRefreshing && uiState.items.isNotEmpty()) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .testTag("list_detail_refresh_indicator")
                                 )
                             }
-                            Text(
-                                text = uiState.listName,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // 磁盘快照已经渲染、远端第一页还在飞时的细进度条：不遮挡内容，只提示数据可能不是最新。
-                        // 放在标题栏最底部，出现/消失不会推动上方的标题。
-                        if (uiState.isRefreshing && uiState.items.isNotEmpty()) {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(2.dp)
-                                    .testTag("list_detail_refresh_indicator")
-                            )
                         }
                     }
                 }

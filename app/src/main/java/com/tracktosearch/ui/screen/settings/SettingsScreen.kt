@@ -38,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Code
@@ -126,7 +125,6 @@ import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
@@ -259,9 +257,6 @@ fun SettingsScreen(
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     val isLoadingChangelog by viewModel.isLoadingChangelog.collectAsStateWithLifecycle()
-    // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
-    // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
-    val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -630,7 +625,6 @@ fun SettingsScreen(
                 AppearanceGroupItem(
                     viewModel = viewModel,
                     hazeState = settingsHazeState,
-                    sharedTransitionEnabled = sharedTransitionEnabled,
                     onThemeClick = { showThemeDialog = true },
                     onAccentColorClick = { showAccentColorDialog = true },
                     onLanguageClick = { showLanguageDialog = true },
@@ -1684,38 +1678,6 @@ private fun PrivacyEntryCard(
 }
 
 /**
- * 共享元素转场动画开关卡片(外观分组下,独占一行)。
- * 开关状态收集局部化到本函数,切换时只重组本卡片。
- */
-@Composable
-private fun SharedTransitionSwitchCard(
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
-) {
-    val haptics = rememberAppHaptics()
-    SettingsItemCard(
-        icon = Icons.Rounded.Animation,
-        title = stringResource(R.string.settings_shared_transition),
-        subtitle = stringResource(R.string.settings_shared_transition_subtitle),
-        // 行区域那一记归 SettingsItemCard 自己的 hapticClickable，这里不能再发 —— 否则点行就是两下
-        onClick = { onToggle(!enabled) },
-        containerColor = containerColor,
-        trailing = {
-            Switch(
-                checked = enabled,
-                // 直接拨开关是另一个手势面（与行点一次只命中一个），按新状态发 toggle
-                onCheckedChange = { value ->
-                    haptics.toggle(value)
-                    onToggle(value)
-                },
-                colors = appSwitchColors()
-            )
-        }
-    )
-}
-
-/**
  * 开屏每日台词入口卡片（外观分组下，独占一行）。
  *
  * 从开关改成入口：开屏那一句和日签是同一件事的两面，凑成一个二级页才说得清，
@@ -1747,8 +1709,8 @@ private fun SplashQuoteEntryCard(
  *
  * 本卡片没有 trailing 开关，也不自己发触感：
  * [SettingsItemCard] 的 `hapticClickable` 已经发过一记，外面再发一次就是同一语义背靠背两下
- * （`SharedTransitionSwitchCard` 与 `SplashQuoteSwitchCard` 原先正是这个毛病，已随本次迁移清掉：
- * 行点那一记留在 [SettingsItemCard]，两张卡只在 `Switch` 的 `onCheckedChange` 上发 toggle）。
+ * （此前带开关的入口卡片正是这个毛病：行点那一记留在 [SettingsItemCard]，
+ * 开关卡片只在 `Switch` 的 `onCheckedChange` 上发 toggle）。
  */
 @Composable
 private fun HapticModeCard(
@@ -1786,7 +1748,6 @@ private fun hapticSummaryText(summary: HapticModeSummary): String = when (summar
 private fun AppearanceGroupItem(
     viewModel: SettingsViewModel,
     hazeState: HazeState?,
-    sharedTransitionEnabled: Boolean,
     onThemeClick: () -> Unit,
     onAccentColorClick: () -> Unit,
     onLanguageClick: () -> Unit,
@@ -1863,12 +1824,6 @@ private fun AppearanceGroupItem(
                 containerColor = Color.Transparent
             )
         }
-        // 共享元素转场动画开关(默认开启):关闭时所有页面间转场降级为 NavHost 默认过渡
-        SharedTransitionSwitchCard(
-            enabled = sharedTransitionEnabled,
-            onToggle = { viewModel.setSharedTransitionEnabled(it) },
-            containerColor = Color.Transparent
-        )
         // 开屏每日台词入口：开关与日签日历都在二级页里
         SplashQuoteEntryCard(
             onClick = onSplashQuoteClick,

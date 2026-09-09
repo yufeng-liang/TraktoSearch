@@ -101,8 +101,6 @@ class DetailHeaderContentTest {
                         onToggleWatchlist = {},
                         posterColorExtractor = mockk(relaxed = true),
                         onPosterColorExtracted = {},
-                        // 只组合上半区（海报/标题/胶囊/按钮/评分卡），演职员等分区不参与本测
-                        contentReady = false
                     )
                 }
             }

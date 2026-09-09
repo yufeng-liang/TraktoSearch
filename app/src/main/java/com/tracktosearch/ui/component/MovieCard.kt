@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.component
 
 import android.graphics.drawable.BitmapDrawable
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -71,7 +70,7 @@ interface PosterColorExtractorProvider {
     fun posterColorExtractor(): PosterColorExtractor
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MovieCard(
     title: String,
@@ -83,7 +82,7 @@ fun MovieCard(
     /**
      * 本卡片所属的列表，见 [SharedOrigin]。
      *
-     * 与 tmdbId 一起构成海报的共享元素 key，详情页从 [DetailSeedStore] 读到同一个值才配对。
+     * 与 tmdbId 一起写入 [DetailSeedStore]，详情页用它做首帧种子。
      * 同一屏里两个列表都有这部片子时，靠这个值区分点的是哪一张，因此每个调用点都要显式给出，
      * 没有默认值。
      */
@@ -101,12 +100,6 @@ fun MovieCard(
      */
     posterShimmer: ShimmerState? = null
 ) {
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    // 只有被点过的卡片才挂共享元素修饰符。列表里每一格都挂的话，滚动时白付一份
-    // SharedContentState 与布局节点的开销，而其中至多一格会真的参与转场。
-    // 这个标记是卡片自己的局部状态，不是全局「当前活跃海报」：key 里已经带了 origin，
-    // 谁跟谁配对由 key 决定，不需要再比对点击顺序。
-    var clicked by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // 通过 EntryPoint 获取 PosterColorExtractor 单例,用于提前提取海报主色写入缓存
     val posterColorExtractor = remember {
@@ -135,8 +128,7 @@ fun MovieCard(
     // 快速滑过的卡片会在 DisposableEffect 中取消协程,不会浪费 CPU
     // 500ms 确保用户点击卡片进入详情页前 PosterColorCache 大概率已写入
     // 卡片海报源图已降级 w342(列表数据 posterUrl),解码 342 与源图 1:1,显示约 318px 清晰;
-    // 详情页 header 改用 w780 独立高清图(见 DetailHeaderContent),不再与卡片共享解码图,
-    // 转场期间由 header 的 w342 占位图兜底避免"闪空"
+    // 详情页 header 改用 w780 独立高清图(见 DetailHeaderContent),不复用卡片解码结果
     val imageRequest = remember(posterUrl, shouldExtractColor) {
         ImageRequest.Builder(context)
             .data(posterUrl)
@@ -175,14 +167,12 @@ fun MovieCard(
         }
     }
 
-    // 包装点击回调：登记本卡片参与转场，并把已渲染的海报/年份/来源交给详情页
+    // 包装点击回调：把已渲染的海报/年份/来源交给详情页做首帧种子
     // remember 包裹避免每次重组创建新 lambda 实例,减少不必要 recomposition
     val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin) {
         {
             if (tmdbId > 0) {
-                clicked = true
-                // 发现页等栏目的海报来自 TMDB 列表接口，不会写入详情缓存，详情页 peek 落空；
-                // origin 让详情页拼出与本卡片相同的共享元素 key
+                // 发现页等栏目的海报来自 TMDB 列表接口，不会写入详情缓存，详情页 peek 落空
                 DetailSeedStore.remember(tmdbId, posterUrl, year, origin)
             }
             onClick()
@@ -234,10 +224,6 @@ fun MovieCard(
                 Modifier
             }
             val imageModifier = Modifier
-                .appSharedBounds(
-                    key = if (clicked) posterSharedKey(tmdbId, origin) else null,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                )
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(posterShape)

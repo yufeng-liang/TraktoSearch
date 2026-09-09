@@ -52,6 +52,7 @@ import com.tracktosearch.data.local.CrashLogRecord
 import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.SharedCorner
+import com.tracktosearch.ui.component.appMorphContentFade
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.crashLogCardSharedKey
@@ -110,92 +111,99 @@ fun CrashLogDetailScreen(
                 // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            when {
-                current == null -> {
-                    // 加载态与不存在区分：Store 异步加载完成前显示加载中，加载完成后仍为 null 才是记录不存在
-                    if (!loaded) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    } else {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(stringResource(R.string.crash_detail_not_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                else -> LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
-                        // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
-                        .appSkipToLookaheadSize(),
-                    // 顶栏改为叠在本列表之上，避让高度自己算：TopAppBar 64dp + 状态栏
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 16.dp + TopAppBarHeight + statusBarHeight,
-                        bottom = 16.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item { InfoCard(current) }
-                    item {
-                        Text(
-                            text = stringResource(R.string.crash_detail_log_content),
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    item {
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Text(
-                                text = current.logContent,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                modifier = Modifier.fillMaxWidth().padding(16.dp)
-                            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .appMorphContentFade()
+            ) {
+                when {
+                    current == null -> {
+                        // 加载态与不存在区分：Store 异步加载完成前显示加载中，加载完成后仍为 null 才是记录不存在
+                        if (!loaded) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(stringResource(R.string.crash_detail_not_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
-                    // 待上传/失败：提供立即上传入口（上传成功后记录自动刷新）
-                    if (current.status == CrashLogRecord.Status.PENDING ||
-                        current.status == CrashLogRecord.Status.FAILED
+                    else -> LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
+                            // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
+                            .appSkipToLookaheadSize(),
+                        // 顶栏改为叠在本列表之上，避让高度自己算：TopAppBar 64dp + 状态栏
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 16.dp + TopAppBarHeight + statusBarHeight,
+                            bottom = 16.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        item { InfoCard(current) }
                         item {
-                            // 上传中禁用：记录刷新为 UPLOADING 后按钮通常随即隐藏，enabled 兜底防重复触发
-                            Button(
-                                onClick = {
-                                    haptics.tap()
-                                    viewModel.uploadNow()
-                                },
-                                enabled = current.status != CrashLogRecord.Status.UPLOADING,
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text(stringResource(R.string.crash_detail_upload_now)) }
+                            Text(
+                                text = stringResource(R.string.crash_detail_log_content),
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Text(
+                                    text = current.logContent,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                                )
+                            }
+                        }
+                        // 待上传/失败：提供立即上传入口（上传成功后记录自动刷新）
+                        if (current.status == CrashLogRecord.Status.PENDING ||
+                            current.status == CrashLogRecord.Status.FAILED
+                        ) {
+                            item {
+                                // 上传中禁用：记录刷新为 UPLOADING 后按钮通常随即隐藏，enabled 兜底防重复触发
+                                Button(
+                                    onClick = {
+                                        haptics.tap()
+                                        viewModel.uploadNow()
+                                    },
+                                    enabled = current.status != CrashLogRecord.Status.UPLOADING,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text(stringResource(R.string.crash_detail_upload_now)) }
+                            }
                         }
                     }
                 }
-            }
 
-            // 顶栏不参与配对，但从第一帧就在：跟着容器一起被裁剪逐渐露出，而不是等落位再淡入。
-            // 不放进 Scaffold 的 topBar 槽，就是为了让它落在共享容器内侧 —— 否则容器还是一张小卡片
-            // 的时候，屏幕顶部就已经压着一条与卡片无关的实心色带。
-            Box(modifier = Modifier.appSkipToLookaheadSize()) {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.crash_detail_title), fontWeight = FontWeight.ExtraBold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.content_desc_back)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-                )
+                // 顶栏不参与配对，与内容一起由外层 appMorphContentFade 控制：
+                // 容器展开后统一延迟淡入，返回时先淡出再收容器。
+                // 不放进 Scaffold 的 topBar 槽，就是为了让它落在共享容器内侧 —— 否则容器还是一张小卡片
+                // 的时候，屏幕顶部就已经压着一条与卡片无关的实心色带。
+                Box(modifier = Modifier.appSkipToLookaheadSize()) {
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.crash_detail_title), fontWeight = FontWeight.ExtraBold) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = stringResource(R.string.content_desc_back)
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                    )
+                }
             }
         }
     }

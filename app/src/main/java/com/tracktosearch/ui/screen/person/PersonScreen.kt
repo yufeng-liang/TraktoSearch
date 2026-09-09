@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.person
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,10 +72,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.backdropContentSource
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.zoomSharedSource
-import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.SharedOrigin
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.posterSharedKey
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.util.ToastEffect
@@ -100,7 +96,6 @@ private const val PERSON_CREDIT_ORIGIN_BASE = "person-credit"
 private fun personCreditOrigin(section: String, tmdbId: Int, index: Int): String =
     SharedOrigin.of(PERSON_CREDIT_ORIGIN_BASE, "${section}_${tmdbId}_$index")
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun PersonScreen(
     personId: Int,
@@ -344,8 +339,6 @@ fun PersonScreen(
                                                 val posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) }
                                                 val year = credit.release_date.take(4)
                                                 val origin = personCreditOrigin("movie", credit.id, index)
-                                                // 只有被点过的那一张才挂共享元素修饰符
-                                                var clicked by remember { mutableStateOf(false) }
                                                 CreditPosterCard(
                                                     title = credit.title,
                                                     subtitle = credit.character,
@@ -353,10 +346,9 @@ fun PersonScreen(
                                                     posterUrl = posterUrl,
                                                     isResolving = uiState.resolvingTmdbId == credit.id,
                                                     onClick = {
-                                                        clicked = true
                                                         // 作品表的海报来自 TMDB 人物作品接口，不写详情缓存，
                                                         // 详情页 peek 必然落空，交给它做首帧种子；
-                                                        // origin 让详情页拼出与本卡片相同的共享元素 key
+                                                        // origin 继续随种子记录来源
                                                         DetailSeedStore.remember(
                                                             credit.id,
                                                             posterUrl,
@@ -369,11 +361,7 @@ fun PersonScreen(
                                                             isMovie = true,
                                                             onNavigate = onMovieClick
                                                         )
-                                                    },
-                                                    posterModifier = Modifier.appSharedBounds(
-                                                        key = if (clicked) posterSharedKey(credit.id, origin) else null,
-                                                        corner = SharedCorner.uniform(12.dp),
-                                                    )
+                                                    }
                                                 )
                                             }
                                             if (uiState.movieCredits.isNotEmpty()) {
@@ -443,8 +431,6 @@ fun PersonScreen(
                                                 val posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) }
                                                 val year = credit.first_air_date.take(4)
                                                 val origin = personCreditOrigin("tv", credit.id, index)
-                                                // 只有被点过的那一张才挂共享元素修饰符
-                                                var clicked by remember { mutableStateOf(false) }
                                                 CreditPosterCard(
                                                     title = credit.name,
                                                     subtitle = credit.character,
@@ -452,7 +438,6 @@ fun PersonScreen(
                                                     posterUrl = posterUrl,
                                                     isResolving = uiState.resolvingTmdbId == credit.id,
                                                     onClick = {
-                                                        clicked = true
                                                         // 理由同电影栏：列表接口的海报进不了详情缓存，
                                                         // 海报与 origin 一起交给详情页
                                                         DetailSeedStore.remember(
@@ -467,11 +452,7 @@ fun PersonScreen(
                                                             isMovie = false,
                                                             onNavigate = onShowClick
                                                         )
-                                                    },
-                                                    posterModifier = Modifier.appSharedBounds(
-                                                        key = if (clicked) posterSharedKey(credit.id, origin) else null,
-                                                        corner = SharedCorner.uniform(12.dp),
-                                                    )
+                                                    }
                                                 )
                                             }
                                             if (uiState.tvCredits.isNotEmpty()) {
