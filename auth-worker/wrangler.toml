@@ -5,6 +5,15 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+# Workers Logs：wrangler tail 看不到经 service binding 进来的请求，开启后服务端
+# 采集全部调用（含绑定流量）的 console 输出，供出题/每日知识 [QUIZ_DIAG] 诊断用
+[observability]
+enabled = true
+
+	[observability.logs]
+	invocation_logs = true
+	head_sampling_rate = 1
+
 # D1 数据库（授权关系数据）
 [[d1_databases]]
 binding = "DB"
