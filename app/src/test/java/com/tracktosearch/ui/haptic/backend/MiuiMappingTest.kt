@@ -37,11 +37,11 @@ class MiuiMappingTest {
         HapticSemantic.TOGGLE_OFF to 0x10000004, // 同一个 ID：这一层表达不出开关方向
         HapticSemantic.CONFIRM to 0x10000012, // MIUI_BUTTON_LARGE 大按钮
         HapticSemantic.REJECT to 0x10000018, // MIUI_ALERT 警示
-        HapticSemantic.DRAG_START to 0x1000000f, // MIUI_HOLD 保持
+        HapticSemantic.DRAG_START to 0x1000000b, // MIUI_PICK_UP 拾起（2026-09-09 改档，原 hold）
         HapticSemantic.THRESHOLD_ARMED to 0x10000010, // MIUI_BOUNDARY_SPATIAL 空间边界
         HapticSemantic.GESTURE_END to 0x10000003, // MIUI_FLICK 甩动
         HapticSemantic.SCROLL_EDGE to 0x1000000c, // MIUI_SCROLL_EDGE 滚动到边
-        HapticSemantic.POPUP_SHOW to 0x10000009, // MIUI_POPUP_NORMAL 弹窗
+        HapticSemantic.POPUP_SHOW to 0x1000000a, // MIUI_POPUP_LIGHT 轻弹窗（2026-09-09 改档，原 popup_normal）
     )
 
     /**
@@ -90,11 +90,11 @@ class MiuiMappingTest {
         0x10000004, // TOGGLE_ON，TOGGLE_OFF 在这里被去重掉
         0x10000012, // CONFIRM
         0x10000018, // REJECT
-        0x1000000f, // DRAG_START
+        0x1000000b, // DRAG_START（PICK_UP，2026-09-09 改档）
         0x10000010, // THRESHOLD_ARMED
         0x10000003, // GESTURE_END
         0x1000000c, // SCROLL_EDGE
-        0x10000009, // POPUP_SHOW
+        0x1000000a, // POPUP_SHOW（POPUP_LIGHT，2026-09-09 改档）
     )
 
     @Test
@@ -120,11 +120,11 @@ class MiuiMappingTest {
         HapticSemantic.TOGGLE_OFF to "EFFECT_KEY_SWITCH", // 与 ext 表同口径：这层表达不出方向
         HapticSemantic.CONFIRM to "EFFECT_KEY_BUTTON_LARGE",
         HapticSemantic.REJECT to "EFFECT_KEY_ALERT",
-        HapticSemantic.DRAG_START to "EFFECT_KEY_HOLD",
+        HapticSemantic.DRAG_START to "EFFECT_KEY_PICKUP", // 拾起（2026-09-09 改档，原 hold）
         HapticSemantic.THRESHOLD_ARMED to "EFFECT_KEY_BOUNDARY_SPATIAL",
         HapticSemantic.GESTURE_END to "EFFECT_KEY_FLICK",
         HapticSemantic.SCROLL_EDGE to "EFFECT_KEY_SCROLL_EDGE",
-        HapticSemantic.POPUP_SHOW to "EFFECT_KEY_POPUP_NORMAL",
+        HapticSemantic.POPUP_SHOW to "EFFECT_KEY_POPUP_LIGHT", // 轻弹窗（2026-09-09 改档）
     )
 
     @Test
@@ -146,11 +146,11 @@ class MiuiMappingTest {
             MiuiHapticEffects.MIUI_SWITCH to "EFFECT_KEY_SWITCH",
             MiuiHapticEffects.MIUI_BUTTON_LARGE to "EFFECT_KEY_BUTTON_LARGE",
             MiuiHapticEffects.MIUI_ALERT to "EFFECT_KEY_ALERT",
-            MiuiHapticEffects.MIUI_HOLD to "EFFECT_KEY_HOLD",
+            MiuiHapticEffects.MIUI_PICK_UP to "EFFECT_KEY_PICKUP",
             MiuiHapticEffects.MIUI_BOUNDARY_SPATIAL to "EFFECT_KEY_BOUNDARY_SPATIAL",
             MiuiHapticEffects.MIUI_FLICK to "EFFECT_KEY_FLICK",
             MiuiHapticEffects.MIUI_SCROLL_EDGE to "EFFECT_KEY_SCROLL_EDGE",
-            MiuiHapticEffects.MIUI_POPUP_NORMAL to "EFFECT_KEY_POPUP_NORMAL",
+            MiuiHapticEffects.MIUI_POPUP_LIGHT to "EFFECT_KEY_POPUP_LIGHT",
         )
         HapticSemantic.entries.forEach { semantic ->
             assertWithMessage("$semantic 在两条通路上选了不同名的效果")
@@ -222,6 +222,8 @@ class MiuiMappingTest {
             MiuiHapticEffects.MIUI_MESH_HEAVY to "连发语义只许走轻网格，重网格会在一次拖动里累出几十下重震",
             MiuiHapticEffects.MIUI_MESH_NORMAL to "同上，普通网格也偏重",
             MiuiHapticEffects.MIUI_LONG_PRESS to "长按刻意不入语义表：combinedClickable 在 onLongClick 之前已自行发过一次",
+            MiuiHapticEffects.MIUI_POPUP_NORMAL to "2026-09-09 改档弃用：被动弹窗走更轻的 POPUP_LIGHT（HyperOS 属性 6,1 vs 6,2），改回来先过设计文档",
+            MiuiHapticEffects.MIUI_HOLD to "2026-09-09 改档弃用：hold 语义是「保持」且原生默认弱档（属性 4,0），起手那记要沉的，走 PICK_UP",
             MiuiHapticEffects.MIUI_GEAR_HEAVY to "刻度感只许走轻齿轮，重齿轮会把 Tab 切换震成撞击",
             MiuiHapticEffects.MIUI_KEYBOARD to "留给彩蛋答题期的键盘反馈，不归这 13 个语义",
         )

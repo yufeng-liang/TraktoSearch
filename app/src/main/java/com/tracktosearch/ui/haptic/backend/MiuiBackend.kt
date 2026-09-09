@@ -418,16 +418,16 @@ internal fun miuiEffectFor(semantic: HapticSemantic): Int = when (semantic) {
     HapticSemantic.CONFIRM -> MiuiHapticEffects.MIUI_BUTTON_LARGE
     // 警示：失败语义，重但不到惊吓
     HapticSemantic.REJECT -> MiuiHapticEffects.MIUI_ALERT
-    // 保持：起手那记沉的「抓住了」
-    HapticSemantic.DRAG_START -> MiuiHapticEffects.MIUI_HOLD
+    // 拾起：起手那记沉的「抓住了」（与 String 键通路同口径，改档理由见键表注释）
+    HapticSemantic.DRAG_START -> MiuiHapticEffects.MIUI_PICK_UP
     // 空间边界：到阈值的强提示，「可以松手了」
     HapticSemantic.THRESHOLD_ARMED -> MiuiHapticEffects.MIUI_BOUNDARY_SPATIAL
     // 甩动：手势落定、面板吸附
     HapticSemantic.GESTURE_END -> MiuiHapticEffects.MIUI_FLICK
     // 滚动到边：撞墙的一记，且会被反复顶到
     HapticSemantic.SCROLL_EDGE -> MiuiHapticEffects.MIUI_SCROLL_EDGE
-    // 弹窗：让面板落得出来，又不抢注意力
-    HapticSemantic.POPUP_SHOW -> MiuiHapticEffects.MIUI_POPUP_NORMAL
+    // 轻弹窗：被动弹出的面板（与 String 键通路同口径，改档理由见键表注释）
+    HapticSemantic.POPUP_SHOW -> MiuiHapticEffects.MIUI_POPUP_LIGHT
 }
 
 /**
@@ -461,11 +461,17 @@ internal fun miuiEffectKeyFieldFor(semantic: HapticSemantic): String = when (sem
     HapticSemantic.TOGGLE_OFF -> "EFFECT_KEY_SWITCH"
     HapticSemantic.CONFIRM -> "EFFECT_KEY_BUTTON_LARGE"
     HapticSemantic.REJECT -> "EFFECT_KEY_ALERT"
-    HapticSemantic.DRAG_START -> "EFFECT_KEY_HOLD"
+    // 拾起：拖拽「抓住」的那一刻（桌面图标拿起同款，属性表 2,2 = 沉的一记）。
+    // 原先用 hold（4,0，原生默认弱档、语义是「保持」不是「起手」），2026-09-09 依
+    // HyperOS 属性表与开源实践（GoldjucX 拖拽拾起用 pickup）改档
+    HapticSemantic.DRAG_START -> "EFFECT_KEY_PICKUP"
     HapticSemantic.THRESHOLD_ARMED -> "EFFECT_KEY_BOUNDARY_SPATIAL"
     HapticSemantic.GESTURE_END -> "EFFECT_KEY_FLICK"
     HapticSemantic.SCROLL_EDGE -> "EFFECT_KEY_SCROLL_EDGE"
-    HapticSemantic.POPUP_SHOW -> "EFFECT_KEY_POPUP_NORMAL"
+    // 轻弹窗：被动弹出的面板要不抢注意力。HyperOS 属性表 popup_light 是 6,1（比
+    // popup_normal 的 6,2 低一档强度），SoundHaptic 调校组也把 popup_light 归在
+    // 「轻」档；2026-09-09 由 popup_normal 改档
+    HapticSemantic.POPUP_SHOW -> "EFFECT_KEY_POPUP_LIGHT"
 }
 
 /**
