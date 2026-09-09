@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleAiApi } from '../src/ai/handler.ts';
-import { handleAiIllustration } from '../src/ai/daily-illustration.ts';
+import { DAILY_ILLUSTRATION_STYLE_VERSION, handleAiIllustration } from '../src/ai/daily-illustration.ts';
 import { fallbackDailyKnowledgeUnit } from '../src/ai/daily-knowledge.ts';
 
 function today() {
@@ -364,6 +364,62 @@ test('technical validation accepts a valid PNG and rejects non-image or invalid 
 
     const tooSmall = validPngBytes(100, 100);
     assert.throws(() => validateConceptIllustration(tooSmall), /dimensions or content are invalid/);
+});
+
+test('expired generating lease with attempts left retries and reaches ready', async () => {
+    const fetchState = installDailyFetch();
+    try {
+        const env = createTestEnv({ AI_IMAGE_CACHE: createImageBucket() });
+        const unit = fallbackDailyKnowledgeUnit(today(), 'zh-CN');
+        const stateKey = JSON.stringify([unit.unitId, unit.locale, DAILY_ILLUSTRATION_STYLE_VERSION]);
+        env.AI_TEST_ILLUSTRATION_STATE.set(stateKey, {
+            status: 'generating',
+            attemptCount: 1,
+            objectKey: null,
+            mimeType: null,
+            width: null,
+            height: null,
+            sizeBytes: null,
+            lastErrorCode: 'PROVIDER_FAILED',
+            updatedAt: Math.floor(Date.now() / 1000) - 700,
+        });
+        const { generateDailyIllustrationInBackground } = await import('../src/ai/daily-illustration.ts');
+        await generateDailyIllustrationInBackground(env, unit, 'friend-1');
+        assert.equal(fetchState.imageCalls, 1);
+        const state = illustrationStates(env)[0];
+        assert.equal(state.status, 'ready');
+        assert.equal(state.attemptCount, 2);
+    } finally {
+        fetchState.restore();
+    }
+});
+
+test('expired generating state with exhausted attempts closes to unavailable without another provider call', async () => {
+    const fetchState = installDailyFetch();
+    try {
+        const env = createTestEnv({ AI_IMAGE_CACHE: createImageBucket() });
+        const unit = fallbackDailyKnowledgeUnit(today(), 'zh-CN');
+        const stateKey = JSON.stringify([unit.unitId, unit.locale, DAILY_ILLUSTRATION_STYLE_VERSION]);
+        env.AI_TEST_ILLUSTRATION_STATE.set(stateKey, {
+            status: 'generating',
+            attemptCount: 2,
+            objectKey: null,
+            mimeType: null,
+            width: null,
+            height: null,
+            sizeBytes: null,
+            lastErrorCode: 'PROVIDER_FAILED',
+            updatedAt: Math.floor(Date.now() / 1000) - 700,
+        });
+        const { generateDailyIllustrationInBackground } = await import('../src/ai/daily-illustration.ts');
+        await generateDailyIllustrationInBackground(env, unit, 'friend-1');
+        assert.equal(fetchState.imageCalls, 0, '次数耗尽后不得再调用上游');
+        const state = illustrationStates(env)[0];
+        assert.equal(state.status, 'unavailable');
+        assert.equal(state.lastErrorCode, 'ATTEMPTS_EXHAUSTED');
+    } finally {
+        fetchState.restore();
+    }
 });
 
 test('invalid illustration tokens are rejected', async () => {

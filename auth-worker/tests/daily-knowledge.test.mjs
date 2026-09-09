@@ -84,9 +84,9 @@ function validKnowledgeUnit(overrides = {}) {
         checkQuestion: {
             prompt: '根据这个学习单元，第一个反对票的作用是什么？',
             options: [
-                { id: 'a', text: '让所有人立刻改变立场。' },
-                { id: 'b', text: '降低其他人表达不同意见的心理成本。' },
-                { id: 'c', text: '证明多数意见一定错误。' },
+                { id: 'a', text: '让所有人立刻改变立场' },
+                { id: 'b', text: '降低其他人表达不同意见的心理成本' },
+                { id: 'c', text: '证明多数意见一定错误' },
             ],
             correctOptionIds: ['b'],
             explanation: '从众压力说明第一个公开异议会让后续不同意见更容易出现。',
@@ -467,6 +467,103 @@ test('daily reads the legacy v2 cache without regenerating or breaking old field
         assert.equal(json.data.unitId, undefined);
     } finally {
         globalThis.fetch = originalFetch;
+    }
+});
+
+test('checkQuestion option texts drop trailing sentence punctuation', async () => {
+    const candidate = validKnowledgeUnit({
+        unitId: 'option-punct-unit',
+        title: '选项标点规范化单元',
+        checkQuestion: {
+            prompt: '根据这个学习单元，第一个反对票的作用是什么？',
+            options: [
+                { id: 'a', text: '让所有人立刻改变立场。？' },
+                { id: 'b', text: '降低其他人表达不同意见的心理成本。' },
+                { id: 'c', text: '证明多数意见一定错误！' },
+            ],
+            correctOptionIds: ['b'],
+            explanation: '从众压力说明第一个公开异议会让后续不同意见更容易出现。',
+        },
+    });
+    const fetchState = installDailyFetch({ candidate, review: candidate });
+    try {
+        const env = createLegacyMimoTextEnv();
+        const { response, json } = await call('/api/ai/daily', {
+            body: { action: 'daily', sessionId: 'daily-option-punct', watched: watchedMovies(), forceRefresh: true },
+            env,
+        });
+        assert.equal(response.status, 200);
+        const texts = json.data.checkQuestion.options.map(option => option.text);
+        assert.deepEqual(texts, ['让所有人立刻改变立场', '降低其他人表达不同意见的心理成本', '证明多数意见一定错误']);
+    } finally {
+        fetchState.restore();
+    }
+});
+
+test('generic methodology content with a mismatched subject falls back, metacognition subjects stay allowed', async () => {
+    // 物理标签 + “避免过度解读”类通用方法内容：学科与内容脱节，必须回落到种子。
+    const mismatched = validKnowledgeUnit({
+        unitId: 'candidate-physics-generic',
+        subject: '物理',
+        subjectGroup: 'science_and_nature',
+        evidenceMode: 'external_fact',
+        title: '如何避免过度解读影片内容',
+        takeaway: '如何避免过度解读是重点，判断时要先核对可观察证据。',
+        boundary: '这是基于外部来源的事实说明，不构成对影片的权威结论。',
+    });
+    const mismatchFetch = installDailyFetch({ candidate: mismatched, review: mismatched });
+    try {
+        const env = createLegacyMimoTextEnv();
+        const { response, json } = await call('/api/ai/daily', {
+            body: { action: 'daily', sessionId: 'daily-physics-generic', watched: watchedMovies(), forceRefresh: true },
+            env,
+        });
+        assert.equal(response.status, 200);
+        assert.notEqual(json.data.unitId, mismatched.unitId, '物理标签不得承载通用“避免过度解读”方法');
+    } finally {
+        mismatchFetch.restore();
+    }
+
+    // 心理学（元认知目录内）讨论“避免过度解读他人行为”属于标签一致，允许放行。
+    const meta = validKnowledgeUnit({
+        unitId: 'candidate-psychology-meta',
+        takeaway: '避免过度解读他人行为时，应先核对可观察证据再下结论。',
+    });
+    const metaFetch = installDailyFetch({ candidate: meta, review: meta });
+    try {
+        const env = createLegacyMimoTextEnv();
+        const { response, json } = await call('/api/ai/daily', {
+            body: { action: 'daily', sessionId: 'daily-psychology-meta', watched: watchedMovies(), forceRefresh: true },
+            env,
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.unitId, meta.unitId, '学习/记忆/元认知学科与“避免过度解读”内容一致时不应误杀');
+    } finally {
+        metaFetch.restore();
+    }
+});
+
+test('daily prompts forbid subject-generic methodology and unsupported external facts', async () => {
+    const candidate = validKnowledgeUnit({ unitId: 'prompt-rule-candidate', title: '提示词硬约束候选' });
+    const reviewed = validKnowledgeUnit({ unitId: 'prompt-rule-reviewed', title: '提示词硬约束审校结果' });
+    const fetchState = installDailyFetch({ candidate, review: reviewed });
+    try {
+        const env = createLegacyMimoTextEnv();
+        const { response, json } = await call('/api/ai/daily', {
+            body: { action: 'daily', sessionId: 'daily-prompt-rules', watched: watchedMovies(), forceRefresh: true },
+            env,
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.unitId, 'prompt-rule-reviewed');
+        const candidatePrompt = String(fetchState.requests[0].messages[0].content);
+        const reviewPrompt = String(fetchState.requests[1].messages[0].content);
+        assert.match(candidatePrompt, /学科标签必须与题目真正检验的内容一致/);
+        assert.match(candidatePrompt, /避免过度解读/);
+        assert.match(candidatePrompt, /source\.evidence 与 URL 的实质支持/);
+        assert.match(reviewPrompt, /学科标签与内容不符/);
+        assert.match(reviewPrompt, /外部事实没有来源摘要实质支撑/);
+    } finally {
+        fetchState.restore();
     }
 });
 

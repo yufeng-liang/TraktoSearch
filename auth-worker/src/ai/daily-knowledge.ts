@@ -124,6 +124,37 @@ const EVIDENCE_ENHANCED_SUBJECTS = new Set([
     '法学', '军事学与战略', '体育科学', '食品科学',
 ]);
 
+// 学习/记忆/元认知类学科允许讨论“如何避免过度解读/再看一遍”等元认知方法；
+// 其他学科出现这些通用方法短语，即视为学科标签与题目内容脱节。
+const METACOGNITION_SUBJECTS = new Set(['教育学', '心理学', '认知科学', '发展心理学']);
+
+// 跨语言通用方法短语：命中后若学科不在元认知目录内，直接判不合格。
+const GENERIC_METHODOLOGY_PHRASES: readonly string[] = [
+    // 中文（quiz 与 daily 的默认语言）
+    '避免过度解读', '不要过度解读', '如何避免过度解读', '怎么避免过度解读',
+    '避免把主观联想当成影片事实', '把主观联想当成影片事实', '避免主观联想', '不要主观臆断',
+    '向朋友推荐', '推荐给朋友', '如何向朋友推荐', '怎么向朋友推荐',
+    '再看一遍', '重新看一遍', '再看一次', '重看一遍', '看第二遍', '二刷一遍', '复盘一遍', '回顾一遍',
+    // English
+    'avoid over interpreting', 'avoid overinterpreting', 'do not over interpret', 'not overinterpret',
+    'avoid reading too much into', 'recommend this film to a friend', 'recommend it to a friend',
+    'watch it again', 'watch again', 'rewatch', 're-watch',
+    // 日本語
+    '過剰解釈を避ける', '友達に勧める', '友だちに勧める', 'もう一度見る', '見直す',
+    // 한국어
+    '과잉해석을 피하', '친구에게 추천하', '다시 보', '복습하',
+];
+
+/**
+ * 学科与内容一致性门槛：非元认知学科出现通用观影/学习方法论短语时返回 true。
+ * 每日知识单元与 quiz 两阶段共用；quiz 用户可见文本固定中文。
+ */
+export function isGenericMethodologyMismatch(text: string, subject: string): boolean {
+    if (METACOGNITION_SUBJECTS.has(subject)) return false;
+    const normalized = normalizeForMatch(text);
+    return GENERIC_METHODOLOGY_PHRASES.some(phrase => normalized.includes(normalizeForMatch(phrase)));
+}
+
 function invalidUnit(message: string): AppError {
     return new AppError('INVALID_AI_OUTPUT', `AI daily knowledge unit is invalid: ${message}`, 502);
 }
@@ -151,6 +182,14 @@ function optionalText(value: unknown, maxLength: number): string | null {
     if (typeof value !== 'string') throw invalidUnit('characterLine must be a string');
     const normalized = value.trim().replace(/\s+/g, ' ');
     return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+/**
+ * 去掉文本末尾的句子标点（保留内部标点）。选项文本拼接（如多选用“、”连接）
+ * 时不能出现“A。、B。”，统一在规范化层去掉结尾标点。
+ */
+export function stripTrailingSentencePunctuation(value: string): string {
+    return value.replace(/[。．.!?！？]+$/u, '');
 }
 
 function requireEnum<T extends string>(value: unknown, values: readonly T[], label: string): T {
@@ -192,7 +231,7 @@ function normalizeCheckQuestion(value: unknown): KnowledgeCheckQuestion {
         const optionObject = requireRecord(option, 'checkQuestion option');
         const id = requireText(optionObject.id, 'option.id', 1, 16);
         if (!/^[A-Za-z0-9_-]+$/.test(id)) throw invalidUnit('option.id has invalid characters');
-        const text = requireText(optionObject.text, 'option.text', 2, 300);
+        const text = stripTrailingSentencePunctuation(requireText(optionObject.text, 'option.text', 2, 300));
         return { id, text };
     });
     const optionIds = new Set(options.map(option => option.id));
@@ -324,9 +363,11 @@ function validateSpoilerLevel(unit: KnowledgeUnit): void {
     const lowered = text.toLocaleLowerCase(unit.locale);
     // 拉丁词按整词匹配：'spending' 含 'ending'、'attending' 含 'ending' 这类子串误杀必须挡掉。
     const latinHeavy = /\b(ending|finale|dies|death|killer|murderer|truth|twist)\b/i;
+    // 日文片假名词同样按整词匹配：'ラスト' 不能命中 'コントラスト'（对比度）这类更长词形。
+    const katakanaLast = /(?<![\u30A0-\u30FF])ラスト(?![\u30A0-\u30FF])/u;
     const hasHeavySpoiler = lowered.includes('结局') || lowered.includes('结尾') || lowered.includes('死亡')
         || lowered.includes('凶手') || lowered.includes('真相') || lowered.includes('逆转')
-        || lowered.includes('結末') || lowered.includes('ラスト') || lowered.includes('死ぬ')
+        || lowered.includes('結末') || katakanaLast.test(text) || lowered.includes('死ぬ')
         || lowered.includes('犯人') || lowered.includes('どんでん返し')
         || lowered.includes('결말') || lowered.includes('마지막') || lowered.includes('죽다')
         || lowered.includes('사망') || lowered.includes('범인') || lowered.includes('진실') || lowered.includes('반전')
@@ -426,6 +467,19 @@ export function normalizeDailyKnowledgeUnit(
     if (isGenericText(title, options.movies) || isGenericText(takeaway, options.movies) || isGenericText(filmEvidence, options.movies)) {
         throw invalidUnit('content is a generic template');
     }
+    // 学科与内容一致性：概念/标题/结论/即时小题出现通用方法短语，而学科又不是
+    // 学习/记忆/元认知目录时，说明模型把通用方法论硬套到了不相关学科标签上。
+    const methodologySurface = [
+        concept,
+        title,
+        takeaway,
+        checkQuestion.prompt,
+        ...checkQuestion.options.map(option => option.text),
+        checkQuestion.explanation,
+    ];
+    if (methodologySurface.some(text => isGenericMethodologyMismatch(text, subject))) {
+        throw invalidUnit('subject does not match generic methodology content');
+    }
     if (EVIDENCE_ENHANCED_SUBJECTS.has(subject)) {
         if (evidenceMode !== 'external_fact' || !source.evidence) throw invalidUnit('evidence-enhanced subject requires external source evidence');
     }
@@ -492,7 +546,7 @@ export function dailyCandidateMessages(
     return [
         {
             role: 'system',
-            content: `你是今日影视知识候选编辑。只返回一个 JSON 对象，不返回 markdown 或审校意见。全部用户可读文本使用${LOCALE_LANGUAGE_NAMES[locale]}。字段固定为 unitId、version、locale、relationType、evidenceMode、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。version 固定为 1；locale 固定为 ${locale}；relationType 只能是 direct_watch、theme_extension、general_knowledge；evidenceMode 只能是 film_fact、viewing_interpretation、external_fact、theme_extension；subjectGroup 只能是 ${SUBJECT_GROUP_IDS.join('、')}；subject 是内部受控学科键，必须使用给定中文目录值，不是用户可读文案；difficulty 只能是 easy、medium、hard；spoilerLevel 只能是 none、light、heavy。${relationRule}direct_watch 的 relatedMedia.title 必须逐字来自已看输入，filmEvidence 必须同时引用片名和输入中的年份、类型、简介或证据。source 必须包含 name、合法 http(s) url、evidence；checkQuestion 必须有 2 到 4 个唯一选项且只有一个最佳答案。标题、结论和影视依据必须具体，禁止“人性的复杂性”“勇敢面对困难”这类泛化套话。不得补写输入没有的剧情、台词、演员、幕后事实或历史因果。`,
+            content: `你是今日影视知识候选编辑。只返回一个 JSON 对象，不返回 markdown 或审校意见。全部用户可读文本使用${LOCALE_LANGUAGE_NAMES[locale]}。字段固定为 unitId、version、locale、relationType、evidenceMode、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。version 固定为 1；locale 固定为 ${locale}；relationType 只能是 direct_watch、theme_extension、general_knowledge；evidenceMode 只能是 film_fact、viewing_interpretation、external_fact、theme_extension；subjectGroup 只能是 ${SUBJECT_GROUP_IDS.join('、')}；subject 是内部受控学科键，必须使用给定中文目录值，不是用户可读文案；difficulty 只能是 easy、medium、hard；spoilerLevel 只能是 none、light、heavy。${relationRule}direct_watch 的 relatedMedia.title 必须逐字来自已看输入，filmEvidence 必须同时引用片名和输入中的年份、类型、简介或证据。source 必须包含 name、合法 http(s) url、evidence；checkQuestion 必须有 2 到 4 个唯一选项且只有一个最佳答案。标题、结论和影视依据必须具体，禁止“人性的复杂性”“勇敢面对困难”这类泛化套话。不得补写输入没有的剧情、台词、演员、幕后事实或历史因果。学科标签必须与题目真正检验的内容一致：禁止给“避免过度解读/如何向朋友推荐/再看一遍”这类与学科无关的通用方法内容硬套物理、化学、历史、马克思主义哲学等学科，除非学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致；external_fact 的外部事实必须得到 source.evidence 与 URL 的实质支持，不能只写空泛来源。checkQuestion 的选项文本不要以句号等句子标点结尾。`,
         },
         {
             role: 'user',
@@ -509,7 +563,7 @@ export function dailyReviewMessages(
     return [
         {
             role: 'system',
-            content: `你是今日影视知识的二审审校器和重写器。只返回完整学习单元 JSON，不返回评分、意见或 markdown。全部用户可读文本使用${LOCALE_LANGUAGE_NAMES[locale]}。你只能使用候选学习单元、客户端提供的影视资料、来源摘要、受控学科和边界规则；不得补写输入中不存在的剧情、台词、镜头、演员、历史因果、实验数据或幕后事实。若候选泛化、证据不足、题目歧义或片透等级不当，必须重写；无法安全重写时返回空对象。保持字段和版本不变，并确保学习结论可复述、影视依据具体、事实/解读/延伸边界清楚、来源证据支持结论、即时小题只有一个明确最佳答案；subject 是内部受控学科键，不是用户可读文案。`,
+            content: `你是今日影视知识的二审审校器和重写器。只返回完整学习单元 JSON，不返回评分、意见或 markdown。全部用户可读文本使用${LOCALE_LANGUAGE_NAMES[locale]}。你只能使用候选学习单元、客户端提供的影视资料、来源摘要、受控学科和边界规则；不得补写输入中不存在的剧情、台词、镜头、演员、历史因果、实验数据或幕后事实。若候选泛化、证据不足、题目歧义或片透等级不当，必须重写；无法安全重写时返回空对象。保持字段和版本不变，并确保学习结论可复述、影视依据具体、事实/解读/延伸边界清楚、来源证据支持结论、即时小题只有一个明确最佳答案；subject 是内部受控学科键，不是用户可读文案。若候选的学科标签与内容不符（例如把通用观影方法硬套物理/化学/历史/马克思主义哲学），或外部事实没有来源摘要实质支撑，或标题/结论/小题互相复制同一套模板，必须重写；无法安全重写时返回空对象。`,
         },
         {
             role: 'user',

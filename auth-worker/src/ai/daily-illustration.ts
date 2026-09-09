@@ -401,7 +401,10 @@ async function claimIllustration(
             if (currentTime - current.updatedAt < DAILY_ILLUSTRATION_LEASE_SECONDS) {
                 return { claimed: false, attemptCount: current.attemptCount };
             }
+            // 租约已过期：还有重试额度就继续下一次尝试；额度耗尽则必须把卡死的
+            // generating 状态终结为 unavailable，否则客户端会一直轮询到“永远生成中”。
             if (current.attemptCount >= DAILY_ILLUSTRATION_MAX_ATTEMPTS) {
+                await markIllustrationUnavailable(env, unit, current.attemptCount, 'ATTEMPTS_EXHAUSTED');
                 return { claimed: false, attemptCount: current.attemptCount };
             }
             const nextAttempt = current.attemptCount + 1;
@@ -444,7 +447,10 @@ async function claimIllustration(
             DAILY_ILLUSTRATION_LEASE_SECONDS,
             currentTime,
         ).run();
-        if (Number(result.meta?.changes || 0) !== 1) return { claimed: false, attemptCount };
+        if (Number(result.meta?.changes || 0) !== 1) {
+            await closeExpiredExhaustedClaim(env, unit, currentTime);
+            return { claimed: false, attemptCount };
+        }
         // 冲突分支会把旧 attempt_count + 1；重新读取，避免租约恢复时误按第 1 次尝试重复两次。
         const row = await env.DB.prepare(`
             SELECT attempt_count
@@ -455,6 +461,41 @@ async function claimIllustration(
         return { claimed: true, attemptCount: row?.attempt_count ?? attemptCount };
     } catch {
         return { claimed: false, attemptCount };
+    }
+}
+
+/**
+ * 租约过期且重试次数已耗尽时，把残留的 generating 行终结为 unavailable。
+ * WHERE 只命中“仍处于 generating、次数已满、租约确已过期”的行，不会干扰正在运行的任务
+ * 或已 ready/unavailable 的状态。
+ */
+async function closeExpiredExhaustedClaim(
+    env: DailyIllustrationEnvironment,
+    unit: DailyIllustrationUnitInput,
+    currentTime: number,
+): Promise<void> {
+    if (!env.DB) return;
+    try {
+        await env.DB.prepare(`
+            UPDATE ai_daily_illustrations
+            SET status = 'unavailable', object_key = NULL, mime_type = NULL, width = NULL,
+                height = NULL, size_bytes = NULL, last_error_code = 'ATTEMPTS_EXHAUSTED',
+                updated_at = ?
+            WHERE knowledge_unit_id = ? AND locale = ? AND image_style_version = ?
+              AND status = 'generating'
+              AND attempt_count >= ?
+              AND updated_at + ? <= ?
+        `).bind(
+            currentTime,
+            unit.unitId,
+            unit.locale,
+            DAILY_ILLUSTRATION_STYLE_VERSION,
+            DAILY_ILLUSTRATION_MAX_ATTEMPTS,
+            DAILY_ILLUSTRATION_LEASE_SECONDS,
+            currentTime,
+        ).run();
+    } catch {
+        // 终结失败也不抛错：下次调度仍会再次尝试清理。
     }
 }
 
