@@ -52,7 +52,9 @@ val openSourceVersionCatalogBase64 = Base64.getEncoder()
 
 android {
     namespace = "com.tracktosearch"
-    compileSdk = 37
+    // 37.2 是扩展级版本（haze-blur-materials 2.0.0-beta03 的 AAR metadata 要求）；
+    // compileSdk 属性只收 Int，扩展版本必须用字符串形式指定 platform android-37.2
+    compileSdkVersion("android-37.2")
 
     defaultConfig {
         applicationId = "com.tracktosearch"
@@ -87,7 +89,14 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            // 使用默认 debug 签名
+            // 显式钉到 ~/.android/debug.keystore：本机 ANDROID_SDK_HOME=H:\Android_SDK\.android，
+            // AGP 会把 debug keystore 解析到 H:\Android_SDK\.android\.android\debug.keystore
+            // （指纹 ab552b…），与设备上已装的包（~/.android 那把，87:AA…）不一致，
+            // 每次 installDebug 都要重签。文件不存在则回落 AGP 默认行为。
+            val homeKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+            if (homeKeystore.exists()) {
+                storeFile = homeKeystore
+            }
         }
         // 仅在配置了 release 签名信息时创建，避免空属性导致配置阶段报错
         if (releaseStoreFilePath.isNotBlank()) {
