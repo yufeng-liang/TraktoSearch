@@ -84,8 +84,8 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.backdropContentSource
+import com.tracktosearch.ui.component.recordOpenImageBounds
 import com.tracktosearch.ui.component.rememberShimmer
-import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.onColorFor
@@ -125,6 +125,11 @@ internal fun DetailHeaderContent(
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
     onShowAllVideos: () -> Unit = {},
+    // 全屏图片查看器（OpenImage）的缩略图矩形记录表：
+    // posterBounds 只记海报（下标 0），backdropBounds 按 backdrops 下标记横向栏剧照，
+    // 由 DetailScreen 持有并读取对应矩形作为查看器转场起点
+    posterBounds: MutableMap<Int, Rect>,
+    backdropBounds: MutableMap<Int, Rect>,
     onCollectionMovieClick: (tmdbId: Int, title: String) -> Unit = { _, _ -> },
     // 海报主色调提取相关:用于在海报加载成功后提取主色,回调通知 ViewModel 更新沉浸式背景
     posterColorExtractor: PosterColorExtractor,
@@ -185,95 +190,85 @@ internal fun DetailHeaderContent(
                             } else Modifier
                         )
                         .testTag("detail_header_poster")
+                        .recordOpenImageBounds(0, posterBounds)
                 ) {
                     if (uiState.posterUrl != null) {
                         var posterScale by remember { mutableFloatStateOf(1f) }
                         val posterModifier = Modifier.fillMaxSize()
-                        // Box 承载全屏查看转场的共享元素；图片本身不再挂导航海报配对。
-                        // 全屏查看这一侧用 caller-managed visibility：全屏 overlay 打开该 key 时
-                        // 本侧置不可见，避免与 overlay 侧同时是 target 导致转场方向反转。
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .zoomSharedSource(
-                                    key = "poster-zoom-bounds-$tmdbId",
-                                    clipRadius = 8.dp
-                                )
-                        ) {
-                            SubcomposeAsyncImage(
-                                model = remember(uiState.posterUrl) {
-                                    // 详情页海报独立使用 w780 高清图:header 实际渲染约 525-700px,
-                                    // w780 源图 + 780 解码 1:1 保证清晰(原 264 解码明显模糊)
-                                    ImageRequest.Builder(context)
-                                        .data(uiState.posterUrl?.let { TmdbImageUrls.swapSize(it, "w780") })
-                                        .size(780)
-                                        // 页面淡入时不要图片再叠一层淡入，避免双重动画。
-                                        .crossfade(false)
-                                        .listener(
-                                            onSuccess = { _, result ->
-                                                // 图片加载成功后提取主色调,用于沉浸式背景渐变
-                                                uiState.posterUrl.let { url ->
-                                                    scope.launch {
-                                                        // toBitmap 需整图解码，挪到 Default 线程避免阻塞主线程
-                                                        val bitmap = withContext(Dispatchers.Default) {
-                                                            result.drawable.toBitmap()
-                                                        }
-                                                        val argb = posterColorExtractor.extractDominantColor(url, bitmap)
-                                                        if (argb != 0L) {
-                                                            onPosterColorExtracted(Color(argb))
-                                                        }
+                        // 全屏查看已迁移 OpenImage：缩略图矩形由外层 Surface 的 recordOpenImageBounds 记录，
+                        // DetailScreen 点海报时作为查看器转场起点，本层不再需要 zoom 共享元素。
+                        SubcomposeAsyncImage(
+                            model = remember(uiState.posterUrl) {
+                                // 详情页海报独立使用 w780 高清图:header 实际渲染约 525-700px,
+                                // w780 源图 + 780 解码 1:1 保证清晰(原 264 解码明显模糊)
+                                ImageRequest.Builder(context)
+                                    .data(uiState.posterUrl.let { TmdbImageUrls.swapSize(it, "w780") })
+                                    .size(780)
+                                    // 转场时不要图片淡入叠加在 sharedElement 容器动画上,避免双重动画看起来卡顿
+                                    .crossfade(false)
+                                    .listener(
+                                        onSuccess = { _, result ->
+                                            // 图片加载成功后提取主色调,用于沉浸式背景渐变
+                                            uiState.posterUrl.let { url ->
+                                                scope.launch {
+                                                    // toBitmap 需整图解码，挪到 Default 线程避免阻塞主线程
+                                                    val bitmap = withContext(Dispatchers.Default) {
+                                                        result.drawable.toBitmap()
+                                                    }
+                                                    val argb = posterColorExtractor.extractDominantColor(url, bitmap)
+                                                    if (argb != 0L) {
+                                                        onPosterColorExtracted(Color(argb))
                                                     }
                                                 }
                                             }
-                                        )
-                                        .build()
-                                },
-                                contentDescription = uiState.displayTitle,
-                                contentScale = ContentScale.Crop,
-                                modifier = posterModifier
-                                    .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
-                                    .pointerInput(Unit) {
-                                        // 仅双指才缩放：detectTransformGestures 对单指拖动超 touch slop
-                                        // 也会消费 change，会吞掉父级 LazyColumn 从海报起手的滚动。
-                                        // 自写检测保证单指阶段不消费任何事件，父级滚动不受影响。
-                                        awaitEachGesture {
-                                            awaitFirstDown(requireUnconsumed = false)
-                                            do {
-                                                val event = awaitPointerEvent()
-                                                val pressedCount = event.changes.count { it.pressed }
-                                                if (pressedCount >= 2) {
-                                                    val zoom = event.calculateZoom()
-                                                    if (zoom != 1f) {
-                                                        posterScale = (posterScale * zoom).coerceIn(1f, 4f)
-                                                        event.changes.forEach { change ->
-                                                            if (change.positionChanged()) change.consume()
-                                                        }
+                                        }
+                                    )
+                                    .build()
+                            },
+                            contentDescription = uiState.displayTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = posterModifier
+                                .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
+                                .pointerInput(Unit) {
+                                    // 仅双指才缩放：detectTransformGestures 对单指拖动超 touch slop
+                                    // 也会消费 change，会吞掉父级 LazyColumn 从海报起手的滚动。
+                                    // 自写检测保证单指阶段不消费任何事件，父级滚动不受影响。
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val pressedCount = event.changes.count { it.pressed }
+                                            if (pressedCount >= 2) {
+                                                val zoom = event.calculateZoom()
+                                                if (zoom != 1f) {
+                                                    posterScale = (posterScale * zoom).coerceIn(1f, 4f)
+                                                    event.changes.forEach { change ->
+                                                        if (change.positionChanged()) change.consume()
                                                     }
                                                 }
-                                            } while (event.changes.any { it.pressed })
-                                        }
-                                    },
-                                // 转场兜底:首次进入详情页 w780 可能需网络下载,
-                                // loading 期间显示与列表卡片同 URL+size 的 w342 缩略图(内存缓存大概率命中),避免"闪空"
-                                loading = {
-                                    val thumbUrl = uiState.posterUrl?.let { TmdbImageUrls.swapSize(it, "w342") }
-                                    if (thumbUrl != null) {
-                                        AsyncImage(
-                                            model = remember(thumbUrl) {
-                                                ImageRequest.Builder(context)
-                                                    .data(thumbUrl)
-                                                    .size(342)
-                                                    .crossfade(false)
-                                                    .build()
-                                            },
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
+                                            }
+                                        } while (event.changes.any { it.pressed })
                                     }
-                                }
-                            )
-                        }
+                                },
+                            // 转场兜底:首次进入详情页 w780 可能需网络下载,
+                            // loading 期间显示与列表卡片同 URL+size 的 w342 缩略图(内存缓存大概率命中),避免"闪空"
+                            loading = {
+                                // posterUrl 在进入本分支时已判非空，直接取 w342 缩略图
+                                val thumbUrl = TmdbImageUrls.swapSize(uiState.posterUrl, "w342")
+                                AsyncImage(
+                                    model = remember(thumbUrl) {
+                                        ImageRequest.Builder(context)
+                                            .data(thumbUrl)
+                                            .size(342)
+                                            .crossfade(false)
+                                            .build()
+                                    },
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        )
                     } else {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
@@ -465,7 +460,8 @@ internal fun DetailHeaderContent(
                     onVideoClick = onVideoClick,
                     onBackdropClick = onBackdropClick,
                     onShowAll = onShowAllVideos,
-                    sharedKeyPrefix = "backdrop-zoom-$tmdbId"
+                    backdropBounds = backdropBounds,
+                    shimmer = headerShimmer
                 )
             } else if (uiState.videosError) {
                 // 加载失败：与评分区一致的 Inline 错误态，带重试入口

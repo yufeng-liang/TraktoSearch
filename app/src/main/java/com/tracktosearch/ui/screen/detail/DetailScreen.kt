@@ -1,15 +1,11 @@
 package com.tracktosearch.ui.screen.detail
 
+import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -99,6 +95,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.AppErrorState
@@ -108,18 +105,19 @@ import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalFullscreenSharedElement
-import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
+import com.tracktosearch.ui.component.OpenImageViewerItem
+import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
+import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
@@ -153,7 +151,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DetailScreen(
     traktId: Int,
@@ -180,6 +178,8 @@ fun DetailScreen(
     val spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // OpenImage 查看器以 Activity decorView 为宿主；非 ComponentActivity 场景拿不到时点击不打开
+    val activity = context as? Activity
     val haptics = rememberAppHaptics()
     var showRatingDialog by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
@@ -294,18 +294,16 @@ fun DetailScreen(
         }
     }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var showPosterFullscreen by remember { mutableStateOf(false) }
     var playingVideoKey by remember { mutableStateOf<String?>(null) }
-    var selectedBackdropIndex by remember { mutableIntStateOf(-1) }
-    // 截图查看器是否由「全部预告片与截图」sheet 触发：
-    // sheet 是独立 Dialog 窗口，内联层会被它遮住且返回键被它吃掉，
-    // 因此该来源要改走 Dialog 包裹（代价是跨窗口无法共享元素，用 scale+fade 近似）
-    var backdropFromSheet by remember { mutableStateOf(false) }
     var showAllVideos by remember { mutableStateOf(false) }
 
     // 内容就绪状态：沉浸背景优先显示，其他内容(cast/视频/简介/tab)淡入。
     // posterDominantColor 就绪 → 80ms 后标记就绪（让背景渐变先渲染出来）；
     // 未就绪（首次访问无缓存主色）→ 400ms 后兜底就绪，避免长时间空白。
+    // 全屏图片查看器（OpenImage）的缩略图矩形记录表：posterBounds 只记海报（下标 0），
+    // backdropBounds 按 backdrops 下标记横向栏剧照；点击回调读取对应矩形作查看器转场起点
+    val posterBounds = rememberOpenImageBounds()
+    val backdropBounds = rememberOpenImageBounds()
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.posterDominantColor) {
         if (contentReady) return@LaunchedEffect // 已就绪则不重复触发淡入(#26)
@@ -458,20 +456,6 @@ fun DetailScreen(
                     .hazeSource(state = detailHazeState, zIndex = 0f)
                     .then(immersiveBackgroundModifier)
             ) {
-            // 全屏查看器打开时，把「正在被查看」的 key 广播给缩略图源侧，让源侧置不可见。
-            // 同一 key 若两侧同时是 target，SharedTransitionStateMachine 会取先注册的源侧作为
-            // 目标边界提供者，打开时边界从全屏动到缩略图（方向反了），观感上等于没有缩放动画。
-            // 从 sheet 打开走的是跨窗口 Dialog，本就无法共享元素，因此不隐藏横向栏缩略图。
-            val fullscreenSharedKey = when {
-                showPosterFullscreen -> "poster-zoom-bounds-$tmdbId"
-                selectedBackdropIndex >= 0 && !backdropFromSheet ->
-                    "backdrop-zoom-$tmdbId-$selectedBackdropIndex"
-                else -> null
-            }
-            CompositionLocalProvider(
-                LocalFullscreenSharedElement provides fullscreenSharedElementKey(fullscreenSharedKey)
-            ) {
-
             // 状态栏条：与顶栏同色同步淡入，让顶栏在视觉上延伸到状态栏底下。
             // 原先这里铺的是掺了海报色的沉浸实色，且不吸顶时才透明——顶栏、Tab 栏、
             // 状态栏三段颜色各算一套，滚动后顶部是三条深浅不一的横带。
@@ -498,11 +482,47 @@ fun DetailScreen(
                     }
                 }
             }
-            val onPosterClick = remember { { showPosterFullscreen = true } }
+            val onPosterClick = remember(uiState.posterUrl, activity) {
+                val url = uiState.posterUrl
+                {
+                    if (url != null && activity != null) {
+                        // 海报大图：large 用 original，cover 与 DetailHeaderContent 实际显示的 w780 一致
+                        openImageViewer(
+                            activity = activity,
+                            items = listOf(
+                                OpenImageViewerItem(
+                                    largeUrl = TmdbImageUrls.swapSize(url, "original"),
+                                    coverUrl = TmdbImageUrls.swapSize(url, "w780")
+                                )
+                            ),
+                            bounds = posterBounds,
+                            clickedIndex = 0
+                        )
+                    }
+                }
+            }
             val onToggleSeason = remember { { season: Int -> viewModel.toggleSeason(season) } }
             val onToggleEpisodeWatched = remember { { season: Int, episode: Int, traktId: Int -> viewModel.toggleEpisodeWatched(season, episode, traktId) } }
             val onVideoClick = remember { { video: TmdbVideo -> playingVideoKey = video.key } }
-            val onBackdropClick = remember { { index: Int -> backdropFromSheet = false; selectedBackdropIndex = index } }
+            val onBackdropClick = remember(uiState.backdrops, activity) {
+                val backdrops = uiState.backdrops
+                { index: Int ->
+                    if (activity != null && index in backdrops.indices) {
+                        // 剧照横向栏：列表显示的是 w780，大图沿用原 original 段替换逻辑
+                        openImageViewer(
+                            activity = activity,
+                            items = backdrops.map { url ->
+                                OpenImageViewerItem(
+                                    largeUrl = url.replace("/w780/", "/original/"),
+                                    coverUrl = url
+                                )
+                            },
+                            bounds = backdropBounds,
+                            clickedIndex = index
+                        )
+                    }
+                }
+            }
             val onShowAllVideos = remember { { showAllVideos = true } }
             val onCollectionMovieClick = remember(onMovieClick) { { movieTmdbId: Int, movieTitle: String -> onMovieClick(0, movieTmdbId, movieTitle, "", 0.0) } }
             // Tab 数量计算（置于 LazyColumn 之前的 @Composable 上下文，并用副作用修正 selectedTab 范围）
@@ -545,6 +565,7 @@ fun DetailScreen(
                         onToggleWatchlist = onToggleWatchlist,
                         onShowRatingDialog = onShowRatingDialog,
                         onPosterClick = onPosterClick,
+                        posterBounds = posterBounds,
                         onPersonClick = onPersonClick,
                         onToggleSeason = onToggleSeason,
                         onToggleEpisodeWatched = onToggleEpisodeWatched,
@@ -554,6 +575,7 @@ fun DetailScreen(
                         onRetryVideos = viewModel::retryVideos,
                         onVideoClick = onVideoClick,
                         onBackdropClick = onBackdropClick,
+                        backdropBounds = backdropBounds,
                         onShowAllVideos = onShowAllVideos,
                         onCollectionMovieClick = onCollectionMovieClick,
                         posterColorExtractor = viewModel.posterColorExtractor,
@@ -971,7 +993,6 @@ fun DetailScreen(
                 }
                 }
             } // CompositionLocalProvider(LocalContentColor)
-            } // CompositionLocalProvider(LocalFullscreenSharedElement)
             } // hazeSource Box 结束：采样源只包住状态栏底色 + 滚动内容
 
             // 悬浮控件与全屏覆盖层必须与 hazeSource 保持兄弟关系。
@@ -1128,18 +1149,6 @@ fun DetailScreen(
             )
             } // CompositionLocalProvider
 
-            // 海报大图查看
-            val posterUrl = uiState.posterUrl
-            if (posterUrl != null) {
-                PosterFullscreenOverlay(
-                    visible = showPosterFullscreen,
-                    posterUrl = posterUrl,
-                    title = uiState.displayTitle,
-                    sharedKeyPrefix = "poster-zoom-bounds-$tmdbId",
-                    onDismiss = { showPosterFullscreen = false }
-                )
-            }
-
             // YouTube 内置播放器（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
             playingVideoKey?.let { key ->
                 Dialog(
@@ -1157,63 +1166,35 @@ fun DetailScreen(
                 }
             }
 
-            // 截图滑动查看（从详情页横向栏打开：内联，不用 Dialog，共享转场需同 window）
-            BackdropPagerOverlay(
-                visible = selectedBackdropIndex >= 0 && !backdropFromSheet && uiState.backdrops.isNotEmpty(),
-                backdrops = uiState.backdrops,
-                initialIndex = selectedBackdropIndex.coerceAtLeast(0),
-                sharedKeyPrefix = "backdrop-zoom-$tmdbId",
-                onDismiss = { selectedBackdropIndex = -1 }
-            )
-
-            // 截图滑动查看（从 sheet 内打开：Dialog 盖在 ModalBottomSheet 之上，
-            // sheet 保持打开，返回只关查看器，sheet 仍停在原滚动位置）
-            if (backdropFromSheet && selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty()) {
-                // 首帧后再翻 true，AnimatedVisibility 才会播进入动画（初始即 true 不播）
-                var sheetViewerVisible by remember { mutableStateOf(false) }
-                LaunchedEffect(Unit) { sheetViewerVisible = true }
-                val closeSheetViewer: () -> Unit = {
-                    detailCoroutineScope.launch {
-                        sheetViewerVisible = false
-                        delay(220) // 等退出动画播完再移除 Dialog 窗口
-                        selectedBackdropIndex = -1
-                        backdropFromSheet = false
-                    }
-                }
-                Dialog(
-                    onDismissRequest = closeSheetViewer,
-                    properties = DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false
-                    )
-                ) {
-                    BackdropPagerOverlay(
-                        visible = sheetViewerVisible,
-                        backdrops = uiState.backdrops,
-                        initialIndex = selectedBackdropIndex.coerceAtLeast(0),
-                        sharedKeyPrefix = null, // 跨窗口无法配对共享元素
-                        onDismiss = closeSheetViewer,
-                        enter = scaleIn(initialScale = 0.85f, animationSpec = tween(220)) +
-                            fadeIn(animationSpec = tween(220)),
-                        exit = scaleOut(targetScale = 0.85f, animationSpec = tween(200)) +
-                            fadeOut(animationSpec = tween(200))
-                    )
-                }
-            }
-
             // 全部预告片与截图弹窗
             if (showAllVideos) {
                 FullVideosImagesSheet(
                     videos = uiState.videos,
                     backdrops = uiState.backdrops,
+                    backdropBounds = backdropBounds,
                     onDismiss = { showAllVideos = false },
                     onVideoClick = { video ->
                         playingVideoKey = video.key
                     },
                     onBackdropClick = { index ->
-                        // 不关 sheet：查看器走 Dialog 盖在 sheet 之上，返回后仍在 sheet 原位
-                        backdropFromSheet = true
-                        selectedBackdropIndex = index
+                        // sheet 保持打开直接走带转场入口：ModalBottomSheet 的 Dialog 是全屏窗口，
+                        // 缩略图 boundsInWindow 就是屏幕坐标，OpenImage 能精确落到 sheet 内的缩略图；
+                        // 返回时 sheet 仍开着，动画缩回原位。
+                        val host = activity
+                        if (host != null && index in uiState.backdrops.indices) {
+                            openImageViewer(
+                                activity = host,
+                                items = uiState.backdrops.map { url ->
+                                    OpenImageViewerItem(
+                                        largeUrl = url.replace("/w780/", "/original/"),
+                                        coverUrl = url
+                                    )
+                                },
+                                bounds = backdropBounds,
+                                clickedIndex = index,
+                                onExit = { /* sheet 保持打开，返回即回到缩略图原位 */ }
+                            )
+                        }
                     }
                 )
             }
@@ -1422,5 +1403,5 @@ private fun BareEmptyHint(icon: ImageVector, title: String) {
 // - DetailMarkWatchedDialog.kt: MarkWatchedDialog
 // - DetailFilterSection.kt: FilterSection
 // - DetailComments.kt: CommentItem
-// - DetailVideosImages.kt: VideosAndImagesSection, VideoCard, BackdropCard, FullVideosImagesSheet, FullVideoItem, FullBackdropItem, YouTubePlayerOverlay, BackdropPagerOverlay
-// - DetailPosterOverlay.kt: PosterFullscreenOverlay
+// - DetailVideosImages.kt: VideosAndImagesSection, VideoCard, BackdropCard, FullVideosImagesSheet, FullVideoItem, FullBackdropItem, YouTubePlayerOverlay
+// 全屏图片查看器已迁移到 OpenImage（OpenImageViewer.kt 桥接层）

@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.douban
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -10,7 +11,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -128,6 +128,10 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.OpenImageViewerItem
+import com.tracktosearch.ui.component.openImageViewer
+import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
@@ -152,8 +156,6 @@ import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.LocalBackdrop
-import com.tracktosearch.ui.component.LocalFullscreenSharedElement
-import com.tracktosearch.ui.component.fullscreenSharedElementKey
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -162,7 +164,6 @@ import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
-import com.tracktosearch.ui.component.zoomSharedSource
 import com.tracktosearch.ui.haptic.HapticOutcome
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
@@ -176,7 +177,6 @@ import com.tracktosearch.ui.screen.detail.DetailSectionHeader
 import com.tracktosearch.ui.screen.detail.DoubanHeaderSkeleton
 import com.tracktosearch.ui.screen.detail.ExpandableText
 import com.tracktosearch.ui.screen.detail.FilterSection
-import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.screen.detail.detailBarColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterVariantColor
@@ -1224,7 +1224,6 @@ fun DoubanItemDetailScreen(
         onBack(markChanges.watchlistChanged, markChanges.watchedChanged)
     }
 
-    var showPosterFullscreen by remember { mutableStateOf(false) }
     var subtitleInput by remember { mutableStateOf("") }
     // 手动标记媒体类型下拉菜单展开状态
     var showMarkMenu by remember { mutableStateOf(false) }
@@ -1296,13 +1295,6 @@ fun DoubanItemDetailScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        // 海报全屏查看打开时，把该 key 广播给海报源，让源侧置不可见，
-        // 保证同一 key 同时只有一侧是 target（否则缩放转场方向会反）
-        CompositionLocalProvider(
-            LocalFullscreenSharedElement provides fullscreenSharedElementKey(
-                if (showPosterFullscreen) "douban-poster-zoom-bounds-$doubanId" else null
-            )
-        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1407,14 +1399,12 @@ fun DoubanItemDetailScreen(
                             isLegacyFailure = uiState.isLegacyFailure,
                             detailInfo = uiState.detailInfo,
                             posterColor = uiState.posterDominantColor,
-                            onPosterClick = { showPosterFullscreen = true },
                             onSubtitleClick = {
                                 subtitleInput = failure.subtitle ?: ""
                                 viewModel.showSubtitleDialog(true)
                             },
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onPosterColorExtracted = viewModel::updatePosterColor,
-                            doubanId = doubanId
                         )
                     }
 
@@ -1900,20 +1890,6 @@ fun DoubanItemDetailScreen(
             }
             }
 
-            // 海报大图查看(放在最后绘制,关闭/保存按钮不被顶部按钮遮住)
-            val posterFailure = uiState.failure
-            val posterUrl = posterFailure?.posterUrl
-            if (posterUrl != null) {
-                // 必须一直处于组合中(用 visible 控制显隐),保证与海报源共享元素同时组合,缩放转场才能生效
-                PosterFullscreenOverlay(
-                    visible = showPosterFullscreen,
-                    posterUrl = posterUrl,
-                    title = posterFailure?.title.orEmpty(),
-                    sharedKeyPrefix = "douban-poster-zoom-bounds-$doubanId",
-                    onDismiss = { showPosterFullscreen = false }
-                )
-            }
-
             // 资源搜索 Tab 快速回顶按钮(仅资源搜索 Tab 显示,详情信息 Tab 内容少不需要)
             if (selectedTab == 1) {
                 ScrollToTopButton(
@@ -1927,7 +1903,6 @@ fun DoubanItemDetailScreen(
                 )
             }
         }
-        } // CompositionLocalProvider(LocalFullscreenSharedElement)
     }
 
     // 子标题编辑弹窗
@@ -2136,21 +2111,37 @@ private fun DoubanWritebackActions(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DoubanItemHeader(
     failure: DoubanSyncFailure,
     isLegacyFailure: Boolean,
     detailInfo: DoubanDetailInfo?,
     posterColor: Color?,
-    onPosterClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     posterColorExtractor: PosterColorExtractor,
-    onPosterColorExtracted: (Color) -> Unit,
-    // 屏幕参数 doubanId,用于海报缩放转场的 sharedBounds key(与全屏 overlay 配对)
-    doubanId: String
+    onPosterColorExtracted: (Color) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    // 豆瓣海报 URL 没有 TMDB 尺寸段：swapSize 对非 /t/p/ 结构原样返回，大图与小图同一 URL
+    val posterViewerItems = remember(failure.posterUrl) {
+        failure.posterUrl?.let { listOf(OpenImageViewerItem(largeUrl = it, coverUrl = it)) } ?: emptyList()
+    }
+    // 海报矩形表：单图固定下标 0，供 OpenImage 打开/返回动画落点
+    val posterBounds = rememberOpenImageBounds()
+    val activity = context as? Activity
+    // 点击海报直接打开查看器；拿不到 Activity（如预览环境）时不响应
+    val openPosterViewer: () -> Unit = {
+        val currentActivity = activity
+        if (currentActivity != null && posterViewerItems.isNotEmpty()) {
+            openImageViewer(
+                activity = currentActivity,
+                items = posterViewerItems,
+                bounds = posterBounds,
+                clickedIndex = 0
+            )
+        }
+    }
     // 沉浸背景下的自适应文字色，判据收在 DetailVisuals（与普通详情页共用同一套）
     val onPosterColor = detailOnPosterColor(posterColor)
     val onPosterVariantColor = detailOnPosterVariantColor(posterColor)
@@ -2184,18 +2175,15 @@ private fun DoubanItemHeader(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
                     .size(width = 120.dp, height = 180.dp)
+                    // 海报即查看器缩略图：记录 window 矩形，点击后以此矩形做转场落点
+                    .recordOpenImageBounds(0, posterBounds)
                     .then(
                         if (failure.posterUrl != null) {
-                            Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onPosterClick() }
+                            Modifier.hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { openPosterViewer() }
                         } else Modifier
                     )
             ) {
                 if (failure.posterUrl != null) {
-                    val context = LocalContext.current
-                    // 海报缩放转场:与全屏 overlay 的 zoomSharedTarget 配对
-                    // (doubanId 为屏幕参数,两个使用点必须用同一 key 才能配对)。
-                    // 本侧用 caller-managed visibility:overlay 打开该 key 时置不可见,
-                    // 避免两侧同时是 target 导致转场方向反转。
                     AsyncImage(
                         model = remember(failure.posterUrl) {
                             ImageRequest.Builder(context)
@@ -2221,10 +2209,6 @@ private fun DoubanItemHeader(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .zoomSharedSource(
-                                key = "douban-poster-zoom-bounds-$doubanId",
-                                clipRadius = 8.dp
-                            )
                     )
                 } else {
                     Box(

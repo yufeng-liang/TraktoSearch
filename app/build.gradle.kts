@@ -435,7 +435,8 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.reorderable)
-    implementation(libs.telephoto.zoomable.image.coil)
+    // OpenImage 成熟查看器（coil 模块自带 base，勿引 full/glide）
+    implementation(libs.openimage.coil)
     implementation(libs.compose.mesh.gradient)
     implementation(libs.mirage)
 
@@ -486,7 +487,7 @@ implementation(libs.skydoves.colorpicker)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.core.testing)
-    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     // Compose UI 测试（Robolectric 组件测试用）
     testImplementation(libs.androidx.compose.ui.test.junit4)

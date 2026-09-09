@@ -2088,7 +2088,7 @@
     <string name="opensource_use_lottie">播放 JSON 矢量动画（加载、空状态等动效）</string>
     <string name="opensource_use_richtext">渲染 Markdown 富文本（版本更新日志）</string>
     <string name="opensource_use_reorderable">列表长按拖拽排序</string>
-    <string name="opensource_use_telephoto">海报与剧照的双指缩放，大图子采样加载</string>
+    <string name="opensource_use_openimage">全屏图片查看器：转场动画、双指缩放、下拉关闭、内置保存</string>
     <string name="opensource_use_backdrop">液态玻璃效果的屏幕级采样背板</string>
     <string name="opensource_use_mesh_gradient">Android 12 及以下背景光晕的网格渐变动画回退实现</string>
     <string name="opensource_use_mirage">Android 13 及以上背景光晕的 AGSL 着色器动画实现</string>

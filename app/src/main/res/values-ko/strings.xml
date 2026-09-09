@@ -2100,7 +2100,7 @@
     <string name="opensource_use_lottie">JSON 벡터 애니메이션 재생(로딩, 빈 상태 등)</string>
     <string name="opensource_use_richtext">Markdown 리치 텍스트 렌더링(업데이트 로그)</string>
     <string name="opensource_use_reorderable">목록 길게 눌러 드래그 정렬</string>
-    <string name="opensource_use_telephoto">포스터와 스틸 사진의 핀치 줌, 대형 이미지 서브샘플링</string>
+    <string name="opensource_use_openimage">전체 화면 이미지 뷰어: 전환 애니메이션, 핀치 줌, 스와이프로 닫기, 내장 저장</string>
     <string name="opensource_use_backdrop">리퀴드 글래스 효과의 화면 단위 샘플링 배경</string>
     <string name="opensource_use_mesh_gradient">Android 12 이하 배경 글로우 대체 구현(메시 그라데이션 애니메이션)</string>
     <string name="opensource_use_mirage">Android 13 이상 배경 글로우 구현(AGSL 셰이더 애니메이션)</string>

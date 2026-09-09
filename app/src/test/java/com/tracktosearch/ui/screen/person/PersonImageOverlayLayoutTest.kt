@@ -30,8 +30,6 @@ class PersonImageOverlayLayoutTest {
                     AllPersonImagesPanel(
                         visible = true,
                         images = emptyList(),
-                        personId = 1,
-                        onImageClick = {},
                         onDismiss = {}
                     )
                 }

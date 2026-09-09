@@ -205,7 +205,8 @@ class SplashPosterStore @Inject constructor(
             val request = Request.Builder().url(url).build()
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext false
-                temp.outputStream().use { out -> response.body.byteStream().copyTo(out) }
+                val body = response.body ?: return@withContext false
+                temp.outputStream().use { out -> body.byteStream().copyTo(out) }
             }
             if (temp.length() <= 0) {
                 temp.delete()

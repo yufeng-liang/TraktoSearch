@@ -2,14 +2,7 @@ package com.tracktosearch.ui.screen.detail
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -31,6 +24,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -52,13 +48,12 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -74,15 +69,14 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
-import com.tracktosearch.ui.component.ZoomableImageOverlay
-import com.tracktosearch.ui.component.queryExistingFile
-import com.tracktosearch.ui.component.savePosterToGallery
-import com.tracktosearch.ui.component.zoomSharedSource
+import com.tracktosearch.ui.component.ShimmerState
+import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.floatingSheetColor
-import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.launch
 
 // ==================== 预告片与截图 ====================
@@ -94,7 +88,10 @@ internal fun VideosAndImagesSection(
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
     onShowAll: () -> Unit = {},
-    sharedKeyPrefix: String? = null
+    // 剧照缩略图矩形记录表（下标 = backdrops 下标），由详情页持有并作为 OpenImage 查看器转场起点
+    backdropBounds: MutableMap<Int, Rect>,
+    // 与页面其他骨架共享的同一条 shimmer，避免每格各跑一条无限动画
+    shimmer: ShimmerState
 ) {
     val totalCount = videos.size + backdrops.size
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -115,8 +112,9 @@ internal fun VideosAndImagesSection(
                 BackdropCard(
                     backdropUrl = backdropUrl,
                     onClick = { onBackdropClick(index) },
-                    sharedKeyPrefix = sharedKeyPrefix,
-                    index = index
+                    index = index,
+                    bounds = backdropBounds,
+                    shimmer = shimmer
                 )
             }
             itemsIndexed(
@@ -248,13 +246,14 @@ internal fun VideoCard(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BackdropCard(
     backdropUrl: String,
     onClick: () -> Unit = {},
-    sharedKeyPrefix: String? = null,
-    index: Int = 0
+    index: Int = 0,
+    // 全屏查看已迁移 OpenImage：缩略图矩形记录到 bounds，点击由详情页读取作为转场起点
+    bounds: MutableMap<Int, Rect>,
+    shimmer: ShimmerState
 ) {
     Box(
         modifier = Modifier
@@ -262,19 +261,17 @@ internal fun BackdropCard(
             .height(135.dp)
             .clip(RoundedCornerShape(8.dp))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            .recordOpenImageBounds(index, bounds)
             // 只给首张挂 tag：LazyRow 里每张都挂，By.res 匹配到的就是当时排在最前的任意一张，
-            // 基准点开的是哪张、配对的是哪个 key 都不确定。首张在栏目里位置固定，可重复。
+            // 基准点开的是哪张都不确定。首张在栏目里位置固定，可重复。
             .then(if (index == 0) Modifier.testTag("detail_backdrop_card") else Modifier)
     ) {
-        // sharedKeyPrefix 非空且共享转场开启时,与全屏端 "$sharedKeyPrefix-$page" 配对,实现缩放转场。
-        // 用 caller-managed visibility(zoomSharedSource):全屏端打开本 key 时缩略图侧置不可见,
-        // 保证同一 key 同时只有一侧是 target,否则转场方向会反。
+        // 不再需要 zoom 共享元素配对：OpenImage 以 recordOpenImageBounds 的矩形做打开/返回动画
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
+            shimmer = shimmer,
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -282,13 +279,14 @@ internal fun BackdropCard(
 /**
  * 剧照渐进占位：加载大图期间先用 w300 小尺寸版本垫底。
  * 小图通常在列表预取或上次浏览时已进 Coil 磁盘缓存，可即时显示，避免大图回源前留白。
- * 若 URL 非 TMDB 结构（豆瓣剧照、Trakt fanart，无尺寸可换），只用纯色垫底不额外发请求，
+ * 若 URL 非 TMDB 结构（豆瓣剧照、Trakt fanart，无尺寸可换），加载期间铺 shimmer 垫底不额外发请求，
  * 但主图照常加载——早先版本在这种情况下直接 return 掉了主图，导致豆瓣来源的截图永远空白。
  */
 @Composable
 private fun ProgressiveBackdrop(
     backdropUrl: String,
     contentScale: ContentScale,
+    shimmer: ShimmerState,
     modifier: Modifier = Modifier
 ) {
     val smallUrl = remember(backdropUrl) {
@@ -301,14 +299,31 @@ private fun ProgressiveBackdrop(
         contentScale = contentScale,
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         loading = {
-            // 非 TMDB /t/p/ 结构（豆瓣剧照、Trakt fanart）没有小尺寸可换，
-            // 只留纯色底，不额外发请求；但主图一定要照常加载。
-            if (smallUrl != null) {
-                AsyncImage(
-                    model = smallUrl,
+            // 小图也没命中（加载中/失败）时先看到 shimmer，避免整格留白；
+            // 小图先到就叠在上面继续渐进放大，shimmer 被盖住。
+            Box(modifier = Modifier.fillMaxSize().shimmer(shimmer)) {
+                if (smallUrl != null) {
+                    AsyncImage(
+                        model = smallUrl,
+                        contentDescription = null,
+                        contentScale = contentScale,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        },
+        error = {
+            // 加载失败：低调断图图标，让用户区分「还没加载」和「这张没拉下来」；
+            // 格子仍可点击进 OpenImage 看大图侧的失败处理
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.BrokenImage,
                     contentDescription = null,
-                    contentScale = contentScale,
-                    modifier = Modifier.fillMaxSize()
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -322,6 +337,9 @@ private fun ProgressiveBackdrop(
 internal fun FullVideosImagesSheet(
     videos: List<TmdbVideo>,
     backdrops: List<String>,
+    // 剧照缩略图矩形记录表（下标 = backdrops 下标）；sheet 内容在自己的 Dialog window 里，
+    // 这里与页面共用同一张表会覆盖为 sheet 内的坐标，作为查看器转场落点
+    backdropBounds: MutableMap<Int, Rect>,
     onDismiss: () -> Unit,
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {}
@@ -344,6 +362,8 @@ internal fun FullVideosImagesSheet(
     ) {
         // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
         val sheetHaptics = rememberAppHaptics()
+        // 三列网格共享一条 shimmer，避免每格各跑一条无限动画
+        val sheetShimmer = rememberShimmer()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -424,13 +444,23 @@ internal fun FullVideosImagesSheet(
                         }
                     }
                     showBackdrops -> {
-                        LazyColumn(
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
+                            gridItemsIndexed(
+                                backdrops,
+                                key = { index, url -> "backdrop_grid_${index}_$url" },
+                                contentType = { _, _ -> "backdrop" }
+                            ) { index, backdropUrl ->
                                 FullBackdropItem(
                                     backdropUrl = backdropUrl,
+                                    index = index,
+                                    bounds = backdropBounds,
+                                    shimmer = sheetShimmer,
                                     onClick = { onBackdropClick(index) }
                                 )
                             }
@@ -513,18 +543,23 @@ internal fun FullVideoItem(
 @Composable
 internal fun FullBackdropItem(
     backdropUrl: String,
+    index: Int,
+    bounds: MutableMap<Int, Rect>,
+    shimmer: ShimmerState,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(8.dp))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP, onClick = onClick)
+            .recordOpenImageBounds(index, bounds)
     ) {
         ProgressiveBackdrop(
             backdropUrl = backdropUrl,
             contentScale = ContentScale.Crop,
+            shimmer = shimmer,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -674,61 +709,4 @@ internal fun YouTubePlayerOverlay(
             )
         }
     }
-}
-
-// ==================== 截图滑动查看 ====================
-
-@Composable
-internal fun BackdropPagerOverlay(
-    visible: Boolean,
-    backdrops: List<String>,
-    initialIndex: Int,
-    sharedKeyPrefix: String?,
-    onDismiss: () -> Unit,
-    enter: EnterTransition = fadeIn(animationSpec = tween(200)),
-    exit: ExitTransition = fadeOut(animationSpec = tween(200))
-) {
-    val context = LocalContext.current
-    val alreadySavedToast = stringResource(R.string.poster_already_saved)
-    val scope = rememberCoroutineScope()
-    // 追踪每张截图的保存状态
-    val savedBackdrops = remember { mutableStateOf<Set<Int>>(emptySet()) }
-    // 大图用 original 清晰度
-    val originalUrls = remember(backdrops) { backdrops.map { it.replace("/w780/", "/original/") } }
-
-    // 检查初始截图是否已保存（一次性检查，与原有按页检查语义近似）
-    // 键住 visible：详情页常驻组合时 initialIndex 恒为 0，未打开查看器不做磁盘查询
-    LaunchedEffect(visible, initialIndex) {
-        if (!visible) return@LaunchedEffect
-        val index = initialIndex
-        if (index in savedBackdrops.value) return@LaunchedEffect
-        val fileName = "TrackToSearch_backdrop_${index}.jpg"
-        val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
-        val exists = queryExistingFile(context, fileName, relativePath) != null
-        if (exists) {
-            savedBackdrops.value += index
-        }
-    }
-
-    // 图片展示与缩放逻辑委托给通用全屏组件，仅保留保存状态检查与保存逻辑
-    ZoomableImageOverlay(
-        visible = visible,
-        images = originalUrls,
-        initialIndex = initialIndex,
-        sharedKeyPrefix = sharedKeyPrefix,
-        onDismiss = onDismiss,
-        onSave = { idx ->
-            val url = originalUrls.getOrNull(idx) ?: return@ZoomableImageOverlay
-            if (idx in savedBackdrops.value) {
-                context.showToast(alreadySavedToast)
-            } else {
-                savePosterToGallery(context, scope, url, "backdrop_$idx") {
-                    savedBackdrops.value += idx
-                }
-            }
-        },
-        isSavedAt = { idx -> idx in savedBackdrops.value },
-        enter = enter,
-        exit = exit
-    )
 }
