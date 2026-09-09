@@ -201,6 +201,9 @@ interface TasteEvidence {
 // 文本供应商三梯队：agnes > zhipu > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
 type TextProvider = 'mimo' | 'agnes' | 'zhipu';
 
+// 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
+const PROVIDER_LADDER: readonly TextProvider[] = ['agnes', 'zhipu', 'mimo'];
+
 const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
     agnes: 'agnes-2.5-flash',
     zhipu: 'glm-5.3-flash',
@@ -587,6 +590,36 @@ async function generateQuiz(
     difficultyHint: string | null,
     requestId: string,
 ): Promise<QuizCacheData | null> {
+    // 两阶段（units→review）整体最多跑三轮：第一轮上游返回 200 但输出过不了本地硬校验
+    // 时换下一家供应商重试（实测 Agnes 会连续输出不合格 JSON，同家重试无效），三家全试仍
+    // 失败才降级离线兜底题库。INVALID_MODEL 属请求配置错误，重试无意义，直接上抛。
+    // 从主供应商在梯队中的位置开始向后试；主供应商位于梯队中游时先试自己再试下游，
+    // 位于末位（mimo）时从头绕回 agnes/zhipu——保证最多三轮内三家都被覆盖。
+    const startIndex = Math.max(0, PROVIDER_LADDER.indexOf(provider));
+    for (let offset = 0; offset < PROVIDER_LADDER.length; offset++) {
+        const attempt = (startIndex + offset) % PROVIDER_LADDER.length;
+        const p = PROVIDER_LADDER[attempt];
+        const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
+        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1);
+        if (result !== undefined) return result;
+    }
+    return null;
+}
+
+/** 单轮生成：返回 QuizCacheData 表示成功，null 表示终局失败，undefined 表示本轮失败、可重试。 */
+async function runQuizGenerationRound(
+    env: AiEnvironment,
+    provider: TextProvider,
+    model: string,
+    fallbackModel: string,
+    selectedMovies: WatchMovie[],
+    requestedQuizId: string | null,
+    sessionId: string,
+    nickname: string,
+    difficultyHint: string | null,
+    requestId: string,
+    attempt: number,
+): Promise<QuizCacheData | null | undefined> {
     let unitsUpstream: LlmJsonResult | null;
     try {
         unitsUpstream = await callLlmJson(
@@ -600,15 +633,21 @@ async function generateQuiz(
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_upstream_error', requestId, attempt, error: error instanceof AppError ? error.code : 'UNKNOWN' }));
+        return attempt < 2 ? undefined : null;
+    }
+    if (!unitsUpstream) {
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_upstream_null', requestId, attempt }));
+        // 主供应商返回 null = 三家全试过仍不可用，重试只是重复同样失败。
         return null;
     }
-    if (!unitsUpstream) return null;
 
     let units: KnowledgeUnit[];
     try {
         units = normalizeQuizUnits(parseAssistantJson<unknown>(unitsUpstream.payload), selectedMovies);
-    } catch {
-        return null;
+    } catch (error) {
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_normalize_error', requestId, attempt, provider: unitsUpstream.provider, model: unitsUpstream.model, error: error instanceof AppError ? error.code : 'PARSE' }));
+        return attempt < 2 ? undefined : null;
     }
 
     let reviewUpstream: LlmJsonResult | null;
@@ -624,17 +663,22 @@ async function generateQuiz(
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'review_upstream_error', requestId, attempt, error: error instanceof AppError ? error.code : 'UNKNOWN' }));
+        return attempt < 2 ? undefined : null;
+    }
+    if (!reviewUpstream) {
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'review_upstream_null', requestId, attempt }));
         return null;
     }
-    if (!reviewUpstream) return null;
 
     try {
         const reviewed = normalizeQuiz(parseAssistantJson<unknown>(reviewUpstream.payload), selectedMovies);
         validateReviewedQuiz(reviewed, selectedMovies, units);
         return { quizId: requestedQuizId ?? crypto.randomUUID(), sessionId, movies: selectedMovies, questions: reviewed, scoringVersion: 2 };
-    } catch {
+    } catch (error) {
         // 二审不合格绝不能把首轮候选泄回 App；调用方会写入确定性安全题库。
-        return null;
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'review_normalize_or_validate_error', requestId, attempt, provider: reviewUpstream.provider, model: reviewUpstream.model, error: error instanceof AppError ? error.code : 'PARSE' }));
+        return attempt < 2 ? undefined : null;
     }
 }
 
@@ -2343,11 +2387,11 @@ async function callLlmJson(
 ): Promise<LlmJsonResult | null> {
     // 三家互备，固定优先级 agnes > zhipu > mimo：主供应商失败（常见：Agnes 共享池 429 把
     // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
-    // GLM 实测可用且独立计费，插在 MiMo 之前兜容量。
+    // GLM 实测可用且独立计费，插在 MiMo 之前兜容量；zhipu 主路径也要含自己在内先试主模型。
     const order: TextProvider[] = provider === 'agnes'
         ? ['agnes', 'zhipu', 'mimo']
         : provider === 'zhipu'
-            ? ['agnes', 'mimo']
+            ? ['zhipu', 'agnes', 'mimo']
             : ['mimo', 'agnes', 'zhipu'];
     let lastError: unknown = null;
     // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，
@@ -2367,10 +2411,12 @@ async function callLlmJson(
                     : p === 'zhipu'
                         ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
                         : await callMimoJson(env, m as MimoModel, messages, options);
-                // 未配置/测试模式下供应商返回 null 表示不可用：主供应商直接走离线兜底，回退供应商则上抛原错误。
+                // 未配置/测试模式下供应商返回 null 表示该家不可用：继续轮下一家；
+                // 全部轮完仍未成功时由函数末尾按主供应商契约返回 null 或上抛。
                 if (result === null) {
-                    if (p === provider) return null;
-                    throw new AppError('AI_UPSTREAM_ERROR', 'Fallback AI provider unavailable', 502);
+                    logAiDiagnostic('upstream_failure', context, p, m, new AppError('AI_UPSTREAM_ERROR', 'AI provider unavailable', 502));
+                    lastError = new AppError('AI_UPSTREAM_ERROR', 'AI provider unavailable', 502);
+                    continue;
                 }
                 return { payload: result, provider: p, model: m };
             } catch (error) {
@@ -2381,9 +2427,9 @@ async function callLlmJson(
             }
         }
     }
-    // 主供应商是 agnes 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
+    // 主供应商是 agnes/zhipu 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
     // （taste/daily/quiz 都有本地 fallback，不向用户抛错）；mimo 主路径维持上抛语义。
-    if (provider === 'agnes') return null;
+    if (provider !== 'mimo') return null;
     throw lastError ?? new AppError('AI_UPSTREAM_ERROR', 'All AI providers failed', 502);
 }
 
@@ -2414,6 +2460,7 @@ function logAiDiagnostic(
 ): void {
     const appError = error instanceof AppError ? error : null;
     // 只记录路由、供应商、固定模型、请求 ID 和稳定错误码/状态；禁止记录 key、prompt、影视列表或上游正文。
+    // errorMessage 仅含 AppError 的固定短语（如 "Agnes provider request failed"），不含上游响应体。
     console.warn('[AI_DIAGNOSTIC]', JSON.stringify({
         event,
         route: context.route,
@@ -2422,6 +2469,7 @@ function logAiDiagnostic(
         model,
         errorCode: appError?.code ?? 'UNKNOWN',
         status: appError?.statusCode ?? null,
+        errorMessage: appError?.message ?? (error instanceof Error ? error.message.slice(0, 120) : 'UNKNOWN'),
     }));
 }
 

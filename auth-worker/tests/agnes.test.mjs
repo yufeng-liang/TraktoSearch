@@ -211,7 +211,9 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
                     }],
                 }
                 : route === 'quiz'
-                    ? { questions: validAgnesQuizQuestions() }
+                    ? requestBody.messages?.[0]?.content.includes('候选学习单元编辑')
+                        ? validAgnesQuizUnits()
+                        : { questions: validAgnesQuizQuestions() }
                     : validAgnesDailyKnowledgeUnit();
             return new Response(JSON.stringify({
                 choices: [{ message: { content: JSON.stringify(payload) } }],
@@ -246,7 +248,10 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         assert.equal(taste.response.status, 200);
         assert.equal(quiz.response.status, 200);
         assert.equal(daily.response.status, 200);
-        assert.deepEqual(requests.map(request => request.route), ['taste', 'quiz', 'daily', 'daily']);
+        // quiz 走两阶段（候选学习单元 + 二审转换）。units 校验失败后跨供应商轮替：
+        // zhipu/mimo 未配 key（AI_TEST_MODE 下不可用）轮空，agnes 第二次兜住又输出不合格
+        // units，三轮全失败走确定性兜底——Agnes 共收到两次 quiz-units 请求。
+        assert.deepEqual(requests.map(request => request.route), ['taste', 'quiz', 'quiz', 'daily', 'daily']);
         assert.ok(requests.every(request => request.model === 'agnes-2.5-flash'));
         assert.ok(requests.every(request => request.hasBearer));
         assert.ok(requests.every(request => !request.hasResponseFormat));
@@ -522,6 +527,49 @@ function agnesWatchedMovies() {
         watchedAt: `202${index % 4}-01-01`,
         mediaIds: { tmdbId: 100 + index },
     }));
+}
+
+function validAgnesQuizUnits() {
+    const specs = [
+        { unitId: 'agnes-unit-a', title: 'Agnes Movie 1', subject: '心理学', concept: '归因偏差' },
+        { unitId: 'agnes-unit-b', title: 'Agnes Movie 2', subject: '社会学', concept: '社会规范' },
+        { unitId: 'agnes-unit-c', title: 'Agnes Movie 3', subject: '历史', concept: '历史语境' },
+    ];
+    const units = specs.map((spec, index) => ({
+        unitId: spec.unitId,
+        version: 1,
+        locale: 'zh-CN',
+        relationType: 'direct_watch',
+        evidenceMode: 'viewing_interpretation',
+        subjectGroup: spec.subject === '心理学' ? 'people_and_mind' : spec.subject === '社会学' ? 'society_and_institution' : 'history_and_culture',
+        subject: spec.subject,
+        concept: spec.concept,
+        title: `${spec.title} 里如何观察${spec.concept}`,
+        takeaway: `观察${spec.title}时，先用可核验材料说话，再谈${spec.concept}的解释。`,
+        relatedMedia: { title: spec.title, mediaType: 'movie', tmdbId: 100 + index },
+        filmEvidence: `《${spec.title}》上映年份：${2020 + index}，类型：Drama，简介：观看记录可用于讨论${spec.concept}。`,
+        explanation: `结合${spec.title}的观看记录，${spec.concept}要求先确认可观察线索，再给出有限解释。`,
+        realWorldExample: `讨论现实议题时，同样先核对事实再套用${spec.concept}。`,
+        boundary: '这是基于观看记录的入门解读，不是对影片的权威结论。',
+        difficulty: 'medium',
+        spoilerLevel: 'none',
+        source: {
+            name: 'Example',
+            url: 'https://www.britannica.com/example',
+            evidence: `该资料介绍${spec.concept}的基本含义与适用条件。`,
+        },
+        checkQuestion: {
+            prompt: `${spec.concept}强调什么？`,
+            options: [
+                { id: 'a', text: '先看可观察证据，再给出有限解释。' },
+                { id: 'b', text: '直接下最终结论。' },
+            ],
+            correctOptionIds: ['a'],
+            explanation: `${spec.concept}要求先确认证据再解释，所以选 a。`,
+        },
+        characterLine: null,
+    }));
+    return { units };
 }
 
 function validAgnesQuizQuestions() {

@@ -1728,12 +1728,15 @@ test('quiz converts shared knowledge units with a second review and returns the 
     }
 });
 
-test('quiz never returns the unit stage when the converted package is invalid', async () => {
+test('quiz retries once when the converted package is invalid, then returns AI questions', async () => {
     const originalFetch = globalThis.fetch;
     let calls = 0;
     globalThis.fetch = async () => {
         calls += 1;
-        const payload = calls === 1 ? validQuizUnitsPayload() : { choices: [{ message: { content: JSON.stringify({ questions: [] }) } }] };
+        // 第一轮转换包为空（不合格），整体重试第二轮正常返回。
+        const payload = calls === 2
+            ? { choices: [{ message: { content: JSON.stringify({ questions: [] }) } }] }
+            : calls % 2 === 1 ? validQuizUnitsPayload() : validQuizFromUnitsPayload();
         return new Response(JSON.stringify(payload), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -1748,16 +1751,12 @@ test('quiz never returns the unit stage when the converted package is invalid', 
         });
 
         assert.equal(response.status, 200);
-        assert.equal(calls, 2);
+        // 第一轮 units+review（2 次）+ 重试轮 units+review（2 次）。
+        assert.equal(calls, 4);
         assert.equal(json.data.questions.length, 13);
-        // 重写后的兜底题干直接考该片可核验信息，不再注入“请结合已看记录线索”提示语，
-        // 也不得出元认知/通用学习法题（回想方法/重看/向朋友推荐）。
-        assert.equal(json.data.questions[0].prompt.includes('已看记录线索'), false);
-        assert.equal(json.data.questions[0].prompt.includes('分析 Movie 1 中人物的选择。'), false);
+        // 重试轮合格时返回 AI 题（unitId 非空），不再直接降级离线兜底。
+        assert.ok(json.data.questions.every(question => question.unitId !== null));
         assert.ok(json.data.questions.every(question => question.learningTakeaway));
-        assert.ok(json.data.questions.every(question => !/回想|重看|向朋友推荐|哪种方法最不容易/.test(question.prompt)));
-        // 离线兜底题库不绑定共享单元。
-        assert.ok(json.data.questions.every(question => question.unitId === null));
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -1866,7 +1865,8 @@ test('quiz unit stage rejects duplicated concept or takeaway across candidate un
                 env,
             });
             assert.equal(response.status, 200, name);
-            assert.equal(calls, 1, `${name}: 单元阶段不合格时不得进入二审转换`);
+            // 两轮 units 都查重不合格：每轮只发 1 次 units 请求，不进二审。
+            assert.equal(calls, 2, `${name}: 单元阶段不合格时不得进入二审转换`);
             assert.equal(json.data.questions[0].unitId, null, name);
         } finally {
             globalThis.fetch = originalFetch;
@@ -1894,7 +1894,8 @@ test('quiz review rejects repeated knowledgePoint, learningTakeaway or rationale
         let calls = 0;
         globalThis.fetch = async () => {
             calls += 1;
-            const payload = calls === 1
+            // units/review 交替：奇数次为单元阶段，偶数次为二审转换（两轮转换包都不合格）。
+            const payload = calls % 2 === 1
                 ? validQuizUnitsPayload()
                 : mutateJsonPayload(validQuizFromUnitsPayload(), mutate);
             return new Response(JSON.stringify(payload), {
@@ -1910,7 +1911,8 @@ test('quiz review rejects repeated knowledgePoint, learningTakeaway or rationale
                 env,
             });
             assert.equal(response.status, 200, name);
-            assert.equal(calls, 2, name);
+            // 两轮 review 都不合格：每轮 units+review 各 1 次。
+            assert.equal(calls, 4, name);
             assert.equal(json.data.questions[0].unitId, null, `${name}: 复盘模板/考点/结论重复时必须走确定性兜底`);
         } finally {
             globalThis.fetch = originalFetch;
@@ -1923,7 +1925,8 @@ test('quiz review rejects a generic methodology question under a non-metacogniti
     let calls = 0;
     globalThis.fetch = async () => {
         calls += 1;
-        const payload = calls === 1
+        // units/review 交替：奇数次为单元阶段，偶数次为二审转换（两轮转换包都不合格）。
+        const payload = calls % 2 === 1
             ? validQuizUnitsPayload()
             : mutateJsonPayload(validQuizFromUnitsPayload(), (parsed) => {
                 // 第 3 题来自“历史/历史语境”单元；把题干改成通用“避免过度解读”方法题。
@@ -1943,7 +1946,7 @@ test('quiz review rejects a generic methodology question under a non-metacogniti
             env,
         });
         assert.equal(response.status, 200);
-        assert.equal(calls, 2);
+        assert.equal(calls, 4);
         assert.equal(json.data.questions[0].unitId, null, '学科标签与通用方法题脱节时必须走确定性兜底');
     } finally {
         globalThis.fetch = originalFetch;
