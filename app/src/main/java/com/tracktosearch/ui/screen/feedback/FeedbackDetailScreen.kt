@@ -65,7 +65,6 @@ import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.component.feedbackCardSharedKey
 import com.tracktosearch.ui.component.isAppSharedTransitionActive
-import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
@@ -541,7 +540,8 @@ private fun OriginalFeedbackCard(
                                 .height(160.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surface)
-                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                // 点截图是看图，不震（用户规则：点击图片无触感）
+                                .hapticClickable(semantic = null) {
                                     onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                 },
                             contentAlignment = Alignment.Center
@@ -724,7 +724,8 @@ private fun ConversationBubble(
                                         // 与全屏端 "$sharedKeyPrefix-$page" 配对；caller-managed visibility
                                         // 保证同一 key 同时只有一侧是 target
                                         .zoomSharedSource(key = sharedKeyPrefix?.let { "$it-$index" })
-                                        .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                        // 点截图是看图，不震（用户规则：点击图片无触感）
+                                        .hapticClickable(semantic = null) {
                                             onScreenshotClick(screenshots.map(::screenshotUrl), index)
                                         }
                                 )
@@ -787,7 +788,8 @@ private fun ReplyBar(
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
+                                // 点截图是看图，不震（用户规则：点击图片无触感）
+                                .hapticClickable(semantic = null) {
                                     onScreenshotClick(index)
                                 }
                         ) {

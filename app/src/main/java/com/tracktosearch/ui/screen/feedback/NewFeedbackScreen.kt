@@ -510,8 +510,10 @@ private fun ScreenshotRow(
                         }
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
                         .clip(RoundedCornerShape(10.dp))
+                        // 点缩略图是看图预览，不震（用户规则：点击图片无触感）；
+                        // 角标的删除 × 与末尾的加号是操作，各自保留触感
                         .hapticClickable(
-                            semantic = HapticSemantic.LIGHT_TAP,
+                            semantic = null,
                             enabled = enabled
                         ) { onImageClick(index) },
                     contentAlignment = Alignment.Center
