@@ -398,7 +398,7 @@ class HapticDeviceCapabilityProbeTest {
         try {
             backend.isAvailable()
             Thread.sleep(PROBE_SETTLE_MS)
-            val dispatched = backend.perform(null, HapticSemantic.CONFIRM)
+            val dispatched = backend.perform(null, HapticSemantic.CONFIRM, HapticStrength.SYSTEM)
             report("RichTap perform(CONFIRM) 派发=$dispatched（等 dumpsys 对照）")
             Thread.sleep(1500)
         } finally {
