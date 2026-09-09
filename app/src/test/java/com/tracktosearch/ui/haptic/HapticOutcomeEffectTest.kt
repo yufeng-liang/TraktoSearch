@@ -195,6 +195,7 @@ class HapticOutcomeEffectTest {
             hapticPlayerSupported = false,
             miuiSupported = false,
             oplusSupported = false,
+            huaweiSupported = false,
         )
     }
 }

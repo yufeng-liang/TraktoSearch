@@ -10,6 +10,7 @@ import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.haptic.backend.AospConstantsBackend
 import com.tracktosearch.ui.haptic.backend.AospWaveformBackend
 import com.tracktosearch.ui.haptic.backend.HapticPlayerBackend
+import com.tracktosearch.ui.haptic.backend.HuaweiBackend
 import com.tracktosearch.ui.haptic.backend.MiuiBackend
 import com.tracktosearch.ui.haptic.backend.OplusBackend
 import com.tracktosearch.ui.haptic.backend.RichTapBackend
@@ -55,25 +56,27 @@ class HapticDeviceCapabilityProbeTest {
         report("richTapSupported=${capabilities.richTapSupported}")
         report("miuiSupported=${capabilities.miuiSupported}")
         report("oplusSupported=${capabilities.oplusSupported}")
+        report("huaweiSupported=${capabilities.huaweiSupported}")
 
         // 探测不抛就算过。这一条同时是「probe 在真机上不会因为某个厂商类缺失而整体炸掉」的证据
         assertThat(capabilities.compositionSizeMax).isAtLeast(0)
     }
 
     /**
-     * 六层各自的 `isAvailable()` 与语义覆盖。
+     * 七层各自的 `isAvailable()` 与语义覆盖。
      *
      * 逐层问而不是只问 [AppHaptics]：门面只告诉你「有人接了」，
      * 而计划里要记的是「**哪一层**接的、每层各覆盖了哪些语义」。
      */
     @Test
-    fun 打印六层的可用性与语义覆盖() {
+    fun 打印七层的可用性与语义覆盖() {
         val capabilities = HapticCapabilities.probe(context)
         val backends = listOf(
             RichTapBackend(context, capabilities),
             HapticPlayerBackend(capabilities),
             MiuiBackend(context, capabilities),
             OplusBackend(context, capabilities),
+            HuaweiBackend(capabilities),
             AospWaveformBackend(context, capabilities),
             AospConstantsBackend(),
         )
@@ -123,6 +126,53 @@ class HapticDeviceCapabilityProbeTest {
             }
         } finally {
             backends.forEach { it.release() }
+        }
+    }
+
+    /**
+     * 华为 Haptics Kit 通路的取数与实弹（2026-09-09 加，本层写完时还没有华为真机过手）。
+     *
+     * 1) `VibratorEx` 是否在 boot classpath（等于 `capabilities.huaweiSupported`）；
+     * 2) 22 个效果键逐个 `isSupportHwVibrator` 的全表 —— 映射表挑中的键不认时
+     *    `HuaweiBackend.supports` 自动降级，这张全表就是调 `huaweiEffectFor` 的依据；
+     * 3) 实弹一记 `setHwVibrator("haptic.dialler.click")`，非华为机型走到这就是
+     *    Class.forName 失败，打印一句收工。
+     */
+    @Test
+    fun 打印华为效果键的支持情况并实弹一记() {
+        val failure = runCatching {
+            val clazz = Class.forName("com.huawei.android.os.VibratorEx")
+            val instance = clazz.getConstructor().newInstance()
+            val isSupport = clazz.getMethod("isSupportHwVibrator", String::class.java)
+            val setHwVibrator = clazz.getMethod("setHwVibrator", String::class.java)
+
+            val keys = listOf(
+                "haptic.dialler.click", "haptic.camera.click", "haptic.camera.click_up",
+                "haptic.camera.focus", "haptic.camera.gear_slip", "haptic.camera.long_press",
+                "haptic.camera.mode_switch", "haptic.camera.portrait_switch",
+                "haptic.battery.charging", "haptic.clock.timer", "haptic.clock.stopwatch",
+                "haptic.contacts.letters_index", "haptic.dialler.long_press",
+                "haptic.desktop.long_press", "haptic.fingerprint.unlock_fail",
+                "haptic.lockscreen.unlock_click", "haptic.systemui.notifications_expand",
+                "haptic.systemui.notifications_long_press", "haptic.volume.maxmin",
+                "haptic.volume.trigger", "haptic.wallet.time_scroll",
+                // 两个 SDK 里有、HuaweiHapticEffects 没收的键，顺带探一下当对照
+                "haptic.gallery.upglide_related", "haptic.systemui.notifications_move",
+            )
+            keys.forEach { key ->
+                val ok = runCatching { isSupport.invoke(instance, key) as? Boolean == true }
+                    .getOrDefault(false)
+                report("Huawei $key = $ok")
+            }
+
+            if (runCatching { isSupport.invoke(instance, "haptic.dialler.click") as? Boolean == true }.getOrDefault(false)) {
+                setHwVibrator.invoke(instance, "haptic.dialler.click")
+                report("Huawei setHwVibrator(haptic.dialler.click) 已实弹（感受一下是否真震）")
+            }
+        }.exceptionOrNull()
+        if (failure != null) {
+            // 非华为机型走这条：类不在 boot classpath。不是失败，是没有这层通路
+            report("Huawei 反射不可用：${failure.javaClass.simpleName}: ${failure.message}")
         }
     }
 

@@ -490,6 +490,7 @@ class AppHapticsDegradationTest {
             hapticPlayerSupported = true,
             miuiSupported = true,
             oplusSupported = false,
+            huaweiSupported = false,
         )
 
     /**

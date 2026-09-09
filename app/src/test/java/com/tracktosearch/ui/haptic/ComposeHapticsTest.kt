@@ -249,6 +249,7 @@ class ComposeHapticsTest {
             hapticPlayerSupported = false,
             miuiSupported = false,
             oplusSupported = false,
+            huaweiSupported = false,
         )
     }
 }

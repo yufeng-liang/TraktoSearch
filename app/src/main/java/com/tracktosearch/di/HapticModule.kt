@@ -7,6 +7,7 @@ import com.tracktosearch.ui.haptic.HapticCapabilities
 import com.tracktosearch.ui.haptic.backend.AospConstantsBackend
 import com.tracktosearch.ui.haptic.backend.AospWaveformBackend
 import com.tracktosearch.ui.haptic.backend.HapticPlayerBackend
+import com.tracktosearch.ui.haptic.backend.HuaweiBackend
 import com.tracktosearch.ui.haptic.backend.MiuiBackend
 import com.tracktosearch.ui.haptic.backend.OplusBackend
 import com.tracktosearch.ui.haptic.backend.RichTapBackend
@@ -19,13 +20,13 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * 触感四层引擎的接线：能力探测、六个 backend、语义门面 [AppHaptics]。
+ * 触感四层引擎的接线：能力探测、七个 backend、语义门面 [AppHaptics]。
  *
  * ### 第一次取 [AppHaptics] 必须在非主线程
  *
  * [provideHapticCapabilities] 里的 `HapticCapabilities.probe` 是阻塞调用
  * （`getSystemService`、到 `VibratorService` 的 IPC、四次类查找与反射），
- * 六个 backend 的构造还要再取一次 `Vibrator`。整条依赖在 Hilt 里是懒的：
+ * 七个 backend 的构造还要再取一次 `Vibrator`。整条依赖在 Hilt 里是懒的：
  * 谁第一次解析 [AppHaptics]，这些成本就落在谁的线程上。
  *
  * 所以调用侧一律注入 `Provider<AppHaptics>`（或 `Lazy<AppHaptics>`），
@@ -43,10 +44,10 @@ import javax.inject.Singleton
  * `HapticPlayerBackend.stop()`，那是它们在 `HapticBackend` 契约之外多出来的成员，
  * 按接口类型注入就拿不到。
  *
- * ### 六层都得是单例，RichTap 尤其
+ * ### 七层都得是单例，RichTap 尤其
  *
  * `RichTapUtils` 是进程级单例，`quit()` 还会把它的静态 `sInstance` 置空 ——
- * 两个 `RichTapBackend` 实例会互相把对方拆掉。其余五层的理由平常些：各自持着一条单线程
+ * 两个 `RichTapBackend` 实例会互相把对方拆掉。其余六层的理由平常些：各自持着一条单线程
  * `Executor` 与一份探测缓存，多建一个就是多一条线程加一次重复探测。
  *
  * ### 两件不在本模块职责内、但缺了就不对的事
@@ -110,6 +111,18 @@ object HapticModule {
         capabilities: HapticCapabilities,
     ): OplusBackend = OplusBackend(context, capabilities)
 
+    /**
+     * tier 2：华为（EMUI / AOSP 底的 HarmonyOS）的语义效果，全程反射。
+     *
+     * 不需要 `Context`：`VibratorEx` 无参构造，不像 OPlus 要先 `getSystemService`。
+     * 与 MIUI、OPlus 一样，两个 tier 2 不会在同一台机上同时可用（`huaweiSupported`
+     * 的类查找只在华为 framework 上过得去），列表里的先后不影响结果。
+     */
+    @Provides
+    @Singleton
+    fun provideHuaweiBackend(capabilities: HapticCapabilities): HuaweiBackend =
+        HuaweiBackend(capabilities)
+
     /** tier 1：AOSP 振幅通路，Composition 拼得出就拼，拼不出画振幅台阶 */
     @Provides
     @Singleton
@@ -158,15 +171,16 @@ object HapticModule {
         hapticPlayer: HapticPlayerBackend,
         miui: MiuiBackend,
         oplus: OplusBackend,
+        huawei: HuaweiBackend,
         waveform: AospWaveformBackend,
         constants: AospConstantsBackend,
         hapticStorage: HapticStorage,
     ): AppHaptics = AppHaptics(
         capabilities = capabilities,
         // 这个顺序只决定同 tier 之间的先后（两个 tier 3：RichTap 在前、HE 在后，
-        // RichTap 真包络可用的机器先问它；两个 tier 2 不会在同一台机上同时可用）。
+        // RichTap 真包络可用的机器先问它；三个 tier 2 不会在同一台机上同时可用）。
         // 跨 tier 的优先级由 AppHaptics 自己排，见那边的 discreteRank。
-        backends = listOf(richTap, hapticPlayer, miui, oplus, waveform, constants),
+        backends = listOf(richTap, hapticPlayer, miui, oplus, huawei, waveform, constants),
         modeState = hapticStorage.modeState,
         systemHapticEnabled = { systemHapticFeedbackEnabled(context) },
         // 包成 lambda 而不是写 richTap::stop：stop() 返回 Boolean，

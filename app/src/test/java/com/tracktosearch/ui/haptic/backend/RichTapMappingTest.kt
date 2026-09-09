@@ -493,6 +493,7 @@ class RichTapStopThreadGuardTest {
         hapticPlayerSupported = false,
         miuiSupported = true,
         oplusSupported = false,
+        huaweiSupported = false,
     )
 
     /**

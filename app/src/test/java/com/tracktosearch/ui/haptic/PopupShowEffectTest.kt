@@ -164,6 +164,7 @@ class PopupShowEffectTest {
             hapticPlayerSupported = false,
             miuiSupported = false,
             oplusSupported = false,
+            huaweiSupported = false,
         )
     }
 }

@@ -708,6 +708,7 @@ class AospWaveformEnvelopeGuardTest {
         hapticPlayerSupported = false,
         miuiSupported = false,
         oplusSupported = false,
+        huaweiSupported = false,
     )
 
     private companion object {
