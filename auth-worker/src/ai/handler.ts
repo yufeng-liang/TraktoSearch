@@ -1195,7 +1195,7 @@ function quizFromUnitsMessages(
     units: KnowledgeUnit[],
     difficultyHint: string | null,
 ): MimoMessage[] {
-    const systemContent = '你是影视知识闯关的二审转换器。把给定学习单元转换成 13 题测验，只返回 JSON，字段为 questions，必须返回完整 13 题（10 个 single、2 个 multiple、1 个 short），不能返回审校意见或 markdown。每题必须有 unitId，取自给定单元之一且不得改动；subject 必须与该单元一致，concept 必须沿用该单元的概念；evidenceUsed 只能来自该单元的 filmEvidence 和已看输入材料，不得编造。sourceTitle 必须等于该单元 relatedMedia.title 的原文。题干必须绑定具体已看影视材料，禁止把片名插入泛化模板；single 只能有一个最佳答案，multiple 的正确选项必须都满足题干且不能靠措辞歧义凑数；difficulty 必须与所需记忆/推理负担相称，前 4 题热身、中间 5 题深入、最后 4 题挑战。每题保留 difficulty、learningTakeaway、knowledgePoint、answerRationale、distractorRationale；explanation 必须按“影视证据 -> 学科概念 -> 学习结论”展开，不能只有知识点名词。short 不要 options，提供 5 到 8 个 answerKeywords。不得编造输入没有的剧情、台词、角色、演员和历史事实。同一场 13 题内，knowledgePoint、learningTakeaway 与题干不得逐字重复；不足 13 个不同角度时允许同一单元派生题目，但必须换角度、换概念表述，禁止整段复制。每道题的题干与全部选项必须直接检验该题声明的 knowledgePoint 与该单元学科概念，并引用该题 relatedMedia 输入中实际存在的证据（年份/类型/简介/evidence）。answerRationale 与 distractorRationale 必须逐题针对本题证据与选项撰写，禁止整场套用同一句模板。禁止生成与学科无关的“再看一遍/如何向朋友推荐/避免过度解读”型通用方法题，除非该题学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致。题干必须考察影片或其记录中可核验的具体信息、概念或关系，禁止考察用户自身的学习/记忆/回想/评价方式（如“回想时哪种方法”“如何核对”“怎么向别人描述”类二阶元问题），禁止把“请结合已看记录线索”这类提示语塞进题干——题干本身要直接使用该证据。选项文本不要以句号等句子标点结尾。' + (difficultyHint ?? '');
+    const systemContent = '你是影视知识闯关的二审转换器。把给定学习单元转换成 13 题测验，只返回 JSON，字段为 questions，必须返回完整 13 题（10 个 single、2 个 multiple、1 个 short），不能返回审校意见或 markdown。每题必须有 unitId，取自给定单元之一且不得改动；subject 必须与该单元一致，concept 必须沿用该单元的概念；evidenceUsed 只能来自该单元的 filmEvidence 和已看输入材料，不得编造。sourceTitle 必须等于该单元 relatedMedia.title 的原文。题干必须绑定具体已看影视材料，禁止把片名插入泛化模板；single 只能有一个最佳答案，multiple 的正确选项必须都满足题干且不能靠措辞歧义凑数；difficulty 必须与所需记忆/推理负担相称，前 4 题热身、中间 5 题深入、最后 4 题挑战。每题保留 difficulty、learningTakeaway、knowledgePoint、answerRationale、distractorRationale；explanation 必须按“影视证据 -> 学科概念 -> 学习结论”展开，不能只有知识点名词。short 不要 options，提供 5 到 8 个 answerKeywords。不得编造输入没有的剧情、台词、角色、演员和历史事实。同一场 13 题内，knowledgePoint、learningTakeaway 与题干不得逐字重复；不足 13 个不同角度时允许同一单元派生题目，但必须换角度、换概念表述，禁止整段复制。每道题的题干与全部选项必须直接检验该题声明的 knowledgePoint 与该单元学科概念，并引用该题 relatedMedia 输入中实际存在的证据（年份/类型/简介/evidence）。answerRationale 与 distractorRationale 必须逐题针对本题证据与选项撰写，禁止整场套用同一句模板。禁止生成与学科无关的“再看一遍/如何向朋友推荐/避免过度解读”型通用方法题，除非该题学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致。题干必须考察影片或其记录中可核验的具体信息、概念或关系，禁止考察用户自身的学习/记忆/回想/评价方式（如“回想时哪种方法”“如何核对”“怎么向别人描述”类二阶元问题），禁止把“请结合已看记录线索”这类提示语塞进题干——题干本身要直接使用该证据。题干禁止出成背诵题：记某部片“哪年上映”“被标成什么类型/评分多少”没有价值，事实应直接写入题干，让题目考运用该事实做判断或解释的能力。已看记录标题常为外文原文，题干展示片名优先使用输入材料里提供的中文名（如“原名”条目），不得把英文原文名直接怼进中文题干。选项文本不要以句号等句子标点结尾。' + (difficultyHint ?? '');
     return [
         { role: 'system', content: systemContent },
         {
@@ -1368,7 +1368,7 @@ function normalizeRecommendation(value: unknown, index: number, movies: WatchMov
 // 任何片子套上去都成立，等于没考；重写为围绕该片可核验事实（年份/类型/片长/国家/原名/简介）出题，
 // 答案与干扰项都落到「这部片」的真实信息或合理推测上，学习结论也绑定该片观察所得。
 const FALLBACK_KNOWLEDGE_EDUCATION: Record<string, { subject: string; concept: string; takeaway: string }> = {
-    '上映年份与时代背景': { subject: '历史', concept: '上映年份与时代背景', takeaway: '把上映年份和影片题材放在一起看，能读出它回应的时代议题。' },
+    '上映年份与时代背景': { subject: '历史', concept: '上映年份与时代背景', takeaway: '年份不是要背的考点；把它和影片题材放在一起看，能读出作品回应的时代议题。' },
     '类型定位': { subject: '电影学', concept: '类型定位', takeaway: '类型标签是观察一部片的起点，真正的判断要回到它如何使用类型惯例。' },
     '简介与叙事重心': { subject: '叙事学', concept: '简介与叙事重心', takeaway: '简介概括的是叙事重心，抓住它就知道影片把笔墨花在了哪里。' },
     '片名与原名': { subject: '语言学与符号学', concept: '片名与原名', takeaway: '对照片名和原名，能看出译名选择强调或弱化了什么信息。' },
@@ -1439,46 +1439,25 @@ function fallbackMultipleQuestion(index: number, movie: WatchMovie, prompt: stri
 
 // 模板函数按该片真实记录动态生成选项：correctFact 是记录里的真值，
 // 干扰项是与该片无关但形态合理的错误值，保证答案可核验、干扰项有区分度。
-function fallbackYearOptions(movie: WatchMovie): Array<[string, string]> {
-    const year = movie.year ?? 2000;
-    const offsets = movie.year === null ? [-3, -1, 2, 5] : [-6, -2, 0, 3];
-    const letters = ['a', 'b', 'c', 'd'];
-    const years = offsets.map(offset => String(year + offset));
-    // 真值固定放 c，避免全部集中在同一选项位
-    return years.map((value, i) => [letters[i], value + ' 年'] as [string, string]);
-}
-
-function fallbackGenreOptions(movie: WatchMovie): Array<[string, string]> {
-    // Trakt/TMDB 原始 genres 可能是英文（Adventure/Drama…），题面是中文，直接引用会中英混杂；
-    // 非中文字符类型一律回退到「剧情」，与中文干扰项保持同一语言。
-    const raw = movie.genres[0] ?? '剧情';
-    const real = /[一-鿿]/.test(raw) ? raw : '剧情';
-    const decoys = ['歌舞', '体育竞技', '太空科幻'];
-    const letters = ['a', 'b', 'c', 'd'];
-    return [real, ...decoys]
-        .map((value, i) => [letters[i], value] as [string, string])
-        .sort((left, right) => (left[0] === 'c' ? -1 : right[0] === 'c' ? 1 : 0));
+// 题干展示名：已看记录 title 是 Trakt 原文（常见英文），evidence 的「原名」条目
+// 才是 TMDB 中文名；题面是中文，全 ASCII 的 title 换成原名展示，避免「《Long Time
+// No See Wuhan》」这类英文片名直接怼在中文题干里。
+function fallbackDisplayTitle(movie: WatchMovie): string {
+    if (/[\u4e00-\u9fff]/.test(movie.title)) return movie.title;
+    const original = movie.evidence.find(item => item.startsWith('原名：'))?.slice('原名：'.length).trim() ?? '';
+    return /[\u4e00-\u9fff]/.test(original) ? original : movie.title;
 }
 
 function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
     const questions: InternalQuestion[] = [];
+    // 兜底题设计原则：不考背诵。记「哪年上映」「被标成什么类型」没有价值，
+    // 事实直接印在题干里，考的是用这个事实做判断/理解的能力。
     const singleBuilders: Array<(movie: WatchMovie) => { prompt: string; options: Array<[string, string]>; correctId: string; knowledgePoint: string }> = [
-        movie => ({
-            prompt: '《' + movie.title + '》是哪一年上映/首播的作品？你的已看记录里就有这个信息。',
-            options: fallbackYearOptions(movie),
-            correctId: 'c',
-            knowledgePoint: '上映年份与时代背景',
-        }),
-        movie => ({
-            prompt: '在你的已看记录里，《' + movie.title + '》被标记为哪种类型？',
-            options: fallbackGenreOptions(movie),
-            correctId: 'c',
-            knowledgePoint: '类型定位',
-        }),
         movie => {
             const year = movie.year ?? 2000;
+            const name = fallbackDisplayTitle(movie);
             return {
-                prompt: '《' + movie.title + '》是 ' + year + ' 年的作品。下列关于"隔了多年再看它的眼光"的说法，哪项最站得住？',
+                prompt: '《' + name + '》是 ' + year + ' 年的作品。下列关于"隔了多年再看它的眼光"的说法，哪项最站得住？',
                 options: [
                     ['a', '它当年的讨论背景已经失效，现在看必然一无是处。'],
                     ['b', '作品在上映那年就定型了，今天看和当年看感受必须完全一样。'],
@@ -1489,37 +1468,13 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
                 knowledgePoint: '上映年份与时代背景',
             };
         },
-        movie => ({
-            prompt: '朋友说《' + movie.title + '》"简介看起来像另一部片"，你可以怎么核对？',
-            options: [
-                ['a', '看谁的评价人数多就听谁的。'],
-                ['b', '片名像就说明是同一部，不用核对。'],
-                ['c', '凭第一印象直接下判断。'],
-                ['d', '用已看记录里的简介片段逐段对读，看他描述的情节是否真的出现。'],
-            ],
-            correctId: 'd',
-            knowledgePoint: '简介与叙事重心',
-        }),
-        movie => {
-            const year = movie.year ?? 2000;
-            return {
-                prompt: '想知道《' + movie.title + '》是不是你记忆中"很久以前"看的那部老片，下面哪条已看记录信息最有说服力？',
-                options: [
-                    ['a', '你的观看日期和它的上映年份都指向同一部，时间线能对上。'],
-                    ['b', '海报颜色和记忆里一致。'],
-                    ['c', '片名越短越说明是老片。'],
-                    ['d', '评分高就一定是老片。'],
-                ],
-                correctId: 'a',
-                knowledgePoint: '上映年份与时代背景',
-            };
-        },
         movie => {
             const rawGenre = movie.genres[0] ?? '剧情';
-            // 同 fallbackGenreOptions：非中文类型回退「剧情」，避免题干中英混杂
-            const genre = /[一-鿿]/.test(rawGenre) ? rawGenre : '剧情';
+            // 非 中文 类型回退「剧情」，避免题干中英混杂
+            const genre = /[\u4e00-\u9fff]/.test(rawGenre) ? rawGenre : '剧情';
+            const name = fallbackDisplayTitle(movie);
             return {
-                prompt: '《' + movie.title + '》的记录类型是「' + genre + '」。下列哪个预期和这个标签最匹配？',
+                prompt: '《' + name + '》在你已看记录里的类型标签是「' + genre + '」。对这个标签哪项理解最准确？',
                 options: [
                     ['a', '它一定全程都在唱歌跳舞。'],
                     ['b', '它必须以真实事件为题材。'],
@@ -1530,23 +1485,19 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
                 knowledgePoint: '类型定位',
             };
         },
-        movie => {
-            const year = movie.year ?? 2000;
-            const decoy = (movie.year ?? 2000) + 7;
-            return {
-                prompt: '写影评时想提《' + movie.title + '》的上映年份，应该采用哪个写法？',
-                options: [
-                    ['a', String(year) + ' 年——以已看记录里的上映/首播年份为准。'],
-                    ['b', String(decoy) + ' 年——听起来更像它画面里的年代。'],
-                    ['c', '随便写一个大致年代，观众不会核对。'],
-                    ['d', '写你第一次看它的年份，那才是"它的时间"。'],
-                ],
-                correctId: 'a',
-                knowledgePoint: '上映年份与时代背景',
-            };
-        },
         movie => ({
-            prompt: '有人断言"《' + movie.title + '》的评分这么高，你肯定也喜欢"。这个推断的问题在哪里？',
+            prompt: '朋友说《' + fallbackDisplayTitle(movie) + '》"简介看起来像另一部片"，你可以怎么核对？',
+            options: [
+                ['a', '看谁的评价人数多就听谁的。'],
+                ['b', '片名像就说明是同一部，不用核对。'],
+                ['c', '凭第一印象直接下判断。'],
+                ['d', '用已看记录里的简介片段逐段对读，看他描述的情节是否真的出现。'],
+            ],
+            correctId: 'd',
+            knowledgePoint: '简介与叙事重心',
+        }),
+        movie => ({
+            prompt: '有人断言"《' + fallbackDisplayTitle(movie) + '》的评分这么高，你肯定也喜欢"。这个推断的问题在哪里？',
             options: [
                 ['a', '高分说明它质量稳定，推断没有问题。'],
                 ['b', '公映评分是群体平均值，和你的具体喜好没有必然联系，你的判断要回到自己的观影感受。'],
@@ -1557,7 +1508,7 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
             knowledgePoint: '评分与个人判断',
         }),
         movie => ({
-            prompt: '关于《' + movie.title + '》的片名，下列哪种态度最合理？',
+            prompt: '关于《' + fallbackDisplayTitle(movie) + '》的片名，下列哪种态度最合理？',
             options: [
                 ['a', '片名只是一个代号，任何解读都无意义。'],
                 ['b', '片名一定隐藏了作者的核心隐喻，必须逐字破译。'],
@@ -1567,17 +1518,78 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
             correctId: 'c',
             knowledgePoint: '片名与原名',
         }),
-        movie => ({
-            prompt: '《' + movie.title + '》在你的已看记录里有类型标签。这个标签对"向别人描述这部片"的实际帮助是什么？',
-            options: [
-                ['a', '没有帮助，描述影片只能逐句复述剧情。'],
-                ['b', '它能一句话框定预期，比如"这是部' + (/[一-鿿]/.test(movie.genres[0] ?? '') ? movie.genres[0] : '剧情') + '片"，对方立刻有大致方向。'],
-                ['c', '有帮助但仅限于报出处，不能展开。'],
-                ['d', '标签是剧透，描述影片时必须回避。'],
-            ],
-            correctId: 'b',
-            knowledgePoint: '类型定位',
-        }),
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            const country = movie.evidence.find(item => item.startsWith('国家/地区：'))?.slice('国家/地区：'.length).trim() ?? '';
+            const region = /[\u4e00-\u9fff]/.test(country) ? country : '它的出品国家';
+            return {
+                prompt: '《' + name + '》的出品地区是「' + region + '」。出品地区这个信息对理解影片的实际作用是什么？',
+                options: [
+                    ['a', '没有作用，好电影超越一切地域。'],
+                    ['b', '它提示了影片的创作语境：题材选择、表达方式常与所处环境相关，是理解的入口之一。'],
+                    ['c', '它决定了影片品质的上限。'],
+                    ['d', '只是发行信息，与影片内容毫无关联。'],
+                ],
+                correctId: 'b',
+                knowledgePoint: '国家与创作语境',
+            };
+        },
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            return {
+                prompt: '你想确认某篇短文写的是不是《' + name + '》这部作品本身，下列哪条依据最可靠？',
+                options: [
+                    ['a', '短文里出现了和已看记录简介一致的情节描述。'],
+                    ['b', '短文标题里带了"影评"两个字。'],
+                    ['c', '短文配图里有明星面孔。'],
+                    ['d', '短文的点赞数很高。'],
+                ],
+                correctId: 'a',
+                knowledgePoint: '简介与叙事重心',
+            };
+        },
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            return {
+                prompt: '关于《' + name + '》的公映评分和你的个人判断，下列哪项说法最合理？',
+                options: [
+                    ['a', '评分就是权威结论，个人感受必须向它看齐。'],
+                    ['b', '评分反映群体平均口味，你的判断要回到自己最有把握的具体感受，两者可以不一致。'],
+                    ['c', '评分毫无意义，讨论影片完全不需要参考。'],
+                    ['d', '评分高的片子不可能有缺点。'],
+                ],
+                correctId: 'b',
+                knowledgePoint: '评分与个人判断',
+            };
+        },
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            return {
+                prompt: '复盘《' + name + '》时，下列哪种做法最能把"看过"变成"看懂"？',
+                options: [
+                    ['a', '记住片名和主要演员就算看懂了。'],
+                    ['b', '回到具体场面：人物面对什么限制、做了什么选择、承担了什么后果。'],
+                    ['c', '多刷几遍自然就懂了，不需要方法。'],
+                    ['d', '把别人的高分短评背下来。'],
+                ],
+                correctId: 'b',
+                knowledgePoint: '开放思考',
+            };
+        },
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            return {
+                prompt: '讨论《' + name + '》时，朋友给出一个和你相反的解读。下列处理方式哪项最合理？',
+                options: [
+                    ['a', '谁的评分高听谁的。'],
+                    ['b', '立刻放弃自己的看法。'],
+                    ['c', '双方都回到影片具体内容：各自的解读能被哪些场面支持，再比较说服力。'],
+                    ['d', '解读没有对错，不需要讨论依据。'],
+                ],
+                correctId: 'c',
+                knowledgePoint: '开放思考',
+            };
+        },
     ];
     singleBuilders.forEach((build, index) => {
         const movie = movies[index % movies.length];
@@ -1586,28 +1598,34 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
         questions.push(fallbackSingleQuestion(index, movie, prompt, built.options.map(([id, text]) => ({ id, text: stripTrailingSentencePunctuation(text) })), built.correctId, built.knowledgePoint));
     });
     const multipleBuilders: Array<(movie: WatchMovie) => { prompt: string; options: Array<[string, string]>; correctIds: string[]; knowledgePoint: string }> = [
-        movie => ({
-            prompt: '关于《' + movie.title + '》的已看记录信息，下列哪些说法成立？（多选）',
-            options: [
-                ['a', '记录里包含它的上映/首播年份。'],
-                ['b', '记录里的类型标签可以帮你快速判断它大致的观影预期。'],
-                ['c', '记录里的评分就等于你自己的评价。'],
-                ['d', '记录里的简介概括了它的叙事重心。'],
-            ],
-            correctIds: ['a', 'b', 'd'],
-            knowledgePoint: '评分与个人判断',
-        }),
-        movie => ({
-            prompt: '对比《' + movie.title + '》和你今年看的另一部片，哪些维度是「已看记录里真实存在、可以直接引用」的？（多选）',
-            options: [
-                ['a', '两部片的上映年份差。'],
-                ['b', '两部片的类型标签异同。'],
-                ['c', '你在两部片里各自最喜欢的具体场面（需要你自己补充描述）。'],
-                ['d', '两部片的导演私交。'],
-            ],
-            correctIds: ['a', 'b', 'c'],
-            knowledgePoint: '作品比较',
-        }),
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            return {
+                prompt: '看完《' + name + '》想判断一篇短评是否可信，下列哪些做法成立？（多选）',
+                options: [
+                    ['a', '核对短评引用的情节是否真的出现在影片简介或正片中。'],
+                    ['b', '看短评是否区分了「影片呈现的事实」与「评论者自己的解读」。'],
+                    ['c', '点赞越多说明短评越可信。'],
+                    ['d', '对比多条短评，看它们引用的场面能否互相印证。'],
+                ],
+                correctIds: ['a', 'b', 'd'],
+                knowledgePoint: '简介与叙事重心',
+            };
+        },
+        movie => {
+            const name = fallbackDisplayTitle(movie);
+            return {
+                prompt: '对比《' + name + '》和你今年看的另一部片，下列哪些做法能让比较有意义？（多选）',
+                options: [
+                    ['a', '并列观察两部片各自如何组织叙事与节奏。'],
+                    ['b', '比较它们对相近主题的不同处理。'],
+                    ['c', '对照各自的人物选择：面对类似处境时决定了什么、付出了什么。'],
+                    ['d', '只比较评分和票房，数字高的一方赢。'],
+                ],
+                correctIds: ['a', 'b', 'c'],
+                knowledgePoint: '作品比较',
+            };
+        },
     ];
     multipleBuilders.forEach((build, offset) => {
         const index = 10 + offset;
@@ -1627,7 +1645,7 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
         sourceTitle: movie.title,
         answerRationale: '这是一道开放题，重点是把影片中的具体人物、选择或关系连接到自己的理解。',
         distractorRationale: '',
-        prompt: '用一句话回答：看完《' + movie.title + '》后，你认为它最值得带回现实生活的一个问题是什么？',
+        prompt: '用一句话回答：看完《' + fallbackDisplayTitle(movie) + '》后，你认为它最值得带回现实生活的一个问题是什么？',
         options: [],
         correctAnswer: '人物如何在处境中作出选择，并承担选择的后果。',
         correctOptionIds: [],
