@@ -207,6 +207,14 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
     mimo: 'mimo-v2.5-pro',
 };
 
+// 同供应商内的模型级降级链（失败按序换下一个）：目前仅 zhipu 有多模型；
+// agnes/mimo 文本各只有一个模型，空数组表示无模型级降级，直接轮下一供应商。
+const MODEL_FALLBACKS_BY_PROVIDER: Record<TextProvider, readonly string[]> = {
+    agnes: [],
+    zhipu: ['glm-5.3-flash', 'glm-4.6v', 'glm-4.5-air', 'glm-4.7', 'glm-4.7-flash'],
+    mimo: [],
+};
+
 interface LlmJsonResult {
     payload: unknown;
     provider: TextProvider;
@@ -2342,25 +2350,35 @@ async function callLlmJson(
             ? ['agnes', 'mimo']
             : ['mimo', 'agnes', 'zhipu'];
     let lastError: unknown = null;
+    // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，
+    // 全部失败才轮下一家；zhipu 梯队内 5.3-flash 限频时自动落到 4.6v/4.5-air 等轻量模型。
     for (const p of order) {
-        const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
-        try {
-            const result = p === 'agnes'
-                ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
-                : p === 'zhipu'
-                    ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
-                    : await callMimoJson(env, m as MimoModel, messages, options);
-            // 未配置/测试模式下供应商返回 null 表示不可用：主供应商直接走离线兜底，回退供应商则上抛原错误。
-            if (result === null) {
-                if (p === provider) return null;
-                throw new AppError('AI_UPSTREAM_ERROR', 'Fallback AI provider unavailable', 502);
+        const candidates: string[] = [];
+        if (p === provider) candidates.push(model);
+        const defaultModel = DEFAULT_MODEL_BY_PROVIDER[p];
+        if (!candidates.includes(defaultModel)) candidates.push(defaultModel);
+        for (const extra of MODEL_FALLBACKS_BY_PROVIDER[p]) {
+            if (!candidates.includes(extra)) candidates.push(extra);
+        }
+        for (const m of candidates) {
+            try {
+                const result = p === 'agnes'
+                    ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
+                    : p === 'zhipu'
+                        ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
+                        : await callMimoJson(env, m as MimoModel, messages, options);
+                // 未配置/测试模式下供应商返回 null 表示不可用：主供应商直接走离线兜底，回退供应商则上抛原错误。
+                if (result === null) {
+                    if (p === provider) return null;
+                    throw new AppError('AI_UPSTREAM_ERROR', 'Fallback AI provider unavailable', 502);
+                }
+                return { payload: result, provider: p, model: m };
+            } catch (error) {
+                // 模型非法属于请求错误，不回退，直接上抛。
+                if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+                logAiDiagnostic('upstream_failure', context, p, m, error);
+                lastError = error;
             }
-            return { payload: result, provider: p, model: m };
-        } catch (error) {
-            // 模型非法属于请求错误，不回退，直接上抛。
-            if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
-            logAiDiagnostic('upstream_failure', context, p, m, error);
-            lastError = error;
         }
     }
     // 主供应商是 agnes 时保持旧契约：失败返回 null，由各业务的确定性兜底接手

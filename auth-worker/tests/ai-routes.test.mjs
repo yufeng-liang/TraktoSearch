@@ -1299,7 +1299,9 @@ test('upstream failure is retried once and returned as a stable error', async ()
 
         assert.equal(response.status, 502);
         assert.equal(json.code, 'AI_UPSTREAM_ERROR');
-        assert.equal(calls, 2);
+        // mimo 家内降级链 v2.5 → v2.5-pro,每个模型 5xx 各重试一次 = 4 次;
+        // agnes/zhipu 未配 key 不可用,最终上抛稳定 502
+        assert.equal(calls, 4);
         assert.doesNotMatch(json.message, /provider failure details/);
     } finally {
         globalThis.fetch = originalFetch;

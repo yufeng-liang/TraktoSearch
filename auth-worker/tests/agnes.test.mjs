@@ -477,8 +477,13 @@ test('explicit legacy MiMo text request keeps the compatibility fallback to Agne
         });
         assert.equal(response.status, 200);
         assert.equal(json.data.greeting, '兼容成功');
+        // mimo 主路径 429 后按 agnes > zhipu > mimo 轮替；zhipu 梯队内再按模型级降级链
+        // 逐个尝试（5.3-flash → 4.6v → 4.5-air → 4.7 → 4.7-flash），全部失败才轮下一供应商。
+        // 本测试 mock 里所有非 mimo 请求都成功，因此第一个 zhipu 模型 5.3-flash 即成功。
         assert.deepEqual(requests, [
+            // 主路径 mimo：显式模型失败后先试 mimo 家内降级（v2.5-pro），再轮 agnes
             { url: 'https://api.xiaomimimo.com/v1/chat/completions', model: 'mimo-v2.5' },
+            { url: 'https://api.xiaomimimo.com/v1/chat/completions', model: 'mimo-v2.5-pro' },
             { url: 'https://apihub.agnes-ai.com/v1/chat/completions', model: 'agnes-2.5-flash' },
         ]);
     } finally {
