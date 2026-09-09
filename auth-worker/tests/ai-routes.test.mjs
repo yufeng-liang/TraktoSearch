@@ -1705,6 +1705,12 @@ test('quiz converts shared knowledge units with a second review and returns the 
         assert.equal(requests.length, 2);
         assert.match(String(requests[0].messages?.[0]?.content), /候选学习单元编辑/);
         assert.match(String(requests[1].messages?.[0]?.content), /二审转换器/);
+        // 提示词硬约束：全场去重、学科一致性、逐题 rationale 与选项标点。
+        assert.match(String(requests[0].messages?.[0]?.content), /concept 与 takeaway 两两必须不同/);
+        assert.match(String(requests[0].messages?.[0]?.content), /禁止生成与学科无关/);
+        assert.match(String(requests[1].messages?.[0]?.content), /knowledgePoint、learningTakeaway 与题干不得逐字重复/);
+        assert.match(String(requests[1].messages?.[0]?.content), /answerRationale 与 distractorRationale 必须逐题/);
+        assert.match(String(requests[1].messages?.[0]?.content), /选项文本不要以句号/);
         assert.match(String(requests[1].messages?.[1]?.content), /KNOWLEDGE_UNITS/);
         assert.match(String(requests[1].messages?.[1]?.content), /上映年份/);
         assert.equal(json.data.questions[0].unitId, 'quiz-unit-a');
@@ -1742,9 +1748,12 @@ test('quiz never returns the unit stage when the converted package is invalid', 
         assert.equal(response.status, 200);
         assert.equal(calls, 2);
         assert.equal(json.data.questions.length, 13);
-        assert.match(json.data.questions[0].prompt, /已看记录线索/);
+        // 重写后的兜底题干直接考该片可核验信息，不再注入“请结合已看记录线索”提示语，
+        // 也不得出元认知/通用学习法题（回想方法/重看/向朋友推荐）。
+        assert.equal(json.data.questions[0].prompt.includes('已看记录线索'), false);
         assert.equal(json.data.questions[0].prompt.includes('分析 Movie 1 中人物的选择。'), false);
         assert.ok(json.data.questions.every(question => question.learningTakeaway));
+        assert.ok(json.data.questions.every(question => !/回想|重看|向朋友推荐|哪种方法最不容易/.test(question.prompt)));
         // 离线兜底题库不绑定共享单元。
         assert.ok(json.data.questions.every(question => question.unitId === null));
     } finally {
@@ -1814,6 +1823,153 @@ test('quiz conversion must keep synopsis evidence from its unit when it is avail
         assert.match(String(requests[0].messages?.[1]?.content), /An engineer repeatedly revises judgment/);
         assert.match(String(requests[1].messages?.[1]?.content), /An engineer repeatedly revises judgment/);
         assert.match(json.data.questions[0].evidenceUsed, /An engineer repeatedly revises judgment/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+/** 解析两级 fixture 中的 JSON，供“变坏一个字段”类测试复用。 */
+function mutateJsonPayload(payload, mutate) {
+    const parsed = JSON.parse(payload.choices[0].message.content);
+    mutate(parsed);
+    return { choices: [{ message: { content: JSON.stringify(parsed) } }] };
+}
+
+test('quiz unit stage rejects duplicated concept or takeaway across candidate units', async () => {
+    const cases = [
+        ['duplicate-concept', (parsed) => {
+            parsed.units[1] = { ...parsed.units[1], unitId: 'quiz-unit-dup-concept', concept: parsed.units[0].concept };
+        }],
+        ['duplicate-takeaway', (parsed) => {
+            parsed.units[2] = { ...parsed.units[2], unitId: 'quiz-unit-dup-takeaway', takeaway: parsed.units[0].takeaway };
+        }],
+    ];
+    for (const [name, mutate] of cases) {
+        const originalFetch = globalThis.fetch;
+        let calls = 0;
+        globalThis.fetch = async () => {
+            calls += 1;
+            return new Response(JSON.stringify(calls === 1
+                ? mutateJsonPayload(validQuizUnitsPayload(), mutate)
+                : validQuizFromUnitsPayload()), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        };
+        try {
+            const env = createLegacyMimoTextEnv();
+            const { response, json } = await call('/api/ai/quiz', {
+                method: 'POST',
+                body: { action: 'quiz', sessionId: `quiz-unit-${name}-session`, watched: quizMoviesWithSynopsis(), forceRefresh: true },
+                env,
+            });
+            assert.equal(response.status, 200, name);
+            assert.equal(calls, 1, `${name}: 单元阶段不合格时不得进入二审转换`);
+            assert.equal(json.data.questions[0].unitId, null, name);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    }
+});
+
+test('quiz review rejects repeated knowledgePoint, learningTakeaway or rationale in one round', async () => {
+    const cases = [
+        ['duplicate-knowledge-point', (parsed) => {
+            parsed.questions[1].knowledgePoint = parsed.questions[0].knowledgePoint;
+        }],
+        ['duplicate-learning-takeaway', (parsed) => {
+            parsed.questions[1].learningTakeaway = parsed.questions[0].learningTakeaway;
+        }],
+        ['duplicate-answer-rationale', (parsed) => {
+            parsed.questions[1].answerRationale = parsed.questions[0].answerRationale;
+        }],
+        ['duplicate-distractor-rationale', (parsed) => {
+            parsed.questions[1].distractorRationale = parsed.questions[0].distractorRationale;
+        }],
+    ];
+    for (const [name, mutate] of cases) {
+        const originalFetch = globalThis.fetch;
+        let calls = 0;
+        globalThis.fetch = async () => {
+            calls += 1;
+            const payload = calls === 1
+                ? validQuizUnitsPayload()
+                : mutateJsonPayload(validQuizFromUnitsPayload(), mutate);
+            return new Response(JSON.stringify(payload), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        };
+        try {
+            const env = createLegacyMimoTextEnv();
+            const { response, json } = await call('/api/ai/quiz', {
+                method: 'POST',
+                body: { action: 'quiz', sessionId: `quiz-review-${name}-session`, watched: quizMoviesWithSynopsis(), forceRefresh: true },
+                env,
+            });
+            assert.equal(response.status, 200, name);
+            assert.equal(calls, 2, name);
+            assert.equal(json.data.questions[0].unitId, null, `${name}: 复盘模板/考点/结论重复时必须走确定性兜底`);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    }
+});
+
+test('quiz review rejects a generic methodology question under a non-metacognition subject', async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => {
+        calls += 1;
+        const payload = calls === 1
+            ? validQuizUnitsPayload()
+            : mutateJsonPayload(validQuizFromUnitsPayload(), (parsed) => {
+                // 第 3 题来自“历史/历史语境”单元；把题干改成通用“避免过度解读”方法题。
+                parsed.questions[2].prompt = `关于《Movie 3》的已看记录（简介：${QUIZ_SYNOPSIS}），如何避免过度解读其中的内容？`;
+            });
+        return new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    };
+
+    try {
+        const env = createLegacyMimoTextEnv();
+        const { response, json } = await call('/api/ai/quiz', {
+            method: 'POST',
+            body: { action: 'quiz', sessionId: 'quiz-generic-mismatch-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
+            env,
+        });
+        assert.equal(response.status, 200);
+        assert.equal(calls, 2);
+        assert.equal(json.data.questions[0].unitId, null, '学科标签与通用方法题脱节时必须走确定性兜底');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('quiz normalization strips trailing sentence punctuation from option texts', async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => {
+        calls += 1;
+        return new Response(JSON.stringify(calls === 1 ? validQuizUnitsPayload() : validQuizFromUnitsPayload()), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    };
+
+    try {
+        const env = createLegacyMimoTextEnv();
+        const { response, json } = await call('/api/ai/quiz', {
+            method: 'POST',
+            body: { action: 'quiz', sessionId: 'quiz-option-punctuation-session', watched: quizMoviesWithSynopsis(), forceRefresh: true },
+            env,
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.questions.length, 13);
+        assert.ok(json.data.questions.every(question =>
+            question.options.every(option => !/[。．.!?！？]$/u.test(option.text))), '选项文本不得以句子标点结尾');
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -2486,7 +2642,7 @@ function validQuizFromUnitsPayload() {
         const year = 2020 + spec.movieIndex;
         const title = `Movie ${spec.movieIndex + 1}`;
         const evidenceUsed = `《${title}》上映年份：${year}，类型：Drama，简介：${QUIZ_SYNOPSIS} 该材料对应单元概念“${spec.concept}”。`;
-        const learningTakeaway = `结合${spec.concept}时，应先回到可观察证据，再解释人物或形式，最后说明这一概念对现实判断的帮助。`;
+        const learningTakeaway = `结合${spec.concept}（第${index + 1}个观察角度）时，应先回到可观察证据，再解释人物或形式，最后说明这一概念对现实判断的帮助。`;
         const prompt = (index < 10
             ? `在《${title}》（${year}年、Drama，简介：${QUIZ_SYNOPSIS}）中，若用${spec.concept}观察这条已看记录，哪种判断最稳妥？`
             : index < 12
@@ -2502,11 +2658,11 @@ function validQuizFromUnitsPayload() {
             concept: spec.concept,
             learningTakeaway,
             evidenceUsed,
-            knowledgePoint: spec.concept,
+            knowledgePoint: `${spec.concept}的${index + 1}号考点`,
             sourceTitle: title,
             prompt,
-            answerRationale: '正确选项同时使用了题干要求和已提供的观看证据。',
-            distractorRationale: '另一选项没有使用可核验材料，无法支持稳定结论。',
+            answerRationale: `第${index + 1}题用${spec.concept}核对应回到已看证据的判断。`,
+            distractorRationale: `第${index + 1}题里，${spec.concept}要求排除不能回片验证的说法。`,
             explanation,
             filmIndex: spec.movieIndex,
         };
@@ -2536,6 +2692,7 @@ function validQuizFromUnitsPayload() {
             options: [],
             correctAnswer: '先陈述证据，再说明概念，最后写出自己的学习结论。',
             answerKeywords: ['证据', '概念', '结论', '现实'],
+            distractorRationale: '',
         };
     });
     return { choices: [{ message: { content: JSON.stringify({ questions }) } }] };

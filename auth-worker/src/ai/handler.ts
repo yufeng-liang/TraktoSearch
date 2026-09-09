@@ -32,8 +32,10 @@ import {
     dailyReviewMessages,
     DAILY_LOCALES,
     fallbackDailyKnowledgeUnit,
+    isGenericMethodologyMismatch,
     normalizeDailyKnowledgeUnit,
     readDailyLocale,
+    stripTrailingSentencePunctuation,
     type DailyLocale,
     type KnowledgeUnit,
 } from './daily-knowledge.ts';
@@ -632,6 +634,18 @@ function normalizeQuizUnits(value: unknown, movies: WatchMovie[]): KnowledgeUnit
         subjects.add(unit.subject);
     }
     if (subjects.size < 3) throw new AppError('INVALID_AI_OUTPUT', 'AI quiz units lack subject coverage', 502);
+    // 候选单元阶段：concept/takeaway 两两必须不同，避免同一角度被复制成多个“不同”单元。
+    const conceptKeys = new Set<string>();
+    const takeawayKeys = new Set<string>();
+    for (const unit of units) {
+        const conceptKey = normalizeSemanticKey(unit.concept);
+        const takeawayKey = normalizeSemanticKey(unit.takeaway);
+        if (conceptKeys.has(conceptKey) || takeawayKeys.has(takeawayKey)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz units must not repeat concept or takeaway', 502);
+        }
+        conceptKeys.add(conceptKey);
+        takeawayKeys.add(takeawayKey);
+    }
     return units;
 }
 
@@ -1159,7 +1173,7 @@ function tasteMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
 }
 
 function quizUnitMessages(nickname: string, movies: WatchMovie[], difficultyHint: string | null = null): MimoMessage[] {
-    const systemContent = '你是影视知识闯关的候选学习单元编辑。只返回 JSON，字段为 units，包含 3 到 6 个学习单元。每个单元字段固定为 unitId、version（固定 1）、locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode（film_fact、viewing_interpretation、external_fact）、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。subjectGroup 只能是 film_expression、people_and_mind、society_and_institution、history_and_culture、philosophy_and_ethics、science_and_nature、technology_and_future、life_and_career；subject 必须使用中文受控学科目录：电影学、叙事学、摄影与视觉设计、剪辑与声音、表演与戏剧、心理学、认知科学、发展心理学、教育学、社会学、人类学、传播学、政治学、经济学、法学、犯罪学、历史、文化研究、语言学与符号学、宗教神话与民俗、音乐与艺术史、哲学与伦理学、马克思主义哲学、物理、化学、生物与生态、医学与公共卫生、天文学、地理与气候、计算机与人工智能、数学与统计、工程与材料、建筑与城市规划、体育科学、军事学与战略、食品科学、职业与组织知识。单元必须自然覆盖至少 3 个不同学科；物理、化学、医学等学科只有输入证据确实支持时才使用，禁止硬套。relatedMedia.title 必须逐字来自已看输入；filmEvidence 必须同时引用片名和输入中的年份、类型、简介或证据，不得编造输入没有的剧情、台词、演员或幕后事实。takeaway 是用户能复述的学习结论；source 必须包含 name、合法 http(s) url 和 evidence；checkQuestion 有 2 到 4 个唯一选项且只有一个最佳答案；boundary 说明事实/解读边界。' + (difficultyHint ?? '');
+    const systemContent = '你是影视知识闯关的候选学习单元编辑。只返回 JSON，字段为 units，包含 3 到 6 个学习单元。每个单元字段固定为 unitId、version（固定 1）、locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode（film_fact、viewing_interpretation、external_fact）、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。subjectGroup 只能是 film_expression、people_and_mind、society_and_institution、history_and_culture、philosophy_and_ethics、science_and_nature、technology_and_future、life_and_career；subject 必须使用中文受控学科目录：电影学、叙事学、摄影与视觉设计、剪辑与声音、表演与戏剧、心理学、认知科学、发展心理学、教育学、社会学、人类学、传播学、政治学、经济学、法学、犯罪学、历史、文化研究、语言学与符号学、宗教神话与民俗、音乐与艺术史、哲学与伦理学、马克思主义哲学、物理、化学、生物与生态、医学与公共卫生、天文学、地理与气候、计算机与人工智能、数学与统计、工程与材料、建筑与城市规划、体育科学、军事学与战略、食品科学、职业与组织知识。单元必须自然覆盖至少 3 个不同学科；物理、化学、医学等学科只有输入证据确实支持时才使用，禁止硬套。relatedMedia.title 必须逐字来自已看输入；filmEvidence 必须同时引用片名和输入中的年份、类型、简介或证据，不得编造输入没有的剧情、台词、演员或幕后事实。takeaway 是用户能复述的学习结论；source 必须包含 name、合法 http(s) url 和 evidence；checkQuestion 有 2 到 4 个唯一选项且只有一个最佳答案；boundary 说明事实/解读边界。同一场候选单元之间禁止逐字重复：concept 与 takeaway 两两必须不同；多个单元可以共用同一部影片，但必须换角度、换概念表述，禁止整段复制。每个单元的标题与即时小题必须直接检验该单元声明的学科概念，并引用 relatedMedia 输入中实际存在的证据（年份/类型/简介/evidence）；external_fact 的外部事实必须得到 source 摘要与 URL 的实质支持。禁止生成与学科无关的“再看一遍/如何向朋友推荐/避免过度解读”型通用方法内容，除非学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致。' + (difficultyHint ?? '');
     return [
         { role: 'system', content: systemContent },
         {
@@ -1181,7 +1195,7 @@ function quizFromUnitsMessages(
     units: KnowledgeUnit[],
     difficultyHint: string | null,
 ): MimoMessage[] {
-    const systemContent = '你是影视知识闯关的二审转换器。把给定学习单元转换成 13 题测验，只返回 JSON，字段为 questions，必须返回完整 13 题（10 个 single、2 个 multiple、1 个 short），不能返回审校意见或 markdown。每题必须有 unitId，取自给定单元之一且不得改动；subject 必须与该单元一致，concept 必须沿用该单元的概念；evidenceUsed 只能来自该单元的 filmEvidence 和已看输入材料，不得编造。sourceTitle 必须等于该单元 relatedMedia.title 的原文。题干必须绑定具体已看影视材料，禁止把片名插入泛化模板；single 只能有一个最佳答案，multiple 的正确选项必须都满足题干且不能靠措辞歧义凑数；difficulty 必须与所需记忆/推理负担相称，前 4 题热身、中间 5 题深入、最后 4 题挑战。每题保留 difficulty、learningTakeaway、knowledgePoint、answerRationale、distractorRationale；explanation 必须按“影视证据 -> 学科概念 -> 学习结论”展开，不能只有知识点名词。short 不要 options，提供 5 到 8 个 answerKeywords。不得编造输入没有的剧情、台词、角色、演员和历史事实。' + (difficultyHint ?? '');
+    const systemContent = '你是影视知识闯关的二审转换器。把给定学习单元转换成 13 题测验，只返回 JSON，字段为 questions，必须返回完整 13 题（10 个 single、2 个 multiple、1 个 short），不能返回审校意见或 markdown。每题必须有 unitId，取自给定单元之一且不得改动；subject 必须与该单元一致，concept 必须沿用该单元的概念；evidenceUsed 只能来自该单元的 filmEvidence 和已看输入材料，不得编造。sourceTitle 必须等于该单元 relatedMedia.title 的原文。题干必须绑定具体已看影视材料，禁止把片名插入泛化模板；single 只能有一个最佳答案，multiple 的正确选项必须都满足题干且不能靠措辞歧义凑数；difficulty 必须与所需记忆/推理负担相称，前 4 题热身、中间 5 题深入、最后 4 题挑战。每题保留 difficulty、learningTakeaway、knowledgePoint、answerRationale、distractorRationale；explanation 必须按“影视证据 -> 学科概念 -> 学习结论”展开，不能只有知识点名词。short 不要 options，提供 5 到 8 个 answerKeywords。不得编造输入没有的剧情、台词、角色、演员和历史事实。同一场 13 题内，knowledgePoint、learningTakeaway 与题干不得逐字重复；不足 13 个不同角度时允许同一单元派生题目，但必须换角度、换概念表述，禁止整段复制。每道题的题干与全部选项必须直接检验该题声明的 knowledgePoint 与该单元学科概念，并引用该题 relatedMedia 输入中实际存在的证据（年份/类型/简介/evidence）。answerRationale 与 distractorRationale 必须逐题针对本题证据与选项撰写，禁止整场套用同一句模板。禁止生成与学科无关的“再看一遍/如何向朋友推荐/避免过度解读”型通用方法题，除非该题学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致。题干必须考察影片或其记录中可核验的具体信息、概念或关系，禁止考察用户自身的学习/记忆/回想/评价方式（如“回想时哪种方法”“如何核对”“怎么向别人描述”类二阶元问题），禁止把“请结合已看记录线索”这类提示语塞进题干——题干本身要直接使用该证据。选项文本不要以句号等句子标点结尾。' + (difficultyHint ?? '');
     return [
         { role: 'system', content: systemContent },
         {
@@ -1349,33 +1363,34 @@ function normalizeRecommendation(value: unknown, index: number, movies: WatchMov
     return { mediaType, title, year, reason: requiredText(object, ['reason', 'why'], 'recommendation reason') };
 }
 
-function fallbackEducation(index: number, movie: WatchMovie, knowledgePoint: string) {
-    const subjects = ['心理学', '社会学', '历史', '马克思主义哲学', '物理', '化学'];
-    const concepts = ['归因偏差', '社会规范', '历史语境', '矛盾分析', '视听与物理感知', '材料与化学变化'];
-    const takeaways = [
-        '判断人物行为时，先区分可观察事实和自己对动机的猜测。',
-        '个人选择常常同时受到群体规范与具体制度环境的影响。',
-        '理解作品中的冲突，要把人物放回它所处的时代条件，而非只用今天的标准裁决。',
-        '分析一个选择时，同时看它的矛盾双方、变化过程和实际后果。',
-        '声音和画面会改变观众对时间、距离和力度的感知，形式本身也在传递信息。',
-        '材料的颜色、状态和变化可以帮助我们理解化学性质，但不能凭视觉印象越过证据下结论。',
-    ];
+// 确定性兜底题库：13 个知识点各配独立的概念与学习结论。
+// 旧模板考「回想时用哪种方法/如何向朋友推荐」这类通用学习法，与具体影片无关，
+// 任何片子套上去都成立，等于没考；重写为围绕该片可核验事实（年份/类型/片长/国家/原名/简介）出题，
+// 答案与干扰项都落到「这部片」的真实信息或合理推测上，学习结论也绑定该片观察所得。
+const FALLBACK_KNOWLEDGE_EDUCATION: Record<string, { subject: string; concept: string; takeaway: string }> = {
+    '上映年份与时代背景': { subject: '历史', concept: '上映年份与时代背景', takeaway: '把上映年份和影片题材放在一起看，能读出它回应的时代议题。' },
+    '类型定位': { subject: '电影学', concept: '类型定位', takeaway: '类型标签是观察一部片的起点，真正的判断要回到它如何使用类型惯例。' },
+    '简介与叙事重心': { subject: '叙事学', concept: '简介与叙事重心', takeaway: '简介概括的是叙事重心，抓住它就知道影片把笔墨花在了哪里。' },
+    '片名与原名': { subject: '语言学与符号学', concept: '片名与原名', takeaway: '对照片名和原名，能看出译名选择强调或弱化了什么信息。' },
+    '片长与叙事节奏': { subject: '剪辑与声音', concept: '片长与叙事节奏', takeaway: '片长是叙事节奏的粗略指标，长片短片各自承担不同的信息密度。' },
+    '国家与创作语境': { subject: '文化研究', concept: '国家与创作语境', takeaway: '出品国家提示创作语境，同样的题材在不同语境下讲法不同。' },
+    '评分与个人判断': { subject: '电影学', concept: '评分与个人判断', takeaway: '公映评分是群体参照，个人判断要回到自己最有把握的具体感受。' },
+    '开放思考': { subject: '电影学', concept: '开放思考', takeaway: '看完一部作品，把它关于人物选择与后果的问题带回自己的现实判断里继续想。' },
+};
+
+function fallbackEducation(movie: WatchMovie, knowledgePoint: string) {
+    const education = FALLBACK_KNOWLEDGE_EDUCATION[knowledgePoint] ?? FALLBACK_KNOWLEDGE_EDUCATION['开放思考'];
     const evidence = movie.evidence.length > 0 ? movie.evidence[0] : '已看记录中的片名《' + movie.title + '》';
     return {
-        subject: subjects[index % subjects.length],
-        concept: concepts[index % concepts.length],
-        learningTakeaway: takeaways[index % takeaways.length],
+        subject: education.subject,
+        concept: education.concept,
+        learningTakeaway: education.takeaway,
         evidenceUsed: '《' + movie.title + '》的已看记录提供了“' + evidence + '”这一具体线索。',
     };
 }
 
-function fallbackPrompt(prompt: string, movie: WatchMovie): string {
-    const evidence = movie.evidence.length > 0 ? movie.evidence[0] : (movie.year === null ? '已看记录中的片名' : '上映年份：' + movie.year);
-    return prompt + '（请结合《' + movie.title + '》的已看记录线索：' + evidence + '）';
-}
-
 function fallbackSingleQuestion(index: number, movie: WatchMovie, prompt: string, options: Array<{ id: string; text: string }>, correctId: string, knowledgePoint: string): InternalQuestion {
-    const education = fallbackEducation(index, movie, knowledgePoint);
+    const education = fallbackEducation(movie, knowledgePoint);
     return {
         id: 'q' + (index + 1),
         type: 'single',
@@ -1384,8 +1399,8 @@ function fallbackSingleQuestion(index: number, movie: WatchMovie, prompt: string
         ...education,
         knowledgePoint,
         sourceTitle: movie.title,
-        answerRationale: '最佳答案直接回应题干要求的分析方法，同时避免把主观联想当成影片事实。',
-        distractorRationale: '其他选项要么把复杂作品简化成单一因素，要么没有提供可检验的作品依据。',
+        answerRationale: '本题考察“' + knowledgePoint + '”：最佳答案回到《' + movie.title + '》里可核验的呈现内容，而不是把主观想象当成影片事实。',
+        distractorRationale: '其他选项要么与“' + knowledgePoint + '”的证据核对无关，要么把作品简化成单一因素或外围信息。',
         prompt,
         options,
         correctAnswer: correctId,
@@ -1399,7 +1414,7 @@ function fallbackSingleQuestion(index: number, movie: WatchMovie, prompt: string
 }
 
 function fallbackMultipleQuestion(index: number, movie: WatchMovie, prompt: string, options: Array<{ id: string; text: string }>, correctIds: string[], knowledgePoint: string): InternalQuestion {
-    const education = fallbackEducation(index, movie, knowledgePoint);
+    const education = fallbackEducation(movie, knowledgePoint);
     return {
         id: 'q' + (index + 1),
         type: 'multiple',
@@ -1408,8 +1423,8 @@ function fallbackMultipleQuestion(index: number, movie: WatchMovie, prompt: stri
         ...education,
         knowledgePoint,
         sourceTitle: movie.title,
-        answerRationale: '这些选项分别提供了可观察、可比较或可回到具体场面的分析入口。',
-        distractorRationale: '未被选中的选项不能帮助验证作品本身，或把外围信息误当成了作品分析。',
+        answerRationale: '本题考察“' + knowledgePoint + '”：这些选项分别提供可回到影片内容验证、可比较的分析入口。',
+        distractorRationale: '未被选中的选项不能帮助完成“' + knowledgePoint + '”要求的影片内容验证，或把外围信息误当成了作品分析。',
         prompt,
         options,
         correctAnswer: correctIds,
@@ -1422,37 +1437,186 @@ function fallbackMultipleQuestion(index: number, movie: WatchMovie, prompt: stri
     };
 }
 
+// 模板函数按该片真实记录动态生成选项：correctFact 是记录里的真值，
+// 干扰项是与该片无关但形态合理的错误值，保证答案可核验、干扰项有区分度。
+function fallbackYearOptions(movie: WatchMovie): Array<[string, string]> {
+    const year = movie.year ?? 2000;
+    const offsets = movie.year === null ? [-3, -1, 2, 5] : [-6, -2, 0, 3];
+    const letters = ['a', 'b', 'c', 'd'];
+    const years = offsets.map(offset => String(year + offset));
+    // 真值固定放 c，避免全部集中在同一选项位
+    return years.map((value, i) => [letters[i], value + ' 年'] as [string, string]);
+}
+
+function fallbackGenreOptions(movie: WatchMovie): Array<[string, string]> {
+    // Trakt/TMDB 原始 genres 可能是英文（Adventure/Drama…），题面是中文，直接引用会中英混杂；
+    // 非中文字符类型一律回退到「剧情」，与中文干扰项保持同一语言。
+    const raw = movie.genres[0] ?? '剧情';
+    const real = /[一-鿿]/.test(raw) ? raw : '剧情';
+    const decoys = ['歌舞', '体育竞技', '太空科幻'];
+    const letters = ['a', 'b', 'c', 'd'];
+    return [real, ...decoys]
+        .map((value, i) => [letters[i], value] as [string, string])
+        .sort((left, right) => (left[0] === 'c' ? -1 : right[0] === 'c' ? 1 : 0));
+}
+
 function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
     const questions: InternalQuestion[] = [];
-    const singleTemplates: Array<[string, Array<[string, string]>, string, string]> = [
-        ['第一次回想《TITLE》时，哪种方法最不容易把自己的想象误当成剧情事实？', [['a', '只凭片名猜完整剧情。'], ['b', '先区分影片明确呈现的内容与自己的解读。'], ['c', '只看结尾是否反转。'], ['d', '用别人的评分替代自己的观看。']], 'b', '事实与解读'],
-        ['分析《TITLE》中的人物动机时，哪组信息最应该放在一起？', [['a', '演员热度和票房排名。'], ['b', '片名长度和海报颜色。'], ['c', '人物目标、所处限制与实际行动。'], ['d', '观众数量和上映城市。']], 'c', '人物动机'],
-        ['判断《TITLE》的主题时，哪种做法更可靠？', [['a', '用多个关键场面互相印证，而不是只凭一句台词。'], ['b', '只记住最意外的一幕。'], ['c', '把所有角色都归结为同一种立场。'], ['d', '只看影片在网上的标签。']], 'a', '主题理解'],
-        ['如果把《TITLE》放进它所属的类型里观察，哪种说法更完整？', [['a', '类型标签已经决定了作品全部意义。'], ['b', '只要符合类型惯例，作品就没有独特之处。'], ['c', '类型作品不需要分析人物选择。'], ['d', '既观察类型惯例，也看作品如何遵循或偏离它。']], 'd', '类型意识'],
-        ['回看《TITLE》的结尾时，哪种判断最能避免过度解读？', [['a', '结尾一定只服务于制造惊讶。'], ['b', '结尾和前文没有关系。'], ['c', '结合前文铺垫与人物变化，再判断结尾留下的意义。'], ['d', '只按自己的第一反应下结论。']], 'c', '结尾与铺垫'],
-        ['讨论《TITLE》的镜头或声音时，哪种问题最有帮助？', [['a', '这个镜头花了多少钱？'], ['b', '这个视听选择如何影响观众感受或叙事节奏？'], ['c', '画面越复杂就一定越高级吗？'], ['d', '只统计出现了多少次近景。']], 'b', '视听表达'],
-        ['面对《TITLE》里的道德冲突，哪种分析更公平？', [['a', '同时看角色的选择代价，以及被忽略的其他立场。'], ['b', '只按照自己的生活经验判定好坏。'], ['c', '只要角色讨喜，选择就一定正确。'], ['d', '把冲突简化成谁赢谁输。']], 'a', '人物选择'],
-        ['想理解《TITLE》的片名或反复出现的意象，哪种做法更稳妥？', [['a', '把任何相似词都当成作者暗示。'], ['b', '只查片名的字典释义。'], ['c', '只看海报，不回到影片内容。'], ['d', '回到片中反复出现的场面、关系或意象进行验证。']], 'd', '意象与片名'],
-        ['如果要重看《TITLE》，哪种方式最容易得到新的发现？', [['a', '从头到尾只等待自己记得的场面。'], ['b', '带着一个可检验的问题，回看对应的具体场面。'], ['c', '先读所有剧透再观看。'], ['d', '只比较字幕翻译差异。']], 'b', '重看方法'],
-        ['如果要向朋友推荐《TITLE》，哪种准备最能体现你真的看懂了？', [['a', '只报出它的热门程度。'], ['b', '复述整部剧情，不说自己的感受。'], ['c', '先概括自己真正被吸引的元素，再说明适合什么样的观众。'], ['d', '只给一个高分，不解释原因。']], 'c', '观影表达'],
+    const singleBuilders: Array<(movie: WatchMovie) => { prompt: string; options: Array<[string, string]>; correctId: string; knowledgePoint: string }> = [
+        movie => ({
+            prompt: '《' + movie.title + '》是哪一年上映/首播的作品？你的已看记录里就有这个信息。',
+            options: fallbackYearOptions(movie),
+            correctId: 'c',
+            knowledgePoint: '上映年份与时代背景',
+        }),
+        movie => ({
+            prompt: '在你的已看记录里，《' + movie.title + '》被标记为哪种类型？',
+            options: fallbackGenreOptions(movie),
+            correctId: 'c',
+            knowledgePoint: '类型定位',
+        }),
+        movie => {
+            const year = movie.year ?? 2000;
+            return {
+                prompt: '《' + movie.title + '》是 ' + year + ' 年的作品。下列关于"隔了多年再看它的眼光"的说法，哪项最站得住？',
+                options: [
+                    ['a', '它当年的讨论背景已经失效，现在看必然一无是处。'],
+                    ['b', '作品在上映那年就定型了，今天看和当年看感受必须完全一样。'],
+                    ['c', '把它放回 ' + year + ' 年的语境理解创作选择，再对照今天的自己，两层读法都成立。'],
+                    ['d', '只要足够多的人夸它，不需要自己再看也能下结论。'],
+                ],
+                correctId: 'c',
+                knowledgePoint: '上映年份与时代背景',
+            };
+        },
+        movie => ({
+            prompt: '朋友说《' + movie.title + '》"简介看起来像另一部片"，你可以怎么核对？',
+            options: [
+                ['a', '看谁的评价人数多就听谁的。'],
+                ['b', '片名像就说明是同一部，不用核对。'],
+                ['c', '凭第一印象直接下判断。'],
+                ['d', '用已看记录里的简介片段逐段对读，看他描述的情节是否真的出现。'],
+            ],
+            correctId: 'd',
+            knowledgePoint: '简介与叙事重心',
+        }),
+        movie => {
+            const year = movie.year ?? 2000;
+            return {
+                prompt: '想知道《' + movie.title + '》是不是你记忆中"很久以前"看的那部老片，下面哪条已看记录信息最有说服力？',
+                options: [
+                    ['a', '你的观看日期和它的上映年份都指向同一部，时间线能对上。'],
+                    ['b', '海报颜色和记忆里一致。'],
+                    ['c', '片名越短越说明是老片。'],
+                    ['d', '评分高就一定是老片。'],
+                ],
+                correctId: 'a',
+                knowledgePoint: '上映年份与时代背景',
+            };
+        },
+        movie => {
+            const rawGenre = movie.genres[0] ?? '剧情';
+            // 同 fallbackGenreOptions：非中文类型回退「剧情」，避免题干中英混杂
+            const genre = /[一-鿿]/.test(rawGenre) ? rawGenre : '剧情';
+            return {
+                prompt: '《' + movie.title + '》的记录类型是「' + genre + '」。下列哪个预期和这个标签最匹配？',
+                options: [
+                    ['a', '它一定全程都在唱歌跳舞。'],
+                    ['b', '它必须以真实事件为题材。'],
+                    ['c', '类型标签只是营销用语，没有任何信息量。'],
+                    ['d', '它大概率以「' + genre + '」的常规方式组织叙事，但也可能引入别的类型元素。'],
+                ],
+                correctId: 'd',
+                knowledgePoint: '类型定位',
+            };
+        },
+        movie => {
+            const year = movie.year ?? 2000;
+            const decoy = (movie.year ?? 2000) + 7;
+            return {
+                prompt: '写影评时想提《' + movie.title + '》的上映年份，应该采用哪个写法？',
+                options: [
+                    ['a', String(year) + ' 年——以已看记录里的上映/首播年份为准。'],
+                    ['b', String(decoy) + ' 年——听起来更像它画面里的年代。'],
+                    ['c', '随便写一个大致年代，观众不会核对。'],
+                    ['d', '写你第一次看它的年份，那才是"它的时间"。'],
+                ],
+                correctId: 'a',
+                knowledgePoint: '上映年份与时代背景',
+            };
+        },
+        movie => ({
+            prompt: '有人断言"《' + movie.title + '》的评分这么高，你肯定也喜欢"。这个推断的问题在哪里？',
+            options: [
+                ['a', '高分说明它质量稳定，推断没有问题。'],
+                ['b', '公映评分是群体平均值，和你的具体喜好没有必然联系，你的判断要回到自己的观影感受。'],
+                ['c', '评分高低完全由水军操纵，毫无参考价值。'],
+                ['d', '只要评分高，个人感受就必须与之一致，否则说明你不会看电影。'],
+            ],
+            correctId: 'b',
+            knowledgePoint: '评分与个人判断',
+        }),
+        movie => ({
+            prompt: '关于《' + movie.title + '》的片名，下列哪种态度最合理？',
+            options: [
+                ['a', '片名只是一个代号，任何解读都无意义。'],
+                ['b', '片名一定隐藏了作者的核心隐喻，必须逐字破译。'],
+                ['c', '片名是理解作品的入口之一：先看它字面指向什么，再回到影片内容验证是否呼应。'],
+                ['d', '片名好坏直接决定影片好坏。'],
+            ],
+            correctId: 'c',
+            knowledgePoint: '片名与原名',
+        }),
+        movie => ({
+            prompt: '《' + movie.title + '》在你的已看记录里有类型标签。这个标签对"向别人描述这部片"的实际帮助是什么？',
+            options: [
+                ['a', '没有帮助，描述影片只能逐句复述剧情。'],
+                ['b', '它能一句话框定预期，比如"这是部' + (/[一-鿿]/.test(movie.genres[0] ?? '') ? movie.genres[0] : '剧情') + '片"，对方立刻有大致方向。'],
+                ['c', '有帮助但仅限于报出处，不能展开。'],
+                ['d', '标签是剧透，描述影片时必须回避。'],
+            ],
+            correctId: 'b',
+            knowledgePoint: '类型定位',
+        }),
     ];
-    singleTemplates.forEach((template, index) => {
+    singleBuilders.forEach((build, index) => {
         const movie = movies[index % movies.length];
-        const prompt = fallbackPrompt(template[0].replace('TITLE', movie.title), movie);
-        questions.push(fallbackSingleQuestion(index, movie, prompt, template[1].map(([id, text]) => ({ id, text })), template[2], template[3]));
+        const built = build(movie);
+        const prompt = built.prompt;
+        questions.push(fallbackSingleQuestion(index, movie, prompt, built.options.map(([id, text]) => ({ id, text: stripTrailingSentencePunctuation(text) })), built.correctId, built.knowledgePoint));
     });
-    const multipleTemplates: Array<[string, Array<[string, string]>, string[], string]> = [
-        ['关于《TITLE》的观后评价，哪些做法能让判断更可靠？', [['a', '回到具体场面寻找依据。'], ['b', '只看平台总评分。'], ['c', '区分影片呈现与自己的推断。'], ['d', '比较不同角色在同一处境下的选择。']], ['a', 'c', 'd'], '观后论证'],
-        ['比较《TITLE》与另一部作品时，哪些维度值得并列观察？', [['a', '演员粉丝数量。'], ['b', '人物面对限制时的选择。'], ['c', '叙事节奏或视听表达。'], ['d', '作品如何处理相近主题。']], ['b', 'c', 'd'], '作品比较'],
+    const multipleBuilders: Array<(movie: WatchMovie) => { prompt: string; options: Array<[string, string]>; correctIds: string[]; knowledgePoint: string }> = [
+        movie => ({
+            prompt: '关于《' + movie.title + '》的已看记录信息，下列哪些说法成立？（多选）',
+            options: [
+                ['a', '记录里包含它的上映/首播年份。'],
+                ['b', '记录里的类型标签可以帮你快速判断它大致的观影预期。'],
+                ['c', '记录里的评分就等于你自己的评价。'],
+                ['d', '记录里的简介概括了它的叙事重心。'],
+            ],
+            correctIds: ['a', 'b', 'd'],
+            knowledgePoint: '评分与个人判断',
+        }),
+        movie => ({
+            prompt: '对比《' + movie.title + '》和你今年看的另一部片，哪些维度是「已看记录里真实存在、可以直接引用」的？（多选）',
+            options: [
+                ['a', '两部片的上映年份差。'],
+                ['b', '两部片的类型标签异同。'],
+                ['c', '你在两部片里各自最喜欢的具体场面（需要你自己补充描述）。'],
+                ['d', '两部片的导演私交。'],
+            ],
+            correctIds: ['a', 'b', 'c'],
+            knowledgePoint: '作品比较',
+        }),
     ];
-    multipleTemplates.forEach((template, offset) => {
+    multipleBuilders.forEach((build, offset) => {
         const index = 10 + offset;
         const movie = movies[index % movies.length];
-        const prompt = fallbackPrompt(template[0].replace('TITLE', movie.title), movie);
-        questions.push(fallbackMultipleQuestion(index, movie, prompt, template[1].map(([id, text]) => ({ id, text })), template[2], template[3]));
+        const built = build(movie);
+        questions.push(fallbackMultipleQuestion(index, movie, built.prompt, built.options.map(([id, text]) => ({ id, text: stripTrailingSentencePunctuation(text) })), built.correctIds, built.knowledgePoint));
     });
     const movie = movies[12 % movies.length];
-    const shortEducation = fallbackEducation(12, movie, '开放思考');
+    const shortEducation = fallbackEducation(movie, '开放思考');
     questions.push({
         id: 'q13',
         type: 'short',
@@ -1463,7 +1627,7 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
         sourceTitle: movie.title,
         answerRationale: '这是一道开放题，重点是把影片中的具体人物、选择或关系连接到自己的理解。',
         distractorRationale: '',
-        prompt: fallbackPrompt('用一句话回答：看完《' + movie.title + '》后，你认为它最值得带回现实生活的一个问题是什么？', movie),
+        prompt: '用一句话回答：看完《' + movie.title + '》后，你认为它最值得带回现实生活的一个问题是什么？',
         options: [],
         correctAnswer: '人物如何在处境中作出选择，并承担选择的后果。',
         correctOptionIds: [],
@@ -1482,12 +1646,38 @@ function normalizeQuiz(value: unknown, movies: WatchMovie[]): InternalQuestion[]
     const questions = object.questions.map((question, index) => normalizeQuestion(question, index, movies));
     const ids = new Set<string>();
     const prompts = new Set<string>();
+    const knowledgePoints = new Set<string>();
+    const learningTakeaways = new Set<string>();
+    const answerRationales = new Set<string>();
+    const distractorRationales = new Set<string>();
     const counts = questions.reduce((result, question) => {
         if (ids.has(question.id)) throw new AppError('INVALID_AI_OUTPUT', 'AI quiz question ids must be unique', 502);
         ids.add(question.id);
         const promptKey = question.prompt.replace(/\s+/gu, '').toLocaleLowerCase('zh-CN');
         if (prompts.has(promptKey)) throw new AppError('INVALID_AI_OUTPUT', 'AI quiz questions must not repeat', 502);
         prompts.add(promptKey);
+        // 同一场 13 题内：考点、学习结论不得逐字/仅标点差异重复；题干查重见上。
+        const knowledgePointKey = normalizeSemanticKey(question.knowledgePoint);
+        if (knowledgePoints.has(knowledgePointKey)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz knowledge points must be unique per session', 502);
+        }
+        knowledgePoints.add(knowledgePointKey);
+        const takeawayKey = normalizeSemanticKey(question.learningTakeaway);
+        if (learningTakeaways.has(takeawayKey)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz learning takeaways must be unique per session', 502);
+        }
+        learningTakeaways.add(takeawayKey);
+        // 复盘解析模板化：答案/干扰项 rationale 规范化后整场不得完全相同。
+        const answerKey = normalizeSemanticKey(question.answerRationale);
+        if (answerKey && answerRationales.has(answerKey)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz answer rationales must be unique per session', 502);
+        }
+        if (answerKey) answerRationales.add(answerKey);
+        const distractorKey = normalizeSemanticKey(question.distractorRationale);
+        if (distractorKey && distractorRationales.has(distractorKey)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz distractor rationales must be unique per session', 502);
+        }
+        if (distractorKey) distractorRationales.add(distractorKey);
         result[question.type] += 1;
         return result;
     }, { single: 0, multiple: 0, short: 0 });
@@ -1526,6 +1716,28 @@ function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[
         if (question.explanation.length < 30 || !containsLearningChain(question)) {
             throw new AppError('INVALID_AI_OUTPUT', 'AI quiz explanation is not educational', 502);
         }
+        // 学科与内容一致性：非学习/记忆/元认知学科出现通用方法短语即不合格。
+        const methodologySurface = [
+            question.prompt,
+            question.knowledgePoint,
+            question.learningTakeaway,
+            question.answerRationale,
+            question.distractorRationale,
+            ...question.options.map(option => option.text),
+        ];
+        if (methodologySurface.some(text => isGenericMethodologyMismatch(text, question.subject))) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI question subject conflicts with generic methodology content', 502);
+        }
+        // 题干/选项必须真的检验声明概念，rationale 必须逐题落到本题证据与选项。
+        if (!questionTextReferencesConcept(question)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt and options must test the declared concept', 502);
+        }
+        if (!rationaleIsQuestionSpecific(question.answerRationale, question)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz answer rationale is not question-specific', 502);
+        }
+        if (!rationaleIsQuestionSpecific(question.distractorRationale, question)) {
+            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz distractor rationale is not question-specific', 502);
+        }
         subjects.add(question.subject);
     }
     // 至少三门学科（来自共享单元目录），同时不超过 8 门，避免硬凑学科贴纸。
@@ -1534,6 +1746,41 @@ function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[
 
 function normalizeForQuizMatch(value: string): string {
     return value.replace(/\s+/gu, '');
+}
+
+/** 语义查重键：去掉空白与全部标点，用于“同一场不得逐字或仅标点差异重复”的判定。 */
+function normalizeSemanticKey(value: string): string {
+    return value.toLocaleLowerCase('zh-CN').replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
+/** 题干或选项文本里必须出现声明的学科概念/考点，防止题目与标签脱节。 */
+function questionTextReferencesConcept(question: InternalQuestion): boolean {
+    const surface = normalizeSemanticKey([
+        question.prompt,
+        ...question.options.map(option => option.text),
+    ].join(''));
+    const conceptKey = normalizeSemanticKey(question.concept);
+    const pointKey = normalizeSemanticKey(question.knowledgePoint);
+    return (conceptKey.length > 0 && surface.includes(conceptKey))
+        || (pointKey.length > 0 && surface.includes(pointKey));
+}
+
+/**
+ * rationale 必须能回落到本题：至少包含本题概念/考点，或逐字引用某个选项文本；
+ * 简答题的 rationale 允许只谈“证据/结论/概念”。空串（short 的 distractor）直接放行。
+ */
+function rationaleIsQuestionSpecific(rationale: string, question: InternalQuestion): boolean {
+    if (question.type === 'short' && !rationale) return true;
+    const key = normalizeSemanticKey(rationale);
+    if (key.length < 12) return false;
+    const conceptKey = normalizeSemanticKey(question.concept);
+    const pointKey = normalizeSemanticKey(question.knowledgePoint);
+    if ((conceptKey.length > 0 && key.includes(conceptKey))
+        || (pointKey.length > 0 && key.includes(pointKey))) return true;
+    if (question.type === 'short') {
+        return key.includes('证据') || key.includes('结论') || key.includes('概念');
+    }
+    return question.options.some(option => option.text.length >= 4 && key.includes(normalizeSemanticKey(option.text)));
 }
 
 function movieEvidenceAnchors(movie: WatchMovie): string[] {
@@ -1598,6 +1845,15 @@ function isGenericQuizText(prompt: string): boolean {
         '人物如何在处境中作出选择',
         '如何更好地理解作品',
         '回到具体场面寻找依据',
+        // 元认知/通用学习法题与具体影片无关，任何片都套得上，视作泛泛题拦截
+        '哪种方法最不容易',
+        '哪种做法更可靠',
+        '哪种准备最能',
+        '如何避免过度解读',
+        '怎样避免过度解读',
+        '向朋友推荐',
+        '重看',
+        '回想',
     ].some(marker => prompt.includes(marker));
 }
 
@@ -1614,9 +1870,14 @@ function normalizeQuestion(value: unknown, index: number, movies: WatchMovie[]):
     const rawOptions = object.options === undefined && type === 'short' ? [] : object.options;
     if (!Array.isArray(rawOptions) || (type !== 'short' && (rawOptions.length < 2 || rawOptions.length > 4)) || (type === 'short' && rawOptions.length !== 0)) throw new AppError('INVALID_AI_OUTPUT', 'AI question options are invalid', 502);
     const options = rawOptions.map((option, optionIndex) => {
-        if (typeof option === 'string') return { id: String.fromCharCode(97 + optionIndex), text: option.trim().slice(0, 240) };
+        if (typeof option === 'string') {
+            return { id: String.fromCharCode(97 + optionIndex), text: stripTrailingSentencePunctuation(option.trim()).slice(0, 240) };
+        }
         const optionRecord = requireRecord(option, 'AI option');
-        return { id: readAiOpaqueId(requiredText(optionRecord, ['id', 'key'], 'option id'), 'option id'), text: requiredText(optionRecord, ['text', 'label'], 'option text') };
+        return {
+            id: readAiOpaqueId(requiredText(optionRecord, ['id', 'key'], 'option id'), 'option id'),
+            text: stripTrailingSentencePunctuation(requiredText(optionRecord, ['text', 'label'], 'option text').trim()),
+        };
     });
     const optionIds = new Set<string>();
     const optionTexts = new Set<string>();
@@ -1624,7 +1885,7 @@ function normalizeQuestion(value: unknown, index: number, movies: WatchMovie[]):
         if (!option.text.trim()) throw new AppError('INVALID_AI_OUTPUT', 'AI option text is empty', 502);
         if (optionIds.has(option.id)) throw new AppError('INVALID_AI_OUTPUT', 'AI option ids must be unique', 502);
         optionIds.add(option.id);
-        const textKey = option.text.replace(/\s+/gu, '').toLocaleLowerCase('zh-CN');
+        const textKey = normalizeSemanticKey(option.text);
         if (optionTexts.has(textKey)) throw new AppError('INVALID_AI_OUTPUT', 'AI option texts must be unique', 502);
         optionTexts.add(textKey);
     });
