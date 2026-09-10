@@ -37,15 +37,20 @@ export const ErrorCode = {
 export class AppError extends Error {
     public readonly code: string;
     public readonly statusCode: number;
+    // 上游原始 HTTP 状态码（402 欠费/401 坏 key/429 限频）：statusCode 已折算成 502，
+    // 健康监控需要原始状态定位根因。仅上游调用错误设置，业务错误为 null。
+    public readonly upstreamStatus: number | null;
 
     constructor(
         code: string,
         message: string,
-        statusCode: number = 400
+        statusCode: number = 400,
+        upstreamStatus: number | null = null
     ) {
         super(message);
         this.code = code;
         this.statusCode = statusCode;
+        this.upstreamStatus = upstreamStatus;
         this.name = 'AppError';
     }
 }
