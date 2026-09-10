@@ -373,7 +373,11 @@ const API = {
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, 20000);
         activeRequestControllers.add(controller);
         try {
             const response = await fetch(`${API_BASE}/admin/ai/health/probe`, {
@@ -388,6 +392,14 @@ const API = {
             const data = await response.json();
             if (!response.ok) throw new Error(data?.message || `Probe failed (${response.status})`);
             return data.data;
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                // AbortError 无 code，转成带 code 的错误供 errorMessage 中文化
+                const abortError = new Error(timedOut ? 'Request timed out' : 'Request cancelled');
+                abortError.code = timedOut ? 'REQUEST_TIMEOUT' : 'REQUEST_CANCELLED';
+                throw abortError;
+            }
+            throw error;
         } finally {
             clearTimeout(timeoutId);
             activeRequestControllers.delete(controller);
@@ -619,6 +631,7 @@ function errorMessage(error) {
         DEVICE_ALREADY_BOUND: '此设备已绑定，请改用激活邀请码或先撤销原绑定',
         MAX_DEVICES_BELOW_ACTIVE: '设备上限不能低于当前活跃设备数',
         REQUEST_TIMEOUT: '请求超时，请检查网络后重试',
+        REQUEST_CANCELLED: '请求已取消',
     };
     if (error?.code && codeMessages[error.code]) return codeMessages[error.code];
     return legacyErrorMessage(error);
@@ -2651,8 +2664,10 @@ function aiProviderCardHtml(providerKey, meta, data) {
             ? `冷却 ${Math.ceil(k.cooldownRemainingSec / 60)} 分钟`
             : k.status === 'ACTIVE' ? '可用'
             : k.status === 'INVALID' ? '已失效'
+            : k.status === 'COOLING' ? '冷却中'
             : (k.status || '—');
-        return `<div class="ai-key-row"><span class="mono">…${tail}</span><span class="${cooling ? 'text-danger' : 'text-ok'}">${escapeHtml(statusText)}</span></div>`;
+        const statusColor = cooling ? 'var(--danger)' : k.status === 'ACTIVE' ? 'var(--success)' : 'var(--text-dim)';
+        return `<div class="ai-key-row"><span class="mono">…${tail}</span><span style="color:${statusColor}">${escapeHtml(statusText)}</span></div>`;
     }).join('') : '';
     return `
     <div class="card ai-provider-card" data-provider="${providerKey}">
