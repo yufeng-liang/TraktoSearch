@@ -1790,6 +1790,7 @@
     <string name="ai_quiz_stage_review">문제 생성 및 검증 중</string>
     <string name="ai_quiz_wait_hint">첫 생성은 5분 정도 걸립니다. 이 화면을 열어 두세요.</string>
     <string name="ai_quiz_elapsed">경과 %1$s</string>
+    <string name="ai_quiz_wait_cancel">취소하고 나중에</string>
     <string name="ai_feature_loading">스프라이트가 생각 중입니다</string>
     <string name="ai_feature_cancel">취소</string>
     <string name="ai_feature_nickname">닉네임을 해석해 볼까요</string>

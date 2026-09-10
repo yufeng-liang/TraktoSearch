@@ -1777,6 +1777,7 @@
     <string name="ai_quiz_stage_review">正在逐题生成并校验</string>
     <string name="ai_quiz_wait_hint">首次生成约需 5 分钟，请保持此页面打开</string>
     <string name="ai_quiz_elapsed">已等待 %1$s</string>
+    <string name="ai_quiz_wait_cancel">取消，稍后再试</string>
     <string name="ai_feature_loading">精灵正在想办法</string>
     <string name="ai_feature_cancel">取消</string>
     <string name="ai_feature_nickname">你的昵称，让我来解读</string>

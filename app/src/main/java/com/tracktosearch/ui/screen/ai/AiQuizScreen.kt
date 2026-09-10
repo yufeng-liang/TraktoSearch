@@ -136,7 +136,8 @@ fun AiQuizScreen(
                         chars = state.quizStageChars,
                         expectedChars = state.quizStageExpectedChars
                     ),
-                    startedAtMillis = state.quizRequestStartedAtMillis
+                    startedAtMillis = state.quizRequestStartedAtMillis,
+                    onCancel = viewModel::cancelActiveFeatureRequest
                 )
             } else {
                 QuizUnavailable()
@@ -1009,7 +1010,8 @@ private fun FeedbackOption(
 private fun QuizLoadingPlaceholder(
     stage: com.tracktosearch.data.ai.AiQuizStage?,
     progress: Float,
-    startedAtMillis: Long
+    startedAtMillis: Long,
+    onCancel: () -> Unit = {}
 ) {
     // 每秒刷新已用时长：只驱动这一个文本，避免把整页拖进高频重组
     val elapsedSeconds by produceState(0L, startedAtMillis) {
@@ -1061,6 +1063,10 @@ private fun QuizLoadingPlaceholder(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            // 长等待必须给出路：等不下去时回到预览页，不把用户锁在转圈里
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.ai_quiz_wait_cancel))
             }
         }
     }

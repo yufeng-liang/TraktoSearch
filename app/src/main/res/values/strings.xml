@@ -1784,6 +1784,7 @@ Config:
     <string name="ai_quiz_stage_review">Writing and checking questions</string>
     <string name="ai_quiz_wait_hint">First run takes about 5 minutes. Keep this screen open.</string>
     <string name="ai_quiz_elapsed">Elapsed %1$s</string>
+    <string name="ai_quiz_wait_cancel">Cancel and try later</string>
     <string name="ai_feature_loading">Preparing your answer</string>
     <string name="ai_feature_cancel">Cancel</string>
     <string name="ai_feature_nickname">Your nickname, decoded</string>
