@@ -87,7 +87,12 @@ export function recordHealthEvent(
         }
     })();
     if (ctx.background) {
-        ctx.background.waitUntil(write);
+        // waitUntil 挂载本身可能抛（context 已释放等），绝不能让它把异常传播进主链路
+        try {
+            ctx.background.waitUntil(write);
+        } catch {
+            void write;
+        }
     } else {
         // 测试/无 ExecutionContext 环境：fire-and-forget
         void write;
