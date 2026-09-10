@@ -4,6 +4,7 @@
 // GLM-4.7 是思考型模型：响应 message.reasoning_content 是思考链，正文在 message.content；
 // response_format json_object 实测有效（content 为纯 JSON）。
 import { AppError } from '../util/errors.ts';
+import { readOpenAiSseStream } from './openai-stream.ts';
 
 export const ZHIPU_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
 // 内部优先级（2026-09 全矩阵实测）：
@@ -106,7 +107,7 @@ export async function callZhipuJson(
             });
             if (response.ok) {
                 const payload: unknown = options.stream === true
-                    ? await readZhipuStream(response, options.onProgress)
+                    ? await readOpenAiSseStream(response, options.onProgress)
                     : await response.json();
                 if (isZhipuRateLimited(payload)) {
                     throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider rate limited', 502, response.status);
@@ -126,68 +127,6 @@ export async function callZhipuJson(
         // AbortError 等网络异常统一折算成上游错误，由 callLlmJson 决定是否轮到下一家
         throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider request failed', 502);
     }
-}
-
-/**
- * 读 GLM 流式 SSE，拼回与非流式同形的 payload（choices[0].message.content），
- * 让 parseAssistantJson 等下游无需感知流式。正文每累积一次就回调 onProgress。
- * 上游在 200 响应体里包业务错误（如 1305 限频）时原样返回该对象，由调用方判定。
- */
-async function readZhipuStream(
-    response: Response,
-    onProgress?: (chars: number) => void,
-): Promise<unknown> {
-    const reader = response.body?.getReader();
-    if (!reader) throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu stream body missing', 502);
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let content = '';
-    let finishReason: string | null = null;
-    let upstreamError: unknown = null;
-    try {
-        for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            // SSE 以行为单位：最后一段可能被截断，留在 buffer 里等下一块
-            const lines = buffer.split('\n');
-            buffer = lines.pop() ?? '';
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed.startsWith('data:')) continue;
-                const data = trimmed.slice(5).trim();
-                if (!data || data === '[DONE]') continue;
-                let chunk: unknown;
-                try {
-                    chunk = JSON.parse(data);
-                } catch {
-                    continue; // 心跳/空行等非 JSON 行
-                }
-                const record = chunk as Record<string, unknown> | null;
-                if (record && typeof record === 'object' && record.error) {
-                    upstreamError = record;
-                    continue;
-                }
-                const choices = record?.choices;
-                if (!Array.isArray(choices) || choices.length === 0) continue;
-                const first = choices[0] as Record<string, unknown> | null;
-                const delta = (first?.delta as Record<string, unknown> | undefined)?.content;
-                if (typeof delta === 'string' && delta.length > 0) {
-                    content += delta;
-                    onProgress?.(content.length);
-                }
-                if (typeof first?.finish_reason === 'string') finishReason = first.finish_reason;
-            }
-        }
-    } finally {
-        try {
-            await reader.cancel();
-        } catch {
-            // 流已结束或已被上游中断，忽略
-        }
-    }
-    if (upstreamError) return upstreamError;
-    return { choices: [{ message: { content }, finish_reason: finishReason }] };
 }
 
 function isZhipuRateLimited(payload: unknown): boolean {    if (typeof payload !== 'object' || payload === null) return false;
