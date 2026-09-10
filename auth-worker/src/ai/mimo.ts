@@ -114,18 +114,25 @@ export function extractAssistantText(payload: unknown): string {
 }
 
 /**
- * 容忍模型输出的三类 JSON 缺陷，且只做「能重新解析成功」的修复，解析不了就原样放弃：
+ * 容忍模型输出的四类 JSON 缺陷，且只做「能重新解析成功」的修复，解析不了就原样放弃：
  *
  * 1. 值缺起始引号：`"learningTakeaway":异质性群体在共同目标"`——键与结尾引号都在，
  *    只有值的起始引号被写漏。实测占出题槽位判废的大头，且正文完全可用。
- * 2. 收尾引号多打反斜杠：中文正文里模型把字符串结束引号写成 `\"`（实测
+ * 2. 正文里的裸引号：`"prompt": "关于"师徒关系的伦理重构"，结合影片情节…"`
+ *    ——内层引号没转义。中文题干里几乎每题都要引用考点，实测是当前最高发的一类。
+ * 3. 收尾引号多打反斜杠：中文正文里模型把字符串结束引号写成 `\"`（实测
  *    `…支撑了本题的对比。\"\n  }\n}`），正文完整但解析失败。
- * 3. 尾部被上游截断：字符串没闭合、括号没配平。补上收尾引号与缺失的闭合括号。
+ * 4. 尾部被上游截断：字符串没闭合、括号没配平。补上收尾引号与缺失的闭合括号。
  *
- * 三步按顺序叠加，每一步之后都试一次解析，能解开就返回。
+ * 四步按顺序叠加，每一步之后都试一次解析，能解开就返回。
  */
 export function repairAssistantJson(text: string): string | null {
-    const steps: Array<(value: string) => string> = [quoteBareStringValues, unescapeStructuralQuotes, closeTruncatedJson];
+    const steps: Array<(value: string) => string> = [
+        quoteBareStringValues,
+        escapeStrayInnerQuotes,
+        unescapeStructuralQuotes,
+        closeTruncatedJson,
+    ];
     let candidate = text;
     for (const step of steps) {
         const next = step(candidate);
@@ -139,6 +146,51 @@ export function repairAssistantJson(text: string): string | null {
         }
     }
     return null;
+}
+
+/**
+ * 字符串内部的裸引号补反斜杠。
+ *
+ * 判定依据是「这个引号后面能不能合法收尾」：合法 JSON 里字符串的结束引号之后只允许出现
+ * `,` `}` `]` `:` 或空白（空白之后仍须是这几个之一）；后面直接跟着正文的引号只可能是没转义的
+ * 正文引号。对合法 JSON 是空操作——正常结束引号必定满足上面的后继规则，`\"` 又会被转义状态跳过。
+ */
+function escapeStrayInnerQuotes(text: string): string {
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if (!inString) {
+            result += char;
+            if (char === '"') inString = true;
+            continue;
+        }
+        if (escaped) {
+            escaped = false;
+            result += char;
+            continue;
+        }
+        if (char === '\\') {
+            escaped = true;
+            result += char;
+            continue;
+        }
+        if (char !== '"') {
+            result += char;
+            continue;
+        }
+        let next = index + 1;
+        while (next < text.length && /\s/u.test(text[next])) next += 1;
+        const following = next < text.length ? text[next] : '';
+        if (following === '' || following === ',' || following === '}' || following === ']' || following === ':') {
+            inString = false;
+            result += char;
+        } else {
+            result += '\\"';
+        }
+    }
+    return result;
 }
 
 /**

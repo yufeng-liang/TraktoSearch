@@ -38,6 +38,33 @@ test('尾部半截键值不冒充合法字段', () => {
     assert.deepEqual(parsed, { question: { prompt: '题干' } });
 });
 
+test('正文里的裸引号（实测最高发）补上转义后仍能解析', () => {
+    const text = '{"question": {"prompt": "关于"师徒关系的伦理重构"，结合影片情节，以下哪一项正确？", "knowledgePoint": "师徒关系的伦理重构"}}';
+    const parsed = parseAssistantJson(payloadWith(text));
+    assert.equal(parsed.question.prompt, '关于"师徒关系的伦理重构"，结合影片情节，以下哪一项正确？');
+    assert.equal(parsed.question.knowledgePoint, '师徒关系的伦理重构');
+});
+
+test('裸引号与尾部截断叠加时也能救回已写完的字段', () => {
+    const text = '{"question": {"prompt": "关于"视觉符号的象征隐喻"的判断", "evidenceUsed": "截断在';
+    const parsed = parseAssistantJson(payloadWith(text));
+    assert.equal(parsed.question.prompt, '关于"视觉符号的象征隐喻"的判断');
+    assert.equal(parsed.question.evidenceUsed, '截断在');
+});
+
+test('正文引号成对出现且紧贴结束引号时不误判字符串边界', () => {
+    const text = '{"prompt": "考点叫"象征"", "id": "q01"}';
+    const parsed = parseAssistantJson(payloadWith(text));
+    assert.equal(parsed.prompt, '考点叫"象征"');
+    assert.equal(parsed.id, 'q01');
+});
+
+test('补转义不会动合法 JSON 的字符串与转义引号', () => {
+    for (const text of ['{"a": "x", "b": "y"}', '{"prompt": "他说：\\"你好\\"，然后走了"}', '{"a": {"b": ["c", "d"]}}']) {
+        assert.equal(repairAssistantJson(text), null, `合法 JSON 不该被改写：${text}`);
+    }
+});
+
 test('值缺起始引号（实测高发）时补上引号', () => {
     const text = '{"question": {"prompt": "题干", "learningTakeaway":异质性群体在共同目标下更愿意合作"}';
     const parsed = parseAssistantJson(payloadWith(text));
