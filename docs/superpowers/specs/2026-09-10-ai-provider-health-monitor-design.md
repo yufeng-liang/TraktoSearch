@@ -44,7 +44,8 @@ CREATE INDEX IF NOT EXISTS idx_ai_health_provider ON ai_health_events(provider, 
 
 写入约束：
 - 用 `waitUntil` 异步，任何写入失败只 console.warn，不影响主响应
-- 单次请求最多写 3 条（candidate 轮替可能多次；正常成功路径 1 条），无聚合去重——当前流量规模（每天几十~几百次调用）逐条存可承受
+- 写入粒度 = 每次上游 candidate 尝试一条（正常成功路径 1 条；轮替/模型降级时按实际尝试次数增多），不去重——当前流量规模（每天几十~几百次调用）逐条存可承受
+- 校验失败补写的 `invalid_output` 与该 candidate 的成功写入是两条独立事件（上游返回 200 ✅ + 本地校验 ❌），都是真实链路信号
 - 不记录 prompt、响应正文、key（沿用 logAiDiagnostic 的安全边界）
 
 ### 保留期
