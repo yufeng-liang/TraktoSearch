@@ -68,6 +68,10 @@ import {
     type TtsPublicAudio,
 } from './tts.ts';
 import { recordHealthEvent, type HealthRouteContext } from './health.ts';
+import { mapWithGate } from './async-pool.ts';
+import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
+import { questionSlotMessages, unitSlotMessages, type SlotMovie, type SlotUnit } from './quiz-slot-messages.ts';
+import { bankSeed, canGenerateSet, deriveBankQuizId, isLocalDate, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
 
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
@@ -683,38 +687,54 @@ async function handleQuizStream(
 
     void (async () => {
         try {
-            // 客户端指定 quizId 且缓存命中：直接下发（重玩/防重路径，不重新生成）
-            if (body.quizId !== undefined) {
-                const quizId = readOpaqueId(body.quizId, 'quizId');
-                const cached = await readQuizCacheCompat(env, payload.sub, quizId);
-                if (cached) {
-                    await writeEvent({ type: 'result', quiz: publicQuiz(parseQuizCache(cached)) });
-                    return;
+            // 当天题库：片单只跟 (用户, 本地日期, 套序号) 有关，所以题库可以提前算好、命中即秒开。
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const requestedDate = typeof body.date === 'string' ? body.date : '';
+            const date = isLocalDate(requestedDate, todayIso) ? requestedDate : todayIso;
+            const prefetch = body.prefetch === true;
+            const usage = await readBankUsage(env, payload.sub, date);
+            const explicitQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
+            const setIndex = usage.usedSets + 1;
+            const quizId = explicitQuizId ?? deriveBankQuizId(payload.sub, date, setIndex);
+            const cached = await readQuizCacheCompat(env, payload.sub, quizId);
+            if (cached) {
+                // 命中当天题库：秒开。预生成是系统行为，不耗用「已玩套数」；正式游玩才记账。
+                if (!prefetch && explicitQuizId === null) {
+                    await writeBankUsage(env, payload.sub, date, { ...usage, usedSets: usage.usedSets + 1 });
                 }
+                await writeEvent({ type: 'result', quiz: publicQuiz(parseQuizCache(cached)) });
+                return;
             }
-            const quota = await reserveAiQuota(env, payload.sub, payload.device, sessionId);
+            if (prefetch && !canGenerateSet(usage)) {
+                console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'prefetch_budget_exhausted', requestId, attempts: usage.attempts }));
+                await writeEvent({ type: 'error', code: 'PREFETCH_BUDGET_EXHAUSTED', message: 'Daily prefetch budget exhausted' });
+                return;
+            }
+            // 预生成不计入用户额度：它是系统行为，不该让用户还没开始玩就先被扣额度。
+            const quota = prefetch ? null : await reserveAiQuota(env, payload.sub, payload.device, sessionId);
             const nickname = await getFriendNickname(env, payload.sub);
-            const avoidedMediaIds = await readAvoidedMediaIds(env, payload.sub, body.excludedQuizIds);
-            const selectedMovies = selectQuizMovies(movies, avoidedMediaIds);
-            const requestedQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
+            // 片单当天固定：同一 (用户, 日期, 套序号) 必然抽到同一批片，预生成的题库才对得上。
+            const selectedMovies = selectDailyMovies(movies, bankSeed(payload.sub, date, setIndex), QUIZ_MOVIE_COUNT);
             const difficultyHint = await readQuizDifficultyHint(env, payload.sub);
-            const generated = await generateQuiz(
+            const attemptUsage = { ...usage, attempts: usage.attempts + 1 };
+            await writeBankUsage(env, payload.sub, date, attemptUsage);
+            const generated = await generateQuizBySlots(
                 env,
                 provider,
                 model,
                 fallbackModel,
                 selectedMovies,
-                requestedQuizId,
+                quizId,
                 sessionId,
                 nickname,
                 difficultyHint,
                 requestId,
                 healthCtx,
                 event => { void writeEvent(event); },
-                QUIZ_STREAM_BUDGET,
+                QUIZ_SLOT_BUDGET,
             );
             const finalData: QuizCacheData = generated ?? {
-                quizId: requestedQuizId ?? crypto.randomUUID(),
+                quizId,
                 sessionId,
                 movies: selectedMovies,
                 questions: fallbackQuizQuestions(selectedMovies),
@@ -722,8 +742,20 @@ async function handleQuizStream(
             };
             const cacheKey = quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, finalData.quizId);
             await writeAiCache(env, cacheKey, finalData, 24 * 60 * 60, payload.sub, 'quiz');
-            await writeEvent({ type: 'result', quiz: publicQuiz(finalData), quota: publicQuota(quota) });
+            await writeBankUsage(env, payload.sub, date, {
+                ...attemptUsage,
+                generatedSets: attemptUsage.generatedSets + (generated ? 1 : 0),
+                usedSets: prefetch ? attemptUsage.usedSets : attemptUsage.usedSets + 1,
+            });
+            await writeEvent({ type: 'result', quiz: publicQuiz(finalData), quota: quota ? publicQuota(quota) : undefined });
         } catch (error) {
+            // 流内异常必须留痕：否则只能看到 App 端「生成失败」，无法区分存储、鉴权还是上游问题
+            console.warn('[QUIZ_DIAG]', JSON.stringify({
+                stage: 'stream_error',
+                requestId,
+                error: error instanceof AppError ? error.code : 'UNKNOWN',
+                errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN',
+            }));
             await writeEvent({
                 type: 'error',
                 code: error instanceof AppError ? error.code : 'AI_UPSTREAM_ERROR',
@@ -796,8 +828,9 @@ async function generateQuiz(
     const startedAtMs = Date.now();
     const startIndex = Math.max(0, PROVIDER_LADDER.indexOf(provider));
     for (let offset = 0; offset < PROVIDER_LADDER.length; offset++) {
-        // 按「还能不能跑完一整轮」判断，而不是「有没有超总预算」：实测单轮 410s，
-        // 总预算 500s 时第二轮必然跑不完，早退立即走兜底比白烧上游更划算。
+        // 按「已用时长上限」收手，而不是「总预算超没超」：单轮实测 410s，流式端点
+        // 的余量只有 20s，第二轮必然跑不完（旧逻辑把总耗时拖到 773s）；
+        // legacy 端点余量 0，第一轮超出即停，与改动前的快速降级行为一致。
         if (Date.now() - startedAtMs > budget.stopAfterElapsedMs) {
             console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'deadline_exceeded', requestId, offset }));
             return null;
@@ -809,6 +842,319 @@ async function generateQuiz(
         if (result !== undefined) return result;
     }
     return null;
+}
+
+/** 槽位化出题的预算：并发、修复轮数与单套上限。 */
+interface QuizSlotBudget {
+    /** 单个单元约 1.5k 字符、单道题约 800 字符（整包实测 5.2k/17.5k 字符摊到 4 格/13 格） */
+    maxTokensUnit: number;
+    maxTokensQuestion: number;
+    unitConcurrency: number;
+    questionConcurrency: number;
+    /** 单格修复轮数（不含首次） */
+    repairRounds: number;
+    /** 单格上游超时：单格输出远小于整包，能更早判定失败并换家 */
+    slotTimeoutMs: number;
+    /** 单套上游调用上限：超出即整轮失败，避免异常情况下无上限重试 */
+    maxCallsPerSet: number;
+    /** 单套墙钟上限 */
+    maxElapsedMs: number;
+}
+
+/** 每套题库的片单规模：与客户端预览页一致，固定 7 部。 */
+const QUIZ_MOVIE_COUNT = 7;
+
+const QUIZ_SLOT_BUDGET: QuizSlotBudget = {
+    maxTokensUnit: 2600,
+    maxTokensQuestion: 1800,
+    unitConcurrency: 4,
+    // 并发 6 会把上游压到限频边缘：实测 6 路时出现超时导致的 JSON 截断，降到 4 更稳
+    questionConcurrency: 4,
+    repairRounds: 2,
+    // 单格 90s 在并发下不够（TTFB 被限频拉长到 30s+），放宽到 120s 让修复轮有机会跑完
+    slotTimeoutMs: 120_000,
+    // 上限按「首轮 17 + 每格最多 2 轮修复」留余量：13 题 + 4 单元 + 修复 ≈ 51，取 80 兜住异常
+    maxCallsPerSet: 80,
+    maxElapsedMs: 420_000,
+};
+
+/** 槽位提示词只需要影片的展示字段与证据，不必把整条记录塞进去。 */
+function slotMovies(movies: WatchMovie[]): SlotMovie[] {
+    return movies.map(movie => ({
+        title: movie.title,
+        mediaType: movie.mediaType,
+        year: movie.year,
+        genres: movie.genres,
+        evidence: movie.evidence,
+    }));
+}
+
+/**
+ * 取单槽位输出：提示词要求 { unit: {...} } / { question: {...} }，模型偶尔回数组或裸对象，
+ * 三种外壳都兼容，避免因为包装差异白丢一次生成。
+ */
+function unwrapSlotPayload(payload: unknown, key: 'unit' | 'question'): unknown {
+    if (typeof payload !== 'object' || payload === null) return payload;
+    const record = payload as Record<string, unknown>;
+    if (record[key] !== undefined) return record[key];
+    const list = record[key + 's'];
+    if (Array.isArray(list) && list.length > 0) return list[0];
+    return payload;
+}
+
+/** 单元必须落在槽位指定的学科组与白名单学科内：这一条从源头掐掉「学科越界」「强证据学科缺来源」两类违规。 */
+function assertUnitMatchesSlot(unit: KnowledgeUnit, slot: UnitSlot): void {
+    if (unit.unitId !== 'unit-' + slot.index) {
+        throw new AppError('INVALID_AI_OUTPUT', '单元 unitId 必须是 unit-' + slot.index, 502);
+    }
+    if (unit.subjectGroup !== slot.subjectGroup) {
+        throw new AppError('INVALID_AI_OUTPUT', '单元 subjectGroup 必须是 ' + slot.subjectGroup, 502);
+    }
+    if (!slot.allowedSubjects.includes(unit.subject)) {
+        throw new AppError('INVALID_AI_OUTPUT', '单元 subject 必须取自 ' + slot.allowedSubjects.join('、'), 502);
+    }
+    if (unit.relationType !== 'direct_watch') {
+        throw new AppError('INVALID_AI_OUTPUT', '单元必须锚定已看影视', 502);
+    }
+}
+
+/** 题位必须落在槽位指定的题型、难度、归属单元与概念上，其余交给既有单题校验。 */
+function assertQuestionMatchesSlot(question: InternalQuestion, slot: QuestionSlot, unit: KnowledgeUnit): void {
+    if (question.type !== slot.type) {
+        throw new AppError('INVALID_AI_OUTPUT', '第 ' + slot.index + ' 题题型必须是 ' + slot.type, 502);
+    }
+    if (question.difficulty !== slot.difficulty) {
+        throw new AppError('INVALID_AI_OUTPUT', '第 ' + slot.index + ' 题难度必须是 ' + slot.difficulty, 502);
+    }
+    if (question.unitId !== unit.unitId) {
+        throw new AppError('INVALID_AI_OUTPUT', '第 ' + slot.index + ' 题 unitId 必须是 ' + unit.unitId, 502);
+    }
+    if (normalizeSemanticKey(question.concept) !== normalizeSemanticKey(unit.concept)) {
+        throw new AppError('INVALID_AI_OUTPUT', '第 ' + slot.index + ' 题 concept 必须沿用单元的「' + unit.concept + '」', 502);
+    }
+}
+
+/** 兜底题按位次天然对齐：前 10 题 single、第 11-12 题 multiple、第 13 题 short。 */
+function fallbackQuestionForSlot(slot: QuestionSlot, pool: InternalQuestion[]): InternalQuestion {
+    const aligned = pool[slot.index - 1];
+    if (aligned && aligned.type === slot.type) return { ...aligned, difficulty: slot.difficulty };
+    const matched = pool.find(question => question.type === slot.type);
+    if (matched) return { ...matched, difficulty: slot.difficulty };
+    return { ...pool[pool.length - 1], difficulty: slot.difficulty };
+}
+
+/**
+ * 槽位化生成：4 个单元与 13 个题位各自生成、各自修复，单格不合格只补那一格。
+ *
+ * 为什么不再整包生成：整包时任意一处违规都会让 13 题全部作废（实测 5 次真实上游生成 0 次通过）；
+ * 拆格之后违规的代价从「整包重来」降到「多等一格」，单格提示词更短、约束也更集中。
+ * 修复时把上一轮被拒的具体原因回灌给模型，而不是盲目重抽。
+ */
+async function generateQuizBySlots(
+    env: AiEnvironment,
+    provider: TextProvider,
+    model: string,
+    fallbackModel: string,
+    movies: WatchMovie[],
+    quizId: string,
+    sessionId: string,
+    nickname: string,
+    difficultyHint: string | null,
+    requestId: string,
+    healthCtx: HealthRouteContext,
+    onEvent?: QuizStreamEmitter,
+    slotBudget: QuizSlotBudget = QUIZ_SLOT_BUDGET,
+): Promise<QuizCacheData | null> {
+    const startedAtMs = Date.now();
+    const promptMovies = slotMovies(movies);
+    const fallbackPool = fallbackQuizQuestions(movies);
+    let calls = 0;
+    const budgetExhausted = (): boolean =>
+        calls >= slotBudget.maxCallsPerSet || Date.now() - startedAtMs > slotBudget.maxElapsedMs;
+
+    const callSlot = async (messages: MimoMessage[], maxTokens: number, route: 'quiz-units' | 'quiz-review'): Promise<unknown> => {
+        if (budgetExhausted()) throw new AppError('AI_UPSTREAM_ERROR', '出题槽位调用超出预算', 502);
+        calls += 1;
+        const upstream = await callLlmJson(
+            env,
+            provider,
+            model,
+            messages,
+            { maxCompletionTokens: maxTokens, timeoutMs: slotBudget.slotTimeoutMs, stream: provider === 'zhipu' },
+            fallbackModel,
+            { route, requestId },
+            healthCtx,
+        );
+        if (!upstream) throw new AppError('AI_UPSTREAM_ERROR', '槽位上游不可用', 502);
+        return parseAssistantJson<unknown>(upstream.payload);
+    };
+
+    const logSlotFailure = (stage: string, slot: number, round: number, error: unknown): void => {
+        console.warn('[QUIZ_DIAG]', JSON.stringify({
+            stage,
+            requestId,
+            slot,
+            round,
+            error: error instanceof AppError ? error.code : 'UNKNOWN',
+            errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN',
+        }));
+    };
+
+    // ---- 单元槽位：4 个单元各自生成，概念重复只丢那一格 ----
+    const unitSlots = planUnitSlots(quizId);
+    onEvent?.({ type: 'stage', stage: 'units', status: 'start', attempt: 1, provider, expectedChars: QUIZ_UNIT_SLOT_COUNT });
+    let unitsFinished = 0;
+    const unitOutcomes = await mapWithGate(unitSlots, slotBudget.unitConcurrency, async (slot: UnitSlot) => {
+        let hint: string | null = null;
+        let lastError: unknown = new Error('未知原因');
+        for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
+            try {
+                const payload = await callSlot(
+                    unitSlotMessages(nickname, promptMovies, slot, QUIZ_UNIT_FIELDS_SPEC + QUIZ_UNITS_SHAPE_SPEC + (difficultyHint ?? ''), hint),
+                    slotBudget.maxTokensUnit,
+                    'quiz-units',
+                );
+                const unit = normalizeDailyKnowledgeUnit(unwrapSlotPayload(payload, 'unit'), { day: 'quiz', locale: 'zh-CN', movies });
+                assertUnitMatchesSlot(unit, slot);
+                return { slot, unit };
+            } catch (error) {
+                if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+                lastError = error;
+                hint = error instanceof Error ? error.message.slice(0, 200) : '未知原因';
+                logSlotFailure('unit_slot_rejected', slot.index, round, error);
+            }
+        }
+        throw lastError;
+    });
+    const unitPairs: Array<{ slot: UnitSlot; unit: KnowledgeUnit }> = [];
+    for (const outcome of unitOutcomes) {
+        if (outcome.ok) unitPairs.push(outcome.value);
+        unitsFinished += 1;
+        onEvent?.({ type: 'progress', stage: 'units', chars: unitsFinished });
+    }
+    // 概念重复的单元只保留第一个：拆格后不再整包作废，但概念撞车仍要收口
+    const seenConcepts = new Set<string>();
+    const keptPairs: Array<{ slot: UnitSlot; unit: KnowledgeUnit }> = [];
+    for (const pair of unitPairs) {
+        const key = normalizeSemanticKey(pair.unit.concept);
+        if (seenConcepts.has(key)) continue;
+        seenConcepts.add(key);
+        keptPairs.push(pair);
+    }
+    if (keptPairs.length < 3) {
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_insufficient', requestId, kept: keptPairs.length }));
+        return null;
+    }
+    onEvent?.({ type: 'stage', stage: 'units', status: 'done', attempt: 1, provider, expectedChars: QUIZ_UNIT_SLOT_COUNT });
+
+    // ---- 题位槽位：13 题各自生成，失败只补那一格，最终仍失败按位次用兜底题占位 ----
+    const unitByIndex = new Map(keptPairs.map(pair => [pair.slot.index, pair.unit]));
+    const questionSlots = planQuestionSlots(keptPairs.map(pair => ({ index: pair.slot.index, concept: pair.unit.concept })));
+    onEvent?.({ type: 'stage', stage: 'review', status: 'start', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
+
+    const runQuestionSlot = async (slot: QuestionSlot, hint: string | null): Promise<InternalQuestion> => {
+        const unit = unitByIndex.get(slot.unitIndex);
+        if (!unit) throw new AppError('INVALID_AI_OUTPUT', '题位找不到归属单元', 502);
+        const slotUnit: SlotUnit = {
+            unitId: unit.unitId,
+            subject: unit.subject,
+            concept: unit.concept,
+            filmEvidence: unit.filmEvidence,
+            relatedMediaTitle: unit.relatedMedia?.title,
+        };
+        const payload = await callSlot(
+            questionSlotMessages(nickname, promptMovies, slotUnit, slot, QUIZ_REVIEW_SHAPE_SPEC + (difficultyHint ?? ''), hint),
+            slotBudget.maxTokensQuestion,
+            'quiz-review',
+        );
+        const question = normalizeQuestion(unwrapSlotPayload(payload, 'question'), slot.index - 1, movies);
+        assertQuestionMatchesSlot(question, slot, unit);
+        return question;
+    };
+
+    let questionsFinished = 0;
+    const questionOutcomes = await mapWithGate(questionSlots, slotBudget.questionConcurrency, async (slot: QuestionSlot) => {
+        let hint: string | null = null;
+        let lastError: unknown = new Error('未知原因');
+        for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
+            try {
+                return await runQuestionSlot(slot, hint);
+            } catch (error) {
+                if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+                lastError = error;
+                hint = error instanceof Error ? error.message.slice(0, 200) : '未知原因';
+                logSlotFailure('question_slot_rejected', slot.index, round, error);
+            }
+        }
+        throw lastError;
+    });
+
+    const assembled: InternalQuestion[] = [];
+    let degradedSlots = 0;
+    questionOutcomes.forEach((outcome, index) => {
+        const slot = questionSlots[index];
+        if (outcome.ok) assembled.push(outcome.value);
+        else {
+            assembled.push(fallbackQuestionForSlot(slot, fallbackPool));
+            degradedSlots += 1;
+            console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'question_slot_fallback', requestId, slot: slot.index }));
+        }
+        questionsFinished += 1;
+        onEvent?.({ type: 'progress', stage: 'review', chars: questionsFinished });
+    });
+
+    // 跨槽位唯一性：knowledgePoint 撞车只重生成后面那一格（≤修复轮数），仍撞车换兜底题，
+    // 不因为两格撞车把整套丢掉。
+    for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
+        const seenPoints = new Map<string, number>();
+        let repaired = false;
+        for (let index = 0; index < assembled.length; index += 1) {
+            const question = assembled[index];
+            const pointKey = normalizeSemanticKey(question.knowledgePoint);
+            const firstIndex = seenPoints.get(pointKey);
+            if (firstIndex === undefined) {
+                seenPoints.set(pointKey, index);
+                continue;
+            }
+            const slot = questionSlots[index];
+            console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'knowledge_point_collision', requestId, slot: slot.index, firstIndex: firstIndex + 1, round }));
+            try {
+                assembled[index] = await runQuestionSlot(slot, 'knowledgePoint 与第 ' + (firstIndex + 1) + ' 题重复（「' + question.knowledgePoint + '」），请换一个完全不同的考点');
+            } catch (error) {
+                logSlotFailure('knowledge_point_repair_failed', slot.index, round, error);
+                assembled[index] = fallbackQuestionForSlot(slot, fallbackPool);
+                degradedSlots += 1;
+            }
+            repaired = true;
+            seenPoints.set(normalizeSemanticKey(assembled[index].knowledgePoint), index);
+        }
+        if (!repaired) break;
+    }
+
+    try {
+        validateReviewedQuiz(assembled, movies, keptPairs.map(pair => pair.unit));
+    } catch (error) {
+        console.warn('[QUIZ_DIAG]', JSON.stringify({
+            stage: 'slots_validate_error',
+            requestId,
+            calls,
+            degradedSlots,
+            error: error instanceof AppError ? error.code : 'PARSE',
+            errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN',
+        }));
+        return null;
+    }
+    console.log('[QUIZ_DIAG]', JSON.stringify({
+        stage: 'slots_ready',
+        requestId,
+        calls,
+        degradedSlots,
+        elapsedMs: Date.now() - startedAtMs,
+        units: keptPairs.length,
+        questions: assembled.length,
+    }));
+    onEvent?.({ type: 'stage', stage: 'review', status: 'done', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
+    return { quizId, sessionId, movies, questions: assembled, scoringVersion: 2 };
 }
 
 /** 单轮生成：返回 QuizCacheData 表示成功，null 表示终局失败，undefined 表示本轮失败、可重试。 */
@@ -1490,7 +1836,14 @@ function tasteMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
 // 以下两段形状规范由本地出题闭环（quiz-lab）逐轮实测定型：每一条都对应一次真实的
 // 模型违规（枚举自造、剧透词漏网、rationale 截断引用、字段改名等），与本地硬校验逐条
 // 对齐后整包作废率显著下降；修改校验规则时须同步维护这两段提示词。
-const QUIZ_UNITS_SHAPE_SPEC = '字段硬性形状（违反即整包作废）：unitId 用英文小写加中划线（如 film-yimiao-color），version=1，locale="zh-CN"，relationType="direct_watch"。evidenceMode 只能 film_fact/viewing_interpretation/external_fact；强证据学科硬规则：subject 为「物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学」之一时，evidenceMode 必须选 external_fact 且 source.evidence 必须非空（否则整包作废），其余学科三种模式任选；difficulty 只能 easy/medium/hard；spoilerLevel 只能 none/light/heavy。剧透硬规则（违反即整包作废）：unit 的 title/takeaway/filmEvidence 和 checkQuestion 的题干、每个选项文本、explanation 里都严禁出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」这些字面词——一个都不能有，哪怕不是剧透只是抽象讨论或出现在干扰选项里（如干扰项「从结局开始回忆」也违规），必须改用不含这些字面词的表达（如「消逝」「性命」「代价」「从故事后段讲起」）；explanation 只解释正确答案的学理依据，禁止逐项点评干扰选项。任一上述字段违规时唯一自救办法是把该单元 spoilerLevel 标为 heavy，但优先选择改写规避而非标 heavy。subjectGroup 与 subject 成对（不在此列的 subject 禁用）：电影学/叙事学/摄影与视觉设计/剪辑与声音/表演与戏剧→film_expression；心理学/认知科学/发展心理学/教育学→people_and_mind；社会学/人类学/传播学/政治学/经济学/法学/犯罪学→society_and_institution；历史/文化研究/语言学与符号学/宗教神话与民俗/音乐与艺术史→history_and_culture；哲学与伦理学/马克思主义哲学→philosophy_and_ethics；物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/食品科学→science_and_nature；计算机与人工智能/数学与统计/工程与材料/建筑与城市规划→technology_and_future；体育科学/军事学与战略/职业与组织知识→life_and_career。relatedMedia={"title":片名逐字,"mediaType":"movie"}。source={"name":"来源名","url":"https://可核验网址","evidence":"该页支持本单元的摘要"}——三个字段全部必填、不允许空字符串，url 必须以 https:// 开头的完整网址（填空串即整包作废）。checkQuestion={"prompt":问题(8-500字),"options":[{"id":"opt-a","text":"选项文本"},...]（2-4项，id 仅小写字母数字中划线）,"correctOptionIds":["opt-a"]（恰好1项，须在 options 的 id 里）,"explanation":解析(12-800字)}。最关键硬规则：checkQuestion.explanation 的文字中必须原样完整出现该单元 concept 字段的全文（例如 concept="文革后期的物质匮乏" 时，explanation 里必须原样写「文革后期的物质匮乏」这几个字，改写、拆词、同义替换都算违规，省略虚词也算违规：写「文革后期物质匮乏」少了个「的」就是违规）。最省事的合规写法：explanation 开头第一句就写「本题考查的概念是“{concept 原文}”」，保证全文必然出现。boundary 12-500 字：evidenceMode=film_fact 时须含「事实/资料/说明」，viewing_interpretation 时须含「解读/不是」，external_fact 时须含「来源/事实/说明」。takeaway 12-320字；filmEvidence 12-600字（必须原样逐字引用输入材料中该影片「简介」的至少一个 4 字以上连续片段——只准引用输入材料里写明的情节，禁止扩写、脑补输入材料没有的画面细节如音效、色调、镜头设计；引用后可补充学理说明）。title/takeaway/filmEvidence 三字段去片名后必须仍有至少 8 个字的实质内容——禁止写成「《片名》+ 两三个字的短语」的拼接（如「《XX》的叙事结构」去片名只剩「的叙事结构」即违规）；title 正确写法示例：「《蜘蛛侠：平行宇宙》如何用网状叙事支撑多重宇宙设定」；explanation 20-900字；realWorldExample 12-500字；title 4-160字；concept 2-120字。';
+/**
+ * 单元字段清单：槽位提示词必须显式列出全部字段名。
+ * 实测只给形状规范时模型会漏字段（例如把解析写进 checkQuestion 却漏掉顶层 explanation），
+ * 而硬校验对缺字段是直接拒绝，白烧一轮生成。
+ */
+const QUIZ_UNIT_FIELDS_SPEC = '每个单元必须包含且只包含这些字段：unitId、version（固定 1）、locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。字段一个都不能少，也不要新增清单之外的字段。';
+
+const QUIZ_UNITS_SHAPE_SPEC = '字段硬性形状（违反即整包作废）：unitId 用英文小写加中划线（如 film-yimiao-color），version=1，locale="zh-CN"，relationType="direct_watch"。evidenceMode 只能 film_fact/viewing_interpretation/external_fact；选科策略（强烈建议）：优先选择不需要外部来源的学科（电影学、叙事学、摄影与视觉设计、剪辑与声音、表演与戏剧、心理学、认知科学、社会学、传播学、历史、文化研究、语言学与符号学、哲学与伦理学、音乐与艺术史），它们只需引用已看影视材料即可合规；强证据学科（物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学）只有在你能同时给出可核验 https 来源时才选，否则直接换学科——这是整包作废的高发点。强证据学科硬规则：subject 为「物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学」之一时，evidenceMode 必须选 external_fact 且 source.evidence 必须非空（否则整包作废），其余学科三种模式任选；difficulty 只能 easy/medium/hard；spoilerLevel 只能 none/light/heavy。剧透硬规则（违反即整包作废）：unit 的 title/takeaway/filmEvidence 和 checkQuestion 的题干、每个选项文本、explanation 里都严禁出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」这些字面词——一个都不能有，哪怕不是剧透只是抽象讨论或出现在干扰选项里（如干扰项「从结局开始回忆」也违规），必须改用不含这些字面词的表达（如「消逝」「性命」「代价」「从故事后段讲起」）；explanation 只解释正确答案的学理依据，禁止逐项点评干扰选项。任一上述字段违规时唯一自救办法是把该单元 spoilerLevel 标为 heavy，但优先选择改写规避而非标 heavy。subjectGroup 与 subject 成对（不在此列的 subject 禁用）：电影学/叙事学/摄影与视觉设计/剪辑与声音/表演与戏剧→film_expression；心理学/认知科学/发展心理学/教育学→people_and_mind；社会学/人类学/传播学/政治学/经济学/法学/犯罪学→society_and_institution；历史/文化研究/语言学与符号学/宗教神话与民俗/音乐与艺术史→history_and_culture；哲学与伦理学/马克思主义哲学→philosophy_and_ethics；物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/食品科学→science_and_nature；计算机与人工智能/数学与统计/工程与材料/建筑与城市规划→technology_and_future；体育科学/军事学与战略/职业与组织知识→life_and_career。relatedMedia={"title":片名逐字,"mediaType":"movie"}。source={"name":"来源名","url":"https://可核验网址","evidence":"该页支持本单元的摘要"}——三个字段全部必填、不允许空字符串，url 必须以 https:// 开头的完整网址（填空串即整包作废）。checkQuestion={"prompt":问题(8-500字),"options":[{"id":"opt-a","text":"选项文本"},...]（2-4项，id 仅小写字母数字中划线）,"correctOptionIds":["opt-a"]（恰好1项，须在 options 的 id 里）,"explanation":解析(12-800字)}。最关键硬规则：checkQuestion.explanation 的文字中必须原样完整出现该单元 concept 字段的全文（例如 concept="文革后期的物质匮乏" 时，explanation 里必须原样写「文革后期的物质匮乏」这几个字，改写、拆词、同义替换都算违规，省略虚词也算违规：写「文革后期物质匮乏」少了个「的」就是违规）。最省事的合规写法：explanation 开头第一句就写「本题考查的概念是“{concept 原文}”」，保证全文必然出现。boundary 12-500 字：evidenceMode=film_fact 时须含「事实/资料/说明」，viewing_interpretation 时须含「解读/不是」，external_fact 时须含「来源/事实/说明」。takeaway 12-320字；filmEvidence 12-600字（必须原样逐字引用输入材料中该影片「简介」的至少一个 4 字以上连续片段——只准引用输入材料里写明的情节，禁止扩写、脑补输入材料没有的画面细节如音效、色调、镜头设计；引用后可补充学理说明）。title/takeaway/filmEvidence 三字段去片名后必须仍有至少 8 个字的实质内容——禁止写成「《片名》+ 两三个字的短语」的拼接（如「《XX》的叙事结构」去片名只剩「的叙事结构」即违规）；title 正确写法示例：「《蜘蛛侠：平行宇宙》如何用网状叙事支撑多重宇宙设定」；explanation 20-900字；realWorldExample 12-500字；title 4-160字；concept 2-120字。';
 
 const QUIZ_REVIEW_SHAPE_SPEC = '每题字段硬性形状（违反即整包作废）：questions 数组长度必须恰好 13，写完后必须自检一遍（数一数 questions.length 是不是 13——多一题或少一题都整包作废，这是最高频的作废原因）；必填字段一个都不能少，完整清单为 id/unitId/subject/concept/sourceTitle/difficulty/spoilerLevel/knowledgePoint/learningTakeaway/prompt/type/options(short 除外)/correctAnswer/answerRationale/distractorRationale/explanation/evidenceUsed——尤其 evidenceUsed 每题都必须有、不许省略；id 用英文小写中划线（q01-style）；题干字段名必须叫 prompt（不许写 questionText/question 等其他名字）；type 必填且只能 single/multiple/short——前 4 题 easy 用 single、中间 5 题里 4 个 single 加 1 个 multiple、最后 4 题里 1 个 single 加 1 个 multiple 加最后 1 题 short（合计 10 single、2 multiple、1 short）；single 用 options 数组（2-4 项 {"id":"opt-a","text":"..."}）加 correctAnswer="opt-a"（单个 id）；multiple 的 correctAnswer 数组必须含 2 或 3 个 id（只含 1 个 id 即整包作废，最常见违规）。multiple 出题流程：先写好恰好 2-3 个互不矛盾的「正确陈述」选项（correctAnswer 必须包含且只包含它们的 id），再补足到 4 个选项写干扰项——不许先写一个正确项再凑数；short 不给 options、给 answerKeywords（5-8 个关键词数组）加 correctAnswer（一句话参考答案范文，10-80 字）；所有题的 correctAnswer 必须是 options 里已有的 id。explanation 按「影视证据→学科概念→学习结论」展开 20-500 字；answerRationale/distractorRationale 各 20-200 字且逐题撰写不同，且二者必须各自满足其一（缺一即整包作废）：a) 原样出现本题 knowledgePoint 全文；b) 逐字包含本题至少一个选项文本的完整原文——注意是完整原文，截断引用（如选项是「通过单一主角的回忆来展开」却只写「通过单一主角的回忆」）不算数；最省事的合规写法是 rationale 里同时写出本题 knowledgePoint 全文（如「干扰项未围绕“{knowledgePoint}”展开：……」）。short 题的 distractorRationale 必须给空字符串 ""，不许写「无干扰项」之类的文字；distractorRationale 正确写法示例：「干扰项把「网点纸纹理」错当成 3D 渲染缺陷，实际它是模拟印刷质感的手法，与本题 knowledgePoint 无关」——即逐个点名错误选项原文并给反驳理由；knowledgePoint 2-60 字（13 题互不重复）；learningTakeaway 10-120 字（13 题互不重复）；evidenceUsed 锚定硬规则（违反即整包作废）：evidenceUsed 必须逐字引用用户已看影片「简介」原文（即该单元 filmEvidence 里引用过的那个简介片段）里的一个 4 字以上连续片段——只能从简介原文抄，不许引用 filmEvidence 里扩写出来的画面细节，也不许自己描写（如「黄色调」「网点纸」「拟声词」这些简介里没有的词即违规）；先抄简介原文片段，再补一句该片段如何支撑本题；sourceTitle 必须等于该单元 relatedMedia.title 逐字；difficulty 只能 easy/medium/hard（前 4 题 easy、中 5 题 medium、后 4 题 hard）；spoilerLevel 只能 none/light/heavy 且任一文字出现结局/结尾/死亡/凶手/真相/逆转即 heavy。选项与题干严禁后段剧透词。题干锚定硬规则（违反即整包作废）：每题题干必须至少引用该影片简介原文里的一个 4 字以上连续片段（不是片名、不是年份——片名和年份不算锚定；例：简介有「为看女儿影像在胶片上跋涉」，题干写「为看女儿影像在胶片上跋涉的主人公是谁」即合规，只写「主人公跋涉的目的是什么」即违规）。概念检验硬规则（违反即整包作废）：每题的题干必须原样完整嵌入本题 knowledgePoint 全文（模板「关于“{knowledgePoint}”，结合影片情节……」；这是硬要求不是建议——不许只嵌在选项或 rationale 里，更不许改写；改写、拆词、只写一半都算违规）。knowledgePoint 因此必须 6-16 字、可独立成问的名词短语，且 13 题互不重复——kp 不得直接照抄单元 concept（同一单元的 4-5 题要在 concept 基础上切出互不重复的子角度，如 concept=「文革后期的物质匮乏」时 kp 可写「胶片影像的精神价值」「票证制度的日常限制」「观影仪式的时代记忆」等，每个 kp 都是 concept 之外的具体侧面）。explanation 学理链硬规则（违反即整包作废）：每题 explanation 与 learningTakeaway 合起来必须出现本题 concept 字段的全文，或至少出现一个因果/结论连接词（因为/因此/说明/意味着/结论/从而）——两者都没有即整包作废；explanation 至少 40 字，且必须写出「影片里的什么现象 → 用哪个学科概念解释 → 得到什么结论」这条链，不能只堆名词。';
 

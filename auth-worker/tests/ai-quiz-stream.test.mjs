@@ -33,13 +33,22 @@ function createEnv(overrides = {}) {
  * 配额返回 changes=1（未触顶）、昵称返回一行，其余查询返回空。
  */
 function createDbStub() {
-    const statement = {
-        bind() { return statement; },
-        async run() { return { meta: { changes: 1 } }; },
-        async first() { return { nickname: '小明', session_id: 'session-1', session_count: 1, daily_count: 1 }; },
-        async all() { return { results: [] }; },
+    return {
+        prepare(sql) {
+            const statement = {
+                bind() { return statement; },
+                async run() { return { meta: { changes: 1 } }; },
+                async all() { return { results: [] }; },
+                // 按查询分流：ai_cache 未命中必须返回 null，否则会被当成命中并解析失败
+                async first() {
+                    if (sql.includes('FROM friends')) return { nickname: '小明' };
+                    if (sql.includes('FROM ai_usage')) return { session_id: 'session-1', session_count: 1, daily_count: 1 };
+                    return null;
+                },
+            };
+            return statement;
+        },
     };
-    return { prepare() { return statement; } };
 }
 
 const WATCHED_MOVIES = [
@@ -88,7 +97,8 @@ test('quiz stream 以 NDJSON 下发阶段事件并以 result 收尾', async () =
     assert.equal(events[0].type, 'stage');
     assert.equal(events[0].stage, 'units');
     assert.equal(events[0].status, 'start');
-    assert.equal(events[0].expectedChars, 5200);
+    // 槽位化后进度分母是「槽位数」而不是字符数：客户端只拿它算比例
+    assert.ok(Number.isInteger(events[0].expectedChars) && events[0].expectedChars > 0);
 
     const result = events.at(-1);
     assert.equal(result.type, 'result');
