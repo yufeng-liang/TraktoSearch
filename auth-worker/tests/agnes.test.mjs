@@ -6,8 +6,24 @@ import { callAgnesJson } from '../src/ai/agnes.ts';
 const AGNES_KEYS = 'sk-agnes-1,sk-agnes-2,sk-agnes-3';
 
 function createTestEnv(overrides = {}) {
+    const healthInserts = [];
+    const db = {
+        prepare(sql) {
+            // 健康事件表：接住 INSERT 并按 bind 顺序捕获，供用例断言写入行；
+            // 其他 SQL 维持原行为（直接 throw，证明测试模式不应触达它们）。
+            if (typeof sql === 'string' && sql.includes('INSERT INTO ai_health_events')) {
+                return {
+                    bind(...args) {
+                        healthInserts.push({ sql, args });
+                        return { async run() { return { meta: { changes: 1 } }; } };
+                    },
+                };
+            }
+            throw new Error('AI test fallback should be used');
+        },
+    };
     return {
-        DB: { prepare() { throw new Error('AI test fallback should be used'); } },
+        DB: db,
         KV: { async get() { return null; }, async put() {} },
         JWT_SIGNING_KEY: 'test-jwt-secret',
         AI_TEST_MODE: true,
@@ -15,6 +31,7 @@ function createTestEnv(overrides = {}) {
         AI_TEST_TRANSCRIPT: '乌萨奇',
         AI_TEST_CACHE: new Map(),
         AI_TEST_QUOTA: new Map(),
+        healthInserts,
         ...overrides,
     };
 }
@@ -255,8 +272,30 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         assert.ok(requests.every(request => request.model === 'agnes-2.5-flash'));
         assert.ok(requests.every(request => request.hasBearer));
         assert.ok(requests.every(request => !request.hasResponseFormat));
+        // 等所有 fire-and-forget 健康写入落地后再断言
+        await new Promise(resolve => setTimeout(resolve, 20));
+        // 健康事件链路（与轮替实际路径一致；route 来自 healthCtx.route，统一为业务路由名）：
+        // - taste 成功 1 条；
+        // - quiz 第一轮 agnes units 成功、二审结构不合格后第二轮 mimo（TEST_MODE 无 key，null=不可用）
+        //   写 upstream_error、再回 agnes units 成功——quiz 路由共 3 条；
+        // - daily 两阶段（daily-candidate/daily-review）各 1 条。
+        // zhipu 未配 key 且在 ladder 中位置靠后，本轮未触达，故无 zhipu 行。
+        const healthRows = env.healthInserts.map(row => row.args);
+        assert.ok(healthRows.some(r => r[2] === 'taste' && r[3] === 'agnes' && r[5] === 'success'));
+        const quizRows = healthRows.filter(r => r[2] === 'quiz');
+        assert.equal(quizRows.length, 3, 'quiz 路由：agnes×2 成功 + mimo×1 不可用');
+        assert.equal(quizRows.filter(r => r[3] === 'agnes' && r[4] === 'agnes-2.5-flash' && r[5] === 'success').length, 2);
+        assert.ok(quizRows.some(r => r[3] === 'mimo' && r[5] === 'upstream_error' && r[6] === 'AI_UPSTREAM_ERROR'));
+        const dailyRows = healthRows.filter(r => r[2] === 'daily-candidate' || r[2] === 'daily-review');
+        assert.equal(dailyRows.length, 2, 'daily 两阶段各写一条健康事件');
+        assert.ok(dailyRows.every(r => r[3] === 'agnes' && r[5] === 'success'));
+        // 每行都必须携带 request_id，且 duration_ms 为实测数值或 null
+        assert.ok(healthRows.every(r => typeof r[9] === 'string' && r[9].length > 0));
+        assert.ok(healthRows.every(r => r[8] === null || typeof r[8] === 'number'));
+        assert.equal(healthRows.length, 6);
     } finally {
         globalThis.fetch = originalFetch;
+        await new Promise(resolve => setTimeout(resolve, 20));
     }
 });
 

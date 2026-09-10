@@ -67,6 +67,7 @@ import {
     synthesizeTtsAudio,
     type TtsPublicAudio,
 } from './tts.ts';
+import { recordHealthEvent, type HealthRouteContext } from './health.ts';
 
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
@@ -277,15 +278,15 @@ export async function handleAiApi(
     const authenticatedPayload = requireAiPayload(payload);
     if (path === '/api/ai/greeting') {
         assertAction(body, 'greeting');
-        return handleGreeting(body, env, requestId, authenticatedPayload, audioOrigin);
+        return handleGreeting(body, env, requestId, authenticatedPayload, audioOrigin, background);
     }
     if (path === '/api/ai/taste') {
         assertAction(body, 'taste');
-        return handleTaste(body, env, requestId, authenticatedPayload);
+        return handleTaste(body, env, requestId, authenticatedPayload, background);
     }
     if (path === '/api/ai/quiz') {
         assertAction(body, 'quiz');
-        return handleQuiz(body, env, requestId, authenticatedPayload);
+        return handleQuiz(body, env, requestId, authenticatedPayload, background);
     }
     if (path === '/api/ai/quiz/submit') {
         assertAction(body, ['quiz.submit', 'quiz_submit', 'submit']);
@@ -401,7 +402,10 @@ async function handleGreeting(
     requestId: string,
     payload: AiJwtPayload,
     audioOrigin: string,
+    background: BackgroundScheduler | undefined,
 ): Promise<Response> {
+    // 健康事件上下文：透传 background 让写入挂到 waitUntil，不阻塞响应。
+    const healthCtx: HealthRouteContext = { route: 'greeting', requestId, background };
     const character = requireCharacter(body);
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
@@ -437,11 +441,14 @@ async function handleGreeting(
         {},
         fallbackModel,
         { route: 'greeting', requestId },
+        healthCtx,
     );
     const generated = parseTextResultOrFallback(
         upstream,
         value => normalizeGreeting(parseAssistantJson<unknown>(value), nickname),
         () => fallbackGreeting(character, nickname),
+        env,
+        healthCtx,
         { route: 'greeting', requestId },
     );
     const spokenText = injectCatchphrase(character, generated.greeting);
@@ -477,7 +484,9 @@ async function handleTaste(
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload,
+    background: BackgroundScheduler | undefined,
 ): Promise<Response> {
+    const healthCtx: HealthRouteContext = { route: 'taste', requestId, background };
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
     const movies = readMovies(body);
     const nickname = await getFriendNickname(env, payload.sub);
@@ -505,11 +514,14 @@ async function handleTaste(
         {},
         fallbackModel,
         { route: 'taste', requestId },
+        healthCtx,
     );
     const response = parseTextResultOrFallback(
         upstream,
         value => normalizeTaste(parseAssistantJson<unknown>(value), nickname, movies),
         () => fallbackTaste(nickname, movies),
+        env,
+        healthCtx,
         { route: 'taste', requestId },
     );
     await writeAiCache(env, cacheKey, response, 7 * 24 * 60 * 60, payload.sub, 'taste');
@@ -521,7 +533,9 @@ async function handleQuiz(
     env: AiEnvironment,
     requestId: string,
     payload: AiJwtPayload,
+    background: BackgroundScheduler | undefined,
 ): Promise<Response> {
+    const healthCtx: HealthRouteContext = { route: 'quiz', requestId, background };
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
     if (body.questionCount !== undefined && body.questionCount !== QUIZ_QUESTION_COUNT) {
         throw new AppError('INVALID_QUESTION_COUNT', 'Quiz must contain exactly 13 questions', 400);
@@ -559,6 +573,7 @@ async function handleQuiz(
         nickname,
         difficultyHint,
         requestId,
+        healthCtx,
     );
     if (cacheData) {
         const cacheKey = quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, cacheData.quizId);
@@ -594,6 +609,7 @@ async function generateQuiz(
     nickname: string,
     difficultyHint: string | null,
     requestId: string,
+    healthCtx: HealthRouteContext,
 ): Promise<QuizCacheData | null> {
     // 两阶段（units→review）整体最多跑三轮：第一轮上游返回 200 但输出过不了本地硬校验
     // 时换下一家供应商重试（实测 Agnes 会连续输出不合格 JSON，同家重试无效），三家全试仍
@@ -612,7 +628,7 @@ async function generateQuiz(
         const attempt = (startIndex + offset) % PROVIDER_LADDER.length;
         const p = PROVIDER_LADDER[attempt];
         const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
-        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1);
+        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1, healthCtx);
         if (result !== undefined) return result;
     }
     return null;
@@ -631,6 +647,7 @@ async function runQuizGenerationRound(
     difficultyHint: string | null,
     requestId: string,
     attempt: number,
+    healthCtx: HealthRouteContext,
 ): Promise<QuizCacheData | null | undefined> {
     let unitsUpstream: LlmJsonResult | null;
     try {
@@ -642,6 +659,7 @@ async function runQuizGenerationRound(
             { maxCompletionTokens: 4600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'quiz-units', requestId },
+            healthCtx,
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -674,6 +692,7 @@ async function runQuizGenerationRound(
             { maxCompletionTokens: 4600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'quiz-review', requestId },
+            healthCtx,
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -901,7 +920,7 @@ async function handleDaily(
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId);
+    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId, background);
     const response = dailyResponseFromUnit(unit, day);
     if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) {
         response.sourceUrl = null;
@@ -932,7 +951,9 @@ async function generateDailyKnowledgeUnit(
     locale: DailyLocale,
     movies: WatchMovie[],
     requestId: string,
+    background: BackgroundScheduler | undefined,
 ): Promise<KnowledgeUnit> {
+    const healthCtx: HealthRouteContext = { route: 'daily-candidate', requestId, background };
     let candidateUpstream: LlmJsonResult | null;
     try {
         candidateUpstream = await callLlmJson(
@@ -943,6 +964,7 @@ async function generateDailyKnowledgeUnit(
             { maxCompletionTokens: 2600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-candidate', requestId },
+            healthCtx,
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -967,6 +989,7 @@ async function generateDailyKnowledgeUnit(
             { maxCompletionTokens: 3000, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-review', requestId },
+            healthCtx,
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -2394,7 +2417,8 @@ function resolveTextModel(
             : { provider: 'zhipu', model: DEFAULT_MODEL_BY_PROVIDER.zhipu, fallbackModel: mimoDefault };
 }
 
-// 统一文本生成入口：Agnes 失败交给业务确定性 fallback；显式/兼容 MiMo 路径仍可回退 Agnes 一次。
+// 统一文本生成入口：Agnes 失败交给业务确定性 fallback；显式/兼容 MiMo 主路径仍可回退 Agnes 一次。
+// health 可选传入：提供时对每次上游尝试（成功与失败）写一条被动健康事件，供「AI 健康」页聚合。
 async function callLlmJson(
     env: AiEnvironment,
     provider: TextProvider,
@@ -2403,6 +2427,7 @@ async function callLlmJson(
     options: Record<string, unknown>,
     fallbackModel: string,
     context: LlmRequestContext,
+    health?: HealthRouteContext,
 ): Promise<LlmJsonResult | null> {
     // 三家互备，固定优先级 zhipu > agnes > mimo：主供应商失败（常见：Agnes 共享池 429 把
     // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
@@ -2413,6 +2438,7 @@ async function callLlmJson(
             ? ['agnes', 'zhipu', 'mimo']
             : ['mimo', 'agnes', 'zhipu'];
     let lastError: unknown = null;
+    const healthCtx: HealthRouteContext | undefined = health;
     // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，
     // 全部失败才轮下一家；zhipu 梯队内 5.3-flash 限频时自动落到 4.6v/4.5-air 等轻量模型。
     for (const p of order) {
@@ -2424,25 +2450,31 @@ async function callLlmJson(
             if (!candidates.includes(extra)) candidates.push(extra);
         }
         for (const m of candidates) {
+            const startedAtMs = Date.now();
             try {
                 const result = p === 'agnes'
                     ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
                     : p === 'zhipu'
                         ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
                         : await callMimoJson(env, m as MimoModel, messages, options);
+                const durationMs = Date.now() - startedAtMs;
                 // 未配置/测试模式下供应商返回 null 表示该家不可用：继续轮下一家；
                 // 全部轮完仍未成功时由函数末尾按主供应商契约返回 null 或上抛。
                 if (result === null) {
                     logAiDiagnostic('upstream_failure', context, p, m, new AppError('AI_UPSTREAM_ERROR', 'AI provider unavailable', 502));
                     lastError = new AppError('AI_UPSTREAM_ERROR', 'AI provider unavailable', 502);
+                    recordHealthEvent(env, healthCtx, 'traffic', p, m, 'upstream_error', lastError, durationMs);
                     continue;
                 }
+                recordHealthEvent(env, healthCtx, 'traffic', p, m, 'success', undefined, durationMs);
                 return { payload: result, provider: p, model: m };
             } catch (error) {
+                const durationMs = Date.now() - startedAtMs;
                 // 模型非法属于请求错误，不回退，直接上抛。
                 if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
                 logAiDiagnostic('upstream_failure', context, p, m, error);
                 lastError = error;
+                recordHealthEvent(env, healthCtx, 'traffic', p, m, 'upstream_error', error, durationMs);
             }
         }
     }
@@ -2456,6 +2488,8 @@ function parseTextResultOrFallback<T>(
     result: LlmJsonResult | null,
     parse: (payload: unknown) => T,
     fallback: () => T,
+    env: AiEnvironment,
+    healthCtx: HealthRouteContext | undefined,
     context: LlmRequestContext,
 ): T {
     if (result === null) return fallback();
@@ -2466,6 +2500,8 @@ function parseTextResultOrFallback<T>(
         // 显式旧 MiMo 主路径仍保留原有结构校验行为；若其失败后实际由 Agnes 返回，则同样使用兜底。
         if (result.provider !== 'agnes') throw error;
         logAiDiagnostic('invalid_output', context, result.provider, result.model, error);
+        // 200 但输出非法是单独的健康类别：与网络层 upstream_error 区分开统计。
+        if (healthCtx) recordHealthEvent(env, healthCtx, 'traffic', result.provider, result.model, 'invalid_output', error);
         return fallback();
     }
 }

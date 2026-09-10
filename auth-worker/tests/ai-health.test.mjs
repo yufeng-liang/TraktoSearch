@@ -119,3 +119,64 @@ test('readKeyPoolSnapshot returns empty on missing or malformed KV', async () =>
     assert.deepEqual(await readKeyPoolSnapshot({ async get() { return null; } }), []);
     assert.deepEqual(await readKeyPoolSnapshot({ async get() { return 'not-json'; } }), []);
 });
+
+// 集成用例：handleAiApi -> handleGreeting -> callLlmJson 成功路径，断言被动健康写入恰好 1 条。
+test('callLlmJson success path writes exactly one health event', async () => {
+    const { handleAiApi } = await import('../src/ai/handler.ts');
+    const capture = createCaptureEnv();
+    const statements = [];
+    const env = {
+        ...capture.env,
+        KV: { async get() { return null; }, async put() {} },
+        JWT_SIGNING_KEY: 'test-jwt-secret',
+        AI_TEST_MODE: true,
+        AI_TEST_NICKNAME: '小明',
+        AI_TEST_CACHE: new Map(),
+        AI_TEST_QUOTA: new Map(),
+        // handleAiApi 内的 DB 走 capture；健康写入共享同一捕获数组
+        DB: {
+            prepare(sql) {
+                return {
+                    bind(...args) {
+                        statements.push({ sql, args });
+                        return { async run() { return { meta: { changes: 1 } }; } };
+                    },
+                };
+            },
+        },
+        AI_DEFAULT_PROVIDER: 'agnes',
+        AGNES_API_KEYS: 'sk-agnes-test',
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(
+        JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({ greeting: '你好', nicknameMeaning: '朋友', comment: '欢迎' }) } }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+    try {
+        const request = new Request('https://gateway.test/api/ai/greeting', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'greeting', characterId: 'usagi', sessionId: 'health-integration' }),
+        });
+        const response = await handleAiApi(request, env, 'req-health-1', '/api/ai/greeting', {
+            sub: 'friend-1',
+            device: 'device-1',
+        });
+        assert.equal(response.status, 200);
+        // 无 ExecutionContext：fire-and-forget，稍等写入落地
+        await new Promise(resolve => setTimeout(resolve, 20));
+        const healthRows = statements.filter(row => row.sql.includes('INSERT INTO ai_health_events'));
+        assert.equal(healthRows.length, 1, '成功路径只应写一条健康事件');
+        const args = healthRows[0].args;
+        assert.equal(args[2], 'greeting');
+        assert.equal(args[3], 'agnes');
+        assert.equal(args[4], 'agnes-2.5-flash');
+        assert.equal(args[5], 'success');
+        assert.equal(args[6], null);
+        assert.equal(args[9], 'req-health-1');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});

@@ -101,7 +101,7 @@ export async function callZhipuJson(
             if (response.ok) {
                 const payload: unknown = await response.json();
                 if (isZhipuRateLimited(payload)) {
-                    throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider rate limited', 502);
+                    throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider rate limited', 502, response.status);
                 }
                 return payload;
             }
@@ -110,7 +110,7 @@ export async function callZhipuJson(
                 await new Promise(resolve => setTimeout(resolve, 400));
                 continue;
             }
-            throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider request failed', 502);
+            throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider request failed', 502, response.status);
         }
         throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider request failed', 502);
     } catch (error) {

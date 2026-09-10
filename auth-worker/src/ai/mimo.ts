@@ -154,7 +154,7 @@ async function callMimoPayload(
                     await sleep(400);
                     continue;
                 }
-                throw new AppError('AI_UPSTREAM_ERROR', 'AI provider request failed', 502);
+                throw new AppError('AI_UPSTREAM_ERROR', 'AI provider request failed', 502, response.status);
             }
             const payload: unknown = await response.json();
             return payload;

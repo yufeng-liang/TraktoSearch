@@ -136,8 +136,8 @@ async function callAgnesPayload(
     }
 
     // 所有 key 轮流失败（含共享池 429）。上抛稳定错误，由调用方决定降级方式，
-    // 避免把 key 级错误伪装成模型结构错误。
-    throw new AppError('AI_UPSTREAM_ERROR', 'Agnes provider request failed', 502);
+    // 避免把 key 级错误伪装成模型结构错误。原始状态码随错误透出，供健康监控定位根因。
+    throw new AppError('AI_UPSTREAM_ERROR', 'Agnes provider request failed', 502, response.status);
 }
 
 function buildRequestInit(
@@ -165,7 +165,8 @@ async function requestOnce(
 ): Promise<unknown> {
     const response = await fetch(`${AGNES_BASE_URL}${endpoint}`, buildRequestInit(key, body, timeoutMs));
     if (!response.ok) {
-        throw new AppError('AI_UPSTREAM_ERROR', 'Agnes provider request failed', 502);
+        // 原始状态码随错误透出，供健康监控定位根因；网络异常（fetch reject）路径无 status 可带。
+        throw new AppError('AI_UPSTREAM_ERROR', 'Agnes provider request failed', 502, response.status);
     }
     return response.json();
 }
