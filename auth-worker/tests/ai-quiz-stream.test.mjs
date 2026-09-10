@@ -360,3 +360,97 @@ test('quiz stream 全部题位判废时降级题仍挂在已审校单元上（�
         globalThis.fetch = originalFetch;
     }
 });
+
+/** 一道「形状全合格」的题位输出：用来把失败点精确压到某一个质量门槛上。 */
+function slotQuestionPayload(prompt, overrides = {}) {
+    const index = Number(/id 固定为 "q(\d+)"/u.exec(prompt)?.[1] ?? '1');
+    const type = /type 固定为 "([a-z]+)"/u.exec(prompt)?.[1] ?? 'single';
+    const difficulty = /difficulty 固定为 "(\w+)"/u.exec(prompt)?.[1] ?? 'easy';
+    const unitId = /unitId 必须原样等于所给单元的 unitId "([^"]+)"/u.exec(prompt)?.[1] ?? 'unit-1';
+    const concept = /concept 必须原样等于 "([^"]+)"/u.exec(prompt)?.[1] ?? '测试概念';
+    const subject = /subject 必须沿用该单元的学科 "([^"]+)"/u.exec(prompt)?.[1] ?? '电影学';
+    const title = /sourceTitle 必须逐字等于 "([^"]+)"/u.exec(prompt)?.[1] ?? WATCHED_MOVIES[0].title;
+    const movieIndex = Math.max(0, WATCHED_MOVIES.findIndex(movie => movie.title === title));
+    // 题干与证据都要回到该片简介原文：取一段去掉标点的连续前缀即可稳定命中
+    const anchor = SLOT_SYNOPSES[movieIndex].replace(/[，。！？、\s]/gu, '').slice(0, 12);
+    const knowledgePoint = '考点' + index + '号';
+    const base = {
+        id: 'q' + String(index).padStart(2, '0'),
+        unitId,
+        subject,
+        concept,
+        sourceTitle: title,
+        difficulty,
+        knowledgePoint,
+        learningTakeaway: '这一题的学习结论是先把材料读准，再在材料能支撑的范围里下判断。',
+        prompt: '关于“' + knowledgePoint + '”，影片里写着“' + anchor + '”，因此' + knowledgePoint + '说明了什么？',
+        evidenceUsed: '影片里写着“' + anchor + '”，这一段是本题的直接依据。',
+        answerRationale: '正确选项回到考点“' + knowledgePoint + '”：材料只支持这一层判断。',
+        distractorRationale: '干扰项都没有落到“' + knowledgePoint + '”上，属于材料之外的推论。',
+        explanation: '材料写着“' + anchor + '”，把它对应到考点“' + knowledgePoint + '”，因此结论只能限定在这段材料支撑得住的范围内。',
+    };
+    if (type === 'short') {
+        return {
+            question: {
+                ...base,
+                type,
+                distractorRationale: '',
+                answerKeywords: ['材料', '考点', '依据', '判断', '范围'],
+                correctAnswer: '先读材料原句，再按考点限定的范围作答，不引入材料之外的情节推断。',
+                ...overrides,
+            },
+        };
+    }
+    const options = [
+        { id: 'opt-a', text: '只按材料写明的信息判断' },
+        { id: 'opt-b', text: '按个人印象补上材料没有的细节' },
+    ];
+    return {
+        question: {
+            ...base,
+            type,
+            options,
+            correctAnswer: type === 'multiple' ? ['opt-a', 'opt-b'] : 'opt-a',
+            ...overrides,
+        },
+    };
+}
+
+test('题位只差一个字段不合格时判废止步于该格，不拖垮整套 13 题', async () => {
+    const originalFetch = globalThis.fetch;
+    let nearMissSeen = 0;
+    globalThis.fetch = async (url, init) => {
+        if (!String(url).includes('agnes-ai.com')) return new Response('unavailable', { status: 500 });
+        const prompt = promptTextOf(init);
+        if (prompt.includes('单槽位学习单元编辑')) return jsonCompletion(JSON.stringify(slotUnitPayload(prompt)));
+        const index = Number(/id 固定为 "q(\d+)"/u.exec(prompt)?.[1] ?? '0');
+        // 第 5 格把 learningTakeaway 写短：形状全对、只差长度门槛，实测真实上游出现过
+        if (index === 5) {
+            nearMissSeen += 1;
+            return jsonCompletion(JSON.stringify(slotQuestionPayload(prompt, { learningTakeaway: '太短' })));
+        }
+        return jsonCompletion(JSON.stringify(slotQuestionPayload(prompt)));
+    };
+    try {
+        const env = createEnv({
+            DB: createDbStub(),
+            AI_TEST_MODE: false,
+            AGNES_API_KEYS: 'test-agnes-key',
+            AI_DEFAULT_PROVIDER: 'agnes',
+        });
+        const events = await readEvents(await callStream({ ...QUIZ_BODY, watched: SLOT_MOVIES }, env));
+        assert.equal(events.at(-1).type, 'result');
+        const quiz = events.at(-1).quiz;
+        assert.equal(quiz.questions.length, 13, '一格不合格不该把整套换成兜底题库');
+        assert.ok(nearMissSeen >= 1, '第 5 格必须真的被判废过（否则这条用例没测到东西）');
+        // 其余 12 题是模型写的（考点带关卡前缀），被拒的那一格降级成结构化兜底题
+        const modelQuestions = quiz.questions.filter(question => String(question.knowledgePoint).startsWith('考点'));
+        assert.equal(modelQuestions.length, 12, '一格不合格只应影响那一格');
+        for (const question of quiz.questions) {
+            assert.ok(question.unitId, '每格仍要挂在已审校单元上');
+            assert.ok(String(question.concept).startsWith('测试概念'), '概念必须沿用命中单元');
+        }
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});

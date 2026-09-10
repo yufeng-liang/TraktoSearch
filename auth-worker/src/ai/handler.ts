@@ -1235,6 +1235,7 @@ async function generateQuizBySlots(
 
     // ---- 题位槽位：13 题各自生成，失败只补那一格，最终仍失败按位次用兜底题占位 ----
     const unitByIndex = new Map<number, QuizSlotUnit>(keptPairs.map(pair => [pair.slot.index, pair.unit]));
+    const unitById = new Map<string, QuizSlotUnit>(keptPairs.map(pair => [pair.unit.unitId, pair.unit]));
     const questionSlots = planQuestionSlots(keptPairs.map(pair => ({ index: pair.slot.index, concept: pair.unit.concept })));
     onEvent?.({ type: 'stage', stage: 'review', status: 'start', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
 
@@ -1257,6 +1258,8 @@ async function generateQuizBySlots(
         try {
             const question = groundQuestionToUnit(normalizeQuestion(unwrapSlotPayload(slotResult.payload, 'question'), slot.index - 1, movies), unit, movies);
             assertQuestionMatchesSlot(question, slot, unit);
+            // 质量门槛在格内跑：不合格只烧这一格的修复轮，不牵动其它 12 题
+            assertQuestionQuality(question, movies, unitById);
             return question;
         } catch (error) {
             // 上游 200 但本地校验判废：补记 invalid_output，保留上游 success 作为对照信号
@@ -2644,59 +2647,72 @@ function normalizeQuiz(value: unknown, movies: WatchMovie[]): InternalQuestion[]
     return questions;
 }
 
+/**
+ * 单题质量门槛：题面锚定、证据回落、学理链、rationale 具体性都在这里判。
+ *
+ * 单独抽出来是为了能「格内」调用：槽位化出题的初衷就是一格不合格只补那一格，
+ * 若这些门槛只在 13 题组装完后才跑，任何一格写短、写泛都会把整套丢进兜底题库
+ * （实测百炼 qwen3.6-flash 三套里吃掉一套，错因只是一题的 learningTakeaway 不足 12 字）。
+ * 格内判废 → 该格走修复轮 → 仍不合格再降级成结构化兜底题，损失从「整套」降到「一格」。
+ */
+function assertQuestionQuality(question: InternalQuestion, movies: WatchMovie[], unitById: Map<string, QuizSlotUnit>): void {
+    const movie = movies.find(item => item.title === question.sourceTitle);
+    if (!movie) throw new AppError('INVALID_AI_OUTPUT', 'AI question source must be watched', 502);
+    const unit = question.unitId === null ? undefined : unitById.get(question.unitId);
+    if (!unit) throw new AppError('INVALID_AI_OUTPUT', 'AI question must come from a reviewed knowledge unit', 502);
+    if (question.subject !== unit.subject) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI question subject must match its unit', 502);
+    }
+    if (!normalizeForQuizMatch(question.concept).includes(normalizeForQuizMatch(unit.concept))
+        && !normalizeForQuizMatch(unit.concept).includes(normalizeForQuizMatch(question.concept))) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI question concept must match its unit', 502);
+    }
+    if (!containsEvidenceText(question.evidenceUsed, unit.filmEvidence)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI question evidence must come from its unit', 502);
+    }
+    if (question.concept.length < 2 || question.learningTakeaway.length < 12 || question.evidenceUsed.length < 8) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz education fields are too short', 502);
+    }
+    if (!hasConcreteMovieEvidence(question, movie)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz evidence is not grounded in watched content', 502);
+    }
+    if (!containsEvidenceAnchor(question.prompt, movie)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt is too generic', 502);
+    }
+    if (isGenericQuizText(question.prompt)) throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt is generic', 502);
+    if (question.explanation.length < 30 || !containsLearningChain(question)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz explanation is not educational', 502);
+    }
+    // 学科与内容一致性：非学习/记忆/元认知学科出现通用方法短语即不合格。
+    const methodologySurface = [
+        question.prompt,
+        question.knowledgePoint,
+        question.learningTakeaway,
+        question.answerRationale,
+        question.distractorRationale,
+        ...question.options.map(option => option.text),
+    ];
+    if (methodologySurface.some(text => isGenericMethodologyMismatch(text, question.subject))) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI question subject conflicts with generic methodology content', 502);
+    }
+    // 题干/选项必须真的检验声明概念，rationale 必须逐题落到本题证据与选项。
+    if (!questionTextReferencesConcept(question)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt and options must test the declared concept', 502);
+    }
+    if (!rationaleIsQuestionSpecific(question.answerRationale, question)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz answer rationale is not question-specific', 502);
+    }
+    if (!rationaleIsQuestionSpecific(question.distractorRationale, question)) {
+        throw new AppError('INVALID_AI_OUTPUT', 'AI quiz distractor rationale is not question-specific', 502);
+    }
+}
+
+/** 整包校验：逐题质量门槛 + 学科覆盖（覆盖是集合性质，只能在全部题都出来后判）。 */
 function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[], units: QuizSlotUnit[]): void {
     const unitById = new Map(units.map(unit => [unit.unitId, unit]));
     const subjects = new Set<string>();
     for (const question of questions) {
-        const movie = movies.find(item => item.title === question.sourceTitle);
-        if (!movie) throw new AppError('INVALID_AI_OUTPUT', 'AI question source must be watched', 502);
-        const unit = question.unitId === null ? undefined : unitById.get(question.unitId);
-        if (!unit) throw new AppError('INVALID_AI_OUTPUT', 'AI question must come from a reviewed knowledge unit', 502);
-        if (question.subject !== unit.subject) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI question subject must match its unit', 502);
-        }
-        if (!normalizeForQuizMatch(question.concept).includes(normalizeForQuizMatch(unit.concept))
-            && !normalizeForQuizMatch(unit.concept).includes(normalizeForQuizMatch(question.concept))) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI question concept must match its unit', 502);
-        }
-        if (!containsEvidenceText(question.evidenceUsed, unit.filmEvidence)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI question evidence must come from its unit', 502);
-        }
-        if (question.concept.length < 2 || question.learningTakeaway.length < 12 || question.evidenceUsed.length < 8) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz education fields are too short', 502);
-        }
-        if (!hasConcreteMovieEvidence(question, movie)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz evidence is not grounded in watched content', 502);
-        }
-        if (!containsEvidenceAnchor(question.prompt, movie)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt is too generic', 502);
-        }
-        if (isGenericQuizText(question.prompt)) throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt is generic', 502);
-        if (question.explanation.length < 30 || !containsLearningChain(question)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz explanation is not educational', 502);
-        }
-        // 学科与内容一致性：非学习/记忆/元认知学科出现通用方法短语即不合格。
-        const methodologySurface = [
-            question.prompt,
-            question.knowledgePoint,
-            question.learningTakeaway,
-            question.answerRationale,
-            question.distractorRationale,
-            ...question.options.map(option => option.text),
-        ];
-        if (methodologySurface.some(text => isGenericMethodologyMismatch(text, question.subject))) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI question subject conflicts with generic methodology content', 502);
-        }
-        // 题干/选项必须真的检验声明概念，rationale 必须逐题落到本题证据与选项。
-        if (!questionTextReferencesConcept(question)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz prompt and options must test the declared concept', 502);
-        }
-        if (!rationaleIsQuestionSpecific(question.answerRationale, question)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz answer rationale is not question-specific', 502);
-        }
-        if (!rationaleIsQuestionSpecific(question.distractorRationale, question)) {
-            throw new AppError('INVALID_AI_OUTPUT', 'AI quiz distractor rationale is not question-specific', 502);
-        }
+        assertQuestionQuality(question, movies, unitById);
         subjects.add(question.subject);
     }
     // 至少三门学科（来自共享单元目录），同时不超过 8 门，避免硬凑学科贴纸。
