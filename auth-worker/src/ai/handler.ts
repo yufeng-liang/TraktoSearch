@@ -198,15 +198,20 @@ interface TasteEvidence {
     confidence: 'high' | 'medium' | 'low';
 }
 
-// 文本供应商三梯队：agnes > zhipu > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
+// 文本供应商三梯队：zhipu > agnes > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
 type TextProvider = 'mimo' | 'agnes' | 'zhipu';
 
 // 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
-const PROVIDER_LADDER: readonly TextProvider[] = ['agnes', 'zhipu', 'mimo'];
+const PROVIDER_LADDER: readonly TextProvider[] = ['zhipu', 'agnes', 'mimo'];
+
+// 出题链路上游单请求超时：客户端 OkHttp 读超时 90s，三段上游（units→review，失败再轮替）
+// 若各家都按 90s 跑，最坏情况客户端早已断开。单请求收紧到 40s，最坏两轮×两段≈4 次请求
+// 仍在 90s 内结束；超预算后立即落离线兜底题，保证 App 端永远在 90s 内拿到响应。
+const QUIZ_UPSTREAM_TIMEOUT_MS = 40_000;
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
     agnes: 'agnes-2.5-flash',
-    zhipu: 'glm-5.3-flash',
+    zhipu: 'glm-4.7',
     mimo: 'mimo-v2.5-pro',
 };
 
@@ -214,7 +219,7 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
 // agnes/mimo 文本各只有一个模型，空数组表示无模型级降级，直接轮下一供应商。
 const MODEL_FALLBACKS_BY_PROVIDER: Record<TextProvider, readonly string[]> = {
     agnes: [],
-    zhipu: ['glm-5.3-flash', 'glm-4.6v', 'glm-4.5-air', 'glm-4.7', 'glm-4.7-flash'],
+    zhipu: ['glm-4.7-flash', 'glm-5.3-flash', 'glm-4.5-air', 'glm-4.6v'],
     mimo: [],
 };
 
@@ -595,8 +600,15 @@ async function generateQuiz(
     // 失败才降级离线兜底题库。INVALID_MODEL 属请求配置错误，重试无意义，直接上抛。
     // 从主供应商在梯队中的位置开始向后试；主供应商位于梯队中游时先试自己再试下游，
     // 位于末位（mimo）时从头绕回 agnes/zhipu——保证最多三轮内三家都被覆盖。
+    // 每轮开头检查总预算：客户端读超时 90s，超预算继续重试只会白烧上游费用且响应
+    // 永远到不了客户端，此时立即返回 null 走确定性兜底。
+    const startedAtMs = Date.now();
     const startIndex = Math.max(0, PROVIDER_LADDER.indexOf(provider));
     for (let offset = 0; offset < PROVIDER_LADDER.length; offset++) {
+        if (Date.now() - startedAtMs > 75_000) {
+            console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'deadline_exceeded', requestId }));
+            return null;
+        }
         const attempt = (startIndex + offset) % PROVIDER_LADDER.length;
         const p = PROVIDER_LADDER[attempt];
         const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
@@ -627,7 +639,7 @@ async function runQuizGenerationRound(
             provider,
             model,
             quizUnitMessages(nickname, selectedMovies, difficultyHint),
-            { maxCompletionTokens: 4600 },
+            { maxCompletionTokens: 4600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'quiz-units', requestId },
         );
@@ -646,7 +658,9 @@ async function runQuizGenerationRound(
     try {
         units = normalizeQuizUnits(parseAssistantJson<unknown>(unitsUpstream.payload), selectedMovies);
     } catch (error) {
-        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_normalize_error', requestId, attempt, provider: unitsUpstream.provider, model: unitsUpstream.model, error: error instanceof AppError ? error.code : 'PARSE' }));
+        // errorDetail 记校验失败的具体契约（如 subject 不在目录/explanation 未回扣 concept），
+        // 便于区分「供应商输出风格问题」（可改提示词）与「校验过严」（需放宽门槛）。
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_normalize_error', requestId, attempt, provider: unitsUpstream.provider, model: unitsUpstream.model, error: error instanceof AppError ? error.code : 'PARSE', errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN' }));
         return attempt < 2 ? undefined : null;
     }
 
@@ -657,7 +671,7 @@ async function runQuizGenerationRound(
             provider,
             model,
             quizFromUnitsMessages(nickname, selectedMovies, units, difficultyHint),
-            { maxCompletionTokens: 4600 },
+            { maxCompletionTokens: 4600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'quiz-review', requestId },
         );
@@ -677,13 +691,14 @@ async function runQuizGenerationRound(
         return { quizId: requestedQuizId ?? crypto.randomUUID(), sessionId, movies: selectedMovies, questions: reviewed, scoringVersion: 2 };
     } catch (error) {
         // 二审不合格绝不能把首轮候选泄回 App；调用方会写入确定性安全题库。
-        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'review_normalize_or_validate_error', requestId, attempt, provider: reviewUpstream.provider, model: reviewUpstream.model, error: error instanceof AppError ? error.code : 'PARSE' }));
+        // errorDetail 同 units 阶段：记录具体踩中的校验契约。
+        console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'review_normalize_or_validate_error', requestId, attempt, provider: reviewUpstream.provider, model: reviewUpstream.model, error: error instanceof AppError ? error.code : 'PARSE', errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN' }));
         return attempt < 2 ? undefined : null;
     }
 }
 
 /** 把上游输出规范成共享学习单元数组；每个单元都过与每日知识相同的本地硬门槛。 */
-function normalizeQuizUnits(value: unknown, movies: WatchMovie[]): KnowledgeUnit[] {
+export function normalizeQuizUnits(value: unknown, movies: WatchMovie[]): KnowledgeUnit[] {
     const object = requireRecord(value, 'AI quiz units');
     if (!Array.isArray(object.units) || object.units.length < 3 || object.units.length > 6) {
         throw new AppError('INVALID_AI_OUTPUT', 'AI quiz units count is invalid', 502);
@@ -925,7 +940,7 @@ async function generateDailyKnowledgeUnit(
             provider,
             model,
             dailyCandidateMessages(day, locale, movies),
-            { maxCompletionTokens: 2600 },
+            { maxCompletionTokens: 2600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-candidate', requestId },
         );
@@ -949,7 +964,7 @@ async function generateDailyKnowledgeUnit(
             provider,
             model,
             dailyReviewMessages(candidate, locale, movies),
-            { maxCompletionTokens: 3000 },
+            { maxCompletionTokens: 3000, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-review', requestId },
         );
@@ -1239,7 +1254,7 @@ function tasteMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
     ];
 }
 
-function quizUnitMessages(nickname: string, movies: WatchMovie[], difficultyHint: string | null = null): MimoMessage[] {
+export function quizUnitMessages(nickname: string, movies: WatchMovie[], difficultyHint: string | null = null): MimoMessage[] {
     const systemContent = '你是影视知识闯关的候选学习单元编辑。只返回 JSON，字段为 units，包含 3 到 6 个学习单元。每个单元字段固定为 unitId、version（固定 1）、locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode（film_fact、viewing_interpretation、external_fact）、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。subjectGroup 只能是 film_expression、people_and_mind、society_and_institution、history_and_culture、philosophy_and_ethics、science_and_nature、technology_and_future、life_and_career；subject 必须使用中文受控学科目录：电影学、叙事学、摄影与视觉设计、剪辑与声音、表演与戏剧、心理学、认知科学、发展心理学、教育学、社会学、人类学、传播学、政治学、经济学、法学、犯罪学、历史、文化研究、语言学与符号学、宗教神话与民俗、音乐与艺术史、哲学与伦理学、马克思主义哲学、物理、化学、生物与生态、医学与公共卫生、天文学、地理与气候、计算机与人工智能、数学与统计、工程与材料、建筑与城市规划、体育科学、军事学与战略、食品科学、职业与组织知识。单元必须自然覆盖至少 3 个不同学科；物理、化学、医学等学科只有输入证据确实支持时才使用，禁止硬套。relatedMedia.title 必须逐字来自已看输入；filmEvidence 必须同时引用片名和输入中的年份、类型、简介或证据，不得编造输入没有的剧情、台词、演员或幕后事实。takeaway 是用户能复述的学习结论；source 必须包含 name、合法 http(s) url 和 evidence；checkQuestion 有 2 到 4 个唯一选项且只有一个最佳答案；boundary 说明事实/解读边界。同一场候选单元之间禁止逐字重复：concept 与 takeaway 两两必须不同；多个单元可以共用同一部影片，但必须换角度、换概念表述，禁止整段复制。每个单元的标题与即时小题必须直接检验该单元声明的学科概念，并引用 relatedMedia 输入中实际存在的证据（年份/类型/简介/evidence）；external_fact 的外部事实必须得到 source 摘要与 URL 的实质支持。禁止生成与学科无关的“再看一遍/如何向朋友推荐/避免过度解读”型通用方法内容，除非学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致。' + (difficultyHint ?? '');
     return [
         { role: 'system', content: systemContent },
@@ -1256,7 +1271,7 @@ function quizUnitMessages(nickname: string, movies: WatchMovie[], difficultyHint
     ];
 }
 
-function quizFromUnitsMessages(
+export function quizFromUnitsMessages(
     nickname: string,
     movies: WatchMovie[],
     units: KnowledgeUnit[],
@@ -1725,7 +1740,7 @@ function fallbackQuizQuestions(movies: WatchMovie[]): InternalQuestion[] {
     return questions;
 }
 
-function normalizeQuiz(value: unknown, movies: WatchMovie[]): InternalQuestion[] {
+export function normalizeQuiz(value: unknown, movies: WatchMovie[]): InternalQuestion[] {
     const object = requireRecord(value, 'AI quiz');
     if (!Array.isArray(object.questions) || object.questions.length !== QUIZ_QUESTION_COUNT) throw new AppError('INVALID_AI_OUTPUT', 'AI quiz question count is invalid', 502);
     const questions = object.questions.map((question, index) => normalizeQuestion(question, index, movies));
@@ -1770,7 +1785,7 @@ function normalizeQuiz(value: unknown, movies: WatchMovie[]): InternalQuestion[]
     return questions;
 }
 
-function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[], units: KnowledgeUnit[]): void {
+export function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[], units: KnowledgeUnit[]): void {
     const unitById = new Map(units.map(unit => [unit.unitId, unit]));
     const subjects = new Set<string>();
     for (const question of questions) {
@@ -2370,9 +2385,13 @@ function resolveTextModel(
     const configuredProvider = typeof env.AI_DEFAULT_PROVIDER === 'string'
         ? env.AI_DEFAULT_PROVIDER.trim().toLowerCase()
         : '';
+    // 未指定模型时默认主供应商走 zhipu（GLM 独立计费、输出稳定），agnes 作第一备选；
+    // 生产可用 AI_DEFAULT_PROVIDER 显式覆盖。agnes 共享池 429 冷却会整场挂起，不作为默认。
     return configuredProvider === 'mimo'
         ? { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault }
-        : { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault };
+        : configuredProvider === 'agnes'
+            ? { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault }
+            : { provider: 'zhipu', model: DEFAULT_MODEL_BY_PROVIDER.zhipu, fallbackModel: mimoDefault };
 }
 
 // 统一文本生成入口：Agnes 失败交给业务确定性 fallback；显式/兼容 MiMo 路径仍可回退 Agnes 一次。
@@ -2385,13 +2404,13 @@ async function callLlmJson(
     fallbackModel: string,
     context: LlmRequestContext,
 ): Promise<LlmJsonResult | null> {
-    // 三家互备，固定优先级 agnes > zhipu > mimo：主供应商失败（常见：Agnes 共享池 429 把
+    // 三家互备，固定优先级 zhipu > agnes > mimo：主供应商失败（常见：Agnes 共享池 429 把
     // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
-    // GLM 实测可用且独立计费，插在 MiMo 之前兜容量；zhipu 主路径也要含自己在内先试主模型。
-    const order: TextProvider[] = provider === 'agnes'
-        ? ['agnes', 'zhipu', 'mimo']
-        : provider === 'zhipu'
-            ? ['zhipu', 'agnes', 'mimo']
+    // GLM 实测可用且独立计费，作为默认主供应商；每家主路径都要含自己在内先试主模型。
+    const order: TextProvider[] = provider === 'zhipu'
+        ? ['zhipu', 'agnes', 'mimo']
+        : provider === 'agnes'
+            ? ['agnes', 'zhipu', 'mimo']
             : ['mimo', 'agnes', 'zhipu'];
     let lastError: unknown = null;
     // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，

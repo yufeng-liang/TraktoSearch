@@ -49,6 +49,8 @@ export async function callMimoJson(
     options: Record<string, unknown> = {},
 ): Promise<unknown | null> {
     validateMimoModel(model);
+    // 与 agnes/zhipu 对齐：文本生成默认 90s 主动断，调用方可通过 options.timeoutMs 收紧。
+    const timeoutMs = typeof options.timeoutMs === 'number' && options.timeoutMs > 0 ? options.timeoutMs : 90_000;
     const body: Record<string, unknown> = {
         model,
         messages,
@@ -59,7 +61,7 @@ export async function callMimoJson(
     };
     if (options.responseFormat !== false) body.response_format = { type: 'json_object' };
     if (options.asrOptions) body.asr_options = options.asrOptions;
-    return callMimoPayload(env, body);
+    return callMimoPayload(env, body, timeoutMs);
 }
 
 export async function callMimoAudio(
@@ -126,6 +128,7 @@ export function parseAssistantJson<T>(payload: unknown): T {
 async function callMimoPayload(
     env: MimoEnvironment,
     body: Record<string, unknown>,
+    timeoutMs = 90_000,
 ): Promise<unknown | null> {
     const apiKey = typeof env.MIMO_API_KEY === 'string' ? env.MIMO_API_KEY.trim() : '';
     if (!apiKey) {
@@ -141,8 +144,8 @@ async function callMimoPayload(
                     'Content-Type': 'application/json',
                     'api-key': apiKey,
                 },
-                // 同 Agnes：上游可能长时间不响应，90s 主动断避免挂死整场出题
-                signal: AbortSignal.timeout(90_000),
+                // 同 Agnes：上游可能长时间不响应，主动断避免挂死整场出题
+                signal: AbortSignal.timeout(timeoutMs),
                 body: JSON.stringify(body),
             });
             // 仅在网络失败或服务端 5xx 时重试；4xx（含限流 429）属确定性错误，重试只会放大供应商费用

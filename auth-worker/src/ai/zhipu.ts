@@ -35,6 +35,8 @@ export interface ZhipuOptions extends Record<string, unknown> {
     temperature?: number;
     // 与 agnes/mimo 保持同形：默认发 response_format json_object（GLM 实测支持）。
     responseFormat?: boolean;
+    // 上游请求超时（毫秒）：出题等长链路需要按客户端读超时预留轮替余量时由调用方收紧。
+    timeoutMs?: number;
 }
 
 export function validateZhipuModel(value: unknown): ZhipuModel {
@@ -89,8 +91,11 @@ export async function callZhipuJson(
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${apiKey}`,
                 },
-                // 与 agnes/mimo 对齐：文本生成 90s 主动断，避免 Workers fetch 挂死整场出题
-                signal: AbortSignal.timeout(90_000),
+                // 与 agnes/mimo 对齐：文本生成默认 90s 主动断，避免 Workers fetch 挂死整场出题；
+                // 调用方可通过 options.timeoutMs 收紧以给轮替留预算。
+                signal: AbortSignal.timeout(
+                    typeof options.timeoutMs === 'number' && options.timeoutMs > 0 ? options.timeoutMs : 90_000,
+                ),
                 body: JSON.stringify(body),
             });
             if (response.ok) {

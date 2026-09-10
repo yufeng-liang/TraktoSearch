@@ -26,6 +26,8 @@ export interface AgnesOptions extends Record<string, unknown> {
     temperature?: number;
     // Agnes 文档未确认 response_format；默认由提示词约束 JSON，仅显式开启时发送以保留兼容性。
     responseFormat?: boolean;
+    // 上游请求超时（毫秒）：出题等长链路需要按客户端读超时预留轮替余量时由调用方收紧。
+    timeoutMs?: number;
 }
 
 // 触发自动轮换的状态：限流/鉴权错误 + 网关级 5xx（共享基础设施抖动时逐 key 重试）。
@@ -70,8 +72,9 @@ export async function callAgnesJson(
     }
     // 文本生成（尤其 quiz 两段长 JSON）上游可能长时间不响应；
     // Workers fetch 无超时会挂到平台上限，App 端 90s 读超时早已断开。
-    // 这里 90s 主动断，失败交给调用方回退另一家或确定性兜底。
-    return callAgnesPayload(env, body, '/chat/completions', 90_000);
+    // 默认 90s 主动断；调用方可通过 options.timeoutMs 收紧以给轮替留预算。
+    return callAgnesPayload(env, body, '/chat/completions',
+        typeof options.timeoutMs === 'number' && options.timeoutMs > 0 ? options.timeoutMs : 90_000);
 }
 
 /**
