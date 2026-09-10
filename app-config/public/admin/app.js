@@ -987,13 +987,22 @@ function render() {
 
 // ===== Dashboard =====
 function renderDashboard(container, renderToken) {
-    const title = document.createElement('div');
-    title.innerHTML = `<h1 class="section-title">仪表盘</h1><p class="section-subtitle">授权系统概览</p>`;
-    container.appendChild(title);
+    const header = document.createElement('div');
+    header.className = 'page-header';
+    header.innerHTML = `
+        <h1 class="section-title">仪表盘</h1>
+        <p class="section-subtitle">全站概览 · 授权 / AI / 待办</p>
+        <div class="dashboard-meta">
+            <span class="dashboard-updated" id="dashboardUpdated"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="dashboardRefresh">刷新</button>
+        </div>
+    `;
+    container.appendChild(header);
 
     const stats = document.createElement('div');
     stats.className = 'stat-grid';
-    stats.innerHTML = [1,2,3,4].map(() => `<div class="stat-card"><div class="loading-skeleton" style="height:90px"></div></div>`).join('');
+    stats.id = 'dashboardStats';
+    stats.innerHTML = [1,2,3,4,5,6].map(() => `<div class="stat-card"><div class="loading-skeleton" style="height:90px"></div></div>`).join('');
     container.appendChild(stats);
 
     const grid = document.createElement('div');
@@ -1004,47 +1013,110 @@ function renderDashboard(container, renderToken) {
             <div class="loading-skeleton" style="height:200px"></div>
         </div>
         <div class="card">
-            <div class="card-header"><span class="card-title">网关健康</span></div>
+            <div class="card-header"><span class="card-title">服务健康</span></div>
             <div class="loading-skeleton" style="height:200px"></div>
         </div>
     `;
     container.appendChild(grid);
 
-    Promise.allSettled([API.getStats(), API.getAuditLogs({ limit: 50, offset: 0 })]).then(([statsResult, auditResult]) => {
+    header.querySelector('#dashboardRefresh').addEventListener('click', () => {
         if (renderToken !== state.renderToken || !container.isConnected) return;
-
-        if (statsResult.status === 'fulfilled') {
-            const s = statsResult.value;
-            stats.innerHTML = `
-                <div class="stat-card"><div class="stat-label">活跃用户</div><div class="stat-value stat-accent">${s.totalFriends}</div><div class="stat-hint">当前可用</div></div>
-                <div class="stat-card"><div class="stat-label">活跃设备</div><div class="stat-value stat-success">${s.activeDevices}</div><div class="stat-hint">在线设备</div></div>
-                <div class="stat-card"><div class="stat-label">24h 失败</div><div class="stat-value ${s.recentFailures > 0 ? 'stat-danger' : ''}">${s.recentFailures}</div><div class="stat-hint">需关注</div></div>
-                <div class="stat-card"><div class="stat-label">管理服务</div><div class="stat-value" style="font-size:20px">${s.gatewayHealth === 'ok' ? '🟢 正常' : '🔴 异常'}</div><div class="stat-hint">D1 与统计查询</div></div>
-            `;
-            grid.innerHTML = dashboardHealthCard(s);
-        } else {
-            stats.innerHTML = dashboardErrorCard('统计加载失败', statsResult.reason, container, renderToken);
-        }
-
-        if (auditResult.status === 'fulfilled') {
-            const failures = auditResult.value.logs.filter(l => l.result === 'FAILURE').slice(0, 5);
-            grid.insertAdjacentHTML('afterbegin', dashboardFailuresCard(failures));
-            grid.querySelector('.js-view-all-failures')?.addEventListener('click', showAllFailuresModal);
-        } else {
-            grid.insertAdjacentHTML('afterbegin', dashboardErrorCard('失败记录加载失败', auditResult.reason, container, renderToken));
-        }
+        container.innerHTML = '';
+        renderDashboard(container, renderToken);
     });
+
+    loadDashboard(container, renderToken, stats, grid);
 }
 
-function dashboardHealthCard(stats) {
+async function loadDashboard(container, renderToken, stats, grid) {
+    // 五路数据独立降级：任一失败只影响对应卡片，不阻塞其余渲染
+    const [statsRes, auditRes, aiRes, crashRes, feedbackRes] = await Promise.allSettled([
+        API.getStats(),
+        API.getAuditLogs({ limit: 50, offset: 0 }),
+        API.get('/admin/ai/health/summary'),
+        crashFetch('/api/crash-logs?limit=1').then(res => {
+            if (!res.ok) throw new Error(`Request failed (${res.status})`);
+            return res.json();
+        }),
+        API.post('/fb/admin/list', { status: 'PENDING', limit: 1, offset: 0 }),
+    ]);
+    if (renderToken !== state.renderToken || !container.isConnected) return;
+
+    const s = statsRes.status === 'fulfilled' ? statsRes.value : null;
+    const aiSummary = aiRes.status === 'fulfilled' ? aiRes.value : null;
+    const crashStats = crashRes.status === 'fulfilled' ? crashRes.value?.stats || null : null;
+    const pendingFeedback = feedbackRes.status === 'fulfilled' ? Number(feedbackRes.value?.total || 0) : null;
+
+    // AI 供应商 24h 状态：有调用且在跑的为正常；成功率 <80% 视为需关注
+    const aiProviders = aiSummary?.byProvider || [];
+    const aiActive = aiProviders.filter(p => Number(p.total) > 0);
+    const aiBad = aiActive.filter(p => Number(p.success) / Number(p.total) < 0.8);
+    let aiValue = '—', aiValueClass = '', aiHint = '24h 无调用';
+    if (aiRes.status !== 'fulfilled') { aiHint = '加载失败'; }
+    else if (aiActive.length > 0) {
+        aiValue = aiBad.length === 0 ? '全部正常' : `${aiBad.length} 家异常`;
+        aiValueClass = aiBad.length === 0 ? 'stat-success' : 'stat-danger';
+        aiHint = `${aiActive.length} 家 24h 有调用`;
+    }
+
+    const card = (label, value, valueClass, hint, href) => `
+        <${href ? `a href="${href}"` : 'div'} class="stat-card stat-card-link">
+            <div class="stat-label">${label}</div>
+            <div class="stat-value ${valueClass}">${value}</div>
+            <div class="stat-hint">${hint}</div>
+        </${href ? 'a' : 'div'}>`;
+
+    if (s) {
+        stats.innerHTML = [
+            card('活跃用户', s.totalFriends, 'stat-accent', '当前可用', '#/friends'),
+            card('活跃设备', s.activeDevices, 'stat-success', '在线设备', '#/friends'),
+            card('24h 授权失败', s.recentFailures, s.recentFailures > 0 ? 'stat-danger' : '', '需关注', '#/audit'),
+            card('待处理反馈', pendingFeedback == null ? '—' : pendingFeedback, pendingFeedback > 0 ? 'stat-danger' : 'stat-success', pendingFeedback == null ? '加载失败' : '未回复', '#/feedback'),
+            card('待修复崩溃', crashStats ? crashStats.open : '—', crashStats && crashStats.open > 0 ? 'stat-danger' : 'stat-success', crashStats ? `近 7 天 ${crashStats.last7d} 条` : '加载失败', '#/crash-logs'),
+            card('AI 供应商', aiValue, aiValueClass, aiHint, '#/ai-health'),
+        ].join('');
+    } else {
+        stats.innerHTML = dashboardErrorCard('统计加载失败', statsRes.reason, container, renderToken);
+    }
+
+    if (s) {
+        grid.innerHTML = dashboardHealthCard(s, aiSummary);
+    }
+
+    if (auditRes.status === 'fulfilled') {
+        const failures = auditRes.value.logs.filter(l => l.result === 'FAILURE').slice(0, 5);
+        grid.insertAdjacentHTML('afterbegin', dashboardFailuresCard(failures));
+        grid.querySelector('.js-view-all-failures')?.addEventListener('click', showAllFailuresModal);
+    } else {
+        grid.insertAdjacentHTML('afterbegin', dashboardErrorCard('失败记录加载失败', auditRes.reason, container, renderToken));
+    }
+
+    const updatedEl = document.getElementById('dashboardUpdated');
+    if (updatedEl) updatedEl.textContent = `更新于 ${formatDateTime(Date.now())}`;
+}
+
+function dashboardHealthCard(stats, aiSummary) {
     const healthy = stats.gatewayHealth === 'ok';
-    return `<div class="card">
-        <div class="card-header"><span class="card-title">管理服务健康</span></div>
+    const providers = aiSummary?.byProvider || [];
+    const providerRows = providers.map(p => {
+        const total = Number(p.total) || 0;
+        const success = Number(p.success) || 0;
+        const rate = total > 0 ? Math.round((success / total) * 100) : null;
+        const bad = rate != null && rate < 80;
+        const dotClass = rate == null ? 'warn' : bad ? 'fail' : 'ok';
+        const valueText = rate == null ? '无调用' : `${success}/${total} · ${rate}%`;
+        const label = AI_PROVIDER_META[p.provider]?.label || p.provider;
+        return `<div class="health-row"><span><span class="health-dot ${dotClass}" style="margin-right:8px"></span>${escapeHtml(label)}</span><span style="color:${bad ? 'var(--danger)' : rate == null ? 'var(--text-dim)' : 'var(--success)'}">${valueText}</span></div>`;
+    }).join('');
+    return `<div class="card js-services-card">
+        <div class="card-header"><span class="card-title">服务健康</span></div>
         <div class="health-indicator"><span class="health-dot ${healthy ? 'ok' : 'fail'}"></span><span>${healthy ? 'D1 与统计查询正常' : '管理服务异常'}</span></div>
         <div style="margin-top:16px">
             <div class="health-row"><span>D1 数据库</span><span style="color:${healthy ? 'var(--success)' : 'var(--danger)'}">${healthy ? '● 正常' : '● 异常'}</span></div>
-            <div class="health-row"><span>上游代理</span><span style="color:var(--text-dim)">未在此页探测</span></div>
         </div>
+        <div class="health-row" style="border-bottom:none;padding-bottom:4px"><span class="dashboard-section-label">AI 供应商 · 24h</span></div>
+        ${providerRows || '<div class="health-row"><span style="color:var(--text-dim)">暂无供应商数据</span></div>'}
+        <div style="margin-top:14px"><a class="btn btn-ghost btn-sm" href="#/ai-health">查看 AI 健康详情 →</a></div>
     </div>`;
 }
 
