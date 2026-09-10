@@ -17,13 +17,16 @@ const PROBE_OPTIONS = { maxCompletionTokens: 16, temperature: 0, responseFormat:
 
 // handler.ts 的 DEFAULT_MODEL_BY_PROVIDER 当前未导出（其导出改动不在本任务范围），
 // 探针默认模型在此维护同值副本；三家默认模型调整时两处必须同步。
-const PROBE_DEFAULT_MODEL: Record<'zhipu' | 'agnes' | 'mimo', string> = {
+type ProbeProvider = 'zhipu' | 'agnes' | 'mimo';
+
+const PROBE_DEFAULT_MODEL: Record<ProbeProvider, string> = {
     zhipu: 'glm-4.7',
     agnes: 'agnes-2.5-flash',
     mimo: 'mimo-v2.5-pro',
 };
 
-const PROBE_PROVIDERS = ['zhipu', 'agnes', 'mimo'] as const;
+// 显式数组判定，避免 `in` 运算符把原型链上的属性（constructor / hasOwnProperty 等）当成合法值
+const PROBE_PROVIDERS: readonly ProbeProvider[] = ['zhipu', 'agnes', 'mimo'];
 
 const VALID_MODELS: Record<string, readonly string[]> = {
     zhipu: ZHIPU_MODELS,
@@ -48,7 +51,14 @@ interface ProbeResult {
 
 // 单家探测：直调底层供应商函数（不走 callLlmJson 轮替，避免别家成功掩盖目标家失败）。
 // 供应商内部的一次 5xx 退避重试与 agnes 的 key 轮换属可接受的重试语义，不算跨家轮替。
-async function probeOne(env: ProbeEnvironment, provider: string, model: string, requestId: string): Promise<ProbeResult> {
+// ctx 来自 handleAdminApi（index.ts），落库经 waitUntil 延寿；仅测试直调时为 undefined，退化为 fire-and-forget。
+async function probeOne(
+    env: ProbeEnvironment,
+    provider: string,
+    model: string,
+    requestId: string,
+    ctx: ExecutionContext | undefined,
+): Promise<ProbeResult> {
     const startedAtMs = Date.now();
     try {
         if (provider === 'zhipu') {
@@ -60,7 +70,7 @@ async function probeOne(env: ProbeEnvironment, provider: string, model: string, 
             await callMimoJson(env, model as MimoModel, PROBE_MESSAGES, PROBE_OPTIONS);
         }
         const durationMs = Date.now() - startedAtMs;
-        recordHealthEvent(env, { route: 'probe', requestId, background: undefined }, 'probe', provider, model, 'success', undefined, durationMs);
+        recordHealthEvent(env, { route: 'probe', requestId, background: ctx }, 'probe', provider, model, 'success', undefined, durationMs);
         return { provider, model, outcome: 'success', errorCode: null, httpStatus: null, durationMs };
     } catch (error) {
         // 未配置（AI_NOT_CONFIGURED，503）同样计入不健康：配置缺失就是可用性问题
@@ -68,7 +78,7 @@ async function probeOne(env: ProbeEnvironment, provider: string, model: string, 
             ? error
             : new AppError('AI_UPSTREAM_ERROR', 'AI provider probe failed', 502);
         const durationMs = Date.now() - startedAtMs;
-        recordHealthEvent(env, { route: 'probe', requestId, background: undefined }, 'probe', provider, model, 'upstream_error', appError, durationMs);
+        recordHealthEvent(env, { route: 'probe', requestId, background: ctx }, 'probe', provider, model, 'upstream_error', appError, durationMs);
         return {
             provider,
             model,
@@ -81,7 +91,12 @@ async function probeOne(env: ProbeEnvironment, provider: string, model: string, 
 }
 
 // POST /admin/ai/health/probe：body 为 { all: true } 或 { provider, model? }
-export async function handleAiHealthProbe(request: Request, env: ProbeEnvironment, requestId: string): Promise<Response> {
+export async function handleAiHealthProbe(
+    request: Request,
+    env: ProbeEnvironment,
+    requestId: string,
+    ctx?: ExecutionContext,
+): Promise<Response> {
     let body: Record<string, unknown>;
     try {
         const parsed: unknown = await request.json();
@@ -100,10 +115,10 @@ export async function handleAiHealthProbe(request: Request, env: ProbeEnvironmen
         }
     } else {
         const provider = typeof body.provider === 'string' ? body.provider : '';
-        if (!(provider in VALID_MODELS)) {
+        if (!(PROBE_PROVIDERS as readonly string[]).includes(provider)) {
             return errorResponse(new AppError('INVALID_REQUEST', 'Unknown provider', 400), requestId);
         }
-        const model = body.model === undefined ? PROBE_DEFAULT_MODEL[provider as keyof typeof PROBE_DEFAULT_MODEL] : body.model;
+        const model = body.model === undefined ? PROBE_DEFAULT_MODEL[provider as ProbeProvider] : body.model;
         if (typeof model !== 'string' || !VALID_MODELS[provider].includes(model)) {
             return errorResponse(new AppError('INVALID_REQUEST', 'Unknown model for provider', 400), requestId);
         }
@@ -111,7 +126,7 @@ export async function handleAiHealthProbe(request: Request, env: ProbeEnvironmen
     }
 
     // 多家并行探测，各家独立落库；单家异常不影响其他家结果
-    const results = await Promise.all(targets.map(target => probeOne(env, target.provider, target.model, requestId)));
+    const results = await Promise.all(targets.map(target => probeOne(env, target.provider, target.model, requestId, ctx)));
     return successResponse({ results, probedAt: now() }, requestId);
 }
 
@@ -146,7 +161,8 @@ interface HealthListEnvironment {
 export async function handleAiHealthList(request: Request, env: HealthListEnvironment, requestId: string): Promise<Response> {
     const url = new URL(request.url);
     const window = url.searchParams.get('window') ?? '24h';
-    if (!(window in WINDOW_SECONDS)) {
+    // hasOwnProperty 判定：`in` 会把原型链属性（如 constructor）当成合法窗口
+    if (!Object.prototype.hasOwnProperty.call(WINDOW_SECONDS, window)) {
         return errorResponse(new AppError('INVALID_REQUEST', 'Invalid window', 400), requestId);
     }
     const since = now() - WINDOW_SECONDS[window];

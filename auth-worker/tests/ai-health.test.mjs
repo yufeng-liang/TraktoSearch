@@ -196,6 +196,7 @@ test('probe endpoint returns per-provider result and writes probe events', async
         return new Response(JSON.stringify({ error: { message: 'insufficient balance' } }), { status: 402 });
     };
     const statements = [];
+    const waits = [];
     const env = {
         DB: {
             prepare(sql) {
@@ -216,7 +217,7 @@ test('probe endpoint returns per-provider result and writes probe events', async
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ all: true }),
         });
-        const response = await handleAiHealthProbe(request, env, 'req-probe-1');
+        const response = await handleAiHealthProbe(request, env, 'req-probe-1', { waitUntil(p) { waits.push(p); } });
         assert.equal(response.status, 200);
         const data = (await response.json()).data;
         const byProvider = Object.fromEntries(data.results.map(r => [r.provider, r]));
@@ -227,7 +228,12 @@ test('probe endpoint returns per-provider result and writes probe events', async
         // 三家各写一条 probe 健康事件
         const probeRows = statements.filter(s => s.sql.includes('ai_health_events'));
         assert.equal(probeRows.length, 3);
+        // 落库必须挂在 waitUntil 上，避免响应返回后 isolate 回收丢事件
+        assert.equal(waits.length, 3);
+        await Promise.all(waits);
         const mimoRow = probeRows.map(r => r.args).find(a => a[3] === 'mimo');
+        assert.equal(mimoRow[1], 'probe');   // source
+        assert.equal(mimoRow[2], 'probe');   // route
         assert.equal(mimoRow[5], 'upstream_error');
         assert.equal(mimoRow[6], 'AI_UPSTREAM_ERROR');
         assert.equal(mimoRow[7], 402);
@@ -302,5 +308,24 @@ test('health list rejects invalid window', async () => {
     const env = { DB: { prepare() { throw new Error('no'); } }, KV: { async get() { return null; } } };
     const request = new Request('https://gw.test/admin/ai/health?window=90d', { method: 'GET' });
     const response = await handleAiHealthList(request, env, 'req-l2');
+    assert.equal(response.status, 400);
+});
+
+test('health list rejects prototype-chain window names', async () => {
+    const { handleAiHealthList } = await import('../src/admin/ai-health.ts');
+    const env = { DB: { prepare() { throw new Error('no'); } }, KV: { async get() { return null; } } };
+    const request = new Request('https://gw.test/admin/ai/health?window=constructor', { method: 'GET' });
+    const response = await handleAiHealthList(request, env, 'req-l3');
+    assert.equal(response.status, 400);
+});
+
+test('probe endpoint rejects prototype-chain provider names', async () => {
+    const { handleAiHealthProbe } = await import('../src/admin/ai-health.ts');
+    const env = { DB: { prepare() { throw new Error('no'); } }, KV: { async get() { return null; } } };
+    const request = new Request('https://gw.test/admin/ai/health/probe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'hasOwnProperty' }),
+    });
+    const response = await handleAiHealthProbe(request, env, 'req-p4');
     assert.equal(response.status, 400);
 });

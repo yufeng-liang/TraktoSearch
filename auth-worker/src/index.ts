@@ -115,7 +115,7 @@ export default {
             }
             // Admin API（需 Access JWT）
             else if (path.startsWith('/admin/')) {
-                response = await handleAdminApi(request, env, requestId, path);
+                response = await handleAdminApi(request, env, requestId, path, ctx);
             }
             // 健康检查
             else if (path === '/health') {
@@ -364,7 +364,8 @@ async function handleAdminApi(
     request: Request,
     env: Env,
     requestId: string,
-    path: string
+    path: string,
+    ctx: ExecutionContext,
 ): Promise<Response> {
     // 验证 Cloudflare Access JWT
     await verifyAccessJWT(request, env);
@@ -466,7 +467,7 @@ async function handleAdminApi(
         return handleAiHealthSummary(env, requestId);
     }
     if (path === '/admin/ai/health/probe' && request.method === 'POST') {
-        return handleAiHealthProbe(request, env, requestId);
+        return handleAiHealthProbe(request, env, requestId, ctx);
     }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);
