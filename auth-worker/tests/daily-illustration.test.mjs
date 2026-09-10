@@ -9,8 +9,25 @@ function today() {
 }
 
 function createTestEnv(overrides = {}) {
+    // 健康事件表：接住 INSERT 并捕获（callLlmJson 轮替每次尝试都会 recordHealthEvent），
+    // 其他 SQL 维持原行为（直接 throw，证明测试模式不应触达它们）。
+    const healthInserts = [];
+    const db = {
+        prepare(sql) {
+            if (typeof sql === 'string' && sql.includes('INSERT INTO ai_health_events')) {
+                return {
+                    bind(...args) {
+                        healthInserts.push({ sql, args });
+                        return { async run() { return { meta: { changes: 1 } }; } };
+                    },
+                };
+            }
+            throw new Error('AI test fallback should be used');
+        },
+    };
     return {
-        DB: { prepare() { throw new Error('AI test fallback should be used'); } },
+        DB: db,
+        healthInserts,
         KV: { async get() { return null; }, async put() {} },
         JWT_SIGNING_KEY: 'test-jwt-secret',
         AI_TEST_MODE: true,
@@ -312,7 +329,12 @@ test('disabled provider never calls Agnes images and returns unavailable', async
         assert.equal(result.json.data.illustration.status, 'unavailable');
         assert.equal(result.json.data.illustration.url, null);
         assert.equal(fetchState.imageCalls, 0);
-        assert.equal(background.tasks.length, 0);
+        // 禁用插图时 background 里只允许出现健康写入任务（callLlmJson 轮替的 recordHealthEvent），
+        // 不允许出现插图生成任务：每个健康写入都会同步捕获一条 INSERT，故
+        // await 全部任务后 tasks.length 必须等于 healthInserts.length，否则存在非健康任务。
+        await Promise.allSettled(background.tasks);
+        assert.equal(background.tasks.length, env.healthInserts.length);
+        assert.ok(background.tasks.length > 0 || env.healthInserts.length === 0);
         assert.equal(env.AI_TEST_ILLUSTRATION_STATE.size, 0);
     } finally {
         fetchState.restore();

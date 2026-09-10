@@ -7,7 +7,9 @@ export type HealthOutcome = 'success' | 'upstream_error' | 'invalid_output';
 export type HealthSource = 'traffic' | 'probe';
 
 export interface AiHealthEnvironment {
-    DB: D1Database;
+    // 尽力而为语义：handler 的 AiEnvironment.DB 是可选的（D1Database | undefined），
+    // 无 DB（本地 dev/降级环境）时健康写入静默跳过，绝不能影响主链路。
+    DB?: D1Database;
     KV?: KVNamespace;
 }
 
@@ -43,7 +45,7 @@ function normalizeHttpStatus(error: unknown): number | null {
 
 export function recordHealthEvent(
     env: AiHealthEnvironment,
-    ctx: HealthRouteContext,
+    ctx: HealthRouteContext | undefined,
     source: HealthSource,
     provider: string,
     model: string,
@@ -51,6 +53,9 @@ export function recordHealthEvent(
     error?: unknown,
     durationMs?: number,
 ): void {
+    // 尽力而为：无 D1 绑定（本地 dev/降级环境）或无路由上下文时不写、不排后台任务
+    const db = env.DB;
+    if (!db || !ctx) return;
     const event: PendingHealthEvent = {
         created_at: Math.floor(Date.now() / 1000),
         source,
@@ -65,7 +70,7 @@ export function recordHealthEvent(
     };
     const write = (async () => {
         try {
-            await env.DB.prepare(`
+            await db.prepare(`
                 INSERT INTO ai_health_events
                     (created_at, source, route, provider, model, outcome, error_code, http_status, duration_ms, request_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
