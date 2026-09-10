@@ -114,28 +114,53 @@ export function extractAssistantText(payload: unknown): string {
 }
 
 /**
- * 容忍模型输出的两种常见 JSON 缺陷，只做「能重新解析成功」的修复，解析不了就原样放弃：
+ * 容忍模型输出的三类 JSON 缺陷，且只做「能重新解析成功」的修复，解析不了就原样放弃：
  *
- * 1. 收尾引号多打反斜杠：中文正文里模型会把字符串的结束引号写成 `\"`（实测
- *    `…支撑了本题的对比。\"\n  }\n}`），JSON.parse 直接判废，但正文其实完整。
- *    只在引号后面紧跟 `,`/`}`/`]` 时才去掉这个反斜杠——正文内部的合法转义引号
- *    后面不会紧接结构分隔符。
- * 2. 尾部被上游截断：字符串没闭合、括号没配平。补上收尾引号与缺失的闭合括号，
- *    让已经写完的字段能救回来。
+ * 1. 值缺起始引号：`"learningTakeaway":异质性群体在共同目标"`——键与结尾引号都在，
+ *    只有值的起始引号被写漏。实测占出题槽位判废的大头，且正文完全可用。
+ * 2. 收尾引号多打反斜杠：中文正文里模型把字符串结束引号写成 `\"`（实测
+ *    `…支撑了本题的对比。\"\n  }\n}`），正文完整但解析失败。
+ * 3. 尾部被上游截断：字符串没闭合、括号没配平。补上收尾引号与缺失的闭合括号。
+ *
+ * 三步按顺序叠加，每一步之后都试一次解析，能解开就返回。
  */
 export function repairAssistantJson(text: string): string | null {
-    const unescaped = text.replace(/\\(["\\])(\s*[,}\]])/gu, '$1$2');
-    if (unescaped !== text) {
+    const steps: Array<(value: string) => string> = [quoteBareStringValues, unescapeStructuralQuotes, closeTruncatedJson];
+    let candidate = text;
+    for (const step of steps) {
+        const next = step(candidate);
+        if (next === candidate) continue;
+        candidate = next;
         try {
-            JSON.parse(unescaped);
-            return unescaped;
+            JSON.parse(candidate);
+            return candidate;
         } catch {
-            // 还有别的缺陷，继续走补括号
+            // 还有别的缺陷，继续叠加下一步
         }
     }
-    const start = unescaped.indexOf('{');
-    if (start < 0) return null;
-    const body = unescaped.slice(start);
+    return null;
+}
+
+/**
+ * `"键":裸值"` → `"键":"裸值"`。
+ *
+ * 只在值既不是引号串、也不是对象/数组/数字/字面量开头时补引号——合法 JSON 的冒号
+ * 后面不会出现这些字符，所以这条改写对正常输出是空操作。
+ */
+function quoteBareStringValues(text: string): string {
+    return text.replace(/("[A-Za-z_][A-Za-z0-9_]*")\s*:\s*([^"{[\s\d\-.tfn\]}][^"]*?)"/gu, '$1:"$2"');
+}
+
+/** 结构分隔符（, } ]）前的多余反斜杠引号：正文内部的合法转义引号后面不会紧跟这些字符。 */
+function unescapeStructuralQuotes(text: string): string {
+    return text.replace(/\\(["\\])(\s*[,}\]])/gu, '$1$2');
+}
+
+/** 尾部截断：补上未闭合的字符串与括号；补不回来的半截键值整体丢弃。 */
+function closeTruncatedJson(text: string): string {
+    const start = text.indexOf('{');
+    if (start < 0) return text;
+    const body = text.slice(start);
     const stack: string[] = [];
     let inString = false;
     let escaped = false;
@@ -150,8 +175,8 @@ export function repairAssistantJson(text: string): string | null {
         else if (char === '{' || char === '[') stack.push(char);
         else if (char === '}' || char === ']') stack.pop();
     }
-    if (!inString && stack.length === 0) return null;
-    // 截断点落在键名或冒号后面时，那个半截元素补不回来：退到最后一个完整元素再补括号
+    if (!inString && stack.length === 0) return text;
+    // 截断点落在键名或冒号后面时那个半截元素补不回来：退到最后一个完整元素再补括号
     let head = body;
     if (/(?:,\s*)?"[^"]*"\s*:\s*$/u.test(body)) {
         const cut = Math.max(body.lastIndexOf(','), body.lastIndexOf('{'));
@@ -162,12 +187,7 @@ export function repairAssistantJson(text: string): string | null {
     for (let index = stack.length - 1; index >= 0; index -= 1) {
         repaired += stack[index] === '{' ? '}' : ']';
     }
-    try {
-        JSON.parse(repaired);
-        return repaired;
-    } catch {
-        return null;
-    }
+    return repaired;
 }
 
 export function parseAssistantJson<T>(payload: unknown): T {

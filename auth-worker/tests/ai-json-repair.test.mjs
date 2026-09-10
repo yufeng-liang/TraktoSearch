@@ -38,6 +38,25 @@ test('尾部半截键值不冒充合法字段', () => {
     assert.deepEqual(parsed, { question: { prompt: '题干' } });
 });
 
+test('值缺起始引号（实测高发）时补上引号', () => {
+    const text = '{"question": {"prompt": "题干", "learningTakeaway":异质性群体在共同目标下更愿意合作"}';
+    const parsed = parseAssistantJson(payloadWith(text));
+    assert.equal(parsed.question.learningTakeaway, '异质性群体在共同目标下更愿意合作');
+});
+
+test('值缺起始引号与尾部截断叠加时也能救回', () => {
+    const text = '{"question": {"learningTakeaway":异质性群体在共同目标下更愿意合作", "evidenceUsed": "截断在';
+    const parsed = parseAssistantJson(payloadWith(text));
+    assert.equal(parsed.question.learningTakeaway, '异质性群体在共同目标下更愿意合作');
+    assert.equal(parsed.question.evidenceUsed, '截断在');
+});
+
+test('补引号不会动合法 JSON 的数字/字面量/字符串值', () => {
+    for (const text of ['{"a": 1}', '{"a": true}', '{"a": null}', '{"a": -1.5}', '{"a": "x", "b": "y"}']) {
+        assert.equal(repairAssistantJson(text), null, `合法 JSON 不该被改写：${text}`);
+    }
+});
+
 test('正文内合法的转义引号不被改写', () => {
     const text = '{"prompt": "他说：\\"你好\\"，然后走了"}';
     assert.equal(repairAssistantJson(text), null);
