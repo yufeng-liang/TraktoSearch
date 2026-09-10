@@ -70,7 +70,12 @@ class SherpaOnnxKwsRecognizer @Inject constructor(
                             tokens = "kws/tokens.txt",
                             numThreads = 2,
                             provider = "cpu",
-                            modelType = "zipformer"
+                            // modelType 留空，让 sherpa-onnx 自己读编码器元数据里的
+                            // model_type 挑实现：写错的代价不是抛异常，而是 native 侧
+                            // SHERPA_ONNX_EXIT(-1) 直接退进程，Java 的 catch(Throwable)
+                            // 拦不住——用户按住录音那一刻整个 App 消失。我们的模型是
+                            // zipformer2，写死 "zipformer" 会让它去找该导出里不存在的
+                            // attention_dims（zipformer2 用的是 query_head_dims 那一组）
                         ),
                         keywordsFile = "kws/keywords.txt",
                         // 与官方示例一致：检测到关键词后需连续 2 个 blank 才确认
