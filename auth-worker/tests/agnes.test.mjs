@@ -274,25 +274,27 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         assert.ok(requests.every(request => !request.hasResponseFormat));
         // 等所有 fire-and-forget 健康写入落地后再断言
         await new Promise(resolve => setTimeout(resolve, 20));
-        // 健康事件链路（与轮替实际路径一致；route 来自 healthCtx.route，统一为业务路由名）：
+        // 健康事件链路（route 为阶段级：quiz-units/quiz-review 分开落库）：
         // - taste 成功 1 条；
-        // - quiz 第一轮 agnes units 成功、二审结构不合格后第二轮 mimo（TEST_MODE 无 key，null=不可用）
-        //   写 upstream_error、再回 agnes units 成功——quiz 路由共 3 条；
+        // - quiz-units：两轮 agnes 上游 200（各记 success）但本地校验判废（各补记
+        //   invalid_output，与上游 success 是两条独立信号）；中间一轮 mimo（TEST_MODE
+        //   无 key，null=不可用）记 upstream_error。units 从未通过，故无 quiz-review 行；
         // - daily 两阶段（daily-candidate/daily-review）各 1 条。
         // zhipu 未配 key 且在 ladder 中位置靠后，本轮未触达，故无 zhipu 行。
         const healthRows = env.healthInserts.map(row => row.args);
         assert.ok(healthRows.some(r => r[2] === 'taste' && r[3] === 'agnes' && r[5] === 'success'));
-        const quizRows = healthRows.filter(r => r[2] === 'quiz');
-        assert.equal(quizRows.length, 3, 'quiz 路由：agnes×2 成功 + mimo×1 不可用');
-        assert.equal(quizRows.filter(r => r[3] === 'agnes' && r[4] === 'agnes-2.5-flash' && r[5] === 'success').length, 2);
-        assert.ok(quizRows.some(r => r[3] === 'mimo' && r[5] === 'upstream_error' && r[6] === 'AI_UPSTREAM_ERROR'));
+        const unitRows = healthRows.filter(r => r[2] === 'quiz-units');
+        assert.equal(unitRows.filter(r => r[3] === 'agnes' && r[4] === 'agnes-2.5-flash' && r[5] === 'success').length, 2, 'units 两轮上游 200 各记 success');
+        assert.equal(unitRows.filter(r => r[3] === 'agnes' && r[5] === 'invalid_output' && r[6] === 'INVALID_AI_OUTPUT').length, 2, 'units 本地判废各补一条 invalid_output');
+        assert.ok(unitRows.some(r => r[3] === 'mimo' && r[5] === 'upstream_error' && r[6] === 'AI_UPSTREAM_ERROR'));
+        assert.equal(healthRows.filter(r => r[2] === 'quiz-review').length, 0, 'units 未通过，不应有 review 行');
         const dailyRows = healthRows.filter(r => r[2] === 'daily-candidate' || r[2] === 'daily-review');
         assert.equal(dailyRows.length, 2, 'daily 两阶段各写一条健康事件');
         assert.ok(dailyRows.every(r => r[3] === 'agnes' && r[5] === 'success'));
         // 每行都必须携带 request_id，且 duration_ms 为实测数值或 null
         assert.ok(healthRows.every(r => typeof r[9] === 'string' && r[9].length > 0));
         assert.ok(healthRows.every(r => r[8] === null || typeof r[8] === 'number'));
-        assert.equal(healthRows.length, 6);
+        assert.equal(healthRows.length, 8);
     } finally {
         globalThis.fetch = originalFetch;
         await new Promise(resolve => setTimeout(resolve, 20));

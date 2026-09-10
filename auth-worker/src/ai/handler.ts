@@ -972,7 +972,7 @@ async function generateQuizBySlots(
     const budgetExhausted = (): boolean =>
         calls >= slotBudget.maxCallsPerSet || Date.now() - startedAtMs > slotBudget.maxElapsedMs;
 
-    const callSlot = async (messages: MimoMessage[], maxTokens: number, route: 'quiz-units' | 'quiz-review'): Promise<unknown> => {
+    const callSlot = async (messages: MimoMessage[], maxTokens: number, route: 'quiz-units' | 'quiz-review'): Promise<{ payload: unknown; provider: TextProvider; model: string }> => {
         if (budgetExhausted()) throw new AppError('AI_UPSTREAM_ERROR', '出题槽位调用超出预算', 502);
         calls += 1;
         const upstream = await callLlmJson(
@@ -983,10 +983,18 @@ async function generateQuizBySlots(
             { maxCompletionTokens: maxTokens, timeoutMs: slotBudget.slotTimeoutMs, stream: provider === 'zhipu' },
             fallbackModel,
             { route, requestId },
-            healthCtx,
+            { ...healthCtx, route },
         );
         if (!upstream) throw new AppError('AI_UPSTREAM_ERROR', '槽位上游不可用', 502);
-        return parseAssistantJson<unknown>(upstream.payload);
+        let payload: unknown;
+        try {
+            payload = parseAssistantJson<unknown>(upstream.payload);
+        } catch (error) {
+            // 上游 200 但正文解析不出 JSON：与本地校验判废同类，单独记一条 invalid_output
+            recordHealthEvent(env, { ...healthCtx, route }, 'traffic', upstream.provider, upstream.model, 'invalid_output', error);
+            throw error;
+        }
+        return { payload, provider: upstream.provider, model: upstream.model };
     };
 
     const logSlotFailure = (stage: string, slot: number, round: number, error: unknown): void => {
@@ -1009,14 +1017,20 @@ async function generateQuizBySlots(
         let lastError: unknown = new Error('未知原因');
         for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
             try {
-                const payload = await callSlot(
+                const slotResult = await callSlot(
                     unitSlotMessages(nickname, promptMovies, slot, QUIZ_UNIT_FIELDS_SPEC + QUIZ_UNITS_SHAPE_SPEC + (difficultyHint ?? ''), hint),
                     slotBudget.maxTokensUnit,
                     'quiz-units',
                 );
-                const unit = normalizeDailyKnowledgeUnit(unwrapSlotPayload(payload, 'unit'), { day: 'quiz', locale: 'zh-CN', movies });
-                assertUnitMatchesSlot(unit, slot);
-                return { slot, unit };
+                try {
+                    const unit = normalizeDailyKnowledgeUnit(unwrapSlotPayload(slotResult.payload, 'unit'), { day: 'quiz', locale: 'zh-CN', movies });
+                    assertUnitMatchesSlot(unit, slot);
+                    return { slot, unit };
+                } catch (error) {
+                    // 上游 200 但本地校验判废：与上游 success 是两条独立链路信号，补记 invalid_output
+                    recordHealthEvent(env, { ...healthCtx, route: 'quiz-units' }, 'traffic', slotResult.provider, slotResult.model, 'invalid_output', error);
+                    throw error;
+                }
             } catch (error) {
                 if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
                 lastError = error;
@@ -1062,14 +1076,20 @@ async function generateQuizBySlots(
             filmEvidence: unit.filmEvidence,
             relatedMediaTitle: unit.relatedMedia?.title,
         };
-        const payload = await callSlot(
+        const slotResult = await callSlot(
             questionSlotMessages(nickname, promptMovies, slotUnit, slot, QUIZ_REVIEW_SHAPE_SPEC + (difficultyHint ?? ''), hint),
             slotBudget.maxTokensQuestion,
             'quiz-review',
         );
-        const question = normalizeQuestion(unwrapSlotPayload(payload, 'question'), slot.index - 1, movies);
-        assertQuestionMatchesSlot(question, slot, unit);
-        return question;
+        try {
+            const question = normalizeQuestion(unwrapSlotPayload(slotResult.payload, 'question'), slot.index - 1, movies);
+            assertQuestionMatchesSlot(question, slot, unit);
+            return question;
+        } catch (error) {
+            // 上游 200 但本地校验判废：补记 invalid_output，保留上游 success 作为对照信号
+            recordHealthEvent(env, { ...healthCtx, route: 'quiz-review' }, 'traffic', slotResult.provider, slotResult.model, 'invalid_output', error);
+            throw error;
+        }
     };
 
     let questionsFinished = 0;
@@ -1134,6 +1154,8 @@ async function generateQuizBySlots(
     try {
         validateReviewedQuiz(assembled, movies, keptPairs.map(pair => pair.unit));
     } catch (error) {
+        // 各槽位单格都过了、整包校验仍失败：与上游 success 相对，补记 invalid_output
+        recordHealthEvent(env, { ...healthCtx, route: 'quiz-review' }, 'traffic', provider, model, 'invalid_output', error);
         console.warn('[QUIZ_DIAG]', JSON.stringify({
             stage: 'slots_validate_error',
             requestId,
@@ -1207,7 +1229,7 @@ async function runQuizGenerationRound(
             },
             fallbackModel,
             { route: 'quiz-units', requestId },
-            healthCtx,
+            { ...healthCtx, route: 'quiz-units' },
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -1224,6 +1246,8 @@ async function runQuizGenerationRound(
     try {
         units = normalizeQuizUnits(parseAssistantJson<unknown>(unitsUpstream.payload), selectedMovies);
     } catch (error) {
+        // 上游 200 但本地校验判废：补记 invalid_output（上游 success 已单独落库）
+        recordHealthEvent(env, { ...healthCtx, route: 'quiz-units' }, 'traffic', unitsUpstream.provider, unitsUpstream.model, 'invalid_output', error);
         // errorDetail 记校验失败的具体契约（如 subject 不在目录/explanation 未回扣 concept），
         // 便于区分「供应商输出风格问题」（可改提示词）与「校验过严」（需放宽门槛）。
         console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_normalize_error', requestId, attempt, provider: unitsUpstream.provider, model: unitsUpstream.model, error: error instanceof AppError ? error.code : 'PARSE', errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN' }));
@@ -1247,7 +1271,7 @@ async function runQuizGenerationRound(
             },
             fallbackModel,
             { route: 'quiz-review', requestId },
-            healthCtx,
+            { ...healthCtx, route: 'quiz-review' },
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -1265,6 +1289,8 @@ async function runQuizGenerationRound(
         onEvent?.({ type: 'stage', stage: 'review', status: 'done', attempt, provider, expectedChars: QUIZ_STAGE_EXPECTED_CHARS.review });
         return { quizId: requestedQuizId ?? crypto.randomUUID(), sessionId, movies: selectedMovies, questions: reviewed, scoringVersion: 2 };
     } catch (error) {
+        // 上游 200 但二审输出判废：补记 invalid_output（上游 success 已单独落库）
+        recordHealthEvent(env, { ...healthCtx, route: 'quiz-review' }, 'traffic', reviewUpstream.provider, reviewUpstream.model, 'invalid_output', error);
         // 二审不合格绝不能把首轮候选泄回 App；调用方会写入确定性安全题库。
         // errorDetail 同 units 阶段：记录具体踩中的校验契约。
         console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'review_normalize_or_validate_error', requestId, attempt, provider: reviewUpstream.provider, model: reviewUpstream.model, error: error instanceof AppError ? error.code : 'PARSE', errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN' }));
@@ -1531,7 +1557,9 @@ async function generateDailyKnowledgeUnit(
     let candidate: KnowledgeUnit;
     try {
         candidate = normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(candidateUpstream.payload), { day, locale, movies });
-    } catch {
+    } catch (error) {
+        // 上游 200 但候选单元判废：补记 invalid_output（上游 success 已单独落库）
+        recordHealthEvent(env, healthCtx, 'traffic', candidateUpstream.provider, candidateUpstream.model, 'invalid_output', error);
         return fallbackDailyKnowledgeUnit(day, locale);
     }
 
@@ -1545,7 +1573,7 @@ async function generateDailyKnowledgeUnit(
             { maxCompletionTokens: 3000, timeoutMs: DAILY_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-review', requestId },
-            healthCtx,
+            { ...healthCtx, route: 'daily-review' },
         );
     } catch (error) {
         if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
@@ -1555,7 +1583,9 @@ async function generateDailyKnowledgeUnit(
 
     try {
         return normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(reviewUpstream.payload), { day, locale, movies });
-    } catch {
+    } catch (error) {
+        // 上游 200 但二审单元判废：补记 invalid_output
+        recordHealthEvent(env, { ...healthCtx, route: 'daily-review' }, 'traffic', reviewUpstream.provider, reviewUpstream.model, 'invalid_output', error);
         return fallbackDailyKnowledgeUnit(day, locale);
     }
 }

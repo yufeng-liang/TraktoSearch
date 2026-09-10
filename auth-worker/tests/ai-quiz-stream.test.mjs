@@ -51,6 +51,26 @@ function createDbStub() {
     };
 }
 
+/** 在 createDbStub 基础上接住健康事件 INSERT，供出题链路的 invalid_output 断言。 */
+function createHealthCapturingDb() {
+    const healthInserts = [];
+    const base = createDbStub();
+    return {
+        healthInserts,
+        prepare(sql) {
+            if (sql.includes('INSERT INTO ai_health_events')) {
+                return {
+                    bind(...args) {
+                        healthInserts.push(args);
+                        return { async run() { return { meta: { changes: 1 } }; } };
+                    },
+                };
+            }
+            return base.prepare(sql);
+        },
+    };
+}
+
 const WATCHED_MOVIES = [
     { title: '一秒钟', mediaType: 'movie', year: 2020, genres: ['剧情', '历史'], mediaIds: { tmdbId: 1001 } },
     { title: '金刚狼2', mediaType: 'movie', year: 2013, genres: ['动作', '科幻'], mediaIds: { tmdbId: 1002 } },
@@ -111,6 +131,39 @@ test('quiz stream 生成失败不抛错，仍以 result 下发兜底题', async 
     const events = await readEvents(await callStream(QUIZ_BODY, createEnv()));
     assert.equal(events.some(event => event.type === 'error'), false);
     assert.equal(events.at(-1).type, 'result');
+});
+
+test('quiz stream 槽位判废时补记 invalid_output 健康事件', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+        if (String(input).includes('agnes-ai.com')) {
+            // 所有槽位都返回 200 但结构不合格的单元：上游 success 与本地 invalid_output 都应落库
+            return new Response(JSON.stringify({
+                choices: [{ message: { content: JSON.stringify({ unit: { unitId: 'bad' } }) } }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('unavailable', { status: 500 });
+    };
+    try {
+        const db = createHealthCapturingDb();
+        const env = createEnv({
+            DB: db,
+            AI_TEST_MODE: false,
+            AGNES_API_KEYS: 'test-agnes-key',
+            AI_DEFAULT_PROVIDER: 'agnes',
+        });
+        const events = await readEvents(await callStream(QUIZ_BODY, env));
+        assert.equal(events.at(-1).type, 'result');
+        // 等 fire-and-forget 健康写入落地（流式链路不挂 waitUntil）
+        await new Promise(resolve => setTimeout(resolve, 30));
+        const rows = db.healthInserts.map(args => ({ route: args[2], provider: args[3], outcome: args[5], code: args[6] }));
+        assert.ok(rows.length > 0, '健康事件必须落库');
+        assert.ok(rows.some(r => r.route === 'quiz-units' && r.provider === 'agnes' && r.outcome === 'success'), '上游 200 应记 success');
+        assert.ok(rows.some(r => r.route === 'quiz-units' && r.provider === 'agnes' && r.outcome === 'invalid_output' && r.code === 'INVALID_AI_OUTPUT'), '槽位本地判废应补记 invalid_output');
+        assert.ok(rows.every(r => r.route === 'quiz-units'), 'units 未通过时不应出现 quiz-review 行');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('quiz stream 生成期间按配置间隔发送 ping 心跳', async () => {
