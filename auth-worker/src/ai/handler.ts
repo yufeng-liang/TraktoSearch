@@ -3251,6 +3251,16 @@ async function callLlmJson(
                     recordHealthEvent(env, healthCtx, 'traffic', p, m, 'upstream_error', lastError, durationMs);
                     continue;
                 }
+                // 200 但没有正文：glm-5.3-flash 这类「始终思考」的模型会把 max_tokens 全烧在
+                // 推理上，返回 finish_reason=length 且 content 为空。这不是本地判废，
+                // 必须当成上游失败轮到下一个模型，否则每次白丢一格。
+                if (extractAssistantText(result).length === 0) {
+                    const emptyError = new AppError('AI_UPSTREAM_ERROR', 'AI provider returned empty content', 502);
+                    logAiDiagnostic('upstream_failure', context, p, m, emptyError);
+                    lastError = emptyError;
+                    recordHealthEvent(env, healthCtx, 'traffic', p, m, 'upstream_error', emptyError, durationMs);
+                    continue;
+                }
                 recordHealthEvent(env, healthCtx, 'traffic', p, m, 'success', undefined, durationMs);
                 return { payload: result, provider: p, model: m };
             } catch (error) {
