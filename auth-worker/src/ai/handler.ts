@@ -867,11 +867,12 @@ const QUIZ_MOVIE_COUNT = 7;
 const QUIZ_SLOT_BUDGET: QuizSlotBudget = {
     maxTokensUnit: 2600,
     maxTokensQuestion: 1800,
-    unitConcurrency: 4,
     // 实测智谱同一模型是账号级串行队列：单模型聚合吞吐恒定 ~40 字符/秒，
     // 提高并发只拉长单格时延（并发 4 时最慢一格 128s、并发 8 时 237s），总墙钟不变。
-    // 并发 4 是「单格不至于超时」与「不让排队拖到 120s 上限」之间的折中，不再上调。
-    questionConcurrency: 4,
+    // 更糟的是并发一上去就撞账号级 1302 速率限制，整格直接 429 —— 收益为零、代价是全格判废。
+    // 2 路是「不断流」与「单格不长时间空等」的折中，墙钟与 4 路实测相同。
+    unitConcurrency: 2,
+    questionConcurrency: 2,
     repairRounds: 2,
     // 同上：并发下 TTFB 会被排队拉长，单格 120s 才够修复轮跑完
     slotTimeoutMs: 120_000,
@@ -1125,6 +1126,16 @@ async function generateQuizBySlots(
             // 空补全（5.3-flash 思考吃满 max_tokens）在只看错误消息时完全分不开。
             const text = extractAssistantText(upstream.payload);
             const finishReason = (upstream.payload as { choices?: Array<{ finish_reason?: string }> } | null)?.choices?.[0]?.finish_reason;
+            // 正文看起来完整却解析失败时，只有 JSON.parse 的报错位置能指出真正坏在哪
+            let jsonError: string | null = null;
+            let flawWindow: string | null = null;
+            try {
+                JSON.parse(text);
+            } catch (parseError) {
+                jsonError = parseError instanceof Error ? parseError.message : String(parseError);
+                const position = Number(/position (\d+)/u.exec(jsonError)?.[1] ?? -1);
+                if (position >= 0) flawWindow = text.slice(Math.max(0, position - 70), position + 70);
+            }
             console.warn('[QUIZ_DIAG]', JSON.stringify({
                 stage: 'slot_json_invalid',
                 requestId,
@@ -1133,6 +1144,8 @@ async function generateQuizBySlots(
                 model: upstream.model,
                 length: text.length,
                 finishReason: finishReason ?? null,
+                jsonError,
+                flawWindow,
                 head: text.slice(0, 120),
                 tail: text.slice(-120),
             }));
