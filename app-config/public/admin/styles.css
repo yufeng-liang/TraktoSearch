@@ -1419,13 +1419,50 @@ tbody tr:last-child td { border-bottom: none; }
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .segmented button { background: transparent; border: 0; color: var(--text-dim); padding: 8px 14px; cursor: pointer; font-size: 13px; }
 .segmented button.active { background: var(--surface-hover); color: var(--text); }
-.ai-provider-card .health-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
-.ai-key-pool { margin-top: 10px; padding: 10px; border: 1px dashed var(--border); border-radius: 10px; }
-.ai-key-title { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
-.ai-key-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
-.ai-card-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
-.ai-probe-model { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+
+/* 三卡等宽一行：三家供应商是并列关系，宽度对齐便于横向扫读 */
+.ai-provider-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.ai-provider-card { padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+.ai-status-strip { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--text-dim); opacity: 0.7; }
+.ai-provider-card[data-level="ok"] .ai-status-strip { background: var(--success); }
+.ai-provider-card[data-level="warn"] .ai-status-strip { background: var(--warning); }
+.ai-provider-card[data-level="fail"] .ai-status-strip { background: var(--danger); }
+
+.ai-stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ai-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ai-stat-value { font-family: var(--font-display); font-size: 24px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-stat-label { font-size: 11px; color: var(--text-dim); }
+
+.ai-rate-bar { height: 4px; border-radius: 999px; background: var(--surface-hover); overflow: hidden; }
+.ai-rate-fill { display: block; height: 100%; border-radius: inherit; background: var(--text-dim); transition: width var(--transition-slow); }
+.ai-rate-fill.ok { background: var(--success); }
+.ai-rate-fill.warn { background: var(--warning); }
+.ai-rate-fill.fail { background: var(--danger); }
+
+.ai-last-error { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-last-error.is-error { color: var(--danger); }
+
+.ai-key-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-key-label { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
+.ai-key-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.ai-key-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: var(--surface-hover); border: 1px solid var(--border); color: var(--text-dim); }
+.ai-key-chip.active { color: var(--success); border-color: rgba(74, 222, 128, 0.35); }
+.ai-key-chip.cooling { color: var(--danger); border-color: rgba(248, 113, 113, 0.35); }
+
+.ai-card-actions { display: flex; gap: 8px; align-items: center; margin-top: auto; padding-top: 2px; }
+.ai-card-actions .ai-console-link { margin-left: auto; }
+.ai-probe-model { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 12px; max-width: 132px; }
 .ai-probe-note { font-size: 12px; color: var(--text-dim); }
+
+/* 事件明细：固定高度内滚 + 吸顶表头，卡片区与表格同屏可见 */
+.ai-event-scroll { overflow: auto; max-height: min(56vh, 560px); }
+.ai-event-table th { position: sticky; top: 0; z-index: 1; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.ai-event-table th, .ai-event-table td { padding: 9px 14px; }
+
+@media (max-width: 1024px) {
+    .ai-provider-grid { grid-template-columns: 1fr; }
+}
+
 .text-ok { color: var(--success); }
 .text-danger { color: var(--danger); }
 .mono { font-family: var(--font-mono); }

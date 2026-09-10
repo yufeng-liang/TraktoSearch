@@ -2595,7 +2595,7 @@ function renderAiHealth(container, renderToken) {
             </div>
             <button type="button" class="btn btn-sm" id="aiProbeAllBtn">全部探测</button>
         </div>
-        <div class="detail-grid" id="aiProviderCards"></div>
+        <div class="ai-provider-grid" id="aiProviderCards"></div>
         <div class="card" style="margin-top:16px">
             <div class="card-header"><span class="card-title">事件明细（最近 50 条）</span>
                 <select id="aiEventProvider" class="ai-probe-model" aria-label="供应商筛选">
@@ -2632,7 +2632,7 @@ async function loadAiHealth(container, renderToken) {
         b.classList.toggle('active', b.dataset.window === AI_HEALTH_STATE.window));
     const providerFilterEl = container.querySelector('#aiEventProvider');
     if (providerFilterEl) providerFilterEl.value = AI_HEALTH_STATE.providerFilter;
-    cardsEl.innerHTML = '<div class="loading-skeleton" style="height:180px"></div>';
+    cardsEl.innerHTML = [1, 2, 3].map(() => '<div class="loading-skeleton" style="height:180px"></div>').join('');
     tableEl.innerHTML = '<div class="loading-skeleton" style="height:120px"></div>';
     try {
         const data = await API.getAiHealth(AI_HEALTH_STATE.window);
@@ -2644,7 +2644,7 @@ async function loadAiHealth(container, renderToken) {
         tableEl.innerHTML = aiEventTableHtml(data);
     } catch (error) {
         if (renderToken !== state.renderToken) return;
-        cardsEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-desc">${escapeHtml(errorMessage(error))}</div></div></div>`;
+        cardsEl.innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-desc">${escapeHtml(errorMessage(error))}</div></div></div>`;
         tableEl.innerHTML = '';
     }
 }
@@ -2671,36 +2671,46 @@ function aiProviderCardHtml(providerKey, meta, data) {
     const aggWithDuration = aggRows.filter(a => a.avg_duration_ms != null);
     const durationTotal = aggWithDuration.reduce((sum, a) => sum + Number(a.total || 0), 0);
     const avgMs = durationTotal > 0 ? Math.round(aggWithDuration.reduce((sum, a) => sum + Number(a.avg_duration_ms) * Number(a.total || 0), 0) / durationTotal) : null;
+    const avgText = avgMs == null ? '—' : avgMs >= 10000 ? `${(avgMs / 1000).toFixed(1)}s` : `${avgMs} ms`;
+    const ratePct = s.successRate != null ? Math.round(s.successRate * 100) : null;
+    const rateLevel = ratePct == null ? 'none' : ratePct >= 80 ? 'ok' : ratePct >= 50 ? 'warn' : 'fail';
     const lastErr = s.lastFail;
+    const lastErrText = lastErr
+        ? `${formatTime(lastErr.created_at)}${lastErr.http_status && lastErr.http_status !== 200 ? ` HTTP ${lastErr.http_status}` : ''}${lastErr.error_code ? ` · ${escapeHtml(lastErr.error_code)}` : ''}`
+        : '无';
     const keyPoolRows = providerKey === 'agnes' ? (data.keyPool || []).map(k => {
         const tail = escapeHtml(String(k.fingerprint || '').slice(-4));
         const cooling = k.status === 'COOLING' && k.cooldownRemainingSec > 0;
         const statusText = cooling
-            ? `冷却 ${Math.ceil(k.cooldownRemainingSec / 60)} 分钟`
+            ? `冷却 ${Math.ceil(k.cooldownRemainingSec / 60)}m`
             : k.status === 'ACTIVE' ? '可用'
             : k.status === 'INVALID' ? '已失效'
             : k.status === 'COOLING' ? '冷却中'
             : (k.status || '—');
-        const statusColor = cooling ? 'var(--danger)' : k.status === 'ACTIVE' ? 'var(--success)' : 'var(--text-dim)';
-        return `<div class="ai-key-row"><span class="mono">…${tail}</span><span style="color:${statusColor}">${escapeHtml(statusText)}</span></div>`;
+        const chipClass = cooling ? 'cooling' : k.status === 'ACTIVE' ? 'active' : 'idle';
+        return `<span class="ai-key-chip ${chipClass}"><span class="mono">…${tail}</span>${escapeHtml(statusText)}</span>`;
     }).join('') : '';
     return `
-    <div class="card ai-provider-card" data-provider="${providerKey}">
+    <div class="card ai-provider-card" data-provider="${providerKey}" data-level="${s.level}">
+        <span class="ai-status-strip" aria-hidden="true"></span>
         <div class="card-header">
             <span class="card-title"><span class="health-dot ${s.level === 'ok' ? 'ok' : s.level === 'fail' ? 'fail' : 'warn'}"></span>${meta.label}</span>
             <span class="ai-probe-note">${s.lastProbe ? `最近探测 ${formatTime(s.lastProbe.created_at)}` : '未探测'}</span>
         </div>
-        <div class="health-row"><span>${AI_HEALTH_STATE.window} 请求量</span><span>${s.total}</span></div>
-        <div class="health-row"><span>成功率</span><span class="${s.successRate != null && s.successRate < 0.8 ? 'text-danger' : ''}">${s.successRate != null ? `${Math.round(s.successRate * 100)}%` : '—'}</span></div>
-        <div class="health-row"><span>平均耗时</span><span>${avgMs != null ? `${avgMs} ms` : '—'}</span></div>
-        <div class="health-row"><span>最近错误</span><span class="${lastErr ? 'text-danger' : 'text-ok'}">${lastErr ? `${formatTime(lastErr.created_at)} ${lastErr.http_status && lastErr.http_status !== 200 ? `HTTP ${lastErr.http_status}` : ''} ${escapeHtml(lastErr.error_code || '')}` : '无'}</span></div>
-        ${keyPoolRows ? `<div class="ai-key-pool"><div class="ai-key-title">Key 池状态</div>${keyPoolRows}</div>` : ''}
+        <div class="ai-stat-row">
+            <div class="ai-stat"><span class="ai-stat-value">${s.total}</span><span class="ai-stat-label">请求量</span></div>
+            <div class="ai-stat"><span class="ai-stat-value ${rateLevel === 'fail' ? 'text-danger' : ''}">${ratePct != null ? `${ratePct}%` : '—'}</span><span class="ai-stat-label">成功率</span></div>
+            <div class="ai-stat"><span class="ai-stat-value">${avgText}</span><span class="ai-stat-label">平均耗时</span></div>
+        </div>
+        <div class="ai-rate-bar"><span class="ai-rate-fill ${rateLevel}" style="width:${ratePct != null ? ratePct : 0}%"></span></div>
+        <div class="ai-last-error ${lastErr ? 'is-error' : ''}">最近错误 · ${lastErrText}</div>
+        ${keyPoolRows ? `<div class="ai-key-wrap"><span class="ai-key-label">Key 池</span><div class="ai-key-chips">${keyPoolRows}</div></div>` : ''}
         <div class="ai-card-actions">
             <select class="ai-probe-model" aria-label="探测模型">
                 ${meta.models.map(m => `<option value="${m}">${m}</option>`).join('')}
             </select>
             <button type="button" class="btn btn-ghost btn-sm js-ai-probe-one">探测</button>
-            <a class="btn btn-ghost btn-sm" href="${meta.consoleUrl}" target="_blank" rel="noopener noreferrer">前往控制台 ↗</a>
+            <a class="btn btn-ghost btn-sm ai-console-link" href="${meta.consoleUrl}" target="_blank" rel="noopener noreferrer">控制台 ↗</a>
         </div>
     </div>`;
 }
@@ -2753,7 +2763,7 @@ function aiEventTableHtml(data) {
     if (rows.length === 0) {
         return '<div class="empty-state"><div class="empty-title">窗口内无事件</div><div class="empty-desc">尚无真实 AI 流量或探针记录</div></div>';
     }
-    return `<div class="table-scroll"><table><thead><tr>
+    return `<div class="table-scroll ai-event-scroll"><table class="ai-event-table"><thead><tr>
         <th>时间</th><th>来源</th><th>路由</th><th>供应商</th><th>模型</th><th>耗时</th><th>结果</th>
     </tr></thead><tbody>${rows.map(r => `
         <tr>
