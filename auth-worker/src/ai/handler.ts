@@ -205,22 +205,42 @@ type TextProvider = 'mimo' | 'agnes' | 'zhipu';
 // 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
 const PROVIDER_LADDER: readonly TextProvider[] = ['zhipu', 'agnes', 'mimo'];
 
-// 出题链路上游超时（本地闭环 quiz-lab 实测，glm-4.7 关思考、13 题全字段）：
-// units 段 75~143s / 输出 5236 字符，review 段 205~275s / 输出 17537 字符。
-// 流式端点每 10s 有事件/心跳保活，客户端 90s 读超时不再构成约束，因此按真实生成
-// 时长放宽；总预算给用户等待封顶，超预算立即落离线兜底题而不是继续烧上游。
-const QUIZ_UNITS_TIMEOUT_MS = 180_000;
-const QUIZ_REVIEW_TIMEOUT_MS = 300_000;
-// 单轮最坏时长（含两段各自超时上限）：剩余预算不足一轮时不再开新一轮，
-// 否则会出现「第二轮刚跑完 units 就没预算」的白烧——实测那次总耗时被拖到 773s。
-const QUIZ_ROUND_MAX_MS = QUIZ_UNITS_TIMEOUT_MS + QUIZ_REVIEW_TIMEOUT_MS;
-const QUIZ_TOTAL_BUDGET_MS = 500_000;
-
+// 出题链路上游超时（本地闭环实测，glm-4.7 关思考、13 题全字段）：
+// units 段 139~174s / 输出 5.2~7k 字符，review 段 256~271s / 输出 16~17.5k 字符。
 // 单段输出上限（tokens）：旧值 4600 会把 review 段 17.5k 字符的输出拦腰截断，
 // finish_reason=length 后 JSON 必不完整、解析必失败——这是真机出题永远降级的根因之一。
 // GLM 实测接受 max_tokens 20000。
-const QUIZ_MAX_TOKENS_UNITS = 6000;
-const QUIZ_MAX_TOKENS_REVIEW = 13000;
+interface QuizGenerationBudget {
+    unitsTimeoutMs: number;
+    reviewTimeoutMs: number;
+    maxTokensUnits: number;
+    maxTokensReview: number;
+    /**
+     * 已用时长超过它就不再开新一轮。语义是「剩余时间还够不够跑完一整轮」：
+     * 流式端点实测单轮 410s，总预算 500s → 只有 20s 余量，第二轮必然跑不完（旧逻辑
+     * 白烧到 773s）；旧客户端则是 0 余量，第一轮超出即收手。
+     */
+    stopAfterElapsedMs: number;
+}
+
+// 流式端点：每 10s 有事件/心跳保活，客户端 90s 读超时不再是约束，按真实生成时长放宽。
+const QUIZ_STREAM_BUDGET: QuizGenerationBudget = {
+    unitsTimeoutMs: 180_000,
+    reviewTimeoutMs: 300_000,
+    maxTokensUnits: 6000,
+    maxTokensReview: 13000,
+    stopAfterElapsedMs: 20_000,
+};
+
+// 非流式的 /quiz（旧版 App 仍在用）：客户端 90s 读超时下等不到 AI 题，必须保持
+// 「快速失败 → 立即下发兜底题」，否则旧版会从「40s 拿到兜底题」退化成「90s 超时报错」。
+const QUIZ_LEGACY_BUDGET: QuizGenerationBudget = {
+    unitsTimeoutMs: 40_000,
+    reviewTimeoutMs: 40_000,
+    maxTokensUnits: 6000,
+    maxTokensReview: 13000,
+    stopAfterElapsedMs: 75_000,
+};
 
 // 每日知识同样是两段 LLM 生成（候选 2600 / 二审 3000 tokens），40s 预算下必超时降级；
 // 它与出题共用流式预算口径，但不走向客户端推送进度。
@@ -691,6 +711,7 @@ async function handleQuizStream(
                 requestId,
                 healthCtx,
                 event => { void writeEvent(event); },
+                QUIZ_STREAM_BUDGET,
             );
             const finalData: QuizCacheData = generated ?? {
                 quizId: requestedQuizId ?? crypto.randomUUID(),
@@ -763,6 +784,7 @@ async function generateQuiz(
     requestId: string,
     healthCtx: HealthRouteContext,
     onEvent?: QuizStreamEmitter,
+    budget: QuizGenerationBudget = QUIZ_LEGACY_BUDGET,
 ): Promise<QuizCacheData | null> {
     // 两阶段（units→review）整体最多跑三轮：第一轮上游返回 200 但输出过不了本地硬校验
     // 时换下一家供应商重试（实测 Agnes 会连续输出不合格 JSON，同家重试无效），三家全试仍
@@ -776,14 +798,14 @@ async function generateQuiz(
     for (let offset = 0; offset < PROVIDER_LADDER.length; offset++) {
         // 按「还能不能跑完一整轮」判断，而不是「有没有超总预算」：实测单轮 410s，
         // 总预算 500s 时第二轮必然跑不完，早退立即走兜底比白烧上游更划算。
-        if (QUIZ_TOTAL_BUDGET_MS - (Date.now() - startedAtMs) < QUIZ_ROUND_MAX_MS) {
+        if (Date.now() - startedAtMs > budget.stopAfterElapsedMs) {
             console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'deadline_exceeded', requestId, offset }));
             return null;
         }
         const attempt = (startIndex + offset) % PROVIDER_LADDER.length;
         const p = PROVIDER_LADDER[attempt];
         const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
-        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1, healthCtx, onEvent);
+        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1, healthCtx, onEvent, budget);
         if (result !== undefined) return result;
     }
     return null;
@@ -804,6 +826,7 @@ async function runQuizGenerationRound(
     attempt: number,
     healthCtx: HealthRouteContext,
     onEvent?: QuizStreamEmitter,
+    budget: QuizGenerationBudget = QUIZ_LEGACY_BUDGET,
 ): Promise<QuizCacheData | null | undefined> {
     // 进度回调来自上游 SSE（数十毫秒一次），节流后转发，避免把流式通道刷成噪声。
     // 间隔可由 env 覆盖：测试用小间隔，线上保持 2s 粒度足够 UI 平滑。
@@ -829,8 +852,8 @@ async function runQuizGenerationRound(
             model,
             quizUnitMessages(nickname, selectedMovies, difficultyHint),
             {
-                maxCompletionTokens: QUIZ_MAX_TOKENS_UNITS,
-                timeoutMs: QUIZ_UNITS_TIMEOUT_MS,
+                maxCompletionTokens: budget.maxTokensUnits,
+                timeoutMs: budget.unitsTimeoutMs,
                 // 只有主路径 zhipu 支持流式进度：其余供应商保持一次性返回，
                 // 阶段事件（start/done）仍然照发，UI 退化为阶段级进度。
                 stream: provider === 'zhipu',
@@ -871,8 +894,8 @@ async function runQuizGenerationRound(
             model,
             quizFromUnitsMessages(nickname, selectedMovies, units, difficultyHint),
             {
-                maxCompletionTokens: QUIZ_MAX_TOKENS_REVIEW,
-                timeoutMs: QUIZ_REVIEW_TIMEOUT_MS,
+                maxCompletionTokens: budget.maxTokensReview,
+                timeoutMs: budget.reviewTimeoutMs,
                 stream: provider === 'zhipu',
                 onProgress: emitProgress('review'),
             },
