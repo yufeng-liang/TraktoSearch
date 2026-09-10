@@ -2671,7 +2671,7 @@ function aiProviderCardHtml(providerKey, meta, data) {
     const aggWithDuration = aggRows.filter(a => a.avg_duration_ms != null);
     const durationTotal = aggWithDuration.reduce((sum, a) => sum + Number(a.total || 0), 0);
     const avgMs = durationTotal > 0 ? Math.round(aggWithDuration.reduce((sum, a) => sum + Number(a.avg_duration_ms) * Number(a.total || 0), 0) / durationTotal) : null;
-    const avgText = avgMs == null ? '—' : avgMs >= 10000 ? `${(avgMs / 1000).toFixed(1)}s` : `${avgMs} ms`;
+    const avgText = avgMs == null ? '—' : avgMs >= 1000 ? `${(avgMs / 1000).toFixed(1)}s` : `${avgMs} ms`;
     const ratePct = s.successRate != null ? Math.round(s.successRate * 100) : null;
     const rateLevel = ratePct == null ? 'none' : ratePct >= 80 ? 'ok' : ratePct >= 50 ? 'warn' : 'fail';
     const lastErr = s.lastFail;
