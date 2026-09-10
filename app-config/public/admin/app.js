@@ -2582,7 +2582,7 @@ const AI_PROVIDER_META = {
     agnes: { label: 'Agnes AI', consoleUrl: 'https://agnes-ai.com/', models: ['agnes-2.5-flash'] },
     mimo: { label: '小米 MiMo', consoleUrl: 'https://platform.xiaomimimo.com/', models: ['mimo-v2.5-pro'] },
 };
-const AI_HEALTH_STATE = { window: '24h', data: null };
+const AI_HEALTH_STATE = { window: '24h', data: null, providerFilter: 'all' };
 
 function renderAiHealth(container, renderToken) {
     container.innerHTML = `
@@ -2597,7 +2597,12 @@ function renderAiHealth(container, renderToken) {
         </div>
         <div class="detail-grid" id="aiProviderCards"></div>
         <div class="card" style="margin-top:16px">
-            <div class="card-header"><span class="card-title">事件明细（最近 50 条）</span></div>
+            <div class="card-header"><span class="card-title">事件明细（最近 50 条）</span>
+                <select id="aiEventProvider" class="ai-probe-model" aria-label="供应商筛选">
+                    <option value="all">全部供应商</option>
+                    ${Object.entries(AI_PROVIDER_META).map(([key, meta]) => `<option value="${key}">${meta.label}</option>`).join('')}
+                </select>
+            </div>
             <div id="aiEventTable"></div>
         </div>
     `;
@@ -2607,6 +2612,14 @@ function renderAiHealth(container, renderToken) {
         AI_HEALTH_STATE.window = btn.dataset.window;
         loadAiHealth(container, renderToken);
     });
+    const providerFilterEl = container.querySelector('#aiEventProvider');
+    if (providerFilterEl) {
+        providerFilterEl.value = AI_HEALTH_STATE.providerFilter;
+        providerFilterEl.addEventListener('change', () => {
+            AI_HEALTH_STATE.providerFilter = providerFilterEl.value;
+            loadAiHealth(container, renderToken);
+        });
+    }
     container.querySelector('#aiProbeAllBtn').addEventListener('click', () => runAiProbeAll(container));
     loadAiHealth(container, renderToken);
 }
@@ -2617,6 +2630,8 @@ async function loadAiHealth(container, renderToken) {
     if (!cardsEl || !tableEl) return;
     container.querySelectorAll('#aiHealthWindow button').forEach(b =>
         b.classList.toggle('active', b.dataset.window === AI_HEALTH_STATE.window));
+    const providerFilterEl = container.querySelector('#aiEventProvider');
+    if (providerFilterEl) providerFilterEl.value = AI_HEALTH_STATE.providerFilter;
     cardsEl.innerHTML = '<div class="loading-skeleton" style="height:180px"></div>';
     tableEl.innerHTML = '<div class="loading-skeleton" style="height:120px"></div>';
     try {
@@ -2678,7 +2693,7 @@ function aiProviderCardHtml(providerKey, meta, data) {
         <div class="health-row"><span>${AI_HEALTH_STATE.window} 请求量</span><span>${s.total}</span></div>
         <div class="health-row"><span>成功率</span><span class="${s.successRate != null && s.successRate < 0.8 ? 'text-danger' : ''}">${s.successRate != null ? `${Math.round(s.successRate * 100)}%` : '—'}</span></div>
         <div class="health-row"><span>平均耗时</span><span>${avgMs != null ? `${avgMs} ms` : '—'}</span></div>
-        <div class="health-row"><span>最近错误</span><span class="${lastErr ? 'text-danger' : 'text-ok'}">${lastErr ? `${formatTime(lastErr.created_at)} ${lastErr.http_status ?? ''} ${escapeHtml(lastErr.error_code || '')}` : '无'}</span></div>
+        <div class="health-row"><span>最近错误</span><span class="${lastErr ? 'text-danger' : 'text-ok'}">${lastErr ? `${formatTime(lastErr.created_at)} ${lastErr.http_status && lastErr.http_status !== 200 ? `HTTP ${lastErr.http_status}` : ''} ${escapeHtml(lastErr.error_code || '')}` : '无'}</span></div>
         ${keyPoolRows ? `<div class="ai-key-pool"><div class="ai-key-title">Key 池状态</div>${keyPoolRows}</div>` : ''}
         <div class="ai-card-actions">
             <select class="ai-probe-model" aria-label="探测模型">
@@ -2733,7 +2748,8 @@ async function runAiProbeAll(container) {
 }
 
 function aiEventTableHtml(data) {
-    const rows = data.recent || [];
+    const rows = (data.recent || []).filter(r =>
+        AI_HEALTH_STATE.providerFilter === 'all' || r.provider === AI_HEALTH_STATE.providerFilter);
     if (rows.length === 0) {
         return '<div class="empty-state"><div class="empty-title">窗口内无事件</div><div class="empty-desc">尚无真实 AI 流量或探针记录</div></div>';
     }
@@ -2747,6 +2763,6 @@ function aiEventTableHtml(data) {
             <td>${escapeHtml(r.provider)}</td>
             <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(r.model)}</td>
             <td>${r.duration_ms != null ? `${r.duration_ms} ms` : '—'}</td>
-            <td class="${r.outcome === 'success' ? 'text-ok' : 'text-danger'}">${r.outcome === 'success' ? '成功' : `${r.outcome === 'invalid_output' ? '输出不合格' : '上游错误'}${r.error_code ? ` · ${escapeHtml(r.error_code)}` : ''}${r.http_status ? ` · HTTP ${r.http_status}` : ''}`}</td>
+            <td class="${r.outcome === 'success' ? 'text-ok' : 'text-danger'}">${r.outcome === 'success' ? '成功' : `${r.outcome === 'invalid_output' ? '输出不合格' : '上游错误'}${r.error_code ? ` · ${escapeHtml(r.error_code)}` : ''}${r.http_status && r.http_status !== 200 ? ` · HTTP ${r.http_status}` : ''}`}</td>
         </tr>`).join('')}</tbody></table></div>`;
 }
