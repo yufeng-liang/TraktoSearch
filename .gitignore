@@ -122,3 +122,6 @@ verification-artifacts/
 /auth-worker/quiz-stream-lab.mjs
 /auth-worker/tail_*.txt
 /auth-worker/.quiz-lab-verify.mjs
+
+# 本地密钥与跑批产物（zhipu/bailian key、quiz-lab 日志），绝不入库
+/.tmp/
