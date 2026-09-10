@@ -9,6 +9,7 @@ import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
+import com.tracktosearch.data.ai.AiQuizStage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
@@ -24,6 +25,8 @@ private const val MAX_OVERLAY_SESSION_COUNT = 3
 private const val MAX_OVERLAY_DAILY_COUNT = 6
 private const val IDLE_TRIGGER_DELAY_MS = 8_000L
 private const val MAX_QUIZ_REPLACEMENTS = 2
+// 出题两阶段在总进度中的权重：units 实测约 140s、review 约 250s
+private const val QUIZ_UNITS_PROGRESS_WEIGHT = 0.35f
 private const val MAX_DAILY_KNOWLEDGE_CHANGES = 2
 
 /** 探头静止观察前的空闲等待时长，两个搜索页都用这个常量，别再各写一遍 8_000L。 */
@@ -517,6 +520,41 @@ fun canReplaceQuizPreview(
 
 fun remainingQuizReplacements(replacementCount: Int): Int =
     (MAX_QUIZ_REPLACEMENTS - replacementCount).coerceAtLeast(0)
+
+/**
+ * 出题等待页的总进度（0f..1f）。
+ *
+ * 两阶段按实测耗时分配权重：units 约 140s、review 约 250s（本地闭环实测），
+ * 阶段内进度用「已生成字符数 / 该阶段预期字符数」估算，服务端会把预期值随 stage 事件下发。
+ * 生成量会浮动，超过预期时按 100% 封顶；没拿到阶段信息时回落到不确定态（0f）。
+ */
+fun quizStreamProgressFraction(
+    stage: AiQuizStage?,
+    chars: Int,
+    expectedChars: Int
+): Float {
+    if (stage == null) return 0f
+    val stageWeight = if (stage == AiQuizStage.UNITS) QUIZ_UNITS_PROGRESS_WEIGHT else 1f - QUIZ_UNITS_PROGRESS_WEIGHT
+    val stageFraction = if (expectedChars > 0) {
+        (chars.toFloat() / expectedChars.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val completedWeight = if (stage == AiQuizStage.REVIEW) QUIZ_UNITS_PROGRESS_WEIGHT else 0f
+    return (completedWeight + stageWeight * stageFraction).coerceIn(0f, 1f)
+}
+
+/** 已用时长文案：不足一分钟显示秒，超过显示「分:秒」。 */
+fun formatQuizElapsed(totalSeconds: Long): String {
+    val safe = totalSeconds.coerceAtLeast(0)
+    return if (safe < 60) {
+        "${safe}s"
+    } else {
+        val minutes = safe / 60
+        val seconds = safe % 60
+        minutes.toString() + ":" + seconds.toString().padStart(2, '0')
+    }
+}
 
 /**
  * 问答候选的媒体类型规范化。

@@ -263,6 +263,33 @@ data class AiQuizRequest(
     val sessionId: String = "quiz"
 )
 
+/** 出题阶段：UNITS=提炼学习单元，REVIEW=把单元转换成 13 题。 */
+enum class AiQuizStage { UNITS, REVIEW }
+
+enum class AiQuizStageStatus { START, DONE }
+
+/**
+ * 出题流式事件（服务端 /api/ai/quiz/stream 的 NDJSON 行）。
+ * 两阶段实测 280~420s，进度事件让等待页显示真实阶段与生成量；Ping 仅用于保活连接。
+ */
+sealed interface AiQuizStreamEvent {
+    /** 阶段开始/结束；expectedChars 为该阶段预期输出字符数，用于把 chars 换算成百分比。 */
+    data class Stage(
+        val stage: AiQuizStage,
+        val status: AiQuizStageStatus,
+        val expectedChars: Int
+    ) : AiQuizStreamEvent
+
+    /** 生成中：chars 为当前阶段已生成的字符数。 */
+    data class Progress(val stage: AiQuizStage, val chars: Int) : AiQuizStreamEvent
+
+    /** 心跳：服务端每 10s 至少发一次，UI 无需展示。 */
+    data object Ping : AiQuizStreamEvent
+
+    /** 完成：携带最终题包（服务端生成失败时给的是确定性兜底题）。 */
+    data class Completed(val quiz: AiQuiz) : AiQuizStreamEvent
+}
+
 @Serializable
 data class AiQuizOption(
     val id: String,

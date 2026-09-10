@@ -13,6 +13,7 @@ import com.tracktosearch.data.ai.AiQuizOption
 import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
+import com.tracktosearch.data.ai.AiQuizStage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
@@ -679,6 +680,32 @@ class AiUiLogicTest {
         assertThat(dailyCheckQuestionIsValid(valid.copy(options = valid.options + AiQuizOption("a", "重复 ID")))).isFalse()
         assertThat(dailyCheckQuestionIsValid(valid.copy(prompt = " "))).isFalse()
         assertThat(dailyCheckQuestionIsValid(null)).isFalse()
+    }
+
+    @Test
+    fun quizStreamProgressWeightsStagesByMeasuredDuration() {
+        // 没有阶段信息时退化为不确定进度
+        assertThat(quizStreamProgressFraction(null, 100, 100)).isEqualTo(0f)
+        // units 完成一半：占总量 35% 权重的一半
+        assertThat(quizStreamProgressFraction(AiQuizStage.UNITS, 50, 100)).isWithin(0.001f).of(0.175f)
+        // 进入 review 即已计入 units 的全部权重
+        assertThat(quizStreamProgressFraction(AiQuizStage.REVIEW, 0, 100)).isWithin(0.001f).of(0.35f)
+        // review 完成即 100%
+        assertThat(quizStreamProgressFraction(AiQuizStage.REVIEW, 100, 100)).isWithin(0.001f).of(1f)
+        // 生成量超过预期时封顶，不回退也不越界
+        assertThat(quizStreamProgressFraction(AiQuizStage.UNITS, 999, 100)).isWithin(0.001f).of(0.35f)
+        // 预期值缺失（服务端未下发）时按 0 处理，不产生 NaN
+        assertThat(quizStreamProgressFraction(AiQuizStage.UNITS, 10, 0)).isEqualTo(0f)
+    }
+
+    @Test
+    fun quizElapsedTextSwitchesToMinutesAfterOneMinute() {
+        assertThat(formatQuizElapsed(0)).isEqualTo("0s")
+        assertThat(formatQuizElapsed(59)).isEqualTo("59s")
+        assertThat(formatQuizElapsed(65)).isEqualTo("1:05")
+        assertThat(formatQuizElapsed(600)).isEqualTo("10:00")
+        // 设备时钟回拨等异常输入不允许产生负数文案
+        assertThat(formatQuizElapsed(-3)).isEqualTo("0s")
     }
 
 }

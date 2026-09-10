@@ -7,13 +7,21 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterConstants
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 import java.security.MessageDigest
 import java.time.LocalDate
@@ -367,6 +375,61 @@ class AiRepository @Inject constructor(
             quiz
         }
     }
+
+    /**
+     * 流式出题（POST /api/ai/quiz/stream，NDJSON 逐行事件）。
+     *
+     * 两阶段实测 280~420s，单次请求会被 OkHttp 90s 读超时掐断；流式下服务端每 10s 至少写
+     * 一行（真实进度或心跳），因此连接可以一直保持，等待页也能显示真实阶段。
+     * 命中本地缓存时不打网络，直接以 [AiQuizStreamEvent.Completed] 收尾。
+     */
+    fun getQuizStream(
+        friendId: String,
+        request: AiQuizRequest = AiQuizRequest(),
+        forceRefresh: Boolean = false
+    ): Flow<AiQuizStreamEvent> = flow {
+        if (friendId.trim().isEmpty()) {
+            throw AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400)
+        }
+        val watched = request.watched.take(MAX_WATCHED_ITEMS)
+        val sessionId = sessionIdFor(friendId, request.sessionId)
+        val suffix = quizCacheSuffix(sessionId, request.excludedQuizIds, watched)
+        if (!forceRefresh) {
+            readCachedWithFallback(friendId, AiCacheFeature.QUIZ, AiQuiz.serializer(), suffix, null)
+                ?.takeIf { it.isThirteenQuestionStructure }
+                ?.let {
+                    emit(AiQuizStreamEvent.Completed(it))
+                    return@flow
+                }
+        }
+        val response = api.getQuizStream(request.copy(watched = watched, sessionId = sessionId))
+        val body = response.body()
+        if (!response.isSuccessful || body == null) {
+            throw AiErrorMapper.exception(
+                serverCode = runCatching {
+                    Json { ignoreUnknownKeys = true }
+                        .decodeFromString(AiErrorDto.serializer(), response.errorBody()?.string().orEmpty())
+                        .code
+                }.getOrNull() ?: "HTTP_${response.code()}",
+                message = "Quiz stream failed with HTTP ${response.code()}",
+                httpCode = response.code()
+            )
+        }
+        var completed: AiQuiz? = null
+        body.use { responseBody ->
+            val source = responseBody.source()
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (line.isBlank()) continue
+                val event = parseQuizStreamEvent(line) ?: continue
+                if (event is AiQuizStreamEvent.Completed) completed = event.quiz
+                emit(event)
+            }
+        }
+        val quiz = completed
+            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "Quiz stream ended without a result", 200)
+        storage.write(friendId, AiCacheFeature.QUIZ, json.encodeToString(AiQuiz.serializer(), quiz), suffix)
+    }.flowOn(Dispatchers.IO)
 
     suspend fun submitQuiz(
         friendId: String,
@@ -1086,6 +1149,59 @@ private data class AiResponsePayload<T>(
     val data: T,
     val quota: AiQuotaDto?
 )
+
+/**
+ * 解析 /api/ai/quiz/stream 的一行 NDJSON。
+ * 结构不符的行返回 null（跳过），服务端 error 事件折算成统一的 AI 异常。
+ */
+private fun parseQuizStreamEvent(line: String): AiQuizStreamEvent? {
+    val root = runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
+    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return null
+    return when (type) {
+        "stage" -> {
+            val stage = quizStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
+            val status = when (root["status"]?.jsonPrimitive?.contentOrNull) {
+                "start" -> AiQuizStageStatus.START
+                "done" -> AiQuizStageStatus.DONE
+                else -> return null
+            }
+            AiQuizStreamEvent.Stage(
+                stage = stage,
+                status = status,
+                expectedChars = root["expectedChars"]?.jsonPrimitive?.intOrNull ?: 0
+            )
+        }
+        "progress" -> {
+            val stage = quizStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
+            AiQuizStreamEvent.Progress(stage, root["chars"]?.jsonPrimitive?.intOrNull ?: 0)
+        }
+        "ping" -> AiQuizStreamEvent.Ping
+        "result" -> {
+            val quizElement = root["quiz"] ?: return null
+            val dto = runCatching {
+                Json { ignoreUnknownKeys = true }.decodeFromJsonElement(AiQuizDto.serializer(), quizElement)
+            }.getOrNull() ?: return null
+            val quiz = dto.toDomainOrNull(root["quota"]?.let { quota ->
+                runCatching {
+                    Json { ignoreUnknownKeys = true }.decodeFromJsonElement(AiQuotaDto.serializer(), quota)
+                }.getOrNull()
+            }) ?: throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz stream result is invalid", 200)
+            AiQuizStreamEvent.Completed(quiz)
+        }
+        "error" -> throw AiErrorMapper.exception(
+            serverCode = root["code"]?.jsonPrimitive?.contentOrNull,
+            message = root["message"]?.jsonPrimitive?.contentOrNull ?: "Quiz stream failed",
+            httpCode = 200
+        )
+        else -> null
+    }
+}
+
+private fun quizStageOf(raw: String?): AiQuizStage? = when (raw) {
+    "units" -> AiQuizStage.UNITS
+    "review" -> AiQuizStage.REVIEW
+    else -> null
+}
 
 private fun <T> Response<AiApiResponse<T>>.requirePayload(): AiResponsePayload<T> {
     val envelope = body()

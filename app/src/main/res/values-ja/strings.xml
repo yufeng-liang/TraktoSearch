@@ -1786,6 +1786,10 @@
     <string name="ai_daily_title">今日の映像知識</string>
     <string name="ai_feature_back">戻る</string>
     <string name="ai_feature_refresh">更新</string>
+    <string name="ai_quiz_stage_units">知識ユニットを抽出中</string>
+    <string name="ai_quiz_stage_review">問題を生成して検証中</string>
+    <string name="ai_quiz_wait_hint">初回は 5 分ほどかかります。この画面を開いたままにしてください。</string>
+    <string name="ai_quiz_elapsed">経過時間 %1$s</string>
     <string name="ai_feature_loading">スプライトが考え中</string>
     <string name="ai_feature_cancel">キャンセル</string>
     <string name="ai_feature_nickname">ニックネームを解読</string>

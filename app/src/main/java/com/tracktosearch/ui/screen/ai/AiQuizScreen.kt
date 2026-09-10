@@ -44,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -128,7 +129,15 @@ fun AiQuizScreen(
                 onRedrawAll = viewModel::redrawAllQuizPreview
             )
             QuizPhase.UNAVAILABLE -> if (state.isLoading) {
-                QuizLoadingPlaceholder()
+                QuizLoadingPlaceholder(
+                    stage = state.quizStage,
+                    progress = quizStreamProgressFraction(
+                        stage = state.quizStage,
+                        chars = state.quizStageChars,
+                        expectedChars = state.quizStageExpectedChars
+                    ),
+                    startedAtMillis = state.quizRequestStartedAtMillis
+                )
             } else {
                 QuizUnavailable()
             }
@@ -323,7 +332,8 @@ private fun QuizPreviewScreen(
 ) {
     if (movies.isEmpty()) {
         if (isLoading) {
-            QuizLoadingPlaceholder()
+            // 预览阶段没有流式进度（还没开始出题），退化为不确定进度条
+            QuizLoadingPlaceholder(stage = null, progress = 0f, startedAtMillis = 0L)
         } else {
             QuizUnavailable()
         }
@@ -988,18 +998,70 @@ private fun FeedbackOption(
     }
 }
 
+/**
+ * 出题等待页。
+ *
+ * 两阶段实测 3~6 分钟，干转圈会让人以为卡死：这里显示真实阶段、按已生成字符数推进的
+ * 进度条、以及已等待时长。进度值来自服务端流式事件（见 AiRepository.getQuizStream），
+ * 没拿到阶段信息时退化为不确定进度条。
+ */
 @Composable
-private fun QuizLoadingPlaceholder() {
+private fun QuizLoadingPlaceholder(
+    stage: com.tracktosearch.data.ai.AiQuizStage?,
+    progress: Float,
+    startedAtMillis: Long
+) {
+    // 每秒刷新已用时长：只驱动这一个文本，避免把整页拖进高频重组
+    val elapsedSeconds by produceState(0L, startedAtMillis) {
+        while (true) {
+            value = if (startedAtMillis > 0L) {
+                ((System.currentTimeMillis() - startedAtMillis) / 1000L).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+            kotlinx.coroutines.delay(1_000L)
+        }
+    }
+    val stageLabel = when (stage) {
+        com.tracktosearch.data.ai.AiQuizStage.UNITS -> stringResource(R.string.ai_quiz_stage_units)
+        com.tracktosearch.data.ai.AiQuizStage.REVIEW -> stringResource(R.string.ai_quiz_stage_review)
+        null -> stringResource(R.string.ai_feature_loading)
+    }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 32.dp)
         ) {
-            CircularProgressIndicator()
+            if (stage == null) {
+                CircularProgressIndicator()
+            } else {
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(56.dp)
+                )
+            }
             Text(
-                text = stringResource(R.string.ai_feature_loading),
+                text = stageLabel,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(R.string.ai_quiz_wait_hint),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (startedAtMillis > 0L) {
+                Text(
+                    text = stringResource(
+                        R.string.ai_quiz_elapsed,
+                        formatQuizElapsed(elapsedSeconds)
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

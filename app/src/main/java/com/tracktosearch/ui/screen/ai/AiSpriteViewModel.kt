@@ -132,6 +132,12 @@ data class AiSpriteUiState(
     // 口味分析成功加载次数，用于只触发一次对应场景图
     val tasteRevision: Long = 0L,
     val quiz: AiQuiz? = null,
+    // 出题等待页的真实进度：服务端流式事件驱动（阶段 + 已生成字符数）
+    val quizStage: com.tracktosearch.data.ai.AiQuizStage? = null,
+    val quizStageChars: Int = 0,
+    val quizStageExpectedChars: Int = 0,
+    // 本轮出题请求的发起时刻（毫秒）：等待页据此显示已用时长
+    val quizRequestStartedAtMillis: Long = 0L,
     val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
     val quizPreviewLocalizedTitles: Map<String, String> = emptyMap(),
     val quizReplacementCount: Int = 0,
@@ -1918,7 +1924,12 @@ class AiSpriteViewModel @Inject constructor(
             if (!canContinueAiRequest(requestId)) return@runFeature
             val enrichedWatched = enrichQuizPreviewMovies(watched)
             if (!canContinueAiRequest(requestId)) return@runFeature
-            aiRepository.getQuiz(
+            updateIfCurrentRequest(requestId) {
+                it.copy(quizRequestStartedAtMillis = System.currentTimeMillis())
+            }
+            // 流式出题：两阶段实测 280~420s，服务端每 10s 至少写一行事件（真实进度或心跳），
+            // 等待页因此能显示「提炼单元 → 逐题生成」的真实阶段与进度，而不是干转圈。
+            aiRepository.getQuizStream(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiQuizRequest(
                     watched = enrichedWatched,
@@ -1927,20 +1938,45 @@ class AiSpriteViewModel @Inject constructor(
                     sessionId = spriteSessionId
                 ),
                 forceRefresh
-            ).onSuccess { quiz ->
-                if (!canContinueAiRequest(requestId)) return@onSuccess
-                recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
-                updateIfCurrentRequest(requestId) {
-                    it.copy(
-                        quiz = quiz,
-                        quizStarted = true,
-                        quizIndex = 0,
-                        quizAnswers = emptyMap(),
-                        quizResult = null,
-                        quota = quiz.quota ?: it.quota
-                    )
+            ).collect { event ->
+                when (event) {
+                    is com.tracktosearch.data.ai.AiQuizStreamEvent.Stage -> {
+                        val expected = if (event.status == com.tracktosearch.data.ai.AiQuizStageStatus.START) {
+                            event.expectedChars
+                        } else {
+                            0
+                        }
+                        updateIfCurrentRequest(requestId) {
+                            it.copy(
+                                quizStage = event.stage,
+                                quizStageExpectedChars = expected,
+                                quizStageChars = if (event.status == com.tracktosearch.data.ai.AiQuizStageStatus.DONE) 0 else it.quizStageChars
+                            )
+                        }
+                    }
+                    is com.tracktosearch.data.ai.AiQuizStreamEvent.Progress -> updateIfCurrentRequest(requestId) {
+                        it.copy(quizStage = event.stage, quizStageChars = event.chars)
+                    }
+                    com.tracktosearch.data.ai.AiQuizStreamEvent.Ping -> Unit
+                    is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed -> {
+                        val quiz = event.quiz
+                        recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
+                        updateIfCurrentRequest(requestId) {
+                            it.copy(
+                                quiz = quiz,
+                                quizStarted = true,
+                                quizIndex = 0,
+                                quizAnswers = emptyMap(),
+                                quizResult = null,
+                                quota = quiz.quota ?: it.quota,
+                                quizStage = null,
+                                quizStageChars = 0,
+                                quizStageExpectedChars = 0
+                            )
+                        }
+                    }
                 }
-            }.getOrElse { throw it }
+            }
         }
     }
 
