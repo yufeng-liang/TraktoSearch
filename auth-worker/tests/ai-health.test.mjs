@@ -180,3 +180,127 @@ test('callLlmJson success path writes exactly one health event', async () => {
         globalThis.fetch = originalFetch;
     }
 });
+
+test('probe endpoint returns per-provider result and writes probe events', async () => {
+    // 直接调 handleAiHealthProbe（不经 verifyAccessJWT——那是 index.ts 层职责，已有独立层）
+    const { handleAiHealthProbe } = await import('../src/admin/ai-health.ts');
+    const originalFetch = globalThis.fetch;
+    const calls = [];
+    globalThis.fetch = async (input, init) => {
+        const body = JSON.parse(init.body);
+        calls.push({ model: body.model, auth: init.headers });
+        // zhipu 200 OK、agnes 200 OK、mimo 402（fetchWithKeyRotation 内部 fetch 同 mock）
+        if (body.model?.startsWith('glm') || body.model?.startsWith('agnes')) {
+            return new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ error: { message: 'insufficient balance' } }), { status: 402 });
+    };
+    const statements = [];
+    const env = {
+        DB: {
+            prepare(sql) {
+                return {
+                    bind(...args) { statements.push({ sql, args }); return { async run() { return { meta: { changes: 1 } }; } }; },
+                };
+            },
+        },
+        KV: { async get() { return null; }, async put() {} },
+        ZHIPU_API_KEY: 'test-zhipu',
+        MIMO_API_KEY: 'test-mimo',
+        AGNES_API_KEYS: 'test-agnes-key',
+        AI_TEST_MODE: false,
+    };
+    try {
+        const request = new Request('https://gw.test/admin/ai/health/probe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ all: true }),
+        });
+        const response = await handleAiHealthProbe(request, env, 'req-probe-1');
+        assert.equal(response.status, 200);
+        const data = (await response.json()).data;
+        const byProvider = Object.fromEntries(data.results.map(r => [r.provider, r]));
+        assert.equal(byProvider.zhipu.outcome, 'success');
+        assert.equal(byProvider.mimo.outcome, 'upstream_error');
+        assert.equal(byProvider.mimo.httpStatus, 402);
+        assert.equal(byProvider.agnes.outcome, 'success');
+        // 三家各写一条 probe 健康事件
+        const probeRows = statements.filter(s => s.sql.includes('ai_health_events'));
+        assert.equal(probeRows.length, 3);
+        const mimoRow = probeRows.map(r => r.args).find(a => a[3] === 'mimo');
+        assert.equal(mimoRow[5], 'upstream_error');
+        assert.equal(mimoRow[6], 'AI_UPSTREAM_ERROR');
+        assert.equal(mimoRow[7], 402);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('probe endpoint validates provider and model params', async () => {
+    const { handleAiHealthProbe } = await import('../src/admin/ai-health.ts');
+    const env = { DB: { prepare() { throw new Error('no'); } }, KV: { async get() { return null; } } };
+    const badProvider = new Request('https://gw.test/admin/ai/health/probe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'openai' }),
+    });
+    const response = await handleAiHealthProbe(badProvider, env, 'req-p2');
+    assert.equal(response.status, 400);
+    const badModel = new Request('https://gw.test/admin/ai/health/probe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'zhipu', model: 'gpt-4o' }),
+    });
+    const response2 = await handleAiHealthProbe(badModel, env, 'req-p3');
+    assert.equal(response2.status, 400);
+});
+
+test('health list aggregates by provider and model with window filter', async () => {
+    const { handleAiHealthList } = await import('../src/admin/ai-health.ts');
+    const queries = [];
+    const env = {
+        DB: {
+            prepare(sql) {
+                queries.push(sql);
+                return {
+                    bind(...args) {
+                        return {
+                            async all() {
+                                if (sql.includes('GROUP BY')) {
+                                    return { results: [
+                                        { provider: 'zhipu', model: 'glm-5.3-flash', total: 10, success: 9, avg_duration_ms: 3200, p95_duration_ms: 8100 },
+                                        { provider: 'mimo', model: 'mimo-v2.5-pro', total: 2, success: 0, avg_duration_ms: 900, p95_duration_ms: 950 },
+                                    ] };
+                                }
+                                if (sql.includes('ORDER BY') && sql.includes('LIMIT')) {
+                                    return { results: [
+                                        { created_at: 1725900000, source: 'traffic', route: 'quiz', provider: 'mimo', model: 'mimo-v2.5-pro', outcome: 'upstream_error', error_code: 'AI_UPSTREAM_ERROR', http_status: 402, duration_ms: 900, request_id: 'r1' },
+                                    ] };
+                                }
+                                return { results: [] };
+                            },
+                        };
+                    },
+                };
+            },
+        },
+        KV: { async get(key) { return key === 'key-pool:agnes' ? JSON.stringify([{ fingerprint: 'a'.repeat(64), status: 'ACTIVE', cooldownUntilMs: 0 }]) : null; } },
+    };
+    const request = new Request('https://gw.test/admin/ai/health?window=24h', { method: 'GET' });
+    const response = await handleAiHealthList(request, env, 'req-l1');
+    assert.equal(response.status, 200);
+    const data = (await response.json()).data;
+    assert.equal(data.window, '24h');
+    assert.equal(data.aggregates.length, 2);
+    const zhipu = data.aggregates.find(a => a.provider === 'zhipu');
+    assert.equal(zhipu.successRate, 0.9);
+    assert.equal(data.keyPool.length, 1);
+    assert.ok(queries.some(q => q.includes('created_at >= ?')));
+    assert.ok(queries.some(q => q.includes('LIMIT 50')));
+});
+
+test('health list rejects invalid window', async () => {
+    const { handleAiHealthList } = await import('../src/admin/ai-health.ts');
+    const env = { DB: { prepare() { throw new Error('no'); } }, KV: { async get() { return null; } } };
+    const request = new Request('https://gw.test/admin/ai/health?window=90d', { method: 'GET' });
+    const response = await handleAiHealthList(request, env, 'req-l2');
+    assert.equal(response.status, 400);
+});

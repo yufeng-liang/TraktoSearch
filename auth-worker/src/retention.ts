@@ -5,13 +5,16 @@ import { AI_TTS_RATE_WINDOW_SECONDS } from './ai/store.ts';
 
 export const INCOMPLETE_INVITE_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 export const CLOSED_LEGAL_REQUEST_RETENTION_SECONDS = 180 * 24 * 60 * 60;
+// AI 健康事件只用于近期可用性观察，30 天足够定位回溯问题，也控制 D1 体积
+export const AI_HEALTH_EVENT_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 
 export async function cleanupRetention(env: { DB: D1Database }): Promise<void> {
     const currentTime = now();
     const incompleteInviteCutoff = currentTime - INCOMPLETE_INVITE_RETENTION_SECONDS;
     const closedLegalRequestCutoff = currentTime - CLOSED_LEGAL_REQUEST_RETENTION_SECONDS;
+    const aiHealthEventCutoff = currentTime - AI_HEALTH_EVENT_RETENTION_SECONDS;
 
-    const [inviteResult, legalResult, auditResult, ttsRateLimitResult] = await Promise.all([
+    const [inviteResult, legalResult, auditResult, ttsRateLimitResult, healthResult] = await Promise.all([
         env.DB.prepare(`
             DELETE FROM invite_requests
             WHERE status IN ('VERIFICATION_SENT', 'REPLACED', 'EXPIRED', 'EMAIL_FAILED')
@@ -30,6 +33,10 @@ export async function cleanupRetention(env: { DB: D1Database }): Promise<void> {
             DELETE FROM ai_tts_rate_limits
             WHERE updated_at < ?
         `).bind(currentTime - AI_TTS_RATE_WINDOW_SECONDS).run(),
+        env.DB.prepare(`
+            DELETE FROM ai_health_events
+            WHERE created_at < ?
+        `).bind(aiHealthEventCutoff).run(),
     ]);
 
     console.log(JSON.stringify({
@@ -38,5 +45,6 @@ export async function cleanupRetention(env: { DB: D1Database }): Promise<void> {
         closedLegalRequests: Number(legalResult.meta.changes || 0),
         legalAuditLogs: Number(auditResult.meta.changes || 0),
         expiredTtsRateLimits: Number(ttsRateLimitResult.meta.changes || 0),
+        expiredHealthEvents: Number(healthResult.meta.changes || 0),
     }));
 }

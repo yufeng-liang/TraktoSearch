@@ -41,6 +41,7 @@ import { handlePublicUpdateReleaseProxy, isPublicUpdateReleasePath } from './pro
 import { handleInviteRequest, handleInviteResend, handleInviteVerification } from './invitations';
 import { handleLegalRequest } from './legal-requests';
 import { closeLegalRequest, listLegalRequests } from './admin/legal-requests';
+import { handleAiHealthList, handleAiHealthProbe, handleAiHealthSummary } from './admin/ai-health';
 import { cleanupRetention } from './retention';
 import { handleAiApi } from './ai/handler';
 import { handleAiIllustration } from './ai/daily-illustration';
@@ -455,6 +456,17 @@ async function handleAdminApi(
     // 健康检查
     if (path === '/admin/health' && request.method === 'GET') {
         return healthCheck(env, requestId);
+    }
+
+    // AI 供应商健康监控（探针 + 聚合）
+    if (path === '/admin/ai/health' && request.method === 'GET') {
+        return handleAiHealthList(request, env, requestId);
+    }
+    if (path === '/admin/ai/health/summary' && request.method === 'GET') {
+        return handleAiHealthSummary(env, requestId);
+    }
+    if (path === '/admin/ai/health/probe' && request.method === 'POST') {
+        return handleAiHealthProbe(request, env, requestId);
     }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);
