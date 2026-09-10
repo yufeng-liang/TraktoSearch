@@ -1026,7 +1026,7 @@ tbody tr:last-child td { border-bottom: none; }
     font-size: 14px;
     font-weight: 500;
 }
-.health-dot { width: 10px; height: 10px; border-radius: 50%; }
+.health-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .health-dot.ok { background: var(--success); box-shadow: 0 0 10px var(--success); }
 .health-dot.fail { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 .health-row {

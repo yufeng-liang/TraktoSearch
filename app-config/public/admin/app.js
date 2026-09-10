@@ -2616,7 +2616,7 @@ async function loadAiHealth(container, renderToken) {
         tableEl.innerHTML = aiEventTableHtml(data);
     } catch (error) {
         if (renderToken !== state.renderToken) return;
-        cardsEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-desc">${escapeHtml(error.message || '未知错误')}</div></div></div>`;
+        cardsEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-desc">${escapeHtml(errorMessage(error))}</div></div></div>`;
         tableEl.innerHTML = '';
     }
 }
@@ -2629,9 +2629,10 @@ function aiHealthLight(providerKey, data) {
     const lastFail = recent.find(r => r.outcome !== 'success');
     const lastProbe = recent.find(r => r.source === 'probe');
     const hasInvalid = recent.some(r => r.outcome === 'invalid_output');
+    const recentUpstreamError = recent.some(r => r.outcome === 'upstream_error' && (Date.now() / 1000 - r.created_at) < 86400);
     const coolingKeys = (data.keyPool || []).filter(k => providerKey === 'agnes' && k.status === 'COOLING' && k.cooldownRemainingSec > 0);
     let level = 'ok';
-    if ((total > 0 && success / total < 0.8) || lastFail?.outcome === 'upstream_error' && (Date.now() / 1000 - lastFail.created_at) < 86400) level = 'fail';
+    if ((total > 0 && success / total < 0.8) || recentUpstreamError) level = 'fail';
     else if (hasInvalid || coolingKeys.length > 0) level = 'warn';
     return { level, total, successRate: total > 0 ? success / total : null, lastFail, lastProbe, hasInvalid };
 }
@@ -2639,12 +2640,19 @@ function aiHealthLight(providerKey, data) {
 function aiProviderCardHtml(providerKey, meta, data) {
     const s = aiHealthLight(providerKey, data);
     const aggRows = (data.aggregates || []).filter(a => a.provider === providerKey);
-    const avgMs = aggRows.length && aggRows[0].avg_duration_ms != null ? Math.round(aggRows[0].avg_duration_ms) : null;
+    const aggWithDuration = aggRows.filter(a => a.avg_duration_ms != null);
+    const durationTotal = aggWithDuration.reduce((sum, a) => sum + Number(a.total || 0), 0);
+    const avgMs = durationTotal > 0 ? Math.round(aggWithDuration.reduce((sum, a) => sum + Number(a.avg_duration_ms) * Number(a.total || 0), 0) / durationTotal) : null;
     const lastErr = s.lastFail;
     const keyPoolRows = providerKey === 'agnes' ? (data.keyPool || []).map(k => {
-        const tail = k.fingerprint.slice(-4);
+        const tail = escapeHtml(String(k.fingerprint || '').slice(-4));
         const cooling = k.status === 'COOLING' && k.cooldownRemainingSec > 0;
-        return `<div class="ai-key-row"><span class="mono">…${tail}</span><span class="${cooling ? 'text-danger' : 'text-ok'}">${cooling ? `冷却 ${Math.ceil(k.cooldownRemainingSec / 60)} 分钟` : k.status === 'ACTIVE' ? '可用' : k.status}</span></div>`;
+        const statusText = cooling
+            ? `冷却 ${Math.ceil(k.cooldownRemainingSec / 60)} 分钟`
+            : k.status === 'ACTIVE' ? '可用'
+            : k.status === 'INVALID' ? '已失效'
+            : (k.status || '—');
+        return `<div class="ai-key-row"><span class="mono">…${tail}</span><span class="${cooling ? 'text-danger' : 'text-ok'}">${escapeHtml(statusText)}</span></div>`;
     }).join('') : '';
     return `
     <div class="card ai-provider-card" data-provider="${providerKey}">
@@ -2655,7 +2663,7 @@ function aiProviderCardHtml(providerKey, meta, data) {
         <div class="health-row"><span>${AI_HEALTH_STATE.window} 请求量</span><span>${s.total}</span></div>
         <div class="health-row"><span>成功率</span><span class="${s.successRate != null && s.successRate < 0.8 ? 'text-danger' : ''}">${s.successRate != null ? `${Math.round(s.successRate * 100)}%` : '—'}</span></div>
         <div class="health-row"><span>平均耗时</span><span>${avgMs != null ? `${avgMs} ms` : '—'}</span></div>
-        <div class="health-row"><span>最近错误</span><span class="${lastErr ? 'text-danger' : 'text-ok'}">${lastErr ? `${formatTime(lastErr.created_at)} ${lastErr.http_status ?? ''} ${lastErr.error_code || ''}` : '无'}</span></div>
+        <div class="health-row"><span>最近错误</span><span class="${lastErr ? 'text-danger' : 'text-ok'}">${lastErr ? `${formatTime(lastErr.created_at)} ${lastErr.http_status ?? ''} ${escapeHtml(lastErr.error_code || '')}` : '无'}</span></div>
         ${keyPoolRows ? `<div class="ai-key-pool"><div class="ai-key-title">Key 池状态</div>${keyPoolRows}</div>` : ''}
         <div class="ai-card-actions">
             <select class="ai-probe-model" aria-label="探测模型">
@@ -2682,7 +2690,7 @@ function bindAiCardActions(container) {
                 else showToast(`${provider} 探测失败：${r?.errorCode || '未知'}${r?.httpStatus ? ` HTTP ${r.httpStatus}` : ''}`, 'error');
                 await loadAiHealth(container, state.renderToken);
             } catch (error) {
-                showToast(`探测失败：${error.message}`, 'error');
+                showToast(`探测失败：${errorMessage(error)}`, 'error');
                 btn.disabled = false;
                 btn.textContent = '探测';
             }
@@ -2702,7 +2710,7 @@ async function runAiProbeAll(container) {
         else showToast(`${failCount} 家探测失败，见卡片详情`, 'error');
         await loadAiHealth(container, state.renderToken);
     } catch (error) {
-        showToast(`探测失败：${error.message}`, 'error');
+        showToast(`探测失败：${errorMessage(error)}`, 'error');
     } finally {
         btn.disabled = false;
         btn.textContent = '全部探测';
@@ -2718,7 +2726,7 @@ function aiEventTableHtml(data) {
         <th>时间</th><th>来源</th><th>路由</th><th>供应商</th><th>模型</th><th>耗时</th><th>结果</th>
     </tr></thead><tbody>${rows.map(r => `
         <tr>
-            <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${formatTime(r.created_at)}</td>
+            <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${formatDateTime(r.created_at)}</td>
             <td>${r.source === 'probe' ? '探针' : '流量'}</td>
             <td>${escapeHtml(r.route || '—')}</td>
             <td>${escapeHtml(r.provider)}</td>
