@@ -111,3 +111,14 @@ verification-artifacts/
 
 # Claude 会话的临时日志与草稿，不入库
 .scratch/
+
+# auth-worker 真实上游验证与探测脚本（本地跑批用，不入库）
+/auth-worker/.probe*-bundle.mjs
+/auth-worker/.probe*-entry.ts
+/auth-worker/.*-bundle.mjs
+/auth-worker/.*-entry.ts
+/auth-worker/probe-*.tmp.mjs
+/auth-worker/quiz-lab.mjs
+/auth-worker/quiz-stream-lab.mjs
+/auth-worker/tail_*.txt
+/auth-worker/.quiz-lab-verify.mjs

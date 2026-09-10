@@ -69,7 +69,7 @@ import {
 } from './tts.ts';
 import { recordHealthEvent, type HealthRouteContext } from './health.ts';
 import { mapWithGate } from './async-pool.ts';
-import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
+import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, type QuizAngleType, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
 import { questionSlotMessages, unitSlotMessages, type SlotMovie, type SlotUnit } from './quiz-slot-messages.ts';
 import { bankSeed, canGenerateSet, deriveBankQuizId, isLocalDate, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
 
@@ -868,14 +868,18 @@ const QUIZ_SLOT_BUDGET: QuizSlotBudget = {
     maxTokensUnit: 2600,
     maxTokensQuestion: 1800,
     unitConcurrency: 4,
-    // 并发 6 会把上游压到限频边缘：实测 6 路时出现超时导致的 JSON 截断，降到 4 更稳
+    // 实测智谱同一模型是账号级串行队列：单模型聚合吞吐恒定 ~40 字符/秒，
+    // 提高并发只拉长单格时延（并发 4 时最慢一格 128s、并发 8 时 237s），总墙钟不变。
+    // 并发 4 是「单格不至于超时」与「不让排队拖到 120s 上限」之间的折中，不再上调。
     questionConcurrency: 4,
     repairRounds: 2,
-    // 单格 90s 在并发下不够（TTFB 被限频拉长到 30s+），放宽到 120s 让修复轮有机会跑完
+    // 同上：并发下 TTFB 会被排队拉长，单格 120s 才够修复轮跑完
     slotTimeoutMs: 120_000,
     // 上限按「首轮 17 + 每格最多 2 轮修复」留余量：13 题 + 4 单元 + 修复 ≈ 51，取 80 兜住异常
     maxCallsPerSet: 80,
-    maxElapsedMs: 420_000,
+    // 一套 17 格共约 21.6k 字符，按 40 字符/秒的账号级吞吐下限约 9 分钟。
+    // 预生成不在用户等待路径上，预算必须高于这个物理下限，否则尾部槽位会被硬掐成兜底题。
+    maxElapsedMs: 660_000,
 };
 
 /** 槽位提示词只需要影片的展示字段与证据，不必把整条记录塞进去。 */
@@ -934,13 +938,137 @@ function assertQuestionMatchesSlot(question: InternalQuestion, slot: QuestionSlo
     }
 }
 
-/** 兜底题按位次天然对齐：前 10 题 single、第 11-12 题 multiple、第 13 题 short。 */
-function fallbackQuestionForSlot(slot: QuestionSlot, pool: InternalQuestion[]): InternalQuestion {
-    const aligned = pool[slot.index - 1];
-    if (aligned && aligned.type === slot.type) return { ...aligned, difficulty: slot.difficulty };
-    const matched = pool.find(question => question.type === slot.type);
-    if (matched) return { ...matched, difficulty: slot.difficulty };
-    return { ...pool[pool.length - 1], difficulty: slot.difficulty };
+/**
+ * 兜底题的考点后缀：同一单元下的多个降级题位必须拿到互不重复的 knowledgePoint，
+ * 否则会在跨槽位查重里被反复重排。每个角度给 3 个变体，够 13 格用尽仍不重复。
+ */
+const SLOT_FALLBACK_SUFFIXES: Record<QuizAngleType, readonly string[]> = {
+    '象征': ['的象征含义', '的意象作用', '的符号指向'],
+    '因果': ['的因果链', '的连锁后果', '的触发条件'],
+    '对比': ['的对照维度', '的差异焦点', '的反差处理'],
+    '应用': ['的迁移用法', '的新情境适用', '的判断入口'],
+    '机制解释': ['的运作机制', '的实现环节', '的作用路径'],
+    '证据辨识': ['的证据边界', '的材料来源', '的依据范围'],
+};
+
+/** 兜底题的题面锚点：一律用单元自己的 filmEvidence，保证题干与证据都回到该片简介原文。 */
+function slotFallbackPrompt(slot: QuestionSlot, unit: KnowledgeUnit, movie: WatchMovie, knowledgePoint: string): string {
+    const anchor = '《' + fallbackDisplayTitle(movie) + '》的已看记录里写着“' + unit.filmEvidence + '”';
+    const opening = '关于“' + knowledgePoint + '”，' + anchor + '。';
+    const question = (() => {
+        switch (slot.angleType) {
+            case '象征': return '这处细节在片中承载的意义最接近哪一项？';
+            case '因果': return '这一设定最直接导致的后果是哪一项？';
+            case '对比': return '把它与片中的另一组处理放在一起比，哪种判断最站得住？';
+            case '应用': return '把这一层意思用到新的观影情境，哪种说法最恰当？';
+            case '机制解释': return '它之所以成立，关键在哪一环？';
+            default: return '下列哪一条才是记录里真有的信息？';
+        }
+    })();
+    if (slot.type === 'multiple') return opening + question.replace('哪一项？', '哪些？').replace('哪一种？', '哪些？') + '（多选）';
+    if (slot.type === 'short') return opening + '请用一句话说明这一判断的依据。';
+    return opening + question;
+}
+
+/** 单选/多选选项：正确项回到 unit.filmEvidence，干扰项是形态合理但不看材料的说法。 */
+function slotFallbackOptions(unit: KnowledgeUnit, slot: QuestionSlot): Array<{ id: string; text: string }> {
+    const grounded = '判断要落回记录里的“' + unit.filmEvidence + '”这一具体线索';
+    const scoped = '结论的范围要限定在“' + unit.filmEvidence + '”能支持的部分';
+    const byMetadata = '凭片名和上映年份就能下结论，不必看记录里的细节';
+    const byFeeling = '个人第一印象比记录里写着的细节更可靠';
+    return slot.type === 'multiple'
+        ? [
+            { id: 'opt-a', text: grounded },
+            { id: 'opt-b', text: scoped },
+            { id: 'opt-c', text: byMetadata },
+            { id: 'opt-d', text: byFeeling },
+        ]
+        : [
+            { id: 'opt-a', text: grounded },
+            { id: 'opt-b', text: byMetadata },
+            { id: 'opt-c', text: byFeeling },
+            { id: 'opt-d', text: '这一层意思与影片内容无关，只是评论者的额外联想' },
+        ];
+}
+
+/**
+ * 把「模型自证」类的硬规则改成结构保证：槽位已经钉死了单元与概念，这几条就不该再赌模型照抄。
+ *
+ * 这些规则在整包校验里都是「题面必须真的引用本题材料/考点」的检查，失配的代价是整套作废，
+ * 而模型换一个起点引用同一段简介、或把考点只写进选项，都会判废。补进去的都是槽位已经
+ * 指定过的原文（单元 filmEvidence 与 concept），不新增任何编造内容，语义不变。
+ */
+function groundQuestionToUnit(question: InternalQuestion, unit: KnowledgeUnit, movies: WatchMovie[]): InternalQuestion {
+    const grounded = { ...question };
+    if (unit.filmEvidence && !containsEvidenceText(grounded.evidenceUsed, unit.filmEvidence)) {
+        grounded.evidenceUsed = unit.filmEvidence + '——' + grounded.evidenceUsed;
+    }
+    const surface = normalizeSemanticKey(grounded.prompt + grounded.options.map(option => option.text).join(''));
+    const anchored = [grounded.concept, grounded.knowledgePoint, unit.concept]
+        .filter(value => value && value.trim().length > 0)
+        .some(value => surface.includes(normalizeSemanticKey(value)));
+    if (!anchored && unit.concept) grounded.prompt = '关于“' + unit.concept + '”，' + grounded.prompt;
+    // 题干必须引用该片简介原文：本地校验用步进切片比对，模型换起点就会失配
+    const movie = movies.find(item => item.title === grounded.sourceTitle);
+    if (movie && !containsEvidenceAnchor(grounded.prompt, movie) && unit.filmEvidence) {
+        grounded.prompt = '已看记录里写着“' + unit.filmEvidence + '”。' + grounded.prompt;
+    }
+    const anchor = grounded.knowledgePoint || unit.concept;
+    if (anchor && !rationaleIsQuestionSpecific(grounded.answerRationale, grounded)) {
+        grounded.answerRationale = '本题考点是“' + anchor + '”：' + grounded.answerRationale;
+    }
+    // 简答题的 distractorRationale 必须保持空串，空串在校验里直接放行
+    if (grounded.type !== 'short' && anchor && !rationaleIsQuestionSpecific(grounded.distractorRationale, grounded)) {
+        grounded.distractorRationale = '干扰项都没有落到“' + anchor + '”上：' + grounded.distractorRationale;
+    }
+    // 学理链：解释与结论合起来必须回到本题概念或给出因果连接词
+    if (!containsLearningChain(grounded) && unit.concept) {
+        grounded.explanation = '用“' + unit.concept + '”来看，' + grounded.explanation;
+    }
+    return grounded;
+}
+
+/**
+ * 槽位兜底题：与命中单元的 unitId/subject/concept/证据完全对齐。
+ *
+ * 不能沿用整包兜底池：兜底池的题自带 unitId=null 与自己的学科概念，只要有一格降级，
+ * 整包校验必然在「题目必须来自已审校单元」处失败——单格降级会连带整套作废，槽位化就白拆了。
+ * 这里按单元的 filmEvidence 现造一题，让降级真正只损失那一格。
+ */
+function fallbackQuestionForSlot(slot: QuestionSlot, unit: KnowledgeUnit, movie: WatchMovie, movieIndex: number, variant = 0): InternalQuestion {
+    const suffixes = SLOT_FALLBACK_SUFFIXES[slot.angleType] ?? SLOT_FALLBACK_SUFFIXES['证据辨识'];
+    const knowledgePoint = (unit.concept + suffixes[variant % suffixes.length]).slice(0, 24);
+    const prompt = slotFallbackPrompt(slot, unit, movie, knowledgePoint);
+    const options = slot.type === 'short' ? [] : slotFallbackOptions(unit, slot).map(option => ({
+        id: option.id,
+        text: stripTrailingSentencePunctuation(option.text),
+    }));
+    const correctAnswer = slot.type === 'multiple' ? ['opt-a', 'opt-b'] : slot.type === 'single' ? 'opt-a' : '记录里的“' + unit.filmEvidence + '”是本题的直接依据，结论只应限定在它能支持的范围里。';
+    return {
+        id: 'q' + String(slot.index).padStart(2, '0'),
+        type: slot.type,
+        difficulty: slot.difficulty,
+        unitId: unit.unitId,
+        subject: unit.subject,
+        concept: unit.concept,
+        learningTakeaway: '读“' + knowledgePoint + '”时，用记录里的具体线索核对判断，而不是凭印象下结论。',
+        evidenceUsed: '《' + fallbackDisplayTitle(movie) + '》的已看记录提供了“' + unit.filmEvidence + '”这一具体线索。',
+        knowledgePoint,
+        sourceTitle: movie.title,
+        answerRationale: '本题考察“' + knowledgePoint + '”：正确选项回到记录里的“' + unit.filmEvidence + '”，判断依据只在这段材料能支撑的范围内。',
+        distractorRationale: slot.type === 'short'
+            ? ''
+            : '其余选项都离开了“' + knowledgePoint + '”要求的依据来源，要么只看片名年份，要么用个人印象替换记录里的细节，都不能作为本题的判断依据。',
+        prompt,
+        options,
+        correctAnswer,
+        correctOptionIds: slot.type === 'short' ? [] : (Array.isArray(correctAnswer) ? correctAnswer : [correctAnswer]),
+        explanation: '记录里写着“' + unit.filmEvidence + '”。把它对应到“' + unit.concept + '”，因此' + knowledgePoint + '这一层意思只能从这段材料出发去判断。',
+        filmIndex: Math.max(0, movieIndex),
+        answerKeywords: slot.type === 'short' ? [knowledgePoint, '已看记录', '具体线索', unit.concept, '判断依据'] : [],
+        mediaTitle: movie.title,
+        quote: null,
+    };
 }
 
 /**
@@ -967,13 +1095,15 @@ async function generateQuizBySlots(
 ): Promise<QuizCacheData | null> {
     const startedAtMs = Date.now();
     const promptMovies = slotMovies(movies);
-    const fallbackPool = fallbackQuizQuestions(movies);
+    const movieByTitle = new Map(movies.map((movie, index) => [movie.title, index]));
     let calls = 0;
+    /** 预算只拦「修复轮」，首轮永远放行：首轮被拦等于白送一个降级格，比多打一次上游更亏。 */
     const budgetExhausted = (): boolean =>
         calls >= slotBudget.maxCallsPerSet || Date.now() - startedAtMs > slotBudget.maxElapsedMs;
 
-    const callSlot = async (messages: MimoMessage[], maxTokens: number, route: 'quiz-units' | 'quiz-review'): Promise<{ payload: unknown; provider: TextProvider; model: string }> => {
-        if (budgetExhausted()) throw new AppError('AI_UPSTREAM_ERROR', '出题槽位调用超出预算', 502);
+    const callSlot = async (messages: MimoMessage[], maxTokens: number, route: 'quiz-units' | 'quiz-review', isRetry = false): Promise<{ payload: unknown; provider: TextProvider; model: string }> => {
+        if (isRetry && budgetExhausted()) throw new AppError('AI_UPSTREAM_ERROR', '出题槽位调用超出预算', 502);
+        if (calls >= slotBudget.maxCallsPerSet) throw new AppError('AI_UPSTREAM_ERROR', '出题槽位调用超出预算', 502);
         calls += 1;
         const upstream = await callLlmJson(
             env,
@@ -990,7 +1120,22 @@ async function generateQuizBySlots(
         try {
             payload = parseAssistantJson<unknown>(upstream.payload);
         } catch (error) {
-            // 上游 200 但正文解析不出 JSON：与本地校验判废同类，单独记一条 invalid_output
+            // 上游 200 但正文解析不出 JSON：与本地校验判废同类，单独记一条 invalid_output。
+            // 这里必须记「正文长度 + 首尾片段 + finish_reason」三件套：截断（length）与
+            // 空补全（5.3-flash 思考吃满 max_tokens）在只看错误消息时完全分不开。
+            const text = extractAssistantText(upstream.payload);
+            const finishReason = (upstream.payload as { choices?: Array<{ finish_reason?: string }> } | null)?.choices?.[0]?.finish_reason;
+            console.warn('[QUIZ_DIAG]', JSON.stringify({
+                stage: 'slot_json_invalid',
+                requestId,
+                route,
+                provider: upstream.provider,
+                model: upstream.model,
+                length: text.length,
+                finishReason: finishReason ?? null,
+                head: text.slice(0, 120),
+                tail: text.slice(-120),
+            }));
             recordHealthEvent(env, { ...healthCtx, route }, 'traffic', upstream.provider, upstream.model, 'invalid_output', error);
             throw error;
         }
@@ -1021,6 +1166,7 @@ async function generateQuizBySlots(
                     unitSlotMessages(nickname, promptMovies, slot, QUIZ_UNIT_FIELDS_SPEC + QUIZ_UNITS_SHAPE_SPEC + (difficultyHint ?? ''), hint),
                     slotBudget.maxTokensUnit,
                     'quiz-units',
+                    round > 0,
                 );
                 try {
                     const unit = normalizeDailyKnowledgeUnit(unwrapSlotPayload(slotResult.payload, 'unit'), { day: 'quiz', locale: 'zh-CN', movies });
@@ -1066,7 +1212,7 @@ async function generateQuizBySlots(
     const questionSlots = planQuestionSlots(keptPairs.map(pair => ({ index: pair.slot.index, concept: pair.unit.concept })));
     onEvent?.({ type: 'stage', stage: 'review', status: 'start', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
 
-    const runQuestionSlot = async (slot: QuestionSlot, hint: string | null): Promise<InternalQuestion> => {
+    const runQuestionSlot = async (slot: QuestionSlot, hint: string | null, isRetry = false): Promise<InternalQuestion> => {
         const unit = unitByIndex.get(slot.unitIndex);
         if (!unit) throw new AppError('INVALID_AI_OUTPUT', '题位找不到归属单元', 502);
         const slotUnit: SlotUnit = {
@@ -1080,9 +1226,10 @@ async function generateQuizBySlots(
             questionSlotMessages(nickname, promptMovies, slotUnit, slot, QUIZ_REVIEW_SHAPE_SPEC + (difficultyHint ?? ''), hint),
             slotBudget.maxTokensQuestion,
             'quiz-review',
+            isRetry,
         );
         try {
-            const question = normalizeQuestion(unwrapSlotPayload(slotResult.payload, 'question'), slot.index - 1, movies);
+            const question = groundQuestionToUnit(normalizeQuestion(unwrapSlotPayload(slotResult.payload, 'question'), slot.index - 1, movies), unit, movies);
             assertQuestionMatchesSlot(question, slot, unit);
             return question;
         } catch (error) {
@@ -1092,13 +1239,21 @@ async function generateQuizBySlots(
         }
     };
 
+    /** 降级格按单元现造兜底题：单元一定存在（题位来自 surviving unit 表），影片取该单元的关联片。 */
+    const degradedQuestion = (slot: QuestionSlot, variant: number): InternalQuestion => {
+        const unit = unitByIndex.get(slot.unitIndex);
+        const title = unit?.relatedMedia?.title ?? '';
+        const index = movieByTitle.get(title) ?? 0;
+        return fallbackQuestionForSlot(slot, unit!, movies[index] ?? movies[0], index, variant);
+    };
+
     let questionsFinished = 0;
     const questionOutcomes = await mapWithGate(questionSlots, slotBudget.questionConcurrency, async (slot: QuestionSlot) => {
         let hint: string | null = null;
         let lastError: unknown = new Error('未知原因');
         for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
             try {
-                return await runQuestionSlot(slot, hint);
+                return await runQuestionSlot(slot, hint, round > 0);
             } catch (error) {
                 if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
                 lastError = error;
@@ -1110,24 +1265,30 @@ async function generateQuizBySlots(
     });
 
     const assembled: InternalQuestion[] = [];
-    let degradedSlots = 0;
+    // 记录哪些题位是降级来的：跨槽位查重时不能拿降级格再去打上游（它本来就是因为上游打不通才降级的）
+    const degraded = new Set<number>();
     questionOutcomes.forEach((outcome, index) => {
         const slot = questionSlots[index];
         if (outcome.ok) assembled.push(outcome.value);
         else {
-            assembled.push(fallbackQuestionForSlot(slot, fallbackPool));
-            degradedSlots += 1;
+            assembled.push(degradedQuestion(slot, 0));
+            degraded.add(index);
             console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'question_slot_fallback', requestId, slot: slot.index }));
         }
         questionsFinished += 1;
         onEvent?.({ type: 'progress', stage: 'review', chars: questionsFinished });
     });
+    let degradedSlots = degraded.size;
 
-    // 跨槽位唯一性：knowledgePoint 撞车只重生成后面那一格（≤修复轮数），仍撞车换兜底题，
-    // 不因为两格撞车把整套丢掉。
+    // 跨槽位唯一性：knowledgePoint 撞车只重生成撞车的那几格（≤修复轮数），仍撞车换兜底题，
+    // 不因为两格撞车把整套丢掉。同单元最多 5 个题位，兜底题的后缀变体足够错开。
+    //
+    // 一轮内的所有撞车格必须并行修：实测一套里撞车可达 9 格，串行修就是 9 次上游往返、
+    // 一次约 30 秒，光这一项就能吃掉四五分钟墙钟，还会把后面的槽位拖到预算线外。
+    const fallbackVariants = new Map<number, number>();
     for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
         const seenPoints = new Map<string, number>();
-        let repaired = false;
+        const collisions: Array<{ index: number; firstIndex: number }> = [];
         for (let index = 0; index < assembled.length; index += 1) {
             const question = assembled[index];
             const pointKey = normalizeSemanticKey(question.knowledgePoint);
@@ -1136,19 +1297,42 @@ async function generateQuizBySlots(
                 seenPoints.set(pointKey, index);
                 continue;
             }
+            collisions.push({ index, firstIndex });
+        }
+        if (collisions.length === 0) break;
+        const usedPoints = [...seenPoints.keys()].join('、');
+        for (const collision of collisions) {
+            console.warn('[QUIZ_DIAG]', JSON.stringify({
+                stage: 'knowledge_point_collision',
+                requestId,
+                slot: questionSlots[collision.index].index,
+                firstIndex: collision.firstIndex + 1,
+                round,
+            }));
+        }
+        await mapWithGate(collisions, slotBudget.questionConcurrency, async (collision) => {
+            const { index, firstIndex } = collision;
             const slot = questionSlots[index];
-            console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'knowledge_point_collision', requestId, slot: slot.index, firstIndex: firstIndex + 1, round }));
+            if (degraded.has(index)) {
+                // 降级格不再打上游，换一个后缀变体让考点错开
+                const nextVariant = (fallbackVariants.get(index) ?? 0) + 1;
+                fallbackVariants.set(index, nextVariant);
+                assembled[index] = degradedQuestion(slot, nextVariant);
+                return;
+            }
             try {
-                assembled[index] = await runQuestionSlot(slot, 'knowledgePoint 与第 ' + (firstIndex + 1) + ' 题重复（「' + question.knowledgePoint + '」），请换一个完全不同的考点');
+                assembled[index] = await runQuestionSlot(
+                    slot,
+                    'knowledgePoint 与第 ' + (firstIndex + 1) + ' 题重复（「' + assembled[index].knowledgePoint + '」）。本套已用考点：' + usedPoints + '。请换一个完全不同于这些的考点，并保证考点原样出现在题干里',
+                    true,
+                );
             } catch (error) {
                 logSlotFailure('knowledge_point_repair_failed', slot.index, round, error);
-                assembled[index] = fallbackQuestionForSlot(slot, fallbackPool);
+                assembled[index] = degradedQuestion(slot, 0);
+                degraded.add(index);
                 degradedSlots += 1;
             }
-            repaired = true;
-            seenPoints.set(normalizeSemanticKey(assembled[index].knowledgePoint), index);
-        }
-        if (!repaired) break;
+        });
     }
 
     try {
@@ -1161,6 +1345,7 @@ async function generateQuizBySlots(
             requestId,
             calls,
             degradedSlots,
+            elapsedMs: Date.now() - startedAtMs,
             error: error instanceof AppError ? error.code : 'PARSE',
             errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN',
         }));

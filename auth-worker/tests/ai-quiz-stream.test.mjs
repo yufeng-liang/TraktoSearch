@@ -245,3 +245,118 @@ test('quiz stream 的 watched 不足 7 部时按普通 JSON 错误返回，不�
         (error) => error.code === 'NOT_ENOUGH_MOVIES',
     );
 });
+
+// ---- 槽位降级必须仍然挂在已审校单元上 ----
+//
+// 历史事故：兜底题沿用整包兜底池（unitId=null、自带学科概念），只要有一格判废，
+// 整包校验必然在「AI question must come from a reviewed knowledge unit」处失败，
+// 单格降级会连带整套作废。这个用例把「全部题位都判废」推到极限，锁住降级只损失单格。
+
+const SLOT_SYNOPSES = [
+    '张艺谋执导，张译主演，讲述 1970 年代西北大漠中一名劳改犯为看女儿影像在胶片上跋涉的故事',
+    '金刚狼在二战长崎核爆中救下矢志郎，多年后受邀前往东京，卷入了一场关于生死的阴谋',
+    '迈尔斯被放射性蜘蛛咬伤后获得能力，与来自平行宇宙的多个蜘蛛侠并肩作战阻止粒子对撞机',
+    '吕克·贝松执导，让·雷诺饰演职业杀手莱昂，与玛蒂尔达因全家被害结成师徒关系，绿植与牛奶贯穿全片',
+    '星爵、火箭浣熊、格鲁特、卡魔拉和德拉克斯组队护送宇宙灵球，最终在山达尔星对抗罗南',
+    '语言与爱情交织的都市喜剧，讲述两位译者在一档节目里反复误解彼此用词的故事',
+    '阿宝与生父李山重逢，回到熊猫村修炼气功，对抗来自灵界的牛魔王天煞',
+];
+
+const SLOT_MOVIES = WATCHED_MOVIES.map((movie, index) => ({ ...movie, overview: SLOT_SYNOPSES[index] }));
+
+/** 从 fetch 的 init 里还原提示词全文：桩只需要看提示词就能判断这是单元槽位还是题位。 */
+function promptTextOf(init) {
+    if (!init || typeof init.body !== 'string') return '';
+    try {
+        const parsed = JSON.parse(init.body);
+        return (parsed.messages ?? []).map(message => String(message.content ?? '')).join('\n');
+    } catch {
+        return String(init.body);
+    }
+}
+
+function jsonCompletion(content) {
+    return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+    });
+}
+
+/** 按槽位提示词里钉死的 unitId/subjectGroup/白名单现造一个能过本地门槛的单元。 */
+function slotUnitPayload(prompt) {
+    const unitId = /unitId=unit-(\d+)/u.exec(prompt)?.[1] ?? '1';
+    const subjectGroup = /subjectGroup=([a-z_]+)/u.exec(prompt)?.[1] ?? 'film_expression';
+    const subjects = (/subject 从白名单【([^】]+)】/u.exec(prompt)?.[1] ?? '电影学').split('、');
+    const angle = /角度类型=([^（(，,]+)/u.exec(prompt)?.[1]?.trim() ?? '象征';
+    const evidenceBlock = /<WATCHED_EVIDENCE>(.*?)<\/WATCHED_EVIDENCE>/su.exec(prompt)?.[1] ?? '[]';
+    const movies = JSON.parse(evidenceBlock);
+    const movie = movies[(Number(unitId) - 1) % movies.length];
+    const synopsis = (movie.evidence ?? []).find(line => line.startsWith('简介：'))?.slice('简介：'.length) ?? movie.title;
+    const concept = '测试概念' + unitId;
+    return {
+        unit: {
+            unitId: 'unit-' + unitId,
+            unitVersion: 1,
+            locale: 'zh-CN',
+            relationType: 'direct_watch',
+            evidenceMode: 'film_fact',
+            subjectGroup,
+            subject: subjects[0],
+            concept,
+            title: '《' + movie.title + '》的' + angle + '角度与影像读法',
+            takeaway: '把' + concept + '放回影片材料里看，结论要能由这段简介原文复述出来。',
+            relatedMedia: { title: movie.title, mediaType: movie.mediaType },
+            filmEvidence: synopsis,
+            explanation: '这段材料给出的是可核验的事实，' + concept + '只用来解释它为什么这样成立。',
+            realWorldExample: '日常讨论作品时，先复述材料，再说自己补的那一层解释。',
+            boundary: '这里的说明来自已看记录里的事实材料，不是对影片的额外延伸解读。',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: { name: '已看记录', url: 'https://example.com/watched-record', evidence: '已看记录里的简介与类型原文。' },
+            checkQuestion: {
+                prompt: '这段材料里直接写到的内容是什么？',
+                options: [
+                    { id: 'a', text: synopsis.slice(0, 24) },
+                    { id: 'b', text: '材料之外的幕后花絮' },
+                    { id: 'c', text: '与' + concept + '无关的票房数字' },
+                ],
+                correctOptionIds: ['a'],
+                explanation: '材料直接写着这段简介，' + concept + '只是解释它的角度。',
+            },
+        },
+    };
+}
+
+test('quiz stream 全部题位判废时降级题仍挂在已审校单元上（整包不被判废）', async () => {
+    const originalFetch = globalThis.fetch;
+    let questionCalls = 0;
+    globalThis.fetch = async (url, init) => {
+        if (!String(url).includes('agnes-ai.com')) return new Response('unavailable', { status: 500 });
+        const prompt = promptTextOf(init);
+        if (prompt.includes('单槽位学习单元编辑')) return jsonCompletion(JSON.stringify(slotUnitPayload(prompt)));
+        // 题位一律返回结构不合格的 200：走满修复轮后全部降级
+        questionCalls += 1;
+        return jsonCompletion(JSON.stringify({ question: { type: 'unsupported' } }));
+    };
+    try {
+        const env = createEnv({
+            DB: createDbStub(),
+            AI_TEST_MODE: false,
+            AGNES_API_KEYS: 'test-agnes-key',
+            AI_DEFAULT_PROVIDER: 'agnes',
+        });
+        const events = await readEvents(await callStream({ ...QUIZ_BODY, watched: SLOT_MOVIES }, env));
+        assert.equal(events.at(-1).type, 'result');
+        const quiz = events.at(-1).quiz;
+        assert.equal(quiz.questions.length, 13, '降级后仍要下发 13 题');
+        assert.ok(questionCalls >= 13, '每个题位都要真的打过一次上游首轮');
+        for (const question of quiz.questions) {
+            assert.ok(question.unitId, '降级题必须挂在已审校单元上，否则整包会被判废');
+            assert.ok(String(question.concept).startsWith('测试概念'), '降级题必须沿用命中单元的概念');
+            assert.ok(String(question.knowledgePoint).startsWith('测试概念'), '降级题的考点要能追溯到单元概念');
+            assert.ok(String(question.evidenceUsed).length >= 8, '降级题仍要带可核验证据');
+        }
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
