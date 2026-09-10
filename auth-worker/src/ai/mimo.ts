@@ -113,6 +113,63 @@ export function extractAssistantText(payload: unknown): string {
     throw new AppError('INVALID_AI_OUTPUT', 'AI text response is invalid', 502);
 }
 
+/**
+ * 容忍模型输出的两种常见 JSON 缺陷，只做「能重新解析成功」的修复，解析不了就原样放弃：
+ *
+ * 1. 收尾引号多打反斜杠：中文正文里模型会把字符串的结束引号写成 `\"`（实测
+ *    `…支撑了本题的对比。\"\n  }\n}`），JSON.parse 直接判废，但正文其实完整。
+ *    只在引号后面紧跟 `,`/`}`/`]` 时才去掉这个反斜杠——正文内部的合法转义引号
+ *    后面不会紧接结构分隔符。
+ * 2. 尾部被上游截断：字符串没闭合、括号没配平。补上收尾引号与缺失的闭合括号，
+ *    让已经写完的字段能救回来。
+ */
+export function repairAssistantJson(text: string): string | null {
+    const unescaped = text.replace(/\\(["\\])(\s*[,}\]])/gu, '$1$2');
+    if (unescaped !== text) {
+        try {
+            JSON.parse(unescaped);
+            return unescaped;
+        } catch {
+            // 还有别的缺陷，继续走补括号
+        }
+    }
+    const start = unescaped.indexOf('{');
+    if (start < 0) return null;
+    const body = unescaped.slice(start);
+    const stack: string[] = [];
+    let inString = false;
+    let escaped = false;
+    for (const char of body) {
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') inString = false;
+            continue;
+        }
+        if (char === '"') inString = true;
+        else if (char === '{' || char === '[') stack.push(char);
+        else if (char === '}' || char === ']') stack.pop();
+    }
+    if (!inString && stack.length === 0) return null;
+    // 截断点落在键名或冒号后面时，那个半截元素补不回来：退到最后一个完整元素再补括号
+    let head = body;
+    if (/(?:,\s*)?"[^"]*"\s*:\s*$/u.test(body)) {
+        const cut = Math.max(body.lastIndexOf(','), body.lastIndexOf('{'));
+        if (cut > 0) head = body.slice(0, cut);
+    }
+    let repaired = head;
+    if (inString && !head.endsWith('"')) repaired += '"';
+    for (let index = stack.length - 1; index >= 0; index -= 1) {
+        repaired += stack[index] === '{' ? '}' : ']';
+    }
+    try {
+        JSON.parse(repaired);
+        return repaired;
+    } catch {
+        return null;
+    }
+}
+
 export function parseAssistantJson<T>(payload: unknown): T {
     const text = extractAssistantText(payload)
         .replace(/^```(?:json)?\s*/i, '')
@@ -121,6 +178,14 @@ export function parseAssistantJson<T>(payload: unknown): T {
     try {
         return JSON.parse(text) as T;
     } catch {
+        const repaired = repairAssistantJson(text);
+        if (repaired !== null) {
+            try {
+                return JSON.parse(repaired) as T;
+            } catch {
+                // 修复结果仍不可解析：按原始失败处理
+            }
+        }
         throw new AppError('INVALID_AI_OUTPUT', 'AI JSON response is invalid', 502);
     }
 }
