@@ -1413,3 +1413,20 @@ tbody tr:last-child td { border-bottom: none; }
     font-size: 16px;
     line-height: 1.2;
 }
+
+/* ===== AI 健康 ===== */
+.ai-health-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 16px 0; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.segmented button { background: transparent; border: 0; color: var(--text-dim); padding: 8px 14px; cursor: pointer; font-size: 13px; }
+.segmented button.active { background: var(--surface-hover); color: var(--text); }
+.ai-provider-card .health-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+.ai-key-pool { margin-top: 10px; padding: 10px; border: 1px dashed var(--border); border-radius: 10px; }
+.ai-key-title { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.ai-key-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+.ai-card-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+.ai-probe-model { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+.ai-probe-note { font-size: 12px; color: var(--text-dim); }
+.text-ok { color: var(--success); }
+.text-danger { color: var(--danger); }
+.mono { font-family: var(--font-mono); }
+.health-dot.warn { background: var(--warning); box-shadow: 0 0 10px var(--warning); }

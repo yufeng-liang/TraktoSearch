@@ -363,6 +363,37 @@ const API = {
         };
     },
 
+    async getAiHealth(window = '24h') {
+        return this.get(`/admin/ai/health?window=${encodeURIComponent(window)}`);
+    },
+
+    async probeAiHealth(body) {
+        // 探针可能比常规请求慢（最长 10s 超时），用更长超时直连 fetch
+        const token = this.getToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        activeRequestControllers.add(controller);
+        try {
+            const response = await fetch(`${API_BASE}/admin/ai/health/probe`, {
+                method: 'POST', headers,
+                body: JSON.stringify(body), signal: controller.signal,
+            });
+            if (response.status === 401) {
+                localStorage.removeItem('tts-access-token');
+                window.location.href = this.getAccessLoginUrl();
+                throw new Error('UNAUTHORIZED');
+            }
+            const data = await response.json();
+            if (!response.ok) throw new Error(data?.message || `Probe failed (${response.status})`);
+            return data.data;
+        } finally {
+            clearTimeout(timeoutId);
+            activeRequestControllers.delete(controller);
+        }
+    },
+
     async getFriends(params = {}) {
         const query = new URLSearchParams({
             q: params.q || '',
@@ -934,6 +965,7 @@ function render() {
                 break;
             case 'audit': renderAudit(main, renderToken); break;
             case 'feedback': renderFeedback(main, renderToken); break;
+            case 'ai-health': renderAiHealth(main, renderToken); break;
             default: renderDashboard(main, renderToken);
         }
         main.style.opacity = '1';
@@ -2526,3 +2558,172 @@ window.addEventListener('hashchange', () => { parseHash(); updateActiveNav(); re
 parseHash();
 updateActiveNav();
 render();
+
+// ===== AI 健康 =====
+const AI_PROVIDER_META = {
+    zhipu: {
+        label: '智谱 GLM',
+        consoleUrl: 'https://open.bigmodel.cn/console/overview',
+        models: ['glm-5.3-flash', 'glm-4.7', 'glm-4.7-flash', 'glm-4.6v', 'glm-4.5-air'],
+    },
+    agnes: { label: 'Agnes AI', consoleUrl: 'https://agnes-ai.com/', models: ['agnes-2.5-flash'] },
+    mimo: { label: '小米 MiMo', consoleUrl: 'https://platform.xiaomimimo.com/', models: ['mimo-v2.5-pro'] },
+};
+const AI_HEALTH_STATE = { window: '24h', data: null };
+
+function renderAiHealth(container, renderToken) {
+    container.innerHTML = `
+        <h1 class="section-title">AI 健康</h1>
+        <p class="section-subtitle">供应商探针与真实流量健康度</p>
+        <div class="ai-health-toolbar">
+            <div class="segmented" id="aiHealthWindow">
+                <button type="button" data-window="24h">24 小时</button>
+                <button type="button" data-window="7d">7 天</button>
+            </div>
+            <button type="button" class="btn btn-sm" id="aiProbeAllBtn">全部探测</button>
+        </div>
+        <div class="detail-grid" id="aiProviderCards"></div>
+        <div class="card" style="margin-top:16px">
+            <div class="card-header"><span class="card-title">事件明细（最近 50 条）</span></div>
+            <div id="aiEventTable"></div>
+        </div>
+    `;
+    container.querySelector('#aiHealthWindow').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-window]');
+        if (!btn) return;
+        AI_HEALTH_STATE.window = btn.dataset.window;
+        loadAiHealth(container, renderToken);
+    });
+    container.querySelector('#aiProbeAllBtn').addEventListener('click', () => runAiProbeAll(container));
+    loadAiHealth(container, renderToken);
+}
+
+async function loadAiHealth(container, renderToken) {
+    const cardsEl = container.querySelector('#aiProviderCards');
+    const tableEl = container.querySelector('#aiEventTable');
+    if (!cardsEl || !tableEl) return;
+    container.querySelectorAll('#aiHealthWindow button').forEach(b =>
+        b.classList.toggle('active', b.dataset.window === AI_HEALTH_STATE.window));
+    cardsEl.innerHTML = '<div class="loading-skeleton" style="height:180px"></div>';
+    tableEl.innerHTML = '<div class="loading-skeleton" style="height:120px"></div>';
+    try {
+        const data = await API.getAiHealth(AI_HEALTH_STATE.window);
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+        AI_HEALTH_STATE.data = data;
+        cardsEl.innerHTML = Object.entries(AI_PROVIDER_META).map(([key, meta]) =>
+            aiProviderCardHtml(key, meta, data)).join('');
+        bindAiCardActions(container);
+        tableEl.innerHTML = aiEventTableHtml(data);
+    } catch (error) {
+        if (renderToken !== state.renderToken) return;
+        cardsEl.innerHTML = `<div class="card"><div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-desc">${escapeHtml(error.message || '未知错误')}</div></div></div>`;
+        tableEl.innerHTML = '';
+    }
+}
+
+function aiHealthLight(providerKey, data) {
+    const agg = (data.aggregates || []).filter(a => a.provider === providerKey);
+    const total = agg.reduce((sum, a) => sum + Number(a.total || 0), 0);
+    const success = agg.reduce((sum, a) => sum + Number(a.success || 0), 0);
+    const recent = (data.recent || []).filter(r => r.provider === providerKey);
+    const lastFail = recent.find(r => r.outcome !== 'success');
+    const lastProbe = recent.find(r => r.source === 'probe');
+    const hasInvalid = recent.some(r => r.outcome === 'invalid_output');
+    const coolingKeys = (data.keyPool || []).filter(k => providerKey === 'agnes' && k.status === 'COOLING' && k.cooldownRemainingSec > 0);
+    let level = 'ok';
+    if ((total > 0 && success / total < 0.8) || lastFail?.outcome === 'upstream_error' && (Date.now() / 1000 - lastFail.created_at) < 86400) level = 'fail';
+    else if (hasInvalid || coolingKeys.length > 0) level = 'warn';
+    return { level, total, successRate: total > 0 ? success / total : null, lastFail, lastProbe, hasInvalid };
+}
+
+function aiProviderCardHtml(providerKey, meta, data) {
+    const s = aiHealthLight(providerKey, data);
+    const aggRows = (data.aggregates || []).filter(a => a.provider === providerKey);
+    const avgMs = aggRows.length && aggRows[0].avg_duration_ms != null ? Math.round(aggRows[0].avg_duration_ms) : null;
+    const lastErr = s.lastFail;
+    const keyPoolRows = providerKey === 'agnes' ? (data.keyPool || []).map(k => {
+        const tail = k.fingerprint.slice(-4);
+        const cooling = k.status === 'COOLING' && k.cooldownRemainingSec > 0;
+        return `<div class="ai-key-row"><span class="mono">…${tail}</span><span class="${cooling ? 'text-danger' : 'text-ok'}">${cooling ? `冷却 ${Math.ceil(k.cooldownRemainingSec / 60)} 分钟` : k.status === 'ACTIVE' ? '可用' : k.status}</span></div>`;
+    }).join('') : '';
+    return `
+    <div class="card ai-provider-card" data-provider="${providerKey}">
+        <div class="card-header">
+            <span class="card-title"><span class="health-dot ${s.level === 'ok' ? 'ok' : s.level === 'fail' ? 'fail' : 'warn'}"></span>${meta.label}</span>
+            <span class="ai-probe-note">${s.lastProbe ? `最近探测 ${formatTime(s.lastProbe.created_at)}` : '未探测'}</span>
+        </div>
+        <div class="health-row"><span>${AI_HEALTH_STATE.window} 请求量</span><span>${s.total}</span></div>
+        <div class="health-row"><span>成功率</span><span class="${s.successRate != null && s.successRate < 0.8 ? 'text-danger' : ''}">${s.successRate != null ? `${Math.round(s.successRate * 100)}%` : '—'}</span></div>
+        <div class="health-row"><span>平均耗时</span><span>${avgMs != null ? `${avgMs} ms` : '—'}</span></div>
+        <div class="health-row"><span>最近错误</span><span class="${lastErr ? 'text-danger' : 'text-ok'}">${lastErr ? `${formatTime(lastErr.created_at)} ${lastErr.http_status ?? ''} ${lastErr.error_code || ''}` : '无'}</span></div>
+        ${keyPoolRows ? `<div class="ai-key-pool"><div class="ai-key-title">Key 池状态</div>${keyPoolRows}</div>` : ''}
+        <div class="ai-card-actions">
+            <select class="ai-probe-model" aria-label="探测模型">
+                ${meta.models.map(m => `<option value="${m}">${m}</option>`).join('')}
+            </select>
+            <button type="button" class="btn btn-ghost btn-sm js-ai-probe-one">探测</button>
+            <a class="btn btn-ghost btn-sm" href="${meta.consoleUrl}" target="_blank" rel="noopener noreferrer">前往控制台 ↗</a>
+        </div>
+    </div>`;
+}
+
+function bindAiCardActions(container) {
+    container.querySelectorAll('.ai-provider-card .js-ai-probe-one').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const card = btn.closest('.ai-provider-card');
+            const provider = card.dataset.provider;
+            const model = card.querySelector('.ai-probe-model').value;
+            btn.disabled = true;
+            btn.textContent = '探测中…';
+            try {
+                const result = await API.probeAiHealth({ provider, model });
+                const r = result.results?.[0];
+                if (r?.outcome === 'success') showToast(`${provider} 探测成功（${r.durationMs} ms）`);
+                else showToast(`${provider} 探测失败：${r?.errorCode || '未知'}${r?.httpStatus ? ` HTTP ${r.httpStatus}` : ''}`, 'error');
+                await loadAiHealth(container, state.renderToken);
+            } catch (error) {
+                showToast(`探测失败：${error.message}`, 'error');
+                btn.disabled = false;
+                btn.textContent = '探测';
+            }
+        });
+    });
+}
+
+async function runAiProbeAll(container) {
+    const btn = container.querySelector('#aiProbeAllBtn');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '探测中…';
+    try {
+        const result = await API.probeAiHealth({ all: true });
+        const failCount = (result.results || []).filter(r => r.outcome !== 'success').length;
+        if (failCount === 0) showToast('三家探测全部成功');
+        else showToast(`${failCount} 家探测失败，见卡片详情`, 'error');
+        await loadAiHealth(container, state.renderToken);
+    } catch (error) {
+        showToast(`探测失败：${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '全部探测';
+    }
+}
+
+function aiEventTableHtml(data) {
+    const rows = data.recent || [];
+    if (rows.length === 0) {
+        return '<div class="empty-state"><div class="empty-title">窗口内无事件</div><div class="empty-desc">尚无真实 AI 流量或探针记录</div></div>';
+    }
+    return `<div class="table-scroll"><table><thead><tr>
+        <th>时间</th><th>来源</th><th>路由</th><th>供应商</th><th>模型</th><th>耗时</th><th>结果</th>
+    </tr></thead><tbody>${rows.map(r => `
+        <tr>
+            <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${formatTime(r.created_at)}</td>
+            <td>${r.source === 'probe' ? '探针' : '流量'}</td>
+            <td>${escapeHtml(r.route || '—')}</td>
+            <td>${escapeHtml(r.provider)}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(r.model)}</td>
+            <td>${r.duration_ms != null ? `${r.duration_ms} ms` : '—'}</td>
+            <td class="${r.outcome === 'success' ? 'text-ok' : 'text-danger'}">${r.outcome === 'success' ? '成功' : `${r.outcome === 'invalid_output' ? '输出不合格' : '上游错误'}${r.error_code ? ` · ${escapeHtml(r.error_code)}` : ''}${r.http_status ? ` · HTTP ${r.http_status}` : ''}`}</td>
+        </tr>`).join('')}</tbody></table></div>`;
+}
