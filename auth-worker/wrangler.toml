@@ -48,6 +48,10 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # DOUBAN_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
 # OMDb_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
 # TRAKT_CREDENTIALS_ENCRYPTION_KEY
+# BAILIAN_API_KEY（阿里云百炼 Model Studio 新加坡业务空间的 OpenAI 兼容 key；用
+# `wrangler secret put BAILIAN_API_KEY` 写入。可选 BAILIAN_BASE_URL 覆盖业务空间域名，
+# 不配则用代码里的默认域名。免费额度按模型独立（每模型 1M token），用尽返 403
+# AllocationQuota.FreeTierOnly，由 MODEL_FALLBACKS_BY_PROVIDER.bailian 自动换下一个模型）
 # AGNES_API_KEYS（Agnes AI 多 key：兼容单值、JSON 数组、逗号/换行分隔；多 key 自动轮换容灾）
 # AI_DEFAULT_PROVIDER 在 [vars] 中配置（主路径 zhipu：GLM 独立计费、输出稳定；agnes 共享池 429 会整场挂起，仅作第一备选轮替）；不在此处写密钥
 # ADMIN_EMAIL

@@ -48,6 +48,13 @@ import {
     type QuizSlotUnit,
 } from './daily-knowledge.ts';
 import {
+    callBailianJson,
+    validateBailianModel,
+    BAILIAN_MODELS,
+    type BailianEnvironment,
+    type BailianMessage,
+} from './bailian.ts';
+import {
     publicDailyIllustration,
     type BackgroundScheduler,
     type DailyIllustrationEnvironment,
@@ -90,7 +97,7 @@ const QUIZ_DIFFICULTY_EASY_HINT = '用户反馈近期题目偏简单：本轮适
 const AI_TEXT_CACHE_VERSION = 'v2';
 const LEGACY_AI_CACHE_VERSION = 'v1';
 
-export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, ZhipuEnvironment, DailyIllustrationEnvironment {
+export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, ZhipuEnvironment, BailianEnvironment, DailyIllustrationEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
     // 概念插图优先使用专用绑定；未配置时由 daily-illustration 复用现有私有媒体桶。
     AI_IMAGE_CACHE?: R2Bucket;
@@ -206,10 +213,10 @@ interface TasteEvidence {
 }
 
 // 文本供应商三梯队：zhipu > agnes > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
-type TextProvider = 'mimo' | 'agnes' | 'zhipu';
+type TextProvider = 'mimo' | 'agnes' | 'zhipu' | 'bailian';
 
 // 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
-const PROVIDER_LADDER: readonly TextProvider[] = ['zhipu', 'agnes', 'mimo'];
+const PROVIDER_LADDER: readonly TextProvider[] = ['zhipu', 'bailian', 'agnes', 'mimo'];
 
 // 出题链路上游超时（本地闭环实测，glm-4.7 关思考、13 题全字段）：
 // units 段 139~174s / 输出 5.2~7k 字符，review 段 256~271s / 输出 16~17.5k 字符。
@@ -255,6 +262,8 @@ const DAILY_UPSTREAM_TIMEOUT_MS = 180_000;
 const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
     agnes: 'agnes-2.5-flash',
     zhipu: 'glm-4.7',
+    // 百炼主模型取实测最快的一档（4 套 87~129s、0 降级格），额度梯队在 MODEL_FALLBACKS_BY_PROVIDER
+    bailian: 'qwen3.6-flash',
     mimo: 'mimo-v2.5-pro',
 };
 
@@ -264,6 +273,31 @@ const MODEL_FALLBACKS_BY_PROVIDER: Record<TextProvider, readonly string[]> = {
     agnes: [],
     zhipu: ['glm-4.7-flash', 'glm-5.3-flash', 'glm-4.5-air', 'glm-4.6v'],
     mimo: [],
+    // 百炼的梯队本质是「免费额度轮换」：每个模型 100 万 token 独立额度，用尽返回
+    // 403 AllocationQuota.FreeTierOnly，换一个 model id 就能继续白嫖下一个模型的额度。
+    // 顺序按真机实测的单套墙钟排（同一套 13 题槽位流水线，均为 0 降级格）：
+    // qwen3.6-flash 87~129s < deepseek-v4-flash 119s < qwen3.7-flash 124s < qwen-flash 146s
+    // < qwen3.8-flash 160s < glm-5.2 227s；后面的 plus/max/pro 档只作额度兜底，慢但更强。
+    bailian: [
+        'qwen3.7-flash',
+        'deepseek-v4-flash',
+        'qwen-flash',
+        'qwen3.8-flash',
+        'qwen3.5-flash',
+        'glm-5.2',
+        'glm-5.1',
+        'kimi-k3',
+        'qwen3.6-plus',
+        'qwen3.6-max-preview',
+        'qwen3-max',
+        'qwen-max',
+        'qwen-plus',
+        'qwen-turbo',
+        'deepseek-v4-pro',
+        'qwen3.7-plus',
+        'qwen3.8-max',
+        'qwen3.7-max',
+    ],
 };
 
 interface LlmJsonResult {
@@ -1121,7 +1155,7 @@ async function generateQuizBySlots(
             provider,
             model,
             messages,
-            { maxCompletionTokens: maxTokens, timeoutMs: slotBudget.slotTimeoutMs, stream: provider === 'zhipu' },
+            { maxCompletionTokens: maxTokens, timeoutMs: slotBudget.slotTimeoutMs, stream: provider === 'zhipu' || provider === 'bailian' },
             fallbackModel,
             { route, requestId },
             { ...healthCtx, route },
@@ -3254,6 +3288,9 @@ function resolveTextModel(
         if (typeof requested === 'string' && (ZHIPU_MODELS as readonly string[]).includes(requested)) {
             return { provider: 'zhipu', model: requested, fallbackModel: mimoDefault };
         }
+        if (typeof requested === 'string' && (BAILIAN_MODELS as readonly string[]).includes(requested)) {
+            return { provider: 'bailian', model: validateBailianModel(requested), fallbackModel: mimoDefault };
+        }
         return { provider: 'mimo', model: validateMimoModel(requested), fallbackModel: agnesDefault };
     }
     // 配置缺失、空白或拼写错误都不能静默切到没有余额的 MiMo 文本模型。
@@ -3262,6 +3299,9 @@ function resolveTextModel(
         : '';
     // 未指定模型时默认主供应商走 zhipu（GLM 独立计费、输出稳定），agnes 作第一备选；
     // 生产可用 AI_DEFAULT_PROVIDER 显式覆盖。agnes 共享池 429 冷却会整场挂起，不作为默认。
+    if (configuredProvider === 'bailian') {
+        return { provider: 'bailian', model: DEFAULT_MODEL_BY_PROVIDER.bailian, fallbackModel: mimoDefault };
+    }
     return configuredProvider === 'mimo'
         ? { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault }
         : configuredProvider === 'agnes'
@@ -3285,10 +3325,12 @@ async function callLlmJson(
     // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
     // GLM 实测可用且独立计费，作为默认主供应商；每家主路径都要含自己在内先试主模型。
     const order: TextProvider[] = provider === 'zhipu'
-        ? ['zhipu', 'agnes', 'mimo']
+        ? ['zhipu', 'bailian', 'agnes', 'mimo']
         : provider === 'agnes'
-            ? ['agnes', 'zhipu', 'mimo']
-            : ['mimo', 'agnes', 'zhipu'];
+            ? ['agnes', 'zhipu', 'bailian', 'mimo']
+            : provider === 'bailian'
+                ? ['bailian', 'zhipu', 'agnes', 'mimo']
+                : ['mimo', 'agnes', 'zhipu', 'bailian'];
     let lastError: unknown = null;
     const healthCtx: HealthRouteContext | undefined = health;
     // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，
@@ -3308,7 +3350,9 @@ async function callLlmJson(
                     ? await callAgnesJson(env, m, messages as unknown as AgnesMessage[], options)
                     : p === 'zhipu'
                         ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
-                        : await callMimoJson(env, m as MimoModel, messages, options);
+                        : p === 'bailian'
+                            ? await callBailianJson(env, m, messages as unknown as BailianMessage[], options)
+                            : await callMimoJson(env, m as MimoModel, messages, options);
                 const durationMs = Date.now() - startedAtMs;
                 // 未配置/测试模式下供应商返回 null 表示该家不可用：继续轮下一家；
                 // 全部轮完仍未成功时由函数末尾按主供应商契约返回 null 或上抛。
