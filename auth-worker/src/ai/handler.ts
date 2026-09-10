@@ -205,10 +205,26 @@ type TextProvider = 'mimo' | 'agnes' | 'zhipu';
 // 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
 const PROVIDER_LADDER: readonly TextProvider[] = ['zhipu', 'agnes', 'mimo'];
 
-// 出题链路上游单请求超时：客户端 OkHttp 读超时 90s，三段上游（units→review，失败再轮替）
-// 若各家都按 90s 跑，最坏情况客户端早已断开。单请求收紧到 40s，最坏两轮×两段≈4 次请求
-// 仍在 90s 内结束；超预算后立即落离线兜底题，保证 App 端永远在 90s 内拿到响应。
-const QUIZ_UPSTREAM_TIMEOUT_MS = 40_000;
+// 出题链路上游超时（本地闭环 quiz-lab 实测，glm-4.7 关思考、13 题全字段）：
+// units 段 75~143s / 输出 5236 字符，review 段 205~275s / 输出 17537 字符。
+// 流式端点每 10s 有事件/心跳保活，客户端 90s 读超时不再构成约束，因此按真实生成
+// 时长放宽；总预算给用户等待封顶，超预算立即落离线兜底题而不是继续烧上游。
+const QUIZ_UNITS_TIMEOUT_MS = 180_000;
+const QUIZ_REVIEW_TIMEOUT_MS = 300_000;
+// 单轮最坏时长（含两段各自超时上限）：剩余预算不足一轮时不再开新一轮，
+// 否则会出现「第二轮刚跑完 units 就没预算」的白烧——实测那次总耗时被拖到 773s。
+const QUIZ_ROUND_MAX_MS = QUIZ_UNITS_TIMEOUT_MS + QUIZ_REVIEW_TIMEOUT_MS;
+const QUIZ_TOTAL_BUDGET_MS = 500_000;
+
+// 单段输出上限（tokens）：旧值 4600 会把 review 段 17.5k 字符的输出拦腰截断，
+// finish_reason=length 后 JSON 必不完整、解析必失败——这是真机出题永远降级的根因之一。
+// GLM 实测接受 max_tokens 20000。
+const QUIZ_MAX_TOKENS_UNITS = 6000;
+const QUIZ_MAX_TOKENS_REVIEW = 13000;
+
+// 每日知识同样是两段 LLM 生成（候选 2600 / 二审 3000 tokens），40s 预算下必超时降级；
+// 它与出题共用流式预算口径，但不走向客户端推送进度。
+const DAILY_UPSTREAM_TIMEOUT_MS = 180_000;
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
     agnes: 'agnes-2.5-flash',
@@ -287,6 +303,10 @@ export async function handleAiApi(
     if (path === '/api/ai/quiz') {
         assertAction(body, 'quiz');
         return handleQuiz(body, env, requestId, authenticatedPayload, background);
+    }
+    if (path === '/api/ai/quiz/stream') {
+        assertAction(body, 'quiz');
+        return handleQuizStream(body, env, requestId, authenticatedPayload, background);
     }
     if (path === '/api/ai/quiz/submit') {
         assertAction(body, ['quiz.submit', 'quiz_submit', 'submit']);
@@ -595,6 +615,138 @@ async function handleQuiz(
 }
 
 /**
+ * 流式出题：鉴权/配额/选题等前置同步完成后（失败仍按普通 JSON 错误返回），再开 NDJSON 流。
+ * 生成期间每有真实进展写一行事件（stage/progress），阶段间隙每 10s 补心跳，
+ * 最后写 result（含离线兜底题）或 error。
+ *
+ * 为什么需要它：两阶段实测 280~420s，而客户端 OkHttp 读超时 90s 按「两次数据间隔」计时，
+ * 一次性响应必被掐断；流式下每 10s 有字节，客户端可以一直等，同时把真实阶段暴露给 UI。
+ * 生成侧不受客户端断开影响（不传 background，避免响应返回后调用 waitUntil 报错）。
+ */
+async function handleQuizStream(
+    body: Record<string, unknown>,
+    env: AiEnvironment,
+    requestId: string,
+    payload: AiJwtPayload,
+    background: BackgroundScheduler | undefined,
+): Promise<Response> {
+    const healthCtx: HealthRouteContext = { route: 'quiz', requestId, background };
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
+    if (body.questionCount !== undefined && body.questionCount !== QUIZ_QUESTION_COUNT) {
+        throw new AppError('INVALID_QUESTION_COUNT', 'Quiz must contain exactly 13 questions', 400);
+    }
+    const movies = readMovies(body);
+    if (movies.length < 7) throw new AppError('NOT_ENOUGH_MOVIES', 'At least 7 watched movies are required', 400);
+    const sessionId = readSessionId(body);
+
+    // 用标准 TransformStream（Workers 与 Node 测试环境都可用），IdentityTransformStream
+    // 是 workerd 专有扩展，本地测试会 ReferenceError。
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+    const startedAtMs = Date.now();
+    let closed = false;
+    const writeEvent = async (event: QuizStreamEvent): Promise<void> => {
+        if (closed) return;
+        try {
+            await writer.write(encoder.encode(JSON.stringify(event) + '\n'));
+        } catch {
+            // 客户端断开：停止推送。生成侧仍会跑完当前轮（上游超时兜底），不做中途取消。
+            closed = true;
+        }
+    };
+    // 心跳兜底：上游 TTFB 可达 20s、阶段切换也有空窗，保证客户端 10s 内必收到字节。
+    const configuredHeartbeat = Number(env.AI_QUIZ_STREAM_HEARTBEAT_MS);
+    const heartbeat = setInterval(() => {
+        void writeEvent({ type: 'ping', elapsedMs: Date.now() - startedAtMs });
+    }, Number.isFinite(configuredHeartbeat) && configuredHeartbeat > 0 ? configuredHeartbeat : 10_000);
+
+    void (async () => {
+        try {
+            // 客户端指定 quizId 且缓存命中：直接下发（重玩/防重路径，不重新生成）
+            if (body.quizId !== undefined) {
+                const quizId = readOpaqueId(body.quizId, 'quizId');
+                const cached = await readQuizCacheCompat(env, payload.sub, quizId);
+                if (cached) {
+                    await writeEvent({ type: 'result', quiz: publicQuiz(parseQuizCache(cached)) });
+                    return;
+                }
+            }
+            const quota = await reserveAiQuota(env, payload.sub, payload.device, sessionId);
+            const nickname = await getFriendNickname(env, payload.sub);
+            const avoidedMediaIds = await readAvoidedMediaIds(env, payload.sub, body.excludedQuizIds);
+            const selectedMovies = selectQuizMovies(movies, avoidedMediaIds);
+            const requestedQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
+            const difficultyHint = await readQuizDifficultyHint(env, payload.sub);
+            const generated = await generateQuiz(
+                env,
+                provider,
+                model,
+                fallbackModel,
+                selectedMovies,
+                requestedQuizId,
+                sessionId,
+                nickname,
+                difficultyHint,
+                requestId,
+                healthCtx,
+                event => { void writeEvent(event); },
+            );
+            const finalData: QuizCacheData = generated ?? {
+                quizId: requestedQuizId ?? crypto.randomUUID(),
+                sessionId,
+                movies: selectedMovies,
+                questions: fallbackQuizQuestions(selectedMovies),
+                scoringVersion: 2,
+            };
+            const cacheKey = quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, finalData.quizId);
+            await writeAiCache(env, cacheKey, finalData, 24 * 60 * 60, payload.sub, 'quiz');
+            await writeEvent({ type: 'result', quiz: publicQuiz(finalData), quota: publicQuota(quota) });
+        } catch (error) {
+            await writeEvent({
+                type: 'error',
+                code: error instanceof AppError ? error.code : 'AI_UPSTREAM_ERROR',
+                message: 'Quiz generation failed',
+            });
+        } finally {
+            clearInterval(heartbeat);
+            closed = true;
+            try {
+                await writer.close();
+            } catch {
+                // 连接已断开
+            }
+        }
+    })();
+
+    return new Response(readable, {
+        headers: {
+            'Content-Type': 'application/x-ndjson; charset=utf-8',
+            // no-transform 阻止边缘压缩：gzip 会把小事件缓冲起来，心跳就失去意义
+            'Cache-Control': 'no-store, no-transform',
+            'X-Accel-Buffering': 'no',
+        },
+    });
+}
+
+/**
+ * 出题流式事件：/api/ai/quiz/stream 逐行 NDJSON 推给客户端。
+ * stage/progress 让 App 端显示真实阶段与生成进度，ping 用于长等待期间保活连接。
+ */
+export type QuizStreamEvent =
+    | { type: 'stage'; stage: 'units' | 'review'; status: 'start' | 'done'; attempt: number; provider: TextProvider; expectedChars: number }
+    | { type: 'progress'; stage: 'units' | 'review'; chars: number }
+    | { type: 'ping'; elapsedMs: number }
+    | { type: 'result'; quiz: unknown; quota?: unknown }
+    | { type: 'error'; code: string; message: string };
+
+// 阶段预期输出字符数（本地闭环实测：units 5236 / review 17537），供客户端换算进度百分比；
+// 上游输出长度会浮动，客户端应把超过 100% 的情况封顶显示。
+const QUIZ_STAGE_EXPECTED_CHARS: Record<'units' | 'review', number> = { units: 5200, review: 17500 };
+
+type QuizStreamEmitter = (event: QuizStreamEvent) => void;
+
+/**
  * 共享学习单元出题：第一阶段生成并审校 3～6 个学习单元，第二阶段把单元转换成 13 题。
  * 解析或结构校验失败（含输出截断）时返回 null，由调用方回退到离线题库。
  */
@@ -610,25 +762,28 @@ async function generateQuiz(
     difficultyHint: string | null,
     requestId: string,
     healthCtx: HealthRouteContext,
+    onEvent?: QuizStreamEmitter,
 ): Promise<QuizCacheData | null> {
     // 两阶段（units→review）整体最多跑三轮：第一轮上游返回 200 但输出过不了本地硬校验
     // 时换下一家供应商重试（实测 Agnes 会连续输出不合格 JSON，同家重试无效），三家全试仍
     // 失败才降级离线兜底题库。INVALID_MODEL 属请求配置错误，重试无意义，直接上抛。
     // 从主供应商在梯队中的位置开始向后试；主供应商位于梯队中游时先试自己再试下游，
     // 位于末位（mimo）时从头绕回 agnes/zhipu——保证最多三轮内三家都被覆盖。
-    // 每轮开头检查总预算：客户端读超时 90s，超预算继续重试只会白烧上游费用且响应
-    // 永远到不了客户端，此时立即返回 null 走确定性兜底。
+    // 每轮开头检查总预算：单轮实测 280~420s，三家全试会把用户等待拖到十几分钟，
+    // 超预算立即返回 null 走确定性兜底（流式端点会把兜底结果作为 result 事件下发）。
     const startedAtMs = Date.now();
     const startIndex = Math.max(0, PROVIDER_LADDER.indexOf(provider));
     for (let offset = 0; offset < PROVIDER_LADDER.length; offset++) {
-        if (Date.now() - startedAtMs > 75_000) {
-            console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'deadline_exceeded', requestId }));
+        // 按「还能不能跑完一整轮」判断，而不是「有没有超总预算」：实测单轮 410s，
+        // 总预算 500s 时第二轮必然跑不完，早退立即走兜底比白烧上游更划算。
+        if (QUIZ_TOTAL_BUDGET_MS - (Date.now() - startedAtMs) < QUIZ_ROUND_MAX_MS) {
+            console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'deadline_exceeded', requestId, offset }));
             return null;
         }
         const attempt = (startIndex + offset) % PROVIDER_LADDER.length;
         const p = PROVIDER_LADDER[attempt];
         const m = p === provider ? model : DEFAULT_MODEL_BY_PROVIDER[p];
-        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1, healthCtx);
+        const result = await runQuizGenerationRound(env, p, m, fallbackModel, selectedMovies, requestedQuizId, sessionId, nickname, difficultyHint, requestId, offset + 1, healthCtx, onEvent);
         if (result !== undefined) return result;
     }
     return null;
@@ -648,15 +803,39 @@ async function runQuizGenerationRound(
     requestId: string,
     attempt: number,
     healthCtx: HealthRouteContext,
+    onEvent?: QuizStreamEmitter,
 ): Promise<QuizCacheData | null | undefined> {
+    // 进度回调来自上游 SSE（数十毫秒一次），节流后转发，避免把流式通道刷成噪声。
+    // 间隔可由 env 覆盖：测试用小间隔，线上保持 2s 粒度足够 UI 平滑。
+    const configuredThrottle = Number(env.AI_QUIZ_PROGRESS_THROTTLE_MS);
+    const progressThrottleMs = Number.isFinite(configuredThrottle) && configuredThrottle >= 0
+        ? configuredThrottle
+        : 2_000;
+    let lastProgressAt = 0;
+    const emitProgress = (stage: 'units' | 'review') => (chars: number) => {
+        if (!onEvent) return;
+        const now = Date.now();
+        if (now - lastProgressAt < progressThrottleMs) return;
+        lastProgressAt = now;
+        onEvent({ type: 'progress', stage, chars });
+    };
+
     let unitsUpstream: LlmJsonResult | null;
+    onEvent?.({ type: 'stage', stage: 'units', status: 'start', attempt, provider, expectedChars: QUIZ_STAGE_EXPECTED_CHARS.units });
     try {
         unitsUpstream = await callLlmJson(
             env,
             provider,
             model,
             quizUnitMessages(nickname, selectedMovies, difficultyHint),
-            { maxCompletionTokens: 4600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
+            {
+                maxCompletionTokens: QUIZ_MAX_TOKENS_UNITS,
+                timeoutMs: QUIZ_UNITS_TIMEOUT_MS,
+                // 只有主路径 zhipu 支持流式进度：其余供应商保持一次性返回，
+                // 阶段事件（start/done）仍然照发，UI 退化为阶段级进度。
+                stream: provider === 'zhipu',
+                onProgress: emitProgress('units'),
+            },
             fallbackModel,
             { route: 'quiz-units', requestId },
             healthCtx,
@@ -681,15 +860,22 @@ async function runQuizGenerationRound(
         console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_normalize_error', requestId, attempt, provider: unitsUpstream.provider, model: unitsUpstream.model, error: error instanceof AppError ? error.code : 'PARSE', errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN' }));
         return attempt < 2 ? undefined : null;
     }
+    onEvent?.({ type: 'stage', stage: 'units', status: 'done', attempt, provider, expectedChars: QUIZ_STAGE_EXPECTED_CHARS.units });
 
     let reviewUpstream: LlmJsonResult | null;
+    onEvent?.({ type: 'stage', stage: 'review', status: 'start', attempt, provider, expectedChars: QUIZ_STAGE_EXPECTED_CHARS.review });
     try {
         reviewUpstream = await callLlmJson(
             env,
             provider,
             model,
             quizFromUnitsMessages(nickname, selectedMovies, units, difficultyHint),
-            { maxCompletionTokens: 4600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
+            {
+                maxCompletionTokens: QUIZ_MAX_TOKENS_REVIEW,
+                timeoutMs: QUIZ_REVIEW_TIMEOUT_MS,
+                stream: provider === 'zhipu',
+                onProgress: emitProgress('review'),
+            },
             fallbackModel,
             { route: 'quiz-review', requestId },
             healthCtx,
@@ -707,6 +893,7 @@ async function runQuizGenerationRound(
     try {
         const reviewed = normalizeQuiz(parseAssistantJson<unknown>(reviewUpstream.payload), selectedMovies);
         validateReviewedQuiz(reviewed, selectedMovies, units);
+        onEvent?.({ type: 'stage', stage: 'review', status: 'done', attempt, provider, expectedChars: QUIZ_STAGE_EXPECTED_CHARS.review });
         return { quizId: requestedQuizId ?? crypto.randomUUID(), sessionId, movies: selectedMovies, questions: reviewed, scoringVersion: 2 };
     } catch (error) {
         // 二审不合格绝不能把首轮候选泄回 App；调用方会写入确定性安全题库。
@@ -961,7 +1148,7 @@ async function generateDailyKnowledgeUnit(
             provider,
             model,
             dailyCandidateMessages(day, locale, movies),
-            { maxCompletionTokens: 2600, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
+            { maxCompletionTokens: 2600, timeoutMs: DAILY_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-candidate', requestId },
             healthCtx,
@@ -986,7 +1173,7 @@ async function generateDailyKnowledgeUnit(
             provider,
             model,
             dailyReviewMessages(candidate, locale, movies),
-            { maxCompletionTokens: 3000, timeoutMs: QUIZ_UPSTREAM_TIMEOUT_MS },
+            { maxCompletionTokens: 3000, timeoutMs: DAILY_UPSTREAM_TIMEOUT_MS },
             fallbackModel,
             { route: 'daily-review', requestId },
             healthCtx,
@@ -1282,7 +1469,7 @@ function tasteMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
 // 对齐后整包作废率显著下降；修改校验规则时须同步维护这两段提示词。
 const QUIZ_UNITS_SHAPE_SPEC = '字段硬性形状（违反即整包作废）：unitId 用英文小写加中划线（如 film-yimiao-color），version=1，locale="zh-CN"，relationType="direct_watch"。evidenceMode 只能 film_fact/viewing_interpretation/external_fact；强证据学科硬规则：subject 为「物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学」之一时，evidenceMode 必须选 external_fact 且 source.evidence 必须非空（否则整包作废），其余学科三种模式任选；difficulty 只能 easy/medium/hard；spoilerLevel 只能 none/light/heavy。剧透硬规则（违反即整包作废）：unit 的 title/takeaway/filmEvidence 和 checkQuestion 的题干、每个选项文本、explanation 里都严禁出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」这些字面词——一个都不能有，哪怕不是剧透只是抽象讨论或出现在干扰选项里（如干扰项「从结局开始回忆」也违规），必须改用不含这些字面词的表达（如「消逝」「性命」「代价」「从故事后段讲起」）；explanation 只解释正确答案的学理依据，禁止逐项点评干扰选项。任一上述字段违规时唯一自救办法是把该单元 spoilerLevel 标为 heavy，但优先选择改写规避而非标 heavy。subjectGroup 与 subject 成对（不在此列的 subject 禁用）：电影学/叙事学/摄影与视觉设计/剪辑与声音/表演与戏剧→film_expression；心理学/认知科学/发展心理学/教育学→people_and_mind；社会学/人类学/传播学/政治学/经济学/法学/犯罪学→society_and_institution；历史/文化研究/语言学与符号学/宗教神话与民俗/音乐与艺术史→history_and_culture；哲学与伦理学/马克思主义哲学→philosophy_and_ethics；物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/食品科学→science_and_nature；计算机与人工智能/数学与统计/工程与材料/建筑与城市规划→technology_and_future；体育科学/军事学与战略/职业与组织知识→life_and_career。relatedMedia={"title":片名逐字,"mediaType":"movie"}。source={"name":"来源名","url":"https://可核验网址","evidence":"该页支持本单元的摘要"}——三个字段全部必填、不允许空字符串，url 必须以 https:// 开头的完整网址（填空串即整包作废）。checkQuestion={"prompt":问题(8-500字),"options":[{"id":"opt-a","text":"选项文本"},...]（2-4项，id 仅小写字母数字中划线）,"correctOptionIds":["opt-a"]（恰好1项，须在 options 的 id 里）,"explanation":解析(12-800字)}。最关键硬规则：checkQuestion.explanation 的文字中必须原样完整出现该单元 concept 字段的全文（例如 concept="文革后期的物质匮乏" 时，explanation 里必须原样写「文革后期的物质匮乏」这几个字，改写、拆词、同义替换都算违规，省略虚词也算违规：写「文革后期物质匮乏」少了个「的」就是违规）。最省事的合规写法：explanation 开头第一句就写「本题考查的概念是“{concept 原文}”」，保证全文必然出现。boundary 12-500 字：evidenceMode=film_fact 时须含「事实/资料/说明」，viewing_interpretation 时须含「解读/不是」，external_fact 时须含「来源/事实/说明」。takeaway 12-320字；filmEvidence 12-600字（必须原样逐字引用输入材料中该影片「简介」的至少一个 4 字以上连续片段——只准引用输入材料里写明的情节，禁止扩写、脑补输入材料没有的画面细节如音效、色调、镜头设计；引用后可补充学理说明）。title/takeaway/filmEvidence 三字段去片名后必须仍有至少 8 个字的实质内容——禁止写成「《片名》+ 两三个字的短语」的拼接（如「《XX》的叙事结构」去片名只剩「的叙事结构」即违规）；title 正确写法示例：「《蜘蛛侠：平行宇宙》如何用网状叙事支撑多重宇宙设定」；explanation 20-900字；realWorldExample 12-500字；title 4-160字；concept 2-120字。';
 
-const QUIZ_REVIEW_SHAPE_SPEC = '每题字段硬性形状（违反即整包作废）：必填字段一个都不能少，完整清单为 id/unitId/subject/concept/sourceTitle/difficulty/spoilerLevel/knowledgePoint/learningTakeaway/prompt/type/options(short 除外)/correctAnswer/answerRationale/distractorRationale/explanation/evidenceUsed——尤其 evidenceUsed 每题都必须有、不许省略；id 用英文小写中划线（q01-style）；题干字段名必须叫 prompt（不许写 questionText/question 等其他名字）；type 必填且只能 single/multiple/short——前 4 题 easy 用 single、中间 5 题里 4 个 single 加 1 个 multiple、最后 4 题里 1 个 single 加 1 个 multiple 加最后 1 题 short（合计 10 single、2 multiple、1 short）；single 用 options 数组（2-4 项 {"id":"opt-a","text":"..."}）加 correctAnswer="opt-a"（单个 id）；multiple 的 correctAnswer 数组必须含 2 或 3 个 id（只含 1 个 id 即整包作废，最常见违规）。multiple 出题流程：先写好恰好 2-3 个互不矛盾的「正确陈述」选项（correctAnswer 必须包含且只包含它们的 id），再补足到 4 个选项写干扰项——不许先写一个正确项再凑数；short 不给 options、给 answerKeywords（5-8 个关键词数组）加 correctAnswer（一句话参考答案范文，10-80 字）；所有题的 correctAnswer 必须是 options 里已有的 id。explanation 按「影视证据→学科概念→学习结论」展开 20-500 字；answerRationale/distractorRationale 各 20-200 字且逐题撰写不同，且二者必须各自满足其一（缺一即整包作废）：a) 原样出现本题 knowledgePoint 全文；b) 逐字包含本题至少一个选项文本的完整原文——注意是完整原文，截断引用（如选项是「通过单一主角的回忆来展开」却只写「通过单一主角的回忆」）不算数；最省事的合规写法是 rationale 里同时写出本题 knowledgePoint 全文（如「干扰项未围绕“{knowledgePoint}”展开：……」）。short 题的 distractorRationale 必须给空字符串 ""，不许写「无干扰项」之类的文字；distractorRationale 正确写法示例：「干扰项把「网点纸纹理」错当成 3D 渲染缺陷，实际它是模拟印刷质感的手法，与本题 knowledgePoint 无关」——即逐个点名错误选项原文并给反驳理由；knowledgePoint 2-60 字（13 题互不重复）；learningTakeaway 10-120 字（13 题互不重复）；evidenceUsed 锚定硬规则（违反即整包作废）：evidenceUsed 必须逐字引用用户已看影片「简介」原文（即该单元 filmEvidence 里引用过的那个简介片段）里的一个 4 字以上连续片段——只能从简介原文抄，不许引用 filmEvidence 里扩写出来的画面细节，也不许自己描写（如「黄色调」「网点纸」「拟声词」这些简介里没有的词即违规）；先抄简介原文片段，再补一句该片段如何支撑本题；sourceTitle 必须等于该单元 relatedMedia.title 逐字；difficulty 只能 easy/medium/hard（前 4 题 easy、中 5 题 medium、后 4 题 hard）；spoilerLevel 只能 none/light/heavy 且任一文字出现结局/结尾/死亡/凶手/真相/逆转即 heavy。选项与题干严禁后段剧透词。题干锚定硬规则（违反即整包作废）：每题题干必须至少引用该影片简介原文里的一个 4 字以上连续片段（不是片名、不是年份——片名和年份不算锚定；例：简介有「为看女儿影像在胶片上跋涉」，题干写「为看女儿影像在胶片上跋涉的主人公是谁」即合规，只写「主人公跋涉的目的是什么」即违规）。概念检验硬规则（违反即整包作废）：每题的题干必须原样完整嵌入本题 knowledgePoint 全文（模板「关于“{knowledgePoint}”，结合影片情节……」；这是硬要求不是建议——不许只嵌在选项或 rationale 里，更不许改写；改写、拆词、只写一半都算违规）。knowledgePoint 因此必须 6-16 字、可独立成问的名词短语，且 13 题互不重复——kp 不得直接照抄单元 concept（同一单元的 4-5 题要在 concept 基础上切出互不重复的子角度，如 concept=「文革后期的物质匮乏」时 kp 可写「胶片影像的精神价值」「票证制度的日常限制」「观影仪式的时代记忆」等，每个 kp 都是 concept 之外的具体侧面）。';
+const QUIZ_REVIEW_SHAPE_SPEC = '每题字段硬性形状（违反即整包作废）：questions 数组长度必须恰好 13，写完后必须自检一遍（数一数 questions.length 是不是 13——多一题或少一题都整包作废，这是最高频的作废原因）；必填字段一个都不能少，完整清单为 id/unitId/subject/concept/sourceTitle/difficulty/spoilerLevel/knowledgePoint/learningTakeaway/prompt/type/options(short 除外)/correctAnswer/answerRationale/distractorRationale/explanation/evidenceUsed——尤其 evidenceUsed 每题都必须有、不许省略；id 用英文小写中划线（q01-style）；题干字段名必须叫 prompt（不许写 questionText/question 等其他名字）；type 必填且只能 single/multiple/short——前 4 题 easy 用 single、中间 5 题里 4 个 single 加 1 个 multiple、最后 4 题里 1 个 single 加 1 个 multiple 加最后 1 题 short（合计 10 single、2 multiple、1 short）；single 用 options 数组（2-4 项 {"id":"opt-a","text":"..."}）加 correctAnswer="opt-a"（单个 id）；multiple 的 correctAnswer 数组必须含 2 或 3 个 id（只含 1 个 id 即整包作废，最常见违规）。multiple 出题流程：先写好恰好 2-3 个互不矛盾的「正确陈述」选项（correctAnswer 必须包含且只包含它们的 id），再补足到 4 个选项写干扰项——不许先写一个正确项再凑数；short 不给 options、给 answerKeywords（5-8 个关键词数组）加 correctAnswer（一句话参考答案范文，10-80 字）；所有题的 correctAnswer 必须是 options 里已有的 id。explanation 按「影视证据→学科概念→学习结论」展开 20-500 字；answerRationale/distractorRationale 各 20-200 字且逐题撰写不同，且二者必须各自满足其一（缺一即整包作废）：a) 原样出现本题 knowledgePoint 全文；b) 逐字包含本题至少一个选项文本的完整原文——注意是完整原文，截断引用（如选项是「通过单一主角的回忆来展开」却只写「通过单一主角的回忆」）不算数；最省事的合规写法是 rationale 里同时写出本题 knowledgePoint 全文（如「干扰项未围绕“{knowledgePoint}”展开：……」）。short 题的 distractorRationale 必须给空字符串 ""，不许写「无干扰项」之类的文字；distractorRationale 正确写法示例：「干扰项把「网点纸纹理」错当成 3D 渲染缺陷，实际它是模拟印刷质感的手法，与本题 knowledgePoint 无关」——即逐个点名错误选项原文并给反驳理由；knowledgePoint 2-60 字（13 题互不重复）；learningTakeaway 10-120 字（13 题互不重复）；evidenceUsed 锚定硬规则（违反即整包作废）：evidenceUsed 必须逐字引用用户已看影片「简介」原文（即该单元 filmEvidence 里引用过的那个简介片段）里的一个 4 字以上连续片段——只能从简介原文抄，不许引用 filmEvidence 里扩写出来的画面细节，也不许自己描写（如「黄色调」「网点纸」「拟声词」这些简介里没有的词即违规）；先抄简介原文片段，再补一句该片段如何支撑本题；sourceTitle 必须等于该单元 relatedMedia.title 逐字；difficulty 只能 easy/medium/hard（前 4 题 easy、中 5 题 medium、后 4 题 hard）；spoilerLevel 只能 none/light/heavy 且任一文字出现结局/结尾/死亡/凶手/真相/逆转即 heavy。选项与题干严禁后段剧透词。题干锚定硬规则（违反即整包作废）：每题题干必须至少引用该影片简介原文里的一个 4 字以上连续片段（不是片名、不是年份——片名和年份不算锚定；例：简介有「为看女儿影像在胶片上跋涉」，题干写「为看女儿影像在胶片上跋涉的主人公是谁」即合规，只写「主人公跋涉的目的是什么」即违规）。概念检验硬规则（违反即整包作废）：每题的题干必须原样完整嵌入本题 knowledgePoint 全文（模板「关于“{knowledgePoint}”，结合影片情节……」；这是硬要求不是建议——不许只嵌在选项或 rationale 里，更不许改写；改写、拆词、只写一半都算违规）。knowledgePoint 因此必须 6-16 字、可独立成问的名词短语，且 13 题互不重复——kp 不得直接照抄单元 concept（同一单元的 4-5 题要在 concept 基础上切出互不重复的子角度，如 concept=「文革后期的物质匮乏」时 kp 可写「胶片影像的精神价值」「票证制度的日常限制」「观影仪式的时代记忆」等，每个 kp 都是 concept 之外的具体侧面）。explanation 学理链硬规则（违反即整包作废）：每题 explanation 与 learningTakeaway 合起来必须出现本题 concept 字段的全文，或至少出现一个因果/结论连接词（因为/因此/说明/意味着/结论/从而）——两者都没有即整包作废；explanation 至少 40 字，且必须写出「影片里的什么现象 → 用哪个学科概念解释 → 得到什么结论」这条链，不能只堆名词。';
 
 export function quizUnitMessages(nickname: string, movies: WatchMovie[], difficultyHint: string | null = null): MimoMessage[] {
     const systemContent = '你是影视知识闯关的候选学习单元编辑。只返回 JSON，字段为 units，包含 3 到 6 个学习单元。每个单元字段固定为 unitId、version（固定 1）、locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode（film_fact、viewing_interpretation、external_fact）、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。subjectGroup 只能是 film_expression、people_and_mind、society_and_institution、history_and_culture、philosophy_and_ethics、science_and_nature、technology_and_future、life_and_career；subject 必须使用中文受控学科目录：电影学、叙事学、摄影与视觉设计、剪辑与声音、表演与戏剧、心理学、认知科学、发展心理学、教育学、社会学、人类学、传播学、政治学、经济学、法学、犯罪学、历史、文化研究、语言学与符号学、宗教神话与民俗、音乐与艺术史、哲学与伦理学、马克思主义哲学、物理、化学、生物与生态、医学与公共卫生、天文学、地理与气候、计算机与人工智能、数学与统计、工程与材料、建筑与城市规划、体育科学、军事学与战略、食品科学、职业与组织知识。单元必须自然覆盖至少 3 个不同学科；物理、化学、医学等学科只有输入证据确实支持时才使用，禁止硬套。relatedMedia.title 必须逐字来自已看输入；filmEvidence 必须同时引用片名和输入中的年份、类型、简介或证据，不得编造输入没有的剧情、台词、演员或幕后事实。takeaway 是用户能复述的学习结论；source 必须包含 name、合法 http(s) url 和 evidence；checkQuestion 有 2 到 4 个唯一选项且只有一个最佳答案；boundary 说明事实/解读边界。同一场候选单元之间禁止逐字重复：concept 与 takeaway 两两必须不同；多个单元可以共用同一部影片，但必须换角度、换概念表述，禁止整段复制。每个单元的标题与即时小题必须直接检验该单元声明的学科概念，并引用 relatedMedia 输入中实际存在的证据（年份/类型/简介/evidence）；external_fact 的外部事实必须得到 source 摘要与 URL 的实质支持。禁止生成与学科无关的“再看一遍/如何向朋友推荐/避免过度解读”型通用方法内容，除非学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）且标签一致。' + QUIZ_UNITS_SHAPE_SPEC + (difficultyHint ?? '');

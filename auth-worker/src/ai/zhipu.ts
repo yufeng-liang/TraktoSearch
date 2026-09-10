@@ -37,6 +37,12 @@ export interface ZhipuOptions extends Record<string, unknown> {
     responseFormat?: boolean;
     // 上游请求超时（毫秒）：出题等长链路需要按客户端读超时预留轮替余量时由调用方收紧。
     timeoutMs?: number;
+    // 流式模式：GLM 非流式时最后一 token 前无任何传输，流式可提前拿到 TTFB 并把
+    // 已生成字符数回调给调用方（出题链路用它向前端推送真实进度）。
+    stream?: boolean;
+    // 流式正文进度回调：累积正文字符数。回调频率等于上游 SSE 频率（数十毫秒一次），
+    // 节流由调用方负责。
+    onProgress?: (chars: number) => void;
 }
 
 export function validateZhipuModel(value: unknown): ZhipuModel {
@@ -74,7 +80,7 @@ export async function callZhipuJson(
         messages,
         max_tokens: options.maxCompletionTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
-        stream: false,
+        stream: options.stream === true,
         thinking,
         // GLM 实测支持 json_object（关/低思考后 content 为纯 JSON）
         response_format: { type: 'json_object' },
@@ -99,7 +105,9 @@ export async function callZhipuJson(
                 body: JSON.stringify(body),
             });
             if (response.ok) {
-                const payload: unknown = await response.json();
+                const payload: unknown = options.stream === true
+                    ? await readZhipuStream(response, options.onProgress)
+                    : await response.json();
                 if (isZhipuRateLimited(payload)) {
                     throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu provider rate limited', 502, response.status);
                 }
@@ -120,8 +128,69 @@ export async function callZhipuJson(
     }
 }
 
-function isZhipuRateLimited(payload: unknown): boolean {
-    if (typeof payload !== 'object' || payload === null) return false;
+/**
+ * 读 GLM 流式 SSE，拼回与非流式同形的 payload（choices[0].message.content），
+ * 让 parseAssistantJson 等下游无需感知流式。正文每累积一次就回调 onProgress。
+ * 上游在 200 响应体里包业务错误（如 1305 限频）时原样返回该对象，由调用方判定。
+ */
+async function readZhipuStream(
+    response: Response,
+    onProgress?: (chars: number) => void,
+): Promise<unknown> {
+    const reader = response.body?.getReader();
+    if (!reader) throw new AppError('AI_UPSTREAM_ERROR', 'Zhipu stream body missing', 502);
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let content = '';
+    let finishReason: string | null = null;
+    let upstreamError: unknown = null;
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            // SSE 以行为单位：最后一段可能被截断，留在 buffer 里等下一块
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data:')) continue;
+                const data = trimmed.slice(5).trim();
+                if (!data || data === '[DONE]') continue;
+                let chunk: unknown;
+                try {
+                    chunk = JSON.parse(data);
+                } catch {
+                    continue; // 心跳/空行等非 JSON 行
+                }
+                const record = chunk as Record<string, unknown> | null;
+                if (record && typeof record === 'object' && record.error) {
+                    upstreamError = record;
+                    continue;
+                }
+                const choices = record?.choices;
+                if (!Array.isArray(choices) || choices.length === 0) continue;
+                const first = choices[0] as Record<string, unknown> | null;
+                const delta = (first?.delta as Record<string, unknown> | undefined)?.content;
+                if (typeof delta === 'string' && delta.length > 0) {
+                    content += delta;
+                    onProgress?.(content.length);
+                }
+                if (typeof first?.finish_reason === 'string') finishReason = first.finish_reason;
+            }
+        }
+    } finally {
+        try {
+            await reader.cancel();
+        } catch {
+            // 流已结束或已被上游中断，忽略
+        }
+    }
+    if (upstreamError) return upstreamError;
+    return { choices: [{ message: { content }, finish_reason: finishReason }] };
+}
+
+function isZhipuRateLimited(payload: unknown): boolean {    if (typeof payload !== 'object' || payload === null) return false;
     const error = (payload as Record<string, unknown>).error;
     if (typeof error !== 'object' || error === null) return false;
     return (error as Record<string, unknown>).code === RATE_LIMIT_CODE;
