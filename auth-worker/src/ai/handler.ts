@@ -40,10 +40,12 @@ import {
     fallbackDailyKnowledgeUnit,
     isGenericMethodologyMismatch,
     normalizeDailyKnowledgeUnit,
+    normalizeQuizSlotUnit,
     readDailyLocale,
     stripTrailingSentencePunctuation,
     type DailyLocale,
     type KnowledgeUnit,
+    type QuizSlotUnit,
 } from './daily-knowledge.ts';
 import {
     publicDailyIllustration,
@@ -846,7 +848,11 @@ async function generateQuiz(
 
 /** 槽位化出题的预算：并发、修复轮数与单套上限。 */
 interface QuizSlotBudget {
-    /** 单个单元约 1.5k 字符、单道题约 800 字符（整包实测 5.2k/17.5k 字符摊到 4 格/13 格） */
+    /**
+     * 单格 token 上限只封顶、不提速（流式按写完为止），所以刻意留宽：精简单元正文约 500 字，
+     * 2600 的额度即使模型无视精简格式、照旧吐完整展示单元也仍能收全，多出的字段被校验忽略。
+     * 卡到刚好够用的额度反而会把「其实合格但啰嗦」的输出截断成 JSON 解析失败，白烧一轮修复。
+     */
     maxTokensUnit: number;
     maxTokensQuestion: number;
     unitConcurrency: number;
@@ -908,7 +914,7 @@ function unwrapSlotPayload(payload: unknown, key: 'unit' | 'question'): unknown 
 }
 
 /** 单元必须落在槽位指定的学科组与白名单学科内：这一条从源头掐掉「学科越界」「强证据学科缺来源」两类违规。 */
-function assertUnitMatchesSlot(unit: KnowledgeUnit, slot: UnitSlot): void {
+function assertUnitMatchesSlot(unit: QuizSlotUnit, slot: UnitSlot): void {
     if (unit.unitId !== 'unit-' + slot.index) {
         throw new AppError('INVALID_AI_OUTPUT', '单元 unitId 必须是 unit-' + slot.index, 502);
     }
@@ -924,7 +930,7 @@ function assertUnitMatchesSlot(unit: KnowledgeUnit, slot: UnitSlot): void {
 }
 
 /** 题位必须落在槽位指定的题型、难度、归属单元与概念上，其余交给既有单题校验。 */
-function assertQuestionMatchesSlot(question: InternalQuestion, slot: QuestionSlot, unit: KnowledgeUnit): void {
+function assertQuestionMatchesSlot(question: InternalQuestion, slot: QuestionSlot, unit: QuizSlotUnit): void {
     if (question.type !== slot.type) {
         throw new AppError('INVALID_AI_OUTPUT', '第 ' + slot.index + ' 题题型必须是 ' + slot.type, 502);
     }
@@ -953,7 +959,7 @@ const SLOT_FALLBACK_SUFFIXES: Record<QuizAngleType, readonly string[]> = {
 };
 
 /** 兜底题的题面锚点：一律用单元自己的 filmEvidence，保证题干与证据都回到该片简介原文。 */
-function slotFallbackPrompt(slot: QuestionSlot, unit: KnowledgeUnit, movie: WatchMovie, knowledgePoint: string): string {
+function slotFallbackPrompt(slot: QuestionSlot, unit: QuizSlotUnit, movie: WatchMovie, knowledgePoint: string): string {
     const anchor = '《' + fallbackDisplayTitle(movie) + '》的已看记录里写着“' + unit.filmEvidence + '”';
     const opening = '关于“' + knowledgePoint + '”，' + anchor + '。';
     const question = (() => {
@@ -972,7 +978,7 @@ function slotFallbackPrompt(slot: QuestionSlot, unit: KnowledgeUnit, movie: Watc
 }
 
 /** 单选/多选选项：正确项回到 unit.filmEvidence，干扰项是形态合理但不看材料的说法。 */
-function slotFallbackOptions(unit: KnowledgeUnit, slot: QuestionSlot): Array<{ id: string; text: string }> {
+function slotFallbackOptions(unit: QuizSlotUnit, slot: QuestionSlot): Array<{ id: string; text: string }> {
     const grounded = '判断要落回记录里的“' + unit.filmEvidence + '”这一具体线索';
     const scoped = '结论的范围要限定在“' + unit.filmEvidence + '”能支持的部分';
     const byMetadata = '凭片名和上映年份就能下结论，不必看记录里的细节';
@@ -999,7 +1005,7 @@ function slotFallbackOptions(unit: KnowledgeUnit, slot: QuestionSlot): Array<{ i
  * 而模型换一个起点引用同一段简介、或把考点只写进选项，都会判废。补进去的都是槽位已经
  * 指定过的原文（单元 filmEvidence 与 concept），不新增任何编造内容，语义不变。
  */
-function groundQuestionToUnit(question: InternalQuestion, unit: KnowledgeUnit, movies: WatchMovie[]): InternalQuestion {
+function groundQuestionToUnit(question: InternalQuestion, unit: QuizSlotUnit, movies: WatchMovie[]): InternalQuestion {
     const grounded = { ...question };
     if (unit.filmEvidence && !containsEvidenceText(grounded.evidenceUsed, unit.filmEvidence)) {
         grounded.evidenceUsed = unit.filmEvidence + '——' + grounded.evidenceUsed;
@@ -1036,7 +1042,7 @@ function groundQuestionToUnit(question: InternalQuestion, unit: KnowledgeUnit, m
  * 整包校验必然在「题目必须来自已审校单元」处失败——单格降级会连带整套作废，槽位化就白拆了。
  * 这里按单元的 filmEvidence 现造一题，让降级真正只损失那一格。
  */
-function fallbackQuestionForSlot(slot: QuestionSlot, unit: KnowledgeUnit, movie: WatchMovie, movieIndex: number, variant = 0): InternalQuestion {
+function fallbackQuestionForSlot(slot: QuestionSlot, unit: QuizSlotUnit, movie: WatchMovie, movieIndex: number, variant = 0): InternalQuestion {
     const suffixes = SLOT_FALLBACK_SUFFIXES[slot.angleType] ?? SLOT_FALLBACK_SUFFIXES['证据辨识'];
     const knowledgePoint = (unit.concept + suffixes[variant % suffixes.length]).slice(0, 24);
     const prompt = slotFallbackPrompt(slot, unit, movie, knowledgePoint);
@@ -1098,6 +1104,10 @@ async function generateQuizBySlots(
     const promptMovies = slotMovies(movies);
     const movieByTitle = new Map(movies.map((movie, index) => [movie.title, index]));
     let calls = 0;
+    // 上游正文累计字符数：账号级吞吐是固定值（约 40 字符/秒），「一套要写多少字」直接
+    // 决定墙钟下限。分开记单元/题位两段，改提示词后才能看出省的是哪一截。
+    let unitChars = 0;
+    let questionChars = 0;
     /** 预算只拦「修复轮」，首轮永远放行：首轮被拦等于白送一个降级格，比多打一次上游更亏。 */
     const budgetExhausted = (): boolean =>
         calls >= slotBudget.maxCallsPerSet || Date.now() - startedAtMs > slotBudget.maxElapsedMs;
@@ -1152,6 +1162,9 @@ async function generateQuizBySlots(
             recordHealthEvent(env, { ...healthCtx, route }, 'traffic', upstream.provider, upstream.model, 'invalid_output', error);
             throw error;
         }
+        const produced = extractAssistantText(upstream.payload).length;
+        if (route === 'quiz-units') unitChars += produced;
+        else questionChars += produced;
         return { payload, provider: upstream.provider, model: upstream.model };
     };
 
@@ -1176,13 +1189,13 @@ async function generateQuizBySlots(
         for (let round = 0; round <= slotBudget.repairRounds; round += 1) {
             try {
                 const slotResult = await callSlot(
-                    unitSlotMessages(nickname, promptMovies, slot, QUIZ_UNIT_FIELDS_SPEC + QUIZ_UNITS_SHAPE_SPEC + (difficultyHint ?? ''), hint),
+                    unitSlotMessages(nickname, promptMovies, slot, QUIZ_SLOT_UNIT_SPEC + (difficultyHint ?? ''), hint),
                     slotBudget.maxTokensUnit,
                     'quiz-units',
                     round > 0,
                 );
                 try {
-                    const unit = normalizeDailyKnowledgeUnit(unwrapSlotPayload(slotResult.payload, 'unit'), { day: 'quiz', locale: 'zh-CN', movies });
+                    const unit = normalizeQuizSlotUnit(unwrapSlotPayload(slotResult.payload, 'unit'), { locale: 'zh-CN', movies });
                     assertUnitMatchesSlot(unit, slot);
                     return { slot, unit };
                 } catch (error) {
@@ -1199,7 +1212,7 @@ async function generateQuizBySlots(
         }
         throw lastError;
     });
-    const unitPairs: Array<{ slot: UnitSlot; unit: KnowledgeUnit }> = [];
+    const unitPairs: Array<{ slot: UnitSlot; unit: QuizSlotUnit }> = [];
     for (const outcome of unitOutcomes) {
         if (outcome.ok) unitPairs.push(outcome.value);
         unitsFinished += 1;
@@ -1207,7 +1220,7 @@ async function generateQuizBySlots(
     }
     // 概念重复的单元只保留第一个：拆格后不再整包作废，但概念撞车仍要收口
     const seenConcepts = new Set<string>();
-    const keptPairs: Array<{ slot: UnitSlot; unit: KnowledgeUnit }> = [];
+    const keptPairs: Array<{ slot: UnitSlot; unit: QuizSlotUnit }> = [];
     for (const pair of unitPairs) {
         const key = normalizeSemanticKey(pair.unit.concept);
         if (seenConcepts.has(key)) continue;
@@ -1221,7 +1234,7 @@ async function generateQuizBySlots(
     onEvent?.({ type: 'stage', stage: 'units', status: 'done', attempt: 1, provider, expectedChars: QUIZ_UNIT_SLOT_COUNT });
 
     // ---- 题位槽位：13 题各自生成，失败只补那一格，最终仍失败按位次用兜底题占位 ----
-    const unitByIndex = new Map(keptPairs.map(pair => [pair.slot.index, pair.unit]));
+    const unitByIndex = new Map<number, QuizSlotUnit>(keptPairs.map(pair => [pair.slot.index, pair.unit]));
     const questionSlots = planQuestionSlots(keptPairs.map(pair => ({ index: pair.slot.index, concept: pair.unit.concept })));
     onEvent?.({ type: 'stage', stage: 'review', status: 'start', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
 
@@ -1372,6 +1385,7 @@ async function generateQuizBySlots(
         elapsedMs: Date.now() - startedAtMs,
         units: keptPairs.length,
         questions: assembled.length,
+        chars: { units: unitChars, questions: questionChars },
     }));
     onEvent?.({ type: 'stage', stage: 'review', status: 'done', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
     return { quizId, sessionId, movies, questions: assembled, scoringVersion: 2 };
@@ -2061,15 +2075,39 @@ function tasteMessages(nickname: string, movies: WatchMovie[]): MimoMessage[] {
     ];
 }
 
-// 以下两段形状规范由本地出题闭环（quiz-lab）逐轮实测定型：每一条都对应一次真实的
+// 以下形状规范由本地出题闭环（quiz-lab）逐轮实测定型：每一条都对应一次真实的
 // 模型违规（枚举自造、剧透词漏网、rationale 截断引用、字段改名等），与本地硬校验逐条
 // 对齐后整包作废率显著下降；修改校验规则时须同步维护这两段提示词。
+//
+// 提示词里必须显式列出字段名：实测只给形状规范时模型会漏字段
+// （例如把解析写进 checkQuestion 却漏掉顶层 explanation），而硬校验对缺字段是直接拒绝，
+// 白烧一轮生成。QUIZ_SLOT_UNIT_SPEC 的字段清单就写在它自己第一句里。
 /**
- * 单元字段清单：槽位提示词必须显式列出全部字段名。
- * 实测只给形状规范时模型会漏字段（例如把解析写进 checkQuestion 却漏掉顶层 explanation），
- * 而硬校验对缺字段是直接拒绝，白烧一轮生成。
+ * 出题槽位的精简单元形状规范。
+ *
+ * 与 QUIZ_UNITS_SHAPE_SPEC（整包出题与每日知识用的完整单元）分开维护：出题链路只需要
+ * 「学科 + 概念 + 一段能回到影片原文的证据」，而完整单元那一套展示字段（title/takeaway/
+ * explanation/boundary/checkQuestion/source…）既不上题面、也不参与任何出题校验
+ * （validateReviewedQuiz 只读 unitId/subject/concept/filmEvidence），实测占单元输出七成以上。
+ * 按展示口径要求它们，等于让用户在等待路径上白等上游。
+ *
+ * 字段清单写在这一段自己的第一句里：实测只给形状规范时模型会漏字段，而硬校验对缺字段是直接拒绝。
  */
-const QUIZ_UNIT_FIELDS_SPEC = '每个单元必须包含且只包含这些字段：unitId、version（固定 1）、locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode、subjectGroup、subject、concept、title、takeaway、relatedMedia、filmEvidence、explanation、realWorldExample、boundary、difficulty、spoilerLevel、source、checkQuestion、characterLine。字段一个都不能少，也不要新增清单之外的字段。';
+const QUIZ_SLOT_UNIT_SPEC = '字段硬性形状（违反即本单元作废）：只输出 unitId、version（固定 1）、'
+    + 'locale（固定 zh-CN）、relationType（固定 direct_watch）、evidenceMode、subjectGroup、subject、'
+    + 'concept、filmEvidence、relatedMedia 这 10 个字段，一个都不能少；'
+    + '不要写 title、takeaway、explanation、realWorldExample、boundary、difficulty、spoilerLevel、'
+    + 'source、checkQuestion、characterLine。'
+    + 'evidenceMode 只能选 film_fact 或 viewing_interpretation——本链路不产出外部来源，'
+    + 'external_fact 与 theme_extension 一律作废。'
+    + 'relatedMedia={"title":片名逐字,"mediaType":"movie"}，title 必须逐字取自证据里的片名。'
+    + 'concept 4-20 字，是要考的那个学科概念的名词短语（例：「有限视角下的信息差」「家庭记忆的代际传递」），'
+    + '必须具体到能派生出 3 到 4 个互不重复的考点，禁止写成「影片分析」「叙事手法」这类空泛标签。'
+    + 'filmEvidence 必须 12-600 字——短于 12 字直接判废，所以不要只摘四个字，把整句一起抄上：'
+    + '原样逐字引用证据里该影片「简介」中的连续片段，只准引用证据里写明的情节，'
+    + '禁止扩写、脑补证据没有的画面细节（如音效、色调、镜头设计），引用后可补一句学理说明。'
+    + 'concept 与 filmEvidence 都不得出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」这些剧透字面词；'
+    + '要引用的简介原文本身含这些词时，改引同一段简介里不含这些词的另一个片段。';
 
 const QUIZ_UNITS_SHAPE_SPEC = '字段硬性形状（违反即整包作废）：unitId 用英文小写加中划线（如 film-yimiao-color），version=1，locale="zh-CN"，relationType="direct_watch"。evidenceMode 只能 film_fact/viewing_interpretation/external_fact；选科策略（强烈建议）：优先选择不需要外部来源的学科（电影学、叙事学、摄影与视觉设计、剪辑与声音、表演与戏剧、心理学、认知科学、社会学、传播学、历史、文化研究、语言学与符号学、哲学与伦理学、音乐与艺术史），它们只需引用已看影视材料即可合规；强证据学科（物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学）只有在你能同时给出可核验 https 来源时才选，否则直接换学科——这是整包作废的高发点。强证据学科硬规则：subject 为「物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学」之一时，evidenceMode 必须选 external_fact 且 source.evidence 必须非空（否则整包作废），其余学科三种模式任选；difficulty 只能 easy/medium/hard；spoilerLevel 只能 none/light/heavy。剧透硬规则（违反即整包作废）：unit 的 title/takeaway/filmEvidence 和 checkQuestion 的题干、每个选项文本、explanation 里都严禁出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」这些字面词——一个都不能有，哪怕不是剧透只是抽象讨论或出现在干扰选项里（如干扰项「从结局开始回忆」也违规），必须改用不含这些字面词的表达（如「消逝」「性命」「代价」「从故事后段讲起」）；explanation 只解释正确答案的学理依据，禁止逐项点评干扰选项。任一上述字段违规时唯一自救办法是把该单元 spoilerLevel 标为 heavy，但优先选择改写规避而非标 heavy。subjectGroup 与 subject 成对（不在此列的 subject 禁用）：电影学/叙事学/摄影与视觉设计/剪辑与声音/表演与戏剧→film_expression；心理学/认知科学/发展心理学/教育学→people_and_mind；社会学/人类学/传播学/政治学/经济学/法学/犯罪学→society_and_institution；历史/文化研究/语言学与符号学/宗教神话与民俗/音乐与艺术史→history_and_culture；哲学与伦理学/马克思主义哲学→philosophy_and_ethics；物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/食品科学→science_and_nature；计算机与人工智能/数学与统计/工程与材料/建筑与城市规划→technology_and_future；体育科学/军事学与战略/职业与组织知识→life_and_career。relatedMedia={"title":片名逐字,"mediaType":"movie"}。source={"name":"来源名","url":"https://可核验网址","evidence":"该页支持本单元的摘要"}——三个字段全部必填、不允许空字符串，url 必须以 https:// 开头的完整网址（填空串即整包作废）。checkQuestion={"prompt":问题(8-500字),"options":[{"id":"opt-a","text":"选项文本"},...]（2-4项，id 仅小写字母数字中划线）,"correctOptionIds":["opt-a"]（恰好1项，须在 options 的 id 里）,"explanation":解析(12-800字)}。最关键硬规则：checkQuestion.explanation 的文字中必须原样完整出现该单元 concept 字段的全文（例如 concept="文革后期的物质匮乏" 时，explanation 里必须原样写「文革后期的物质匮乏」这几个字，改写、拆词、同义替换都算违规，省略虚词也算违规：写「文革后期物质匮乏」少了个「的」就是违规）。最省事的合规写法：explanation 开头第一句就写「本题考查的概念是“{concept 原文}”」，保证全文必然出现。boundary 12-500 字：evidenceMode=film_fact 时须含「事实/资料/说明」，viewing_interpretation 时须含「解读/不是」，external_fact 时须含「来源/事实/说明」。takeaway 12-320字；filmEvidence 12-600字（必须原样逐字引用输入材料中该影片「简介」的至少一个 4 字以上连续片段——只准引用输入材料里写明的情节，禁止扩写、脑补输入材料没有的画面细节如音效、色调、镜头设计；引用后可补充学理说明）。title/takeaway/filmEvidence 三字段去片名后必须仍有至少 8 个字的实质内容——禁止写成「《片名》+ 两三个字的短语」的拼接（如「《XX》的叙事结构」去片名只剩「的叙事结构」即违规）；title 正确写法示例：「《蜘蛛侠：平行宇宙》如何用网状叙事支撑多重宇宙设定」；explanation 20-900字；realWorldExample 12-500字；title 4-160字；concept 2-120字。';
 
@@ -2606,7 +2644,7 @@ function normalizeQuiz(value: unknown, movies: WatchMovie[]): InternalQuestion[]
     return questions;
 }
 
-function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[], units: KnowledgeUnit[]): void {
+function validateReviewedQuiz(questions: InternalQuestion[], movies: WatchMovie[], units: QuizSlotUnit[]): void {
     const unitById = new Map(units.map(unit => [unit.unitId, unit]));
     const subjects = new Set<string>();
     for (const question of questions) {

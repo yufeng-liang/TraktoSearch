@@ -239,3 +239,18 @@ test('两个构造函数都不泄漏 URL 或隐私字段', () => {
     assert.equal(all.includes('https://'), false);
     assert.equal(all.includes('friendId'), false);
 });
+
+test('单元槽位只要精简单元字段，并显式点名不要写展示字段', () => {
+    const systemText = textOf(unitSlotMessages('小明', MOVIES, UNIT_SLOT, BASE_SPEC)[0]);
+    for (const field of ['unitId', 'version', 'locale', 'relationType', 'evidenceMode', 'subjectGroup', 'subject', 'concept', 'filmEvidence', 'relatedMedia']) {
+        assert.ok(systemText.includes(field), `system 缺字段名 ${field}`);
+    }
+    assert.match(systemText, /只需要下面这 10 个字段/);
+    // 漏字段是硬校验直接拒绝的高发原因，展示字段则必须点名禁止，否则模型会照旧按每日知识的成品口径写
+    for (const dropped of ['title', 'takeaway', 'explanation', 'realWorldExample', 'boundary', 'difficulty', 'spoilerLevel', 'source', 'checkQuestion', 'characterLine']) {
+        assert.ok(systemText.includes(dropped), `system 要显式点名不要写 ${dropped}`);
+    }
+    // 角度只收敛到 concept 与 filmEvidence：单元不再产出 title/checkQuestion，写它们围绕角度没有意义
+    assert.match(systemText, /concept 与 filmEvidence 都要围绕这个角度展开/);
+    assert.equal(systemText.includes('checkQuestion 都要围绕'), false);
+});

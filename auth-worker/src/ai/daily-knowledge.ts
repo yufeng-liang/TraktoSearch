@@ -517,6 +517,91 @@ export function normalizeDailyKnowledgeUnit(
     return unit;
 }
 
+/**
+ * 出题链路的精简单元：只当「题位生成的依据」用，不下发、不缓存、不展示。
+ *
+ * 为什么要单独一个类型：知识单元在每日知识里是要给用户看的成品，所以带着
+ * title/takeaway/explanation/realWorldExample/boundary/checkQuestion/source 这一整套展示字段；
+ * 出题链路只靠它回答「这一题的依据来自哪部片的哪段材料」，而展示字段既不上题面、也不参与
+ * 任何出题校验（validateReviewedQuiz 只读 unitId/subject/concept/filmEvidence）。
+ * 实测按展示口径生成时，这些字段占单元输出七成以上，纯属让用户白等上游。
+ */
+export interface QuizSlotUnit {
+    unitId: string;
+    version: number;
+    locale: DailyLocale;
+    relationType: KnowledgeRelationType;
+    evidenceMode: KnowledgeEvidenceMode;
+    subjectGroup: KnowledgeSubjectGroup;
+    subject: string;
+    concept: string;
+    filmEvidence: string;
+    relatedMedia: KnowledgeRelatedMedia | null;
+}
+
+/**
+ * 精简单元的本地硬门槛。
+ *
+ * 校验口径与完整单元一致，只是不再校验展示字段——它们根本不产出，也无从校验。
+ * 模型多写了 title/checkQuestion 之类也不判废（字段直接忽略）：宁可浪费几个 token，
+ * 也不要把一次其实合格的输出打成修复轮。
+ */
+export function normalizeQuizSlotUnit(
+    value: unknown,
+    options: { locale: DailyLocale; movies: DailyKnowledgeMovieInput[] },
+): QuizSlotUnit {
+    const object = requireRecord(value, 'quiz slot unit');
+    const unitId = requireText(object.unitId ?? object.id, 'unitId', 3, 96);
+    if (!/^[A-Za-z0-9._:-]+$/.test(unitId)) throw invalidUnit('unitId has invalid characters');
+    const versionValue = object.unitVersion ?? object.version;
+    if (typeof versionValue !== 'number' || !Number.isInteger(versionValue) || versionValue !== KNOWLEDGE_UNIT_VERSION) {
+        throw invalidUnit('unitVersion must be 1');
+    }
+    const locale = requireEnum(object.locale, DAILY_LOCALES, 'locale');
+    if (locale !== options.locale) throw invalidUnit('locale does not match request');
+    const relationType = requireEnum(object.relationType, KNOWLEDGE_RELATION_TYPES, 'relationType');
+    if (relationType !== 'direct_watch') throw invalidUnit('quiz slot units must stay on watched media');
+    const evidenceMode = requireEnum(object.evidenceMode, KNOWLEDGE_EVIDENCE_MODES, 'evidenceMode');
+    if (evidenceMode === 'theme_extension') throw invalidUnit('direct_watch cannot use theme_extension evidence mode');
+    const subjectGroup = requireEnum(object.subjectGroup, SUBJECT_GROUP_IDS, 'subjectGroup');
+    const subject = requireText(object.subject, 'subject', 2, 80);
+    if (SUBJECT_TO_GROUP.get(subject) !== subjectGroup) throw invalidUnit('subject is outside the controlled catalog');
+    // 强证据学科要求 source.evidence 支撑，而精简单元不产出 source：槽位白名单已排除这类学科，
+    // 这道守卫留着，免得将来有人往白名单加了强证据学科却忘了补来源校验。
+    if (EVIDENCE_ENHANCED_SUBJECTS.has(subject)) throw invalidUnit('evidence-enhanced subject requires external source evidence');
+    const concept = requireText(object.concept, 'concept', 2, 120);
+    const filmEvidence = requireText(object.filmEvidence, 'filmEvidence', 12, 600);
+
+    const matchedMovie = matchedWatchedMovie(requireRecord(object.relatedMedia, 'relatedMedia'), options.movies);
+    if (!matchedMovie) throw invalidUnit('direct_watch media must come from watched input');
+    if (!evidenceOverlapsInput(filmEvidence, matchedMovie, true)) {
+        throw invalidUnit('filmEvidence must use specific watched input besides the title');
+    }
+    // 只对 filmEvidence 做泛化检查：concept 是短名词短语，而 isGenericText 对不足 6 字的输入
+    // 一律判泛化，拿它筛 concept 会把「象征」这类正常短概念全部误杀。
+    if (isGenericText(filmEvidence, options.movies)) throw invalidUnit('content is a generic template');
+    if (isGenericMethodologyMismatch(concept, subject)) throw invalidUnit('subject does not match generic methodology content');
+    if ([concept, filmEvidence].some(containsHighRiskActionGuidance)) {
+        throw invalidUnit('high-risk action guidance is not allowed');
+    }
+    return {
+        unitId,
+        version: KNOWLEDGE_UNIT_VERSION,
+        locale,
+        relationType,
+        evidenceMode,
+        subjectGroup,
+        subject,
+        concept,
+        filmEvidence,
+        relatedMedia: {
+            title: matchedMovie.title,
+            mediaType: matchedMovie.mediaType,
+            ...(matchedMovie.mediaIds ?? {}),
+        },
+    };
+}
+
 function knowledgeMovieDigest(movies: DailyKnowledgeMovieInput[]): Array<Record<string, unknown>> {
     return movies.map(movie => ({
         title: movie.title,

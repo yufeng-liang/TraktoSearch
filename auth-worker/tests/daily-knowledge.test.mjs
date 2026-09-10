@@ -6,6 +6,7 @@ import {
     SUBJECT_GROUP_IDS,
     fallbackDailyKnowledgeUnit,
     normalizeDailyKnowledgeUnit,
+    normalizeQuizSlotUnit,
 } from '../src/ai/daily-knowledge.ts';
 
 function createTestEnv(overrides = {}) {
@@ -619,4 +620,59 @@ test('reviewed seed knowledge meets the 24-to-36 coverage contract', () => {
         assert.ok(fallback.filmEvidence);
         assert.ok(fallback.boundary);
     }
+});
+
+const SLOT_MOVIE = {
+    title: '《一一》',
+    mediaType: 'movie',
+    year: 2000,
+    genres: ['剧情'],
+    mediaIds: { tmdbId: 100 },
+    evidence: ['上映年份：2000', '类型：剧情', '简介：NJ 在东京与旧情人重逢，洋洋用相机拍别人的后脑勺。'],
+};
+
+/** 出题链路的精简单元：只有题位生成与本地校验真正会读的字段。 */
+function slimSlotUnit(overrides = {}) {
+    return {
+        unitId: 'unit-1',
+        version: 1,
+        locale: 'zh-CN',
+        relationType: 'direct_watch',
+        evidenceMode: 'film_fact',
+        subjectGroup: 'film_expression',
+        subject: '电影学',
+        concept: '有限视角下的信息差',
+        filmEvidence: '洋洋用相机拍别人的后脑勺',
+        relatedMedia: { title: '《一一》', mediaType: 'movie' },
+        ...overrides,
+    };
+}
+
+test('精简单元只保留出题链路要用的字段，模型多写的展示字段被忽略', () => {
+    const unit = normalizeQuizSlotUnit(slimSlotUnit({
+        title: '多余的标题',
+        takeaway: '多余的结论',
+        checkQuestion: { prompt: '多余的小题' },
+    }), { locale: 'zh-CN', movies: [SLOT_MOVIE] });
+
+    assert.deepEqual(Object.keys(unit).sort(), [
+        'concept', 'evidenceMode', 'filmEvidence', 'locale', 'relatedMedia',
+        'relationType', 'subject', 'subjectGroup', 'unitId', 'version',
+    ]);
+    assert.equal(unit.concept, '有限视角下的信息差');
+    assert.equal(unit.filmEvidence, '洋洋用相机拍别人的后脑勺');
+    assert.equal(unit.relatedMedia.title, '《一一》');
+    assert.equal(unit.relatedMedia.tmdbId, 100);
+});
+
+test('精简单元与完整单元同口径：没回到影片原文、学科越界、来源型学科一律判废', () => {
+    const options = { locale: 'zh-CN', movies: [SLOT_MOVIE] };
+    // 只提片名、不带任何简介原文：题面会失去可核验依据，必须当场判废而不是留给题位阶段
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ filmEvidence: '《一一》讲的是家庭与时间。' }), options), /filmEvidence/);
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ relatedMedia: { title: '《别的片》', mediaType: 'movie' } }), options), /watched input/);
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ relationType: 'general_knowledge' }), options), /watched media/);
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ subject: '占星学' }), options), /controlled catalog/);
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ subjectGroup: 'people_and_mind' }), options), /controlled catalog/);
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ subject: '物理', subjectGroup: 'science_and_nature' }), options), /external source evidence/);
+    assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ version: 2 }), options), /unitVersion/);
 });
