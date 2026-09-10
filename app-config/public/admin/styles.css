@@ -1446,8 +1446,8 @@ tbody tr:last-child td { border-bottom: none; }
 .ai-key-label { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
 .ai-key-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .ai-key-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: var(--surface-hover); border: 1px solid var(--border); color: var(--text-dim); }
-.ai-key-chip.active { color: var(--success); border-color: rgba(74, 222, 128, 0.35); }
-.ai-key-chip.cooling { color: var(--danger); border-color: rgba(248, 113, 113, 0.35); }
+.ai-key-chip.active { color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.ai-key-chip.cooling { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 
 .ai-card-actions { display: flex; gap: 8px; align-items: center; margin-top: auto; padding-top: 2px; }
 .ai-card-actions .ai-console-link { margin-left: auto; }
