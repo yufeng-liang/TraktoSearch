@@ -150,11 +150,41 @@ test('单元关联片名对不上传入列表时退回全量证据，不能把�
     assert.equal(JSON.parse(bareRaw).length, 2);
 });
 
-test('单元槽位保留全部候选片：选哪部片出概念是单元自己的自由', () => {
+test('单元槽位指定影片时只发这一部片的证据，并在 system 与 user 里都钉死片名', () => {
+    const [, user] = unitSlotMessages('小明', MOVIES, { ...UNIT_SLOT, movieTitle: '《一一》' }, BASE_SPEC);
+    const [system] = unitSlotMessages('小明', MOVIES, { ...UNIT_SLOT, movieTitle: '《一一》' }, BASE_SPEC);
+    const userText = textOf(user);
+    const raw = userText.slice(userText.indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length, userText.indexOf('</WATCHED_EVIDENCE>'));
+    const parsed = JSON.parse(raw);
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].title, '《一一》');
+    assert.equal(userText.includes('《大佛普拉斯》'), false);
+    assert.match(userText, /只给这一部/);
+    assert.ok(userText.includes('relatedMedia.title 必须逐字等于 "《一一》"'));
+    // system 里的硬约束同样要点名：模型最常照做的是这一段
+    const systemText = textOf(system);
+    assert.ok(systemText.includes('本槽位指定影片是 "《一一》"'));
+    assert.ok(systemText.includes('禁止写其它影片'));
+});
+
+test('单元槽位没指定影片时保留全部候选片：选哪部片出概念是单元自己的自由', () => {
     const [, user] = unitSlotMessages('小明', MOVIES, UNIT_SLOT, BASE_SPEC);
     const userText = textOf(user);
     const raw = userText.slice(userText.indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length, userText.indexOf('</WATCHED_EVIDENCE>'));
     assert.equal(JSON.parse(raw).length, 2);
+    assert.equal(userText.includes('只给这一部'), false);
+    assert.ok(userText.includes('relatedMedia.title 必须逐字取自上面证据里的 title'));
+});
+
+test('槽位指定片名不在候选列表里时退回全量证据，不能把材料清空', () => {
+    const stray = { ...UNIT_SLOT, movieTitle: '《牯岭街少年杀人事件》' };
+    const [, user] = unitSlotMessages('小明', MOVIES, stray, BASE_SPEC);
+    const userText = textOf(user);
+    const raw = userText.slice(userText.indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length, userText.indexOf('</WATCHED_EVIDENCE>'));
+    assert.equal(JSON.parse(raw).length, 2);
+    assert.equal(userText.includes('只给这一部'), false);
+    // 证据块退回全量时，指示也必须退回「取自证据里的 title」，不能留下对不上的死片名要求
+    assert.ok(userText.includes('relatedMedia.title 必须逐字取自上面证据里的 title'));
 });
 
 test('repairHint 传值时追加在 user 末尾，且只出现一次', () => {

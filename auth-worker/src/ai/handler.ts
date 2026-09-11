@@ -78,7 +78,7 @@ import {
 } from './tts.ts';
 import { recordHealthEvent, type HealthRouteContext } from './health.ts';
 import { mapWithGate } from './async-pool.ts';
-import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, type QuizAngleType, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
+import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, rankMovieTitlesForSlots, type QuizAngleType, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
 import { questionSlotMessages, unitSlotMessages, type SlotMovie, type SlotUnit } from './quiz-slot-messages.ts';
 import { bankSeed, canGenerateSet, deriveBankQuizId, isLocalDate, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
 
@@ -964,6 +964,18 @@ function assertUnitMatchesSlot(unit: QuizSlotUnit, slot: UnitSlot): void {
     if (unit.relationType !== 'direct_watch') {
         throw new AppError('INVALID_AI_OUTPUT', '单元必须锚定已看影视', 502);
     }
+    // 槽位钉死的影片：4 个单元各占一部片才谈得上「一套覆盖 4 部不同片」，写别的片一律退回重写。
+    // 两侧都 trim 再比：槽位里的片名去掉了首尾空白，而 relatedMedia.title 是已看列表的原始片名。
+    const wantedTitle = (slot.movieTitle ?? '').trim();
+    const actualTitle = (unit.relatedMedia?.title ?? '').trim();
+    if (wantedTitle !== '' && actualTitle !== wantedTitle) {
+        throw new AppError(
+            'INVALID_AI_OUTPUT',
+            '本槽位指定影片是「' + wantedTitle + '」，unit.relatedMedia.title 必须逐字等于它，'
+                + '当前是「' + (actualTitle === '' ? '空' : actualTitle) + '」',
+            502,
+        );
+    }
 }
 
 /** 题位必须落在槽位指定的题型、难度、归属单元与概念上，其余交给既有单题校验。 */
@@ -1217,7 +1229,9 @@ async function generateQuizBySlots(
     };
 
     // ---- 单元槽位：4 个单元各自生成，概念重复只丢那一格 ----
-    const unitSlots = planUnitSlots(quizId);
+    // 片单按材料厚度排序后逐个槽位钉死：4 个单元必然落在 4 部不同片上（候选不足 4 部时轮转复用），
+    // 13 个题位跟着单元走，一套题库的影片覆盖面因此由槽位保证，不再赌模型自己挑片。
+    const unitSlots = planUnitSlots(quizId, rankMovieTitlesForSlots(movies));
     onEvent?.({ type: 'stage', stage: 'units', status: 'start', attempt: 1, provider, expectedChars: QUIZ_UNIT_SLOT_COUNT });
     let unitsFinished = 0;
     const unitOutcomes = await mapWithGate(unitSlots, slotBudget.unitConcurrency, async (slot: UnitSlot) => {
@@ -1428,7 +1442,15 @@ async function generateQuizBySlots(
         chars: { units: unitChars, questions: questionChars },
     }));
     onEvent?.({ type: 'stage', stage: 'review', status: 'done', attempt: 1, provider, expectedChars: QUIZ_QUESTION_SLOT_COUNT });
-    return { quizId, sessionId, movies, questions: assembled, scoringVersion: 2 };
+    // 一轮的影片清单只列真的出过题的片：预览页「本轮会涉及」与实际题目一一对应，不再给没考到的片做剧透提示。
+    // 兜底题也带 sourceTitle，所以降级格不会让所用影片凭空少一部。
+    const usedTitles = new Set<string>();
+    for (const question of assembled) {
+        const title = (question.sourceTitle || question.mediaTitle || '').trim();
+        if (title !== '') usedTitles.add(title);
+    }
+    const quizMovies = movies.filter(movie => usedTitles.has(movie.title));
+    return { quizId, sessionId, movies: quizMovies.length > 0 ? quizMovies : movies, questions: assembled, scoringVersion: 2 };
 }
 
 /** 单轮生成：返回 QuizCacheData 表示成功，null 表示终局失败，undefined 表示本轮失败、可重试。 */

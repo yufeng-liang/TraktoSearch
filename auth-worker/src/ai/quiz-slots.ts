@@ -66,6 +66,40 @@ function rotateTake<T>(list: readonly T[], start: number, count: number): T[] {
     return picked;
 }
 
+/** evidence 里简介行的前缀，与 handler 构造 evidence 时一致；决定这部片有没有可锚定的简介原文。 */
+const SYNOPSIS_LINE_PREFIX = '简介：';
+
+/**
+ * 候选片优先级：按「材料厚度」降序排列，供 planUnitSlots 逐个槽位分配。
+ *
+ * 排序键依次是「有没有简介」「材料总字符数」「片名」：单元与题位的证据锚定都要求引用简介原文
+ * （题位题干必须引用简介里 4 字以上连续片段），有简介的片子才拿得出可引用的材料；
+ * 同分时按片名兜底，保证同一批候选片在任何环境下排出同一个顺序。
+ *
+ * @param movies 候选片（只需要片名与 evidence 两个字段）
+ */
+export function rankMovieTitlesForSlots(
+    movies: ReadonlyArray<{ title: string; evidence?: readonly string[] }>,
+): string[] {
+    const seen = new Set<string>();
+    const ranked: Array<{ title: string; synopsis: number; weight: number }> = [];
+    for (const movie of movies) {
+        const title = movie.title.trim();
+        if (title === '' || seen.has(title)) continue;
+        seen.add(title);
+        const evidence = movie.evidence ?? [];
+        ranked.push({
+            title,
+            synopsis: evidence.some(line => line.startsWith(SYNOPSIS_LINE_PREFIX)) ? 1 : 0,
+            weight: evidence.reduce((sum, line) => sum + line.length, 0),
+        });
+    }
+    ranked.sort((left, right) => (right.synopsis - left.synopsis)
+        || (right.weight - left.weight)
+        || (left.title < right.title ? -1 : left.title > right.title ? 1 : 0));
+    return ranked.map(row => row.title);
+}
+
 /**
  * 单元槽位：生成前就把「这一格写哪个学科组、允许哪些学科、什么角度」钉死。
  *
@@ -83,6 +117,8 @@ export interface UnitSlot {
     allowedSubjects: readonly string[];
     /** 本单元的角度类型 */
     angleType: QuizAngleType;
+    /** 本槽位钉死的影片（片单为空时缺省，退回「单元自选影片」） */
+    movieTitle?: string;
 }
 
 /** 题位槽位：题型、难度、归属单元、概念、角度全部预先分配，模型只负责把这一格写成题。 */
@@ -110,12 +146,15 @@ export interface QuestionSlot {
  * - 4 个槽位取 4 个不同的 subjectGroup（从「不需要外部来源」的 5 个组里按 seed 轮转挑），
  *   保证学科覆盖 ≥3 的既有硬校验必然满足。
  * - 4 个角度类型互不重复（6 选 4，按 seed 轮转）。
+ * - 传入 movieTitles 时第 i 个槽位钉死第 i 部片：13 个题位跟着单元走，单元固定在 4 部不同片上，
+ *   一套必然覆盖 4 部片。片名不是 seed 派的（片单本身已按 seed 抽过一轮），换一套片单就换一批片。
  * - 同一 seed 必须得到完全相同的结果（确定性）：预生成按 (用户, 日期, 套序号) 复算槽位表，
  *   不需要把槽位表存库。
  *
  * @param seed 形如 `{friendId}:{date}:{setIndex}` 的确定性种子
+ * @param movieTitles 候选片优先级顺序（见 rankMovieTitlesForSlots），缺省即不指定影片
  */
-export function planUnitSlots(seed: string): UnitSlot[] {
+export function planUnitSlots(seed: string, movieTitles: readonly string[] = []): UnitSlot[] {
     const hash = hashSeed(seed);
     // 低位定组偏移，高位定角度偏移：5 与 6 互质，两个偏移各自独立轮转
     const groupOffset = hash % QUIZ_UNIT_GROUPS.length;
@@ -123,6 +162,14 @@ export function planUnitSlots(seed: string): UnitSlot[] {
 
     const groups = rotateTake(QUIZ_UNIT_GROUPS, groupOffset, QUIZ_UNIT_SLOT_COUNT);
     const angles = rotateTake(QUIZ_ANGLE_TYPES, angleOffset, QUIZ_UNIT_SLOT_COUNT);
+    // 候选片不足 4 部时按位次轮转复用：宁可重复，也不能有空槽位拿不到片
+    const picked: string[] = [];
+    for (const title of movieTitles) {
+        const trimmed = title.trim();
+        if (trimmed === '' || picked.includes(trimmed)) continue;
+        picked.push(trimmed);
+        if (picked.length >= QUIZ_UNIT_SLOT_COUNT) break;
+    }
 
     return groups.map((group, position) => ({
         index: position + 1,
@@ -130,6 +177,7 @@ export function planUnitSlots(seed: string): UnitSlot[] {
         // 复制一份，避免调用方拿到表内数组后改动影响后续调用
         allowedSubjects: [...group.allowedSubjects],
         angleType: angles[position],
+        ...(picked.length === 0 ? {} : { movieTitle: picked[position % picked.length] }),
     }));
 }
 

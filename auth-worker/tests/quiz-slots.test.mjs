@@ -6,6 +6,7 @@ import {
     QUIZ_UNIT_SLOT_COUNT,
     planQuestionSlots,
     planUnitSlots,
+    rankMovieTitlesForSlots,
 } from '../src/ai/quiz-slots.ts';
 
 /**
@@ -269,4 +270,90 @@ test('planQuestionSlots 空单元数组抛中文错误', () => {
         () => planQuestionSlots([]),
         (error) => error instanceof Error && /至少 3 个/.test(error.message),
     );
+});
+
+/** 候选片夹具：带 evidence 的形态与 handler 的 WatchMovie 一致（简介用「简介：」前缀标记）。 */
+const CANDIDATE_MOVIES = [
+    // 有简介但材料最薄
+    { title: '《甲》', evidence: ['简介：甲'] },
+    { title: '《乙》', evidence: ['简介：' + '乙'.repeat(30)] },
+    // 没有简介但材料总量最大：必须排在所有有简介的片子后面
+    { title: '《丙》', evidence: ['关键词：' + '丙'.repeat(40)] },
+    { title: '《丁》', evidence: ['简介：' + '丁'.repeat(10)] },
+    { title: '《戊》', evidence: ['简介：' + '戊'.repeat(20)] },
+];
+
+test('planUnitSlots 不传片单时不带 movieTitle，保持「单元自选影片」的旧口径', () => {
+    for (const seed of UNIT_SEEDS) {
+        for (const slot of planUnitSlots(seed)) {
+            assert.equal(Object.hasOwn(slot, 'movieTitle'), false);
+        }
+        assert.deepEqual(planUnitSlots(seed), planUnitSlots(seed, []));
+    }
+});
+
+test('planUnitSlots 传入片单时 4 个槽位各钉一部不同影片', () => {
+    const titles = CANDIDATE_MOVIES.map((movie) => movie.title);
+    for (const seed of UNIT_SEEDS) {
+        const slots = planUnitSlots(seed, titles);
+        assert.deepEqual(slots.map((slot) => slot.movieTitle), titles.slice(0, QUIZ_UNIT_SLOT_COUNT));
+        assert.equal(new Set(slots.map((slot) => slot.movieTitle)).size, QUIZ_UNIT_SLOT_COUNT);
+        // 指定影片不能顶掉既有的组与角度分配
+        assert.equal(new Set(slots.map((slot) => slot.subjectGroup)).size, 4);
+        assert.equal(new Set(slots.map((slot) => slot.angleType)).size, 4);
+        // 确定性：同 seed 同片单必须逐字节可复算
+        assert.equal(JSON.stringify(planUnitSlots(seed, titles)), JSON.stringify(planUnitSlots(seed, titles)));
+    }
+});
+
+test('planUnitSlots 候选片不足 4 部时按位次轮转复用，片名去重且忽略空白项', () => {
+    const slots = planUnitSlots('friend-1:2026-09-09:1', ['《甲》', '  ', '', '《乙》', '《甲》', '  《丙》 ']);
+    assert.deepEqual(slots.map((slot) => slot.movieTitle), ['《甲》', '《乙》', '《丙》', '《甲》']);
+
+    const two = planUnitSlots('friend-1:2026-09-09:1', ['《甲》', '《乙》']);
+    assert.deepEqual(two.map((slot) => slot.movieTitle), ['《甲》', '《乙》', '《甲》', '《乙》']);
+
+    // 只有空白片名时等价于没传片单
+    assert.equal(Object.hasOwn(planUnitSlots('friend-1:2026-09-09:1', ['', '   '])[0], 'movieTitle'), false);
+});
+
+test('rankMovieTitlesForSlots 有简介的优先、其次按材料厚度降序，没简介的垫底', () => {
+    const ranked = rankMovieTitlesForSlots(CANDIDATE_MOVIES);
+    // 有简介的四部分按材料长度降序：乙(33) > 戊(23) > 丁(13) > 甲(4)
+    // 丙没有简介、材料总量最大(44)，仍然排在最后 —— 简介是首位键，压过材料厚度
+    assert.deepEqual(ranked, ['《乙》', '《戊》', '《丁》', '《甲》', '《丙》']);
+    // 两两对比再钉一遍：只有「有没有简介」不同时，简介就是唯一判据
+    assert.deepEqual(
+        rankMovieTitlesForSlots([CANDIDATE_MOVIES[2], CANDIDATE_MOVIES[3]]),
+        ['《丁》', '《丙》'],
+    );
+    // 材料里有「简介：」前缀才算有简介，前缀只出现在句子中间不算
+    assert.deepEqual(
+        rankMovieTitlesForSlots([
+            { title: '《己》', evidence: ['关键词：提到简介：这个词但并不是简介行'] },
+            { title: '《庚》', evidence: ['简介：庚'] },
+        ]),
+        ['《庚》', '《己》'],
+    );
+});
+
+test('rankMovieTitlesForSlots 去重取首次出现的材料，完全同分时按片名而不是输入顺序排序', () => {
+    const input = [
+        { title: '《B》', evidence: ['简介：一样长'] },
+        { title: '《A》', evidence: ['简介：一样长'] },
+        // 重复片名取首次出现的材料：这条更长的材料不该顶掉上面那条
+        { title: '《B》', evidence: ['简介：这条重复条目的材料明显更长，但不该改变顺序。'] },
+        { title: '   ', evidence: [] },
+    ];
+    // 同分兜底按 UTF-16 码元序（ASCII 片名就是字典序）
+    assert.deepEqual(rankMovieTitlesForSlots(input), ['《A》', '《B》']);
+    assert.deepEqual(input.map((movie) => movie.title), ['《B》', '《A》', '《B》', '   ']);
+    // 同分排序与输入顺序无关：两种喂法都是一个结果
+    const ties = [
+        { title: '《B》', evidence: ['简介：一样长'] },
+        { title: '《A》', evidence: ['简介：一样长'] },
+    ];
+    assert.deepEqual(rankMovieTitlesForSlots(ties), ['《A》', '《B》']);
+    assert.deepEqual(rankMovieTitlesForSlots([...ties].reverse()), ['《A》', '《B》']);
+    assert.deepEqual(rankMovieTitlesForSlots([]), []);
 });

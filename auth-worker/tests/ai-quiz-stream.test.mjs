@@ -416,6 +416,87 @@ function slotQuestionPayload(prompt, overrides = {}) {
     };
 }
 
+test('一套 13 题覆盖 4 部不同影片：单元槽位各钉一部，题位跟随单元', async () => {
+    const originalFetch = globalThis.fetch;
+    const unitEvidenceSizes = [];
+    globalThis.fetch = async (url, init) => {
+        if (!String(url).includes('agnes-ai.com')) return new Response('unavailable', { status: 500 });
+        const prompt = promptTextOf(init);
+        if (prompt.includes('单槽位学习单元编辑')) {
+            const block = /<WATCHED_EVIDENCE>(.*?)<\/WATCHED_EVIDENCE>/su.exec(prompt)?.[1] ?? '[]';
+            unitEvidenceSizes.push(JSON.parse(block).length);
+            return jsonCompletion(JSON.stringify(slotUnitPayload(prompt)));
+        }
+        return jsonCompletion(JSON.stringify(slotQuestionPayload(prompt)));
+    };
+    try {
+        const env = createEnv({
+            DB: createDbStub(),
+            AI_TEST_MODE: false,
+            AGNES_API_KEYS: 'test-agnes-key',
+            AI_DEFAULT_PROVIDER: 'agnes',
+        });
+        const events = await readEvents(await callStream({ ...QUIZ_BODY, watched: SLOT_MOVIES }, env));
+        assert.equal(events.at(-1).type, 'result');
+        const quiz = events.at(-1).quiz;
+        assert.equal(quiz.questions.length, 13);
+        // 单元槽位只带所属影片的证据：4 个槽位各自打一次，块里都只有 1 部片
+        assert.ok(unitEvidenceSizes.length >= 4, '四个单元槽位都要真的打过上游');
+        assert.deepEqual([...new Set(unitEvidenceSizes)], [1], '单元槽位必须只带所属影片的证据');
+        const titles = [...new Set(quiz.questions.map(question => question.sourceTitle))];
+        assert.equal(titles.length, 4, '一套 13 题必须落在 4 部不同影片上：' + titles.join('、'));
+        // 发送给客户端的影片清单要与题目一致：预览页「本轮会涉及」不列没考到的片，且保持候选片顺序
+        const expectedTitles = SLOT_MOVIES.map(movie => movie.title).filter(title => titles.includes(title));
+        assert.deepEqual(quiz.mediaTitles, expectedTitles);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('单元写成别的影片时判废并带原因重试，修复后仍钉在指定影片上', async () => {
+    const originalFetch = globalThis.fetch;
+    const repairHints = [];
+    globalThis.fetch = async (url, init) => {
+        if (!String(url).includes('agnes-ai.com')) return new Response('unavailable', { status: 500 });
+        const prompt = promptTextOf(init);
+        if (prompt.includes('单槽位学习单元编辑')) {
+            const payload = slotUnitPayload(prompt);
+            const repair = /上一次这份输出被校验拒绝，原因：([^。]+)/u.exec(prompt)?.[1] ?? null;
+            if (repair === null) {
+                // 首轮故意写成另一部候选片（材料也换成那一部的简介，只留片名不匹配这一处违规）
+                const wanted = payload.unit.relatedMedia.title;
+                const otherIndex = WATCHED_MOVIES.findIndex(movie => movie.title !== wanted);
+                payload.unit.relatedMedia = { title: WATCHED_MOVIES[otherIndex].title, mediaType: 'movie' };
+                payload.unit.filmEvidence = SLOT_SYNOPSES[otherIndex];
+            } else {
+                repairHints.push(repair);
+            }
+            return jsonCompletion(JSON.stringify(payload));
+        }
+        return jsonCompletion(JSON.stringify(slotQuestionPayload(prompt)));
+    };
+    try {
+        const env = createEnv({
+            DB: createDbStub(),
+            AI_TEST_MODE: false,
+            AGNES_API_KEYS: 'test-agnes-key',
+            AI_DEFAULT_PROVIDER: 'agnes',
+        });
+        const events = await readEvents(await callStream({ ...QUIZ_BODY, watched: SLOT_MOVIES }, env));
+        assert.equal(events.at(-1).type, 'result');
+        assert.ok(repairHints.length > 0, '写成别的影片必须触发修复轮');
+        assert.ok(
+            repairHints.some(hint => hint.includes('本槽位指定影片是')),
+            '修复原因必须点明指定影片：' + repairHints.join('｜'),
+        );
+        // 修复后整套仍然覆盖 4 部不同影片：写错的那一轮没有把别的片带进题目
+        const quiz = events.at(-1).quiz;
+        assert.equal(new Set(quiz.questions.map(question => question.sourceTitle)).size, 4);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('题位只差一个字段不合格时判废止步于该格，不拖垮整套 13 题', async () => {
     const originalFetch = globalThis.fetch;
     let nearMissSeen = 0;

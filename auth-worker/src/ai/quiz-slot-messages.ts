@@ -102,6 +102,9 @@ export function unitSlotMessages(
 ): MimoMessage[] {
     const unitId = 'unit-' + slot.index;
     const allowedSubjects = slot.allowedSubjects.join('、');
+    // 槽位钉死影片时只发这一部的证据：一套 4 个单元各占一部片，13 个题位才跟着分散到 4 部片
+    const assignedTitle = (slot.movieTitle ?? '').trim();
+    const scoped = assignedTitle !== '' && movies.some(movie => movie.title.trim() === assignedTitle);
     const systemContent = '你是影视知识闯关的单槽位学习单元编辑。本次只写 1 个学习单元，'
         + '只返回 JSON，形如 {"unit":{...}}：不要返回 units 数组，不要一次写 3 到 6 个单元，'
         + '除这一个单元对象外不要输出任何其它字段、说明或 markdown。'
@@ -115,6 +118,8 @@ export function unitSlotMessages(
         + 'subjectGroup 只能是 "' + slot.subjectGroup + '"，写成其它组一律作废；'
         + 'subject 只能从本槽位白名单里挑一个：' + allowedSubjects
         + '（必须使用白名单原文，不得新增、改写或翻译学科名）；'
+        + (scoped ? '本槽位指定影片是 "' + assignedTitle + '"：relatedMedia.title 必须逐字等于它，'
+            + 'filmEvidence 只能引用这一部片的材料，禁止写其它影片，换成别的片一律作废；' : '')
         + '本单元的角度类型是「' + slot.angleType + '」：' + ANGLE_GUIDANCE[slot.angleType]
         + '。concept 与 filmEvidence 都要围绕这个角度展开，'
         + '不要写成泛泛的影片介绍或通用学习方法。'
@@ -122,14 +127,21 @@ export function unitSlotMessages(
         + '多个单元之间 concept 互不重复、title/takeaway/checkQuestion 该怎么写）'
         + '在本槽位不适用，本槽位只写这 1 个精简单元，其余字段取值范围与硬规则照常执行。'
         + baseSpec;
-    const userContent = '用户昵称是“' + nickname + '”。以下是本轮已看影视及客户端实际提供的证据；'
+    const userContent = '用户昵称是“' + nickname + '”。以下是'
+        + (scoped ? '本槽位指定影片（只给这一部，本单元只能围绕它写）' : '本轮已看影视')
+        + '及客户端实际提供的证据；'
         + EVIDENCE_SAFETY_NOTE + '只使用这些材料写本槽位的 1 个学习单元：'
-        + watchedEvidenceBlock(movies)
+        + slotEvidenceBlock(movies, assignedTitle)
         + '。本槽位的具体指示：unitId=' + unitId + '，subjectGroup=' + slot.subjectGroup
         + '，subject 从白名单【' + allowedSubjects + '】里挑一个，角度类型=' + slot.angleType
         + '（' + ANGLE_GUIDANCE[slot.angleType] + '）。'
-        + 'relatedMedia.title 必须逐字取自上面证据里的 title，不得另造片名；'
-        + 'filmEvidence 必须引用上面证据里该影片真实存在的年份、类型、简介或 evidence 原文，不得编造剧情、台词、演员或幕后事实。'
+        + (scoped
+            ? 'relatedMedia.title 必须逐字等于 "' + assignedTitle + '"，不得改用其它影片、不得另造片名；'
+                + 'filmEvidence 必须引用上面证据里 "' + assignedTitle + '" 真实存在的年份、类型、简介或 evidence 原文，'
+                + '不得编造剧情、台词、演员或幕后事实。'
+            : 'relatedMedia.title 必须逐字取自上面证据里的 title，不得另造片名；'
+                + 'filmEvidence 必须引用上面证据里该影片真实存在的年份、类型、简介或 evidence 原文，'
+                + '不得编造剧情、台词、演员或幕后事实。')
         + '只输出 {"unit":{...}} 这一条完整 JSON，不要输出数组。'
         + repairSection(repairHint);
     return [
