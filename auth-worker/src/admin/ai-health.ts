@@ -7,6 +7,8 @@ import { recordHealthEvent, readKeyPoolSnapshot } from '../ai/health.ts';
 import { callZhipuJson, ZHIPU_MODELS, type ZhipuEnvironment } from '../ai/zhipu.ts';
 import { callAgnesJson, AGNES_MODELS, type AgnesEnvironment } from '../ai/agnes.ts';
 import { callMimoJson, MIMO_MODELS, type MimoEnvironment, type MimoModel } from '../ai/mimo.ts';
+import { callBailianJson, BAILIAN_MODELS, type BailianEnvironment } from '../ai/bailian.ts';
+import { DEFAULT_MODEL_BY_PROVIDER } from '../ai/handler.ts';
 
 const WINDOW_SECONDS: Record<string, number> = { '24h': 86_400, '7d': 7 * 86_400 };
 const PROBE_TIMEOUT_MS = 10_000;
@@ -15,27 +17,29 @@ const PROBE_TIMEOUT_MS = 10_000;
 const PROBE_MESSAGES = [{ role: 'user' as const, content: '回复 OK 两个字，不要输出其他内容。' }];
 const PROBE_OPTIONS = { maxCompletionTokens: 16, temperature: 0, responseFormat: false, timeoutMs: PROBE_TIMEOUT_MS };
 
-// handler.ts 的 DEFAULT_MODEL_BY_PROVIDER 当前未导出（其导出改动不在本任务范围），
-// 探针默认模型在此维护同值副本；三家默认模型调整时两处必须同步。
-type ProbeProvider = 'zhipu' | 'agnes' | 'mimo';
+// 默认模型直接取 handler 那一份，不再维护同值副本——主供应商换人（如 zhipu→bailian）时
+// 探针漏掉新家就等于健康页看不到主力到底通不通。
+type ProbeProvider = 'zhipu' | 'agnes' | 'mimo' | 'bailian';
 
 const PROBE_DEFAULT_MODEL: Record<ProbeProvider, string> = {
-    zhipu: 'glm-4.7',
-    agnes: 'agnes-2.5-flash',
-    mimo: 'mimo-v2.5-pro',
+    zhipu: DEFAULT_MODEL_BY_PROVIDER.zhipu,
+    agnes: DEFAULT_MODEL_BY_PROVIDER.agnes,
+    mimo: DEFAULT_MODEL_BY_PROVIDER.mimo,
+    bailian: DEFAULT_MODEL_BY_PROVIDER.bailian,
 };
 
 // 显式数组判定，避免 `in` 运算符把原型链上的属性（constructor / hasOwnProperty 等）当成合法值
-const PROBE_PROVIDERS: readonly ProbeProvider[] = ['zhipu', 'agnes', 'mimo'];
+const PROBE_PROVIDERS: readonly ProbeProvider[] = ['zhipu', 'bailian', 'agnes', 'mimo'];
 
 const VALID_MODELS: Record<string, readonly string[]> = {
     zhipu: ZHIPU_MODELS,
     agnes: AGNES_MODELS,
     mimo: MIMO_MODELS,
+    bailian: BAILIAN_MODELS,
 };
 
-// 探针要读三家密钥；DB/KV 均可选，与 AiHealthEnvironment 的尽力而为语义一致
-interface ProbeEnvironment extends ZhipuEnvironment, AgnesEnvironment, MimoEnvironment {
+// 探针要读四家密钥；DB/KV 均可选，与 AiHealthEnvironment 的尽力而为语义一致
+interface ProbeEnvironment extends ZhipuEnvironment, AgnesEnvironment, MimoEnvironment, BailianEnvironment {
     DB?: D1Database;
     KV?: KVNamespace;
 }
@@ -63,6 +67,8 @@ async function probeOne(
     try {
         if (provider === 'zhipu') {
             await callZhipuJson(env, model, PROBE_MESSAGES, PROBE_OPTIONS);
+        } else if (provider === 'bailian') {
+            await callBailianJson(env, model, PROBE_MESSAGES, PROBE_OPTIONS);
         } else if (provider === 'agnes') {
             await callAgnesJson(env, model, PROBE_MESSAGES, PROBE_OPTIONS);
         } else {

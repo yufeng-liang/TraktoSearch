@@ -189,8 +189,8 @@ test('probe endpoint returns per-provider result and writes probe events', async
     globalThis.fetch = async (input, init) => {
         const body = JSON.parse(init.body);
         calls.push({ model: body.model, auth: init.headers });
-        // zhipu 200 OK、agnes 200 OK、mimo 402（fetchWithKeyRotation 内部 fetch 同 mock）
-        if (body.model?.startsWith('glm') || body.model?.startsWith('agnes')) {
+        // zhipu/bailian/agnes 200 OK、mimo 402（fetchWithKeyRotation 内部 fetch 同 mock）
+        if (body.model?.startsWith('glm') || body.model?.startsWith('agnes') || body.model?.startsWith('qwen')) {
             return new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), { status: 200 });
         }
         return new Response(JSON.stringify({ error: { message: 'insufficient balance' } }), { status: 402 });
@@ -209,6 +209,7 @@ test('probe endpoint returns per-provider result and writes probe events', async
         ZHIPU_API_KEY: 'test-zhipu',
         MIMO_API_KEY: 'test-mimo',
         AGNES_API_KEYS: 'test-agnes-key',
+        BAILIAN_API_KEY: 'test-bailian',
         AI_TEST_MODE: false,
     };
     try {
@@ -225,11 +226,14 @@ test('probe endpoint returns per-provider result and writes probe events', async
         assert.equal(byProvider.mimo.outcome, 'upstream_error');
         assert.equal(byProvider.mimo.httpStatus, 402);
         assert.equal(byProvider.agnes.outcome, 'success');
-        // 三家各写一条 probe 健康事件
+        // 主供应商换成百炼后探针必须覆盖它，否则健康页看不到主力通不通
+        assert.equal(byProvider.bailian.outcome, 'success');
+        assert.equal(byProvider.bailian.model, 'qwen3.6-flash');
+        // 四家各写一条 probe 健康事件
         const probeRows = statements.filter(s => s.sql.includes('ai_health_events'));
-        assert.equal(probeRows.length, 3);
+        assert.equal(probeRows.length, 4);
         // 落库必须挂在 waitUntil 上，避免响应返回后 isolate 回收丢事件
-        assert.equal(waits.length, 3);
+        assert.equal(waits.length, 4);
         await Promise.all(waits);
         const mimoRow = probeRows.map(r => r.args).find(a => a[3] === 'mimo');
         assert.equal(mimoRow[1], 'probe');   // source
@@ -257,6 +261,12 @@ test('probe endpoint validates provider and model params', async () => {
     });
     const response2 = await handleAiHealthProbe(badModel, env, 'req-p3');
     assert.equal(response2.status, 400);
+    const badBailianModel = new Request('https://gw.test/admin/ai/health/probe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'bailian', model: 'qwen-not-exist' }),
+    });
+    const response3 = await handleAiHealthProbe(badBailianModel, env, 'req-p4');
+    assert.equal(response3.status, 400);
 });
 
 test('health list aggregates by provider and model with window filter', async () => {

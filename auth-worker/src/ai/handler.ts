@@ -261,7 +261,8 @@ const QUIZ_LEGACY_BUDGET: QuizGenerationBudget = {
 // 它与出题共用流式预算口径，但不走向客户端推送进度。
 const DAILY_UPSTREAM_TIMEOUT_MS = 180_000;
 
-const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
+/** 各供应商的主模型：admin 探针与出题共用同一份，避免两处各写一份后默认模型漂移。 */
+export const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
     agnes: 'agnes-2.5-flash',
     zhipu: 'glm-4.7',
     // 百炼主模型取实测最快的一档（4 套 87~129s、0 降级格），额度梯队在 MODEL_FALLBACKS_BY_PROVIDER
