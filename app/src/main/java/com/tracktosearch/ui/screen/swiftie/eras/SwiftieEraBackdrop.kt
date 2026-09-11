@@ -1949,7 +1949,7 @@ private fun DrawScope.drawHalftoneThrone(
     val sTail = (sHead - SNAKE_LEN).coerceAtLeast(0f)
     val sTip = sHead.coerceAtMost(1f)
     val span = sTip - sTail
-    val maxThick = h * 0.0168f
+    val maxThick = h * SNAKE_THICK
 
     fun sAt(i: Int) = sTail + span * i / SNAKE_SAMPLES
     fun px(s: Float) = snakePointX(s) * w
@@ -1970,10 +1970,18 @@ private fun DrawScope.drawHalftoneThrone(
         return if (len < 0.001f) 1f else e / len
     }
 
-    // 粗细：颈略细 → 前段最粗 → 尾尖收到三成。一条等粗的蛇是根管子
+    // 粗细：颈细一档 → 颈后最粗 → 三段折线收到尾尖。数见 [SNAKE_NECK] 那一段
     fun thick(s: Float): Float {
         val u = ((sHead - s) / SNAKE_LEN).coerceIn(0f, 1f)
-        val shape = if (u < 0.18f) 0.70f + 0.30f * (u / 0.18f) else 1f - 0.72f * ((u - 0.18f) / 0.82f)
+        val shape = when {
+            u < SNAKE_KNEE -> SNAKE_NECK + (1f - SNAKE_NECK) * (u / SNAKE_KNEE)
+            u < SNAKE_MID_KNEE ->
+                SNAKE_MID + (1f - SNAKE_MID) * ((SNAKE_MID_KNEE - u) / (SNAKE_MID_KNEE - SNAKE_KNEE))
+            u < SNAKE_TAIL_KNEE ->
+                SNAKE_TAIL + (SNAKE_MID - SNAKE_TAIL) *
+                    ((SNAKE_TAIL_KNEE - u) / (SNAKE_TAIL_KNEE - SNAKE_MID_KNEE))
+            else -> SNAKE_TIP + (SNAKE_TAIL - SNAKE_TIP) * ((1f - u) / (1f - SNAKE_TAIL_KNEE))
+        }
         return maxThick * shape
     }
 
@@ -2130,7 +2138,9 @@ private fun DrawScope.drawHalftoneThrone(
             ux = ux / len,
             uy = uy / len,
             hl = h * 0.052f,
-            hh = thick(sTip) * 1.15f,
+            // 头的半高按**最粗处**折算，不跟着 `thick(sTip)` 走 —— 身细了一档之后
+            // 若还按颈的口径算，头会跟着缩成管子上一个鼓包（[SNAKE_HEAD_HALF] 有推导）
+            hh = maxThick * SNAKE_HEAD_HALF,
             gape = gape,
             phase = phase,
             alpha = alpha
@@ -2472,20 +2482,65 @@ private val SNAKE_SCALE = Color(0xFF8A857F)
 /**
  * 蛇身在行程曲线上占的长度（`s` 的单位）。
  *
- * 0.52 是「绕圈段占 0.508」推出来的：蛇身刚好比一整段绕圈略长，所以定格那一刻屏幕上是
- * **一圈半缠在王座上、尾巴还从左缘拖着**。再短就只剩半圈（读作搭在扶手上的一条），
- * 再长则头都出画了尾巴还没进过圈。
+ * 0.65 而不是 0.52：这个数同时决定「屏幕上那条蛇有多长」，因为 `s` 是按弧长分的，
+ * 身的可见弧长就是 `0.65 × 全曲线弧长 ≈ 2400px`（1440×3200 上，占屏高四分之三）。
+ * 0.52 那一版只有约 1800px，配上 0.0168 的粗，读出来是一条短粗的绳。
+ * 绕圈段本身是 0.540，所以 0.65 仍然满足「定格时一圈半缠在座上、尾巴还拖着」。
  */
-private const val SNAKE_LEN = 0.52f
+private const val SNAKE_LEN = 0.65f
+
+/**
+ * 蛇身最粗处的**半**管径，按屏高取。
+ *
+ * 0.0168 是第一版那个「短粗」的口径；0.0110 把身细了三分之一。
+ * 细下来还有一层：王座两侧的扶手只有 0.30w 宽，粗管径贴上去会把扶手盖掉。
+ */
+private const val SNAKE_THICK = 0.0110f
+
+/**
+ * 蛇头半高 = 最粗处的半管径 × 这个系数。
+ *
+ * **头不跟身体的比例走**。头画出来高约 `1.76 × hh`，颈的宽是 `2 × 0.62 × maxThick`，
+ * 于是这个系数就是「头比脖子宽多少」：1.10 时头是颈的 1.77 倍、也比身最粗处（1.0）
+ * 略宽 —— 真蛇的宽度比就在 1.3–1.8 之间，头该是全身最宽的一处，否则读作管子接了个帽。
+ * 绝对尺寸是 `thick(头) × 1.15` 那版的 90%（0.0121h），眼睛和牙照旧看得清。
+ */
+private const val SNAKE_HEAD_HALF = 1.10f
+
+/**
+ * 粗细沿身的四折线：颈 0.62 → 颈后最粗 1.0（u = 0.16）→ 0.68（u = 0.50）
+ * → 0.44（u = 0.88）→ 尾尖 0.26。
+ *
+ * 被点名过两次，两次是同一个病：**尾太细，头身尾不匀称**。
+ *
+ * 第一次的曲线是「1.0 一条直线收到 0.16」，可见的那截尾巴正好落在最细处，一路收到
+ * 11px，读作一根线；第二次改成「缓收到 0.30、最后 6% 收成尖 0.08」，尾**尖**反而更细
+ * 了 —— 而屏幕上看得到的尾，恰恰就是尾尖本身：它在 s 上是滑动窗口的末端，永远跟着
+ * 蛇走，尾巴拖出来时最先露出来的就是这一点。
+ *
+ * 所以这一次按**真蛇的宽度比**来定：最粗 70px（0.0110h × 2），尾尖 18px（0.26），
+ * 也就是尾尖约最粗处的四分之一；中后段（0.44–0.68）整段留在 31–48px，
+ * 拖着的那截尾巴才有体量。四个数各管一段：颈 0.62 让脖子与头衔接住，
+ * u = 0.16 把最粗处放在头后不远（真蛇的胃部那一带），0.50 与 0.88 两个折点
+ * 把收细推到后半程，尾尖 0.26 收口不收成针。
+ */
+private const val SNAKE_NECK = 0.62f
+private const val SNAKE_KNEE = 0.16f
+private const val SNAKE_MID = 0.68f
+private const val SNAKE_MID_KNEE = 0.50f
+private const val SNAKE_TAIL = 0.44f
+private const val SNAKE_TAIL_KNEE = 0.88f
+private const val SNAKE_TIP = 0.26f
 
 /**
  * 蛇身采样点数。窗口是滑动的，所以这是「当前可见那一段」的分段数，不是整条曲线的。
  *
  * 192 而不是 96：蛇身的折线感有两个来源，除了段界上的切线拐折，还有一个是**采样太稀**。
- * 绕圈那个椭圆极扁（0.176w × 0.032h），两端的曲率半径只有约 41px（1440×3200 上），
- * 而可见那一段（`SNAKE_LEN` = 0.52 的 `s`）约 1800px 弧长 —— 96 个采样在那里一段要转 21°，
- * 圈的两端就成了一小段一小段的折线。192 之后每段降到 10° 上下，肉眼已经读作圆弧。
- * 代价只是每帧多几百个多边形顶点，与鳞、腹鳞的绘制调用数无关（那两个按采样**步长**走）。
+ * 第一版那个椭圆极扁（0.176w × 0.032h），两端的曲率半径只有约 41px（1440×3200 上），
+ * 而可见那一段约 1800px 弧长 —— 96 个采样在最弯处一段要转 21°，圈的两端就成了一小段
+ * 一小段的折线。现在圈上最紧处约 110px、可见弧长约 2500px（`SNAKE_LEN` = 0.65），
+ * 192 个采样在最弯处每段转 6.7°，肉眼已经读作圆弧。代价只是每帧多几百个多边形顶点，
+ * 与鳞、腹鳞的绘制调用数无关（那两个按采样**步长**走）。
  */
 private const val SNAKE_SAMPLES = 192
 
@@ -2495,25 +2550,55 @@ private const val SNAKE_DS = 0.0035f
 /**
  * 行程曲线三段的 `s` 分界。
  *
- * 按各段的**实际弧长**分配，蛇的速度才是均匀的：进场约 838px、绕圈 1.5 圈约 1787px、
- * 抬头出画约 906px，合 3531px（1440×3200 上）。改椭圆半径、进场/出画曲线的控制量或
- * 出画点，都要跟着重算这两个数，不然蛇会在某一段忽然加速。
+ * 按各段的**实际弧长**分配，蛇的速度才是均匀的：进场约 845px、绕圈（约 1.43 圈）2171px、
+ * 抬头出画约 892px，合 3908px（1440×3200 上按 4 万个采样点累加相邻点距离量的）。
+ * 改椭圆半径、收尾角、进场/出画曲线的控制量或出画点，都要跟着重算这两个数，
+ * 不然蛇会在某一段忽然加速 —— 绕圈那段尤其非线性：半轴动一点，它的弧长就变一截。
  */
-private const val SNAKE_S_ENTER = 0.237f
-private const val SNAKE_S_LOOP = 0.743f
+private const val SNAKE_S_ENTER = 0.216f
+private const val SNAKE_S_LOOP = 0.772f
 
-/** 绕王座那个椭圆：中心、两半轴、起始高度、1.5 圈总共抬多高。 */
+/**
+ * 绕王座那个椭圆：中心、两半轴、起始高度、扫过的角（1.5 圈减去 [SNAKE_LOOP_TRIM]）。
+ *
+ * **这一版的两半轴是「按弯得动」挑的，不是按好看挑的。** 蛇身有半个管径的厚度，
+ * 轨迹的曲率半径只要掉到半管径量级，内侧边缘就会自己叠起来 —— 屏幕上读作一个折角，
+ * 而不是一条急弯。所以先量曲率半径，再挑半径：老椭圆（0.176w × 0.032h，且 1.5 圈
+ * 硬拧到最右点）在两端只有 38px 半径，而那时半管径 27px —— 正好卡在折叠的边缘上。
+ * 0.070 的高半轴 + 提前收尾后，绕圈段最紧处约 110px，是半管径的三倍。
+ *
+ * 高度也受了卡片的约束：这条螺纹最低的那半圈（`b = 1/6`，θ = 1.5π）落在
+ * `CY − RISE/6 + RY`，要压在卡片上沿（0.40h）之上 —— 半轴一大就会钻到卡片背后去。
+ */
 private const val SNAKE_LOOP_CX = 0.500f
-private const val SNAKE_LOOP_RX = 0.176f
-private const val SNAKE_LOOP_RY = 0.032f
-private const val SNAKE_LOOP_CY = 0.348f
-private const val SNAKE_LOOP_RISE = 0.130f
+private const val SNAKE_LOOP_RX = 0.182f
+private const val SNAKE_LOOP_RY = 0.070f
+private const val SNAKE_LOOP_CY = 0.320f
+private const val SNAKE_LOOP_RISE = 0.140f
 
 /**
  * 绕几圈。1.5 而不是整数：从最左（θ = π）起转 1.5 圈正好停在**最右**，
- * 接下来往右上抬头、往右出画一路顺着走。整数圈会停回最左边，出画得先横穿王座。
+ * 接下来往右、斜着出画一路顺着走。整数圈会停回最左边，出画得先横穿王座。
+ * 实际只转 `1.5 圈 − [SNAKE_LOOP_TRIM]`（见那条注释：停最右点的切线出画段接不住）。
  */
 private const val SNAKE_TURNS = 1.5f
+
+/**
+ * 线圈**提前**收尾的角（弧度）。0 就是「正好停在最右点」。
+ *
+ * 停在最右点看着最整齐，但那一点的切线是**竖直向下**的：出画段要从这里接到「往右上走」，
+ * 得原地反折约 163°，贝塞尔在这种反折上会塌成一个半径 10px 的尖 —— 就是上一版颈部
+ * 那道折。提前 0.80rad（约 46°）收尾，蛇身是在椭圆右上角、**斜向下右**离开线圈的，
+ * 出画段顺着这个方向续上去，整条颈部只有一个方向的转向，最紧处从 10px 变成约 150px。
+ *
+ * 收尾点因此落在 `x = CX + RX·cos(46°) ≈ 0.627w`、`y ≈ 0.130h` —— 王座的背板轮廓
+ * 在那个高度只到 0.51w（上缘收成尖顶），所以「远侧 → 近侧」的切换点仍在轮廓之外，
+ * 不会出现身体从背板面上穿出来。
+ */
+private const val SNAKE_LOOP_TRIM = 0.80f
+
+/** `[SNAKE_LOOP_TRIM]` 之后绕圈段实际扫过的角。三个三角函数共用。 */
+private val SNAKE_LOOP_SPAN: Float = SNAKE_TURNS * TAU - SNAKE_LOOP_TRIM
 
 /** reputation 是第 6 张。写成常量是为了让下面那行现算的段长有个名字。 */
 private const val REP_INDEX = 5
@@ -2530,7 +2615,7 @@ private val REP_ERA_MS: Float =
 /**
  * 头位置随本段进度的四段速度（[SNAKE_KEY_P] 是进度、[SNAKE_KEY_S] 是曲线参数）。
  *
- * 四段的速度分别是 1.04 / 1.41 / 0.63 / 2.69（s 每单位进度）—— 故意不平滑：
+ * 四段的速度分别是 0.98 / 1.54 / 0.43 / 3.33（s 每单位进度）—— 故意不平滑：
  * 「游进来 → 缠上去 → **几乎停住立起头** → 一甩出画」，那个停顿就是攻击姿态的定格，
  * 也是这段唯一让人看清蛇头的时刻。匀速走完全程只会读作一条传送带上的绳子。
  */
@@ -2550,8 +2635,18 @@ private fun snakeHeadAt(p: Float): Float {
     return SNAKE_KEY_S[SNAKE_KEY_S.size - 1]
 }
 
-/** 绕圈段的角度。从最左（π）起按 [SNAKE_TURNS] 转。 */
-private fun snakeLoopAngle(b: Float): Float = PI.toFloat() + b * SNAKE_TURNS * TAU
+/** 绕圈段的角度。从最左（π）起按 [SNAKE_LOOP_SPAN] 转（不足 1.5 圈，见 [SNAKE_LOOP_TRIM]）。 */
+private fun snakeLoopAngle(b: Float): Float = PI.toFloat() + b * SNAKE_LOOP_SPAN
+
+/**
+ * 线圈末端那一点，也是出画段的**起点**。
+ *
+ * 提前收尾之后它不再等于椭圆最右点（`CX + RX`）—— 两段必须共用这一个值，
+ * 否则接缝上蛇身会断开（`snakePointX/Y` 的出画分支以前直接写 `CX + RX`）。
+ */
+private val SNAKE_LOOP_END_X: Float = SNAKE_LOOP_CX + cos(snakeLoopAngle(1f)) * SNAKE_LOOP_RX
+private val SNAKE_LOOP_END_Y: Float =
+    SNAKE_LOOP_CY - SNAKE_LOOP_RISE + sin(snakeLoopAngle(1f)) * SNAKE_LOOP_RY
 
 /**
  * 一段三次贝塞尔的取值。进场段与抬头出画那两截都用它：两端的控制点落在椭圆端点的
@@ -2566,9 +2661,9 @@ private fun cubicAt(t: Float, p0: Float, p1: Float, p2: Float, p3: Float): Float
  * 行程曲线的横坐标（屏宽的比例）。
  *
  * 三段拼起来，**段界处两段的值必须相等**，不然蛇身会在接缝上断开：
- * 进场段末端 = 椭圆最左点，绕圈段末端（1.5 圈）= 椭圆最右点 = 出画段起点。
- * 除了位置，**切线也要接上**：进场段与出画段的端点控制点都放在椭圆端点的切线上
- * （两个端点处椭圆切线竖直，于是那两个控制点与端点同 x）—— 见 [drawHalftoneThrone] 的说明。
+ * 进场段末端 = 椭圆最左点，绕圈段末端 = 出画段起点 = [SNAKE_LOOP_END_X]。
+ * 除了位置，**切线也要接上**：进场段末端的控制点压在最左点下方、出画段首端的控制点
+ * 沿线圈末端切线方向拉出去（[SNAKE_EXIT_KICK_X]）—— 见 [drawHalftoneThrone] 的说明。
  * `s` 允许略微超出 `0..1`（求切线要取 `s ± SNAKE_DS`），两头都按同一个式子外推。
  */
 private fun snakePointX(s: Float): Float = when {
@@ -2585,8 +2680,8 @@ private fun snakePointX(s: Float): Float = when {
     }
     else -> cubicAt(
         (s - SNAKE_S_LOOP) / (1f - SNAKE_S_LOOP),
-        SNAKE_LOOP_CX + SNAKE_LOOP_RX,
-        SNAKE_LOOP_CX + SNAKE_LOOP_RX,
+        SNAKE_LOOP_END_X,
+        SNAKE_LOOP_END_X + SNAKE_EXIT_KICK_X,
         SNAKE_EXIT_X - SNAKE_EXIT_PULL,
         SNAKE_EXIT_X
     )
@@ -2607,8 +2702,8 @@ private fun snakePointY(s: Float): Float = when {
     }
     else -> cubicAt(
         (s - SNAKE_S_LOOP) / (1f - SNAKE_S_LOOP),
-        SNAKE_LOOP_CY - SNAKE_LOOP_RISE,
-        SNAKE_LOOP_CY - SNAKE_LOOP_RISE + SNAKE_EXIT_DIP,
+        SNAKE_LOOP_END_Y,
+        SNAKE_LOOP_END_Y + SNAKE_EXIT_KICK_Y,
         SNAKE_EXIT_Y - SNAKE_EXIT_PULL * SNAKE_EXIT_SLOPE,
         SNAKE_EXIT_Y
     )
@@ -2631,8 +2726,13 @@ private const val SNAKE_ENTER_X = -0.22f
 private const val SNAKE_ENTER_Y = 0.360f
 private const val SNAKE_EXIT_X = 1.240f
 
-/** 出画点的高度。比椭圆最右点（0.218）略低：甩出去是往下走的，不是平着飞。 */
-private const val SNAKE_EXIT_Y = 0.232f
+/**
+ * 出画点的高度。0.150 而不是上一版的 0.232：线圈末端抬到 0.130h 之后，出画点再压到
+ * 0.23h 的话整条颈一路往下沉、头几乎贴着王座扶手；抬高到 0.150h，颈才是「从线圈上
+ * 探出去、末了再往上抬一点」，在屏上的位置与上一版那个立起头的定格几乎重合
+ * （实测定格时刻头在 0.76w、0.19h，上一版约 0.75w、0.19h）。
+ */
+private const val SNAKE_EXIT_Y = 0.150f
 
 /**
  * 进场段（三次贝塞尔）的三个控制量。
@@ -2649,18 +2749,29 @@ private const val SNAKE_ENTER_ARRIVE = 0.050f
 /**
  * 出画段（三次贝塞尔）的三个控制量。
  *
- * 椭圆在最右点的切线是**竖直向下**的（椭圆越扁，两端的切线越接近竖直），绕完 1.5 圈的
- * 蛇正是在这一点上、朝着正下方出圈：出画段只有从竖直向下接出去才不拐折。上一版是从
- * 水平偏上 55° 直接起手 —— 接缝上蛇身被掰了一下，也就是「转弯时身体变成了折线」。
+ * 首端控制点**落在绕圈段末端的切线上**（[SNAKE_EXIT_KICK_X] / [SNAKE_EXIT_KICK_Y]），
+ * 这是这一版的全部要害：提前收尾之后蛇身是斜向下右离开线圈的（约 34°），出画段顺着
+ * 这个方向拉出去，整条颈部只有一个方向的转向。上一版把首端控制点放在「竖直向下」，
+ * 而末端在 0.42w 外、比出圈点还高 0.126h —— 曲线得先下、再上、最后又往下，
+ * 两次反折把贝塞尔压成半径 10px 的尖，就是颈部那道折。
  *
- * [SNAKE_EXIT_DIP] 是首端控制点向下的距离（把出圈时朝下的那点势先收住），
- * [SNAKE_EXIT_PULL] / [SNAKE_EXIT_SLOPE] 给出末端切线：从出画点往回 0.42w、
- * 抬 0.126h，于是尾部是「右下斜着甩出屏外」。三者合起来正是颈部那个 S ——
- * 先沉、再抬起来立住头、最后一甩。
+ * **两个 kick 常量必须一起改**：它们不是「长度」而是「位移分量」，比例等于线圈末端
+ * 切线的方向（按 1440×3200 折算；与 [SNAKE_S_ENTER] 一样是随半轴/收尾角重算的常数）。
+ * 改 [SNAKE_LOOP_TRIM] 之后要重新算这两个数，否则端点切线又会不一致。
  */
-private const val SNAKE_EXIT_DIP = 0.050f
+private const val SNAKE_EXIT_KICK_X = 0.0875f
+private const val SNAKE_EXIT_KICK_Y = 0.0218f
+
+/**
+ * 末端：从出画点往回 0.42w、向上 0.042h，于是末端切线是「右略偏下 5.7°」——
+ * 头和颈的收尾基本是平着探出去，不再像上一版那样一路往右上抬到 55°。
+ *
+ * 斜率是量出来的，不是挑出来的：0.10 时出画段最紧处约 150px（半管径在颈部约 25px，
+ * 六倍余量）；斜率再往负走（末端越抬越高），曲率会迅速收紧 —— −0.20 时只剩 91px、
+ * −0.30 时 63px，重新回到会看出折角的量级。
+ */
 private const val SNAKE_EXIT_PULL = 0.420f
-private const val SNAKE_EXIT_SLOPE = 0.300f
+private const val SNAKE_EXIT_SLOPE = 0.100f
 
 // ─────────────────────── 7 · Lover ───────────────────────
 
