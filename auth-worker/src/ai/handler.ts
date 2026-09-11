@@ -80,7 +80,7 @@ import { recordHealthEvent, type HealthRouteContext } from './health.ts';
 import { mapWithGate } from './async-pool.ts';
 import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, rankMovieTitlesForSlots, type QuizAngleType, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
 import { questionSlotMessages, unitSlotMessages, type SlotMovie, type SlotUnit } from './quiz-slot-messages.ts';
-import { bankSeed, canGenerateSet, deriveBankQuizId, isLocalDate, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
+import { bankSeed, canGenerateSet, deriveBankQuizId, isLocalDate, isPreGeneratedSet, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
 
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
@@ -750,6 +750,14 @@ async function handleQuizStream(
                 await writeEvent({ type: 'result', quiz: publicQuiz(parseQuizCache(cached)) });
                 return;
             }
+            // 预生成只备「当天那几套」：用户玩完当天的量还想再来一局时，多出来的套走按需生成
+            // （用户在等待页看得见进度），不再由系统提前烧一套上游调用 —— 那一套用户可能永远不玩。
+            if (prefetch && !isPreGeneratedSet(setIndex)) {
+                console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'prefetch_daily_sets_done', requestId, setIndex, usedSets: usage.usedSets }));
+                await writeEvent({ type: 'error', code: 'PREFETCH_DAILY_SETS_DONE', message: 'Daily sets already generated' });
+                return;
+            }
+            // 防刷爆：当天尝试预算用尽后同样不再预生成（异常客户端反复触发时的兜底）。
             if (prefetch && !canGenerateSet(usage)) {
                 console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'prefetch_budget_exhausted', requestId, attempts: usage.attempts }));
                 await writeEvent({ type: 'error', code: 'PREFETCH_BUDGET_EXHAUSTED', message: 'Daily prefetch budget exhausted' });

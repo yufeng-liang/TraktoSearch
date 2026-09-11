@@ -8,6 +8,7 @@ import {
     canGenerateSet,
     deriveBankQuizId,
     isLocalDate,
+    isPreGeneratedSet,
     nextSetIndex,
     readBankUsage,
     selectDailyMovies,
@@ -267,4 +268,19 @@ test('nextSetIndex 按已玩套数前进，用满预生成槽位后继续加', (
     assert.equal(nextSetIndex(usage(4)), 5);
     assert.equal(nextSetIndex(usage(4), 3), 5);
     assert.equal(nextSetIndex({ usedSets: Number.NaN, generatedSets: 0, attempts: 0 }), 1);
+});
+
+test('isPreGeneratedSet 只认当天前 setsPerDay 套，超出即按需生成', () => {
+    assert.equal(isPreGeneratedSet(1), true);
+    assert.equal(isPreGeneratedSet(QUIZ_SETS_PER_DAY), true);
+    // 边界：第 setsPerDay+1 套起不是预生成套（用户玩完当天的量还想再来一局）
+    assert.equal(isPreGeneratedSet(QUIZ_SETS_PER_DAY + 1), false);
+    assert.equal(isPreGeneratedSet(9), false);
+    // 自定义 setsPerDay 时同一条规则
+    assert.equal(isPreGeneratedSet(3, 3), true);
+    assert.equal(isPreGeneratedSet(4, 3), false);
+    // 非法序号一律不算预生成套，脏值不能把「系统预生成」的口子撑开
+    assert.equal(isPreGeneratedSet(0), false);
+    assert.equal(isPreGeneratedSet(-1), false);
+    assert.equal(isPreGeneratedSet(Number.NaN), false);
 });

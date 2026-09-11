@@ -178,6 +178,17 @@ export function nextSetIndex(usage: BankUsage, setsPerDay: number = QUIZ_SETS_PE
     return countField(usage?.usedSets) + 1;
 }
 
+/**
+ * 该套是否属于「当天预生成的套」：序号在 setsPerDay 以内（1 起数）。
+ *
+ * 预生成是系统行为，只覆盖当天固定的前 setsPerDay 套；用户玩完这些套还想再来一局时，
+ * 多出来的套改走按需生成（等待页有进度可看），否则每进一次出题页就会白烧一套上游调用，
+ * 而那一套用户可能永远不玩。判定只吃序号，与是否已达尝试预算（canGenerateSet）是两回事。
+ */
+export function isPreGeneratedSet(setIndex: number, setsPerDay: number = QUIZ_SETS_PER_DAY): boolean {
+    return countField(setIndex) >= 1 && countField(setIndex) <= resolveSetsPerDay(setsPerDay);
+}
+
 export interface BankEnv {
     KV?: {
         get(key: string): Promise<string | null>;

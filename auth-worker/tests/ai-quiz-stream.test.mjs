@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleAiApi } from '../src/ai/handler.ts';
+import { QUIZ_SETS_PER_DAY } from '../src/ai/quiz-bank.ts';
 import { signAccessToken } from '../src/util/jwt.ts';
 
 /**
@@ -107,6 +108,45 @@ async function readEvents(response) {
 }
 
 const QUIZ_BODY = { action: 'quiz', watched: WATCHED_MOVIES, questionCount: 13, sessionId: 'session-1' };
+
+/**
+ * 只回答当天用量记录的 KV 桩：验证预生成按「当天还剩几套」决定是否发车。
+ * 键与 quiz-bank 的 usageKey 一致，日期取 UTC 今天（请求不带 date 时服务端就用它）。
+ */
+function createBankUsageKv(usage) {
+    const key = `quizbank:used:friend-1:${new Date().toISOString().slice(0, 10)}`;
+    return {
+        async get(requested) { return requested === key ? JSON.stringify(usage) : null; },
+        async put() {},
+    };
+}
+
+test('玩完当天的套数后预生成被拒，不再白烧一套上游调用', async () => {
+    const env = createEnv({
+        KV: createBankUsageKv({
+            usedSets: QUIZ_SETS_PER_DAY,
+            generatedSets: QUIZ_SETS_PER_DAY,
+            attempts: QUIZ_SETS_PER_DAY,
+        }),
+    });
+    const events = await readEvents(await callStream({ ...QUIZ_BODY, prefetch: true }, env));
+
+    // 只回一条 error：没有 stage（压根没开始生成）也没有 result（没落库新套）
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, 'error');
+    assert.equal(events[0].code, 'PREFETCH_DAILY_SETS_DONE');
+});
+
+test('当天还有没玩的套时预生成照常发车', async () => {
+    const env = createEnv({
+        KV: createBankUsageKv({ usedSets: QUIZ_SETS_PER_DAY - 1, generatedSets: 1, attempts: 1 }),
+    });
+    const events = await readEvents(await callStream({ ...QUIZ_BODY, prefetch: true }, env));
+
+    assert.equal(events.some(event => event.type === 'error'), false);
+    assert.equal(events.at(-1).type, 'result');
+    assert.equal(events.at(-1).quiz.questions.length, 13);
+});
 
 test('quiz stream 以 NDJSON 下发阶段事件并以 result 收尾', async () => {
     const response = await callStream(QUIZ_BODY, createEnv());
