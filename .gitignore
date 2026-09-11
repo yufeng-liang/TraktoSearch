@@ -134,3 +134,8 @@ verification-artifacts/
 # Agent 客户端本地配置（.claude/skills 等要入库，只忽略本地文件与目录）
 /.zcode/
 /.claude/launch.json
+
+# 性能基线：只留 before/after-benchmarkData 这一对可比记录（已入库，跟踪的路径不受忽略影响），
+# 排查过程的中间测量（after-run1/2、after-corner-fix 等）不入库
+/benchmark/baseline/after-*.json
+!/benchmark/baseline/after-benchmarkData.json
