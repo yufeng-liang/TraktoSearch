@@ -74,6 +74,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -106,6 +107,9 @@ import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
+import com.tracktosearch.ui.component.ShimmerState
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -113,6 +117,7 @@ import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
 import com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord
+import com.tracktosearch.data.ai.AiDailyStage
 import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiGreeting
 import com.tracktosearch.data.ai.AiNameSignal
@@ -121,6 +126,9 @@ import com.tracktosearch.data.ai.AiTasteEvidence
 import com.tracktosearch.data.ai.AiTasteAnalysis
 import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.theme.floatingSheetColor
+
+/** 服务端插图状态：生成中（后台生图，完成后由静默刷新补拉）。 */
+private const val ILLUSTRATION_STATUS_GENERATING = "generating"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -321,7 +329,16 @@ fun AiFeatureScreen(
                         }
                     } else if (showLoadingPlaceholder) {
                         if (feature == AiFeature.DAILY) {
-                            DailyLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
+                            DailyLoadingPlaceholder(
+                                stage = state.dailyStage,
+                                progress = dailyStreamProgressFraction(
+                                    stage = state.dailyStage,
+                                    chars = state.dailyStageChars,
+                                    expectedChars = state.dailyStageExpectedChars
+                                ),
+                                startedAtMillis = state.dailyRequestStartedAtMillis,
+                                onCancel = viewModel::cancelActiveFeatureRequest
+                            )
                         } else {
                             FeatureLoadingPlaceholder(onCancel = viewModel::cancelActiveFeatureRequest)
                         }
@@ -376,7 +393,12 @@ fun AiFeatureScreen(
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                             Text(
-                                text = stringResource(R.string.ai_feature_loading),
+                                // 今日知识刷新时带上真实阶段：换一条同样要等十几秒，用户要知道现在在跑哪一步
+                                text = if (feature == AiFeature.DAILY) {
+                                    dailyStageLabel(state.dailyStage) ?: stringResource(R.string.ai_feature_loading)
+                                } else {
+                                    stringResource(R.string.ai_feature_loading)
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1241,24 +1263,49 @@ private fun DailyFeature(
                         if (illustrationUrl != null && !illustrationLoadFailed) {
                             // AI 概念插图只辅助理解，不承担事实证明责任；角色与来源在 caption 里声明。
                             // 失败（如 10 分钟签名 URL 已过期）时降级为不渲染空槽，避免大片空白。
-                            AsyncImage(
-                                model = illustrationUrl,
-                                contentDescription = stringResource(
-                                    R.string.ai_daily_illustration_description,
-                                    daily.concept.orEmpty()
-                                ),
-                                onError = { illustrationLoadFailed = true },
+                            // 插图就绪时淡入：静默刷新补拉成功后是「无图 → 有图」的跳变，硬切会闪一下。
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(animationSpec = tween(durationMillis = 320))
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    AsyncImage(
+                                        model = illustrationUrl,
+                                        contentDescription = stringResource(
+                                            R.string.ai_daily_illustration_description,
+                                            daily.concept.orEmpty()
+                                        ),
+                                        onError = { illustrationLoadFailed = true },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(16f / 9f)
+                                            .clip(RoundedCornerShape(14.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.ai_daily_illustration_caption),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else if (!illustrationLoadFailed && illustration?.status == ILLUSTRATION_STATUS_GENERATING) {
+                            // 后台生图期间给出「占位 + 说明」而不是留白：用户知道图会来，也知道去哪儿等。
+                            // 文案只在生成中显示；unavailable 与失败一律不渲染空槽（旧行为）。
+                            val shimmer = rememberShimmer()
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .aspectRatio(16f / 9f)
-                                    .clip(RoundedCornerShape(14.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                            Text(
-                                text = stringResource(R.string.ai_daily_illustration_caption),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                                    .shimmer(shimmer, RoundedCornerShape(14.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.ai_daily_illustration_generating),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         if (daily.explanation.isNotBlank()) {
                             Text(
@@ -1805,19 +1852,85 @@ private fun DailyFeedbackOption(
     }
 }
 
+/** 今日知识阶段文案；没拿到阶段信息时返回 null，由调用方回落到通用加载文案。 */
 @Composable
-private fun DailyLoadingPlaceholder(onCancel: () -> Unit) {
+private fun dailyStageLabel(stage: AiDailyStage?): String? = when (stage) {
+    AiDailyStage.CANDIDATE -> stringResource(R.string.ai_daily_stage_candidate)
+    AiDailyStage.REVIEW -> stringResource(R.string.ai_daily_stage_review)
+    null -> null
+}
+
+/**
+ * 今日知识加载页。
+ *
+ * 两段生成实测十几秒，干骨架屏看不出是在跑还是卡死：这里给出真实阶段、按已生成字符数推进的
+ * 进度环、已等待时长与取消入口（与出题等待页同一套语言），下面保留骨架卡片说明「将要出现什么」。
+ * 进度值来自服务端流式事件（见 AiRepository.getDailyStream），没拿到阶段信息时退化为不确定进度。
+ */
+@Composable
+private fun DailyLoadingPlaceholder(
+    stage: AiDailyStage?,
+    progress: Float,
+    startedAtMillis: Long,
+    onCancel: () -> Unit
+) {
+    // 每秒刷新已用时长：只驱动这一个文本，避免把整页拖进高频重组
+    val elapsedSeconds by produceState(0L, startedAtMillis) {
+        while (true) {
+            value = if (startedAtMillis > 0L) {
+                ((System.currentTimeMillis() - startedAtMillis) / 1000L).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+            kotlinx.coroutines.delay(1_000L)
+        }
+    }
+    val shimmer = rememberShimmer()
+    val stageLabel = dailyStageLabel(stage) ?: stringResource(R.string.ai_daily_loading)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text(
-                text = stringResource(R.string.ai_daily_loading),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (stage == null) {
+                    CircularProgressIndicator()
+                } else {
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(52.dp)
+                    )
+                }
+                Text(
+                    text = stageLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = stringResource(R.string.ai_daily_wait_hint),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (startedAtMillis > 0L) {
+                    Text(
+                        text = stringResource(
+                            R.string.ai_daily_elapsed,
+                            formatQuizElapsed(elapsedSeconds)
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
         item {
             Surface(
@@ -1829,9 +1942,9 @@ private fun DailyLoadingPlaceholder(onCancel: () -> Unit) {
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    DailySkeletonLine(widthFraction = 0.72f)
-                    DailySkeletonLine(widthFraction = 0.94f)
-                    DailySkeletonLine(widthFraction = 0.66f)
+                    DailySkeletonLine(widthFraction = 0.72f, shimmer = shimmer)
+                    DailySkeletonLine(widthFraction = 0.94f, shimmer = shimmer)
+                    DailySkeletonLine(widthFraction = 0.66f, shimmer = shimmer)
                 }
             }
         }
@@ -1848,16 +1961,15 @@ private fun DailyLoadingPlaceholder(onCancel: () -> Unit) {
                     Box(
                         modifier = Modifier
                             .size(width = 64.dp, height = 88.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .shimmer(shimmer, RoundedCornerShape(12.dp))
                     )
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        DailySkeletonLine(widthFraction = 0.42f)
-                        DailySkeletonLine(widthFraction = 0.88f)
-                        DailySkeletonLine(widthFraction = 0.62f)
+                        DailySkeletonLine(widthFraction = 0.42f, shimmer = shimmer)
+                        DailySkeletonLine(widthFraction = 0.88f, shimmer = shimmer)
+                        DailySkeletonLine(widthFraction = 0.62f, shimmer = shimmer)
                     }
                 }
             }
@@ -1872,12 +1984,13 @@ private fun DailyLoadingPlaceholder(onCancel: () -> Unit) {
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    DailySkeletonLine(widthFraction = 0.36f)
-                    DailySkeletonLine(widthFraction = 0.92f)
-                    DailySkeletonLine(widthFraction = 0.78f)
+                    DailySkeletonLine(widthFraction = 0.36f, shimmer = shimmer)
+                    DailySkeletonLine(widthFraction = 0.92f, shimmer = shimmer)
+                    DailySkeletonLine(widthFraction = 0.78f, shimmer = shimmer)
                 }
             }
         }
+        // 长等待必须给出路：等不下去时回到入口，不把用户锁在骨架屏里
         item {
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
                 Text(text = stringResource(R.string.ai_feature_cancel))
@@ -1887,13 +2000,12 @@ private fun DailyLoadingPlaceholder(onCancel: () -> Unit) {
 }
 
 @Composable
-private fun DailySkeletonLine(widthFraction: Float) {
+private fun DailySkeletonLine(widthFraction: Float, shimmer: ShimmerState) {
     Box(
         modifier = Modifier
             .fillMaxWidth(widthFraction)
             .height(14.dp)
-            .clip(RoundedCornerShape(7.dp))
-            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f))
+            .shimmer(shimmer, RoundedCornerShape(7.dp))
     )
 }
 

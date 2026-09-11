@@ -1848,6 +1848,11 @@
     <string name="ai_daily_change">다른 것 보기</string>
     <string name="ai_daily_change_remaining_format">오늘 남은 변경 횟수: %1$d</string>
     <string name="ai_daily_change_limit_description">오늘 지식 변경 2회를 모두 사용했어요</string>
+    <string name="ai_daily_stage_candidate">오늘의 지식 포인트를 고르는 중…</string>
+    <string name="ai_daily_stage_review">검토하고 다시 쓰는 중…</string>
+    <string name="ai_daily_wait_hint">보통 십여 초면 끝나요. 이 화면에서 기다려 주세요</string>
+    <string name="ai_daily_elapsed">경과 %1$s</string>
+    <string name="ai_daily_illustration_generating">일러스트 생성 중…</string>
     <string name="ai_daily_loading">오늘의 영상 지식을 준비 중</string>
     <string name="ai_daily_offline_title">오늘의 새 영상 지식이 아직 준비되지 않았어요</string>
     <string name="ai_daily_offline_message">네트워크에 연결한 뒤 다시 시도해 주세요</string>

@@ -41,6 +41,15 @@ interface AiApiService {
     @POST("daily")
     suspend fun getDailyKnowledge(@Body request: AiDailyRequest): Response<AiApiResponse<AiDailyKnowledgeDto>>
 
+    /**
+     * 流式每日知识：服务端逐行返回 NDJSON 事件（阶段/进度/心跳/结果）。
+     * @Streaming 让 OkHttp 不把响应体整体缓冲，配合逐行读取实现真实进度。
+     * 旧版 App 仍走上面的 /daily 一次性接口，两条端点共用同一份生成与缓存。
+     */
+    @Streaming
+    @POST("daily/stream")
+    suspend fun getDailyKnowledgeStream(@Body request: AiDailyRequest): Response<ResponseBody>
+
     @POST("tts")
     suspend fun playTts(@Body request: AiTtsRequest): Response<AiApiResponse<AiAudioDto>>
 }

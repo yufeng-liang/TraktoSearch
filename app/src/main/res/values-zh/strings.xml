@@ -1835,6 +1835,11 @@
     <string name="ai_daily_change">换一条</string>
     <string name="ai_daily_change_remaining_format">今日还可换 %1$d 条</string>
     <string name="ai_daily_change_limit_description">今日两次换知识机会已用完</string>
+    <string name="ai_daily_stage_candidate">正在挑选今日知识点…</string>
+    <string name="ai_daily_stage_review">正在复核并改写…</string>
+    <string name="ai_daily_wait_hint">通常十几秒就好，请留在这一页</string>
+    <string name="ai_daily_elapsed">已等待 %1$s</string>
+    <string name="ai_daily_illustration_generating">插图生成中…</string>
     <string name="ai_daily_loading">正在准备今日影视知识</string>
     <string name="ai_daily_offline_title">今天还没有准备好新的影视知识</string>
     <string name="ai_daily_offline_message">连接网络后再试</string>

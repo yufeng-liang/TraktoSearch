@@ -7,6 +7,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -149,6 +150,111 @@ class AiRepositoryTest {
 
         assertThat(suffixes).hasSize(2)
         assertThat(suffixes[0]).isNotEqualTo(suffixes[1])
+    }
+
+    /** 与 /api/ai/daily/stream 实际下发格式一致的 NDJSON：事件之间必须逐行，最后一行不带换行也要能解析。 */
+    private val dailyStreamBody = """
+        {"type":"stage","stage":"candidate","status":"start","provider":"bailian","expectedChars":1800}
+        {"type":"progress","stage":"candidate","chars":900}
+        {"type":"ping","elapsedMs":10000}
+        {"type":"stage","stage":"review","status":"start","provider":"bailian","expectedChars":1800}
+        {"type":"result","daily":{"id":"2026-09-11","title":"胶片隐喻","fact":"结论","explanation":"解释","unitId":"u-1","concept":"记忆重构","locale":"zh-CN","illustration":{"status":"generating"}},"quota":{"sessionUsed":1,"sessionLimit":14,"dailyUsed":2,"dailyLimit":80}}
+    """.trimIndent()
+
+    @Test
+    fun dailyStream_parsesStageProgressPingAndResult_thenWritesCache() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { storage.read(any(), any(), any()) } returns null
+        coEvery { api.getDailyKnowledgeStream(any()) } returns Response.success(
+            dailyStreamBody.toResponseBody("application/x-ndjson".toMediaType())
+        )
+        val written = mutableListOf<String>()
+        coEvery { storage.write(any(), any(), any(), any()) } coAnswers { written += arg<String>(2) }
+
+        val events = buildAiRepository(api, storage)
+            .getDailyStream("friend-a", forceRefresh = true)
+            .toList()
+
+        assertThat(events).hasSize(5)
+        // 阶段事件必须按 candidate → review 到达，且带预期字符数（加载页据此换算进度）
+        assertThat(events.filterIsInstance<AiDailyStreamEvent.Stage>().map { it.stage to it.status })
+            .containsExactly(
+                AiDailyStage.CANDIDATE to AiDailyStageStatus.START,
+                AiDailyStage.REVIEW to AiDailyStageStatus.START
+            )
+            .inOrder()
+        assertThat(events.filterIsInstance<AiDailyStreamEvent.Stage>().first().expectedChars).isEqualTo(1800)
+        assertThat(events.filterIsInstance<AiDailyStreamEvent.Progress>().single())
+            .isEqualTo(AiDailyStreamEvent.Progress(AiDailyStage.CANDIDATE, 900))
+        assertThat(events).contains(AiDailyStreamEvent.Ping)
+        val completed = events.filterIsInstance<AiDailyStreamEvent.Completed>().single()
+        assertThat(completed.daily.title).isEqualTo("胶片隐喻")
+        assertThat(completed.daily.concept).isEqualTo("记忆重构")
+        assertThat(completed.daily.illustration?.status).isEqualTo("generating")
+        // 配额取服务端结果事件里的那一份：缓存命中路径不带配额
+        assertThat(completed.daily.quota?.dailyUsed).isEqualTo(2)
+        assertThat(written).hasSize(1)
+        assertThat(written.single()).contains("胶片隐喻")
+    }
+
+    @Test
+    fun dailyStream_cacheHitEmitsCompletedWithoutNetwork() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        // 缓存里存的是 domain 序列化结果（readCached 用同一套 serializer 解码）
+        val cached = AiDailyKnowledge(
+            id = "2026-09-11",
+            title = "缓存里的标题",
+            fact = "f",
+            explanation = "e",
+            sourceName = "s",
+            sourceUrl = "",
+            publishedAt = null,
+            characterLine = null,
+            unitId = "u-cached"
+        )
+        coEvery { storage.read(any(), any(), any()) } returns
+            Json.encodeToString(AiDailyKnowledge.serializer(), cached)
+
+        val events = buildAiRepository(api, storage).getDailyStream("friend-a").toList()
+
+        assertThat(events).hasSize(1)
+        val completed = events.single()
+        assertThat(completed).isInstanceOf(AiDailyStreamEvent.Completed::class.java)
+        assertThat((completed as AiDailyStreamEvent.Completed).daily.title).isEqualTo("缓存里的标题")
+        coVerify(exactly = 0) { api.getDailyKnowledgeStream(any()) }
+    }
+
+    @Test
+    fun dailyStream_errorEventSurfacesAsAiApiException() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { storage.read(any(), any(), any()) } returns null
+        coEvery { api.getDailyKnowledgeStream(any()) } returns Response.success(
+            """{"type":"error","code":"AI_UPSTREAM_ERROR","message":"Daily knowledge failed"}"""
+                .toResponseBody("application/x-ndjson".toMediaType())
+        )
+
+        val failure = runCatching {
+            buildAiRepository(api, storage).getDailyStream("friend-a", forceRefresh = true).toList()
+        }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(AiApiException::class.java)
+        assertThat((failure as AiApiException).serverCode).isEqualTo("AI_UPSTREAM_ERROR")
+    }
+
+    @Test
+    fun dailyStream_rejectsUnsupportedLocaleBeforeNetwork() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        val failure = runCatching {
+            buildAiRepository(api, storage).getDailyStream("friend-a", locale = "fr-FR").toList()
+        }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(AiApiException::class.java)
+        assertThat((failure as AiApiException).serverCode).isEqualTo("INVALID_REQUEST")
+        coVerify(exactly = 0) { api.getDailyKnowledgeStream(any()) }
     }
 
     private fun validQuizDto(quizId: String): AiQuizDto = AiQuizDto(

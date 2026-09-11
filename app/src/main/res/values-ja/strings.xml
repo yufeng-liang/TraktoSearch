@@ -1848,6 +1848,11 @@
     <string name="ai_daily_change">もう一件</string>
     <string name="ai_daily_change_remaining_format">本日の残り変更回数：%1$d</string>
     <string name="ai_daily_change_limit_description">本日の知識変更 2 回は終わりました</string>
+    <string name="ai_daily_stage_candidate">今日の知識ポイントを選定中…</string>
+    <string name="ai_daily_stage_review">レビューと書き直し中…</string>
+    <string name="ai_daily_wait_hint">通常は十数秒です。この画面のままお待ちください</string>
+    <string name="ai_daily_elapsed">経過 %1$s</string>
+    <string name="ai_daily_illustration_generating">イラスト生成中…</string>
     <string name="ai_daily_loading">今日の映像知識を準備中</string>
     <string name="ai_daily_offline_title">今日の映像知識はまだ準備できていません</string>
     <string name="ai_daily_offline_message">ネットワークに接続してもう一度お試しください</string>

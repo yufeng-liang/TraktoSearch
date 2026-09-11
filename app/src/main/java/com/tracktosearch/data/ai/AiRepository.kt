@@ -563,6 +563,93 @@ class AiRepository @Inject constructor(
     }
 
     /**
+     * 流式今日知识：服务端按 candidate → review 两段推送 NDJSON 事件（阶段/进度/心跳/结果）。
+     *
+     * 与出题流式同一套协议与读取方式：@Streaming + 逐行读，边读边 emit，
+     * 让加载页显示真实阶段与生成量而不是干转圈；命中本地当天缓存时直接 emit Completed（秒开，不打网络）。
+     * 服务端生成失败会给确定性兜底内容（同样是 result 事件），所以客户端不会出现空白卡。
+     */
+    fun getDailyStream(
+        friendId: String,
+        forceRefresh: Boolean = false,
+        watched: List<AiWatchedTitleDto> = emptyList(),
+        locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
+    ): Flow<AiDailyStreamEvent> = flow {
+        if (friendId.trim().isEmpty()) {
+            throw AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400)
+        }
+        val normalizedLocale = locale.trim()
+        if (normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) {
+            throw AiErrorMapper.exception(
+                "INVALID_REQUEST",
+                "Unsupported daily knowledge locale: $normalizedLocale",
+                400
+            )
+        }
+        val trimmedWatched = watched.take(MAX_WATCHED_ITEMS)
+        val suffix = dailyCacheSuffix(normalizedLocale, trimmedWatched)
+        // zh-CN 是旧缓存的真实语言：新键未命中时读旧日期键，避免升级当天强制重新请求。
+        val fallbackSuffix = if (normalizedLocale == AiDailyKnowledgeContract.DEFAULT_LOCALE) {
+            legacyDailyCacheSuffix(trimmedWatched)
+        } else {
+            null
+        }
+        if (!forceRefresh) {
+            readCachedWithFallback(
+                friendId,
+                AiCacheFeature.DAILY_KNOWLEDGE,
+                AiDailyKnowledge.serializer(),
+                suffix,
+                fallbackSuffix
+            )?.let {
+                emit(AiDailyStreamEvent.Completed(it))
+                return@flow
+            }
+        }
+        val response = api.getDailyKnowledgeStream(
+            AiDailyRequest(
+                sessionId = sessionIdFor(friendId),
+                forceRefresh = forceRefresh,
+                watched = trimmedWatched,
+                locale = normalizedLocale
+            )
+        )
+        val body = response.body()
+        if (!response.isSuccessful || body == null) {
+            throw AiErrorMapper.exception(
+                serverCode = runCatching {
+                    Json { ignoreUnknownKeys = true }
+                        .decodeFromString(AiErrorDto.serializer(), response.errorBody()?.string().orEmpty())
+                        .code
+                }.getOrNull() ?: "HTTP_${response.code()}",
+                message = "Daily stream failed with HTTP ${response.code()}",
+                httpCode = response.code()
+            )
+        }
+        var completed: AiDailyKnowledge? = null
+        body.use { responseBody ->
+            val source = responseBody.source()
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (line.isBlank()) continue
+                val event = parseDailyStreamEvent(line) ?: continue
+                if (event is AiDailyStreamEvent.Completed) completed = event.daily
+                emit(event)
+            }
+        }
+        val daily = completed
+            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "Daily stream ended without a result", 200)
+        runCatching {
+            storage.write(
+                friendId,
+                AiCacheFeature.DAILY_KNOWLEDGE,
+                json.encodeToString(AiDailyKnowledge.serializer(), daily),
+                suffix
+            )
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
      * 记录一条真正展示过的今日知识。
      *
      * 只有 UI 确认内容已经渲染后才调用；这里不把“网络请求成功”偷换成“用户看过”。
@@ -1200,6 +1287,61 @@ private fun parseQuizStreamEvent(line: String): AiQuizStreamEvent? {
 private fun quizStageOf(raw: String?): AiQuizStage? = when (raw) {
     "units" -> AiQuizStage.UNITS
     "review" -> AiQuizStage.REVIEW
+    else -> null
+}
+
+/**
+ * 解析 /api/ai/daily/stream 的一行 NDJSON。
+ * 结构不符的行返回 null（跳过），服务端 error 事件折算成统一的 AI 异常。
+ */
+private fun parseDailyStreamEvent(line: String): AiDailyStreamEvent? {
+    val root = runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
+    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return null
+    return when (type) {
+        "stage" -> {
+            val stage = dailyStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
+            val status = when (root["status"]?.jsonPrimitive?.contentOrNull) {
+                "start" -> AiDailyStageStatus.START
+                "done" -> AiDailyStageStatus.DONE
+                else -> return null
+            }
+            AiDailyStreamEvent.Stage(
+                stage = stage,
+                status = status,
+                expectedChars = root["expectedChars"]?.jsonPrimitive?.intOrNull ?: 0
+            )
+        }
+        "progress" -> {
+            val stage = dailyStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
+            AiDailyStreamEvent.Progress(stage, root["chars"]?.jsonPrimitive?.intOrNull ?: 0)
+        }
+        "ping" -> AiDailyStreamEvent.Ping
+        "result" -> {
+            val dailyElement = root["daily"] ?: return null
+            val dto = runCatching {
+                Json { ignoreUnknownKeys = true }
+                    .decodeFromJsonElement(AiDailyKnowledgeDto.serializer(), dailyElement)
+            }.getOrNull() ?: return null
+            val quota = root["quota"]?.let {
+                runCatching {
+                    Json { ignoreUnknownKeys = true }
+                        .decodeFromJsonElement(AiQuotaDto.serializer(), it)
+                }.getOrNull()
+            }
+            AiDailyStreamEvent.Completed(dto.toDomain(quota))
+        }
+        "error" -> throw AiErrorMapper.exception(
+            serverCode = root["code"]?.jsonPrimitive?.contentOrNull,
+            message = root["message"]?.jsonPrimitive?.contentOrNull ?: "Daily stream failed",
+            httpCode = 200
+        )
+        else -> null
+    }
+}
+
+private fun dailyStageOf(raw: String?): AiDailyStage? = when (raw) {
+    "candidate" -> AiDailyStage.CANDIDATE
+    "review" -> AiDailyStage.REVIEW
     else -> null
 }
 

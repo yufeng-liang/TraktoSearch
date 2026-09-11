@@ -10,6 +10,7 @@ import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiQuizStage
+import com.tracktosearch.data.ai.AiDailyStage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiTtsScene
 import com.tracktosearch.data.ai.AiTtsRequest
@@ -27,6 +28,8 @@ private const val IDLE_TRIGGER_DELAY_MS = 8_000L
 private const val MAX_QUIZ_REPLACEMENTS = 2
 // 出题两阶段在总进度中的权重：units 实测约 140s、review 约 250s
 private const val QUIZ_UNITS_PROGRESS_WEIGHT = 0.35f
+// 今日知识两阶段实测耗时接近（候选约 6s、复核约 7s），各占一半
+private const val DAILY_CANDIDATE_PROGRESS_WEIGHT = 0.5f
 private const val MAX_DAILY_KNOWLEDGE_CHANGES = 2
 
 /** 探头静止观察前的空闲等待时长，两个搜索页都用这个常量，别再各写一遍 8_000L。 */
@@ -541,6 +544,33 @@ fun quizStreamProgressFraction(
         0f
     }
     val completedWeight = if (stage == AiQuizStage.REVIEW) QUIZ_UNITS_PROGRESS_WEIGHT else 0f
+    return (completedWeight + stageWeight * stageFraction).coerceIn(0f, 1f)
+}
+
+/**
+ * 今日知识加载页的总进度（0f..1f）。
+ *
+ * 两阶段实测耗时接近（候选约 6s、复核约 7s，各约 1800 字符），所以各占一半权重；
+ * 阶段内进度用「已生成字符数 / 该阶段预期字符数」估算，预期值随服务端 stage 事件下发。
+ * 生成量会浮动，超过预期按 100% 封顶；没拿到阶段信息时回落到不确定态（0f）。
+ */
+fun dailyStreamProgressFraction(
+    stage: AiDailyStage?,
+    chars: Int,
+    expectedChars: Int
+): Float {
+    if (stage == null) return 0f
+    val stageWeight = if (stage == AiDailyStage.CANDIDATE) {
+        DAILY_CANDIDATE_PROGRESS_WEIGHT
+    } else {
+        1f - DAILY_CANDIDATE_PROGRESS_WEIGHT
+    }
+    val stageFraction = if (expectedChars > 0) {
+        (chars.toFloat() / expectedChars.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val completedWeight = if (stage == AiDailyStage.REVIEW) DAILY_CANDIDATE_PROGRESS_WEIGHT else 0f
     return (completedWeight + stageWeight * stageFraction).coerceIn(0f, 1f)
 }
 

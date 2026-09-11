@@ -14,6 +14,7 @@ import com.tracktosearch.data.ai.AiQuizQuestion
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiQuizStage
+import com.tracktosearch.data.ai.AiDailyStage
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import kotlin.random.Random
@@ -706,6 +707,23 @@ class AiUiLogicTest {
         assertThat(formatQuizElapsed(600)).isEqualTo("10:00")
         // 设备时钟回拨等异常输入不允许产生负数文案
         assertThat(formatQuizElapsed(-3)).isEqualTo("0s")
+    }
+
+    @Test
+    fun dailyStreamProgressFraction_weightsBothStagesEquallyAndCapsAtFull() {
+        // 还没拿到阶段信息时是不确定态：进度环走不确定动画
+        assertThat(dailyStreamProgressFraction(null, 0, 0)).isEqualTo(0f)
+        assertThat(dailyStreamProgressFraction(AiDailyStage.CANDIDATE, 0, 1800)).isEqualTo(0f)
+        assertThat(dailyStreamProgressFraction(AiDailyStage.CANDIDATE, 900, 1800)).isWithin(0.001f).of(0.25f)
+        assertThat(dailyStreamProgressFraction(AiDailyStage.CANDIDATE, 1800, 1800)).isWithin(0.001f).of(0.5f)
+        // 进入复核阶段后从 50% 起算，不会回退到 0
+        assertThat(dailyStreamProgressFraction(AiDailyStage.REVIEW, 0, 1800)).isWithin(0.001f).of(0.5f)
+        assertThat(dailyStreamProgressFraction(AiDailyStage.REVIEW, 900, 1800)).isWithin(0.001f).of(0.75f)
+        assertThat(dailyStreamProgressFraction(AiDailyStage.REVIEW, 1800, 1800)).isWithin(0.001f).of(1f)
+        // 生成量超过预期时封顶，不回退也不越界
+        assertThat(dailyStreamProgressFraction(AiDailyStage.REVIEW, 9999, 1800)).isWithin(0.001f).of(1f)
+        // 预期值缺失（服务端未下发）时按 0 处理，不产生 NaN
+        assertThat(dailyStreamProgressFraction(AiDailyStage.REVIEW, 10, 0)).isWithin(0.001f).of(0.5f)
     }
 
 }

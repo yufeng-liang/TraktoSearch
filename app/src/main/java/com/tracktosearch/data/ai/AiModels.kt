@@ -290,6 +290,33 @@ sealed interface AiQuizStreamEvent {
     data class Completed(val quiz: AiQuiz) : AiQuizStreamEvent
 }
 
+/** 每日知识阶段：CANDIDATE=挑选候选知识，REVIEW=复核改写。 */
+enum class AiDailyStage { CANDIDATE, REVIEW }
+
+enum class AiDailyStageStatus { START, DONE }
+
+/**
+ * 每日知识流式事件（服务端 /api/ai/daily/stream 的 NDJSON 行）。
+ * 两段式生成实测数十秒，进度事件让加载页显示真实阶段与生成量；Ping 仅用于保活连接。
+ */
+sealed interface AiDailyStreamEvent {
+    /** 阶段开始/结束；expectedChars 为该阶段预期输出字符数，用于把 chars 换算成百分比。 */
+    data class Stage(
+        val stage: AiDailyStage,
+        val status: AiDailyStageStatus,
+        val expectedChars: Int
+    ) : AiDailyStreamEvent
+
+    /** 生成中：chars 为当前阶段已生成的字符数。 */
+    data class Progress(val stage: AiDailyStage, val chars: Int) : AiDailyStreamEvent
+
+    /** 心跳：服务端每 10s 至少发一次，UI 无需展示。 */
+    data object Ping : AiDailyStreamEvent
+
+    /** 完成：携带最终知识（服务端生成失败时给的是确定性兜底内容）。 */
+    data class Completed(val daily: AiDailyKnowledge) : AiDailyStreamEvent
+}
+
 @Serializable
 data class AiQuizOption(
     val id: String,

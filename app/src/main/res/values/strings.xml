@@ -1842,6 +1842,11 @@ Config:
     <string name="ai_daily_change">Change once</string>
     <string name="ai_daily_change_remaining_format">Changes remaining today: %1$d</string>
     <string name="ai_daily_change_limit_description">Today’s two knowledge changes are already used</string>
+    <string name="ai_daily_stage_candidate">Choosing today’s knowledge point</string>
+    <string name="ai_daily_stage_review">Reviewing and rewriting</string>
+    <string name="ai_daily_wait_hint">Usually a few seconds. Keep this screen open.</string>
+    <string name="ai_daily_elapsed">Elapsed %1$s</string>
+    <string name="ai_daily_illustration_generating">Illustration in progress…</string>
     <string name="ai_daily_loading">Preparing today’s film knowledge</string>
     <string name="ai_daily_offline_title">Today’s film knowledge is not ready yet</string>
     <string name="ai_daily_offline_message">Connect to the internet and try again</string>

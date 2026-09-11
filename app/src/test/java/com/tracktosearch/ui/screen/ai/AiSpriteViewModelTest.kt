@@ -8,6 +8,7 @@ import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
 import com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord
 import com.tracktosearch.data.ai.AiDailyKnowledgeQuestionResult
+import com.tracktosearch.data.ai.AiDailyStreamEvent
 import com.tracktosearch.data.ai.AiGreeting
 import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiQuizDifficulty
@@ -72,6 +73,12 @@ class AiSpriteViewModelTest {
     private val overlayStorage = mockk<com.tracktosearch.data.local.AiSpriteOverlayStorage>(relaxed = true)
     private val aiTasteStorage = mockk<com.tracktosearch.data.local.AiTasteStorage>()
 
+    /** 今日知识已改成流式：用「直接下发 Completed」的假流等价于旧的一次性返回。 */
+    private fun stubDailyStream(daily: AiDailyKnowledge) {
+        coEvery { aiRepository.getDailyStream(any(), any(), any(), any()) } returns
+            flowOf(AiDailyStreamEvent.Completed(daily))
+    }
+
     @Test
     fun submitQuiz_mergesResultQuotaIntoUiState() = runTest {
         val expectedQuota = quota(sessionUsed = 4, dailyUsed = 21)
@@ -99,7 +106,7 @@ class AiSpriteViewModelTest {
         val daily = dailyKnowledge(expectedQuota)
         val viewModel = viewModel()
         coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
-        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(daily)
+        stubDailyStream(daily)
 
         viewModel.openFeature(AiFeature.DAILY)
         advanceUntilIdle()
@@ -136,12 +143,12 @@ class AiSpriteViewModelTest {
             networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.OFFLINE)
         )
         coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
-        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(daily)
+        stubDailyStream(daily)
 
         viewModel.openFeature(AiFeature.DAILY)
         advanceUntilIdle()
         coVerify(exactly = 1) { aiRepository.readDailyKnowledgeHistory("friend-a") }
-        coVerify(exactly = 1) { aiRepository.getDailyKnowledge(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { aiRepository.getDailyStream(any(), any(), any(), any()) }
         assertThat(viewModel.uiState.value.dailyKnowledge).isEqualTo(daily)
         assertThat(viewModel.uiState.value.errorCode).isNull()
         assertThat(viewModel.uiState.value.isLoading).isFalse()
@@ -160,7 +167,7 @@ class AiSpriteViewModelTest {
         val refreshed = dailyKnowledge().copy(unitId = "unit-illu", illustration = readyIllustration)
         val viewModel = viewModel()
         coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
-        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(generating)
+        stubDailyStream(generating)
         coEvery { aiRepository.refreshDailyKnowledge(any(), any(), any()) } returns Result.success(refreshed)
 
         viewModel.openFeature(AiFeature.DAILY)
@@ -192,7 +199,7 @@ class AiSpriteViewModelTest {
         )
         val viewModel = viewModel()
         coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
-        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } returns Result.success(generating)
+        stubDailyStream(generating)
 
         viewModel.openFeature(AiFeature.DAILY)
         // 只推进到内容落地，不跨过 25 秒静默刷新窗口，先让用户答题。
@@ -241,8 +248,8 @@ class AiSpriteViewModelTest {
             language = MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
         )
         coEvery {
-            aiRepository.getDailyKnowledge(any(), any(), any(), capture(localeSlot))
-        } returns Result.success(dailyKnowledge())
+            aiRepository.getDailyStream(any(), any(), any(), capture(localeSlot))
+        } returns flowOf(AiDailyStreamEvent.Completed(dailyKnowledge()))
 
         viewModel.openFeature(AiFeature.DAILY)
         advanceUntilIdle()
@@ -264,8 +271,8 @@ class AiSpriteViewModelTest {
             )
         }
         coEvery {
-            aiRepository.getDailyKnowledge(any(), true, any(), any())
-        } returns Result.success(structuredDailyKnowledge())
+            aiRepository.getDailyStream(any(), true, any(), any())
+        } returns flowOf(AiDailyStreamEvent.Completed(structuredDailyKnowledge()))
 
         viewModel.refreshFeature()
         advanceUntilIdle()
@@ -312,7 +319,7 @@ class AiSpriteViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.dailyKnowledgeChangeCount).isEqualTo(2)
-        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getDailyStream(any(), any(), any(), any()) }
     }
 
     @Test
@@ -347,7 +354,7 @@ class AiSpriteViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.errorCode).isEqualTo("AUTH_REQUIRED")
-        coVerify(exactly = 0) { aiRepository.getDailyKnowledge(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getDailyStream(any(), any(), any(), any()) }
     }
 
     @Test
@@ -413,10 +420,12 @@ class AiSpriteViewModelTest {
             withContext(NonCancellable) { releaseOldRequest.await() }
             Result.success(greeting())
         }
-        coEvery { aiRepository.getDailyKnowledge(any(), any(), any(), any()) } coAnswers {
+        // 必须用 returns flow{} 而不是 coAnswers：getDailyStream 不是 suspend 函数，
+        // coAnswers 里的 await 会被 mockk 用 runBlocking 执行，直接卡死测试线程。
+        coEvery { aiRepository.getDailyStream(any(), any(), any(), any()) } returns flow {
             newRequestStarted.complete(Unit)
             releaseNewRequest.await()
-            Result.success(dailyKnowledge())
+            emit(AiDailyStreamEvent.Completed(dailyKnowledge()))
         }
 
         viewModel.openFeature(AiFeature.GREETING)

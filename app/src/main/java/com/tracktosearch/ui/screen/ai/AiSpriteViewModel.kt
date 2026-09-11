@@ -22,6 +22,9 @@ import com.tracktosearch.data.ai.AiMediaIdsDto
 import com.tracktosearch.data.ai.AiDailyKnowledge
 import com.tracktosearch.data.ai.AiDailyKnowledgeContentFeedback
 import com.tracktosearch.data.ai.AiDailyKnowledgeHistoryRecord
+import com.tracktosearch.data.ai.AiDailyStage
+import com.tracktosearch.data.ai.AiDailyStageStatus
+import com.tracktosearch.data.ai.AiDailyStreamEvent
 import com.tracktosearch.data.ai.AiQuizDifficulty
 import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.auth.AuthManager
@@ -154,6 +157,12 @@ data class AiSpriteUiState(
     val quizFeedbackState: AiQuizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED,
     val quizHistory: com.tracktosearch.data.ai.AiQuizHistory? = null,
     val dailyKnowledge: AiDailyKnowledge? = null,
+    // 今日知识加载页的真实进度：服务端流式事件驱动（阶段 + 已生成字符数）
+    val dailyStage: com.tracktosearch.data.ai.AiDailyStage? = null,
+    val dailyStageChars: Int = 0,
+    val dailyStageExpectedChars: Int = 0,
+    // 本轮加载的发起时刻（毫秒）：加载页据此显示已用时长
+    val dailyRequestStartedAtMillis: Long = 0L,
     val dailyKnowledgeChangeCount: Int = 0,
     val dailyQuestionSelectedOptionId: String? = null,
     val dailyKnowledgeFeedback: AiDailyKnowledgeContentFeedback? = null,
@@ -1231,6 +1240,12 @@ class AiSpriteViewModel @Inject constructor(
             AiFeature.QUIZ -> replayQuiz()
             AiFeature.DAILY -> {
                 normalizeDailyKnowledgeChangeCountForToday()
+                // 页面上还没有内容（首次加载失败）时点重试不该吃掉「换一条」额度：
+                // 这次只是把同一份当天内容再取一次（forceRefresh=false 不会生成新内容）。
+                if (_uiState.value.dailyKnowledge == null) {
+                    loadDaily(forceRefresh = false, allowOfflineCache = true)
+                    return
+                }
                 if (!canChangeDailyKnowledge(_uiState.value.dailyKnowledgeChangeCount)) return
                 loadDaily(forceRefresh = true)
             }
@@ -2004,43 +2019,71 @@ class AiSpriteViewModel @Inject constructor(
                 val latestKnowledge = latestRecord.knowledge
                 updateIfCurrentRequest(requestId) { state ->
                     applyDailyKnowledgeRecord(state, latestRecord, historyChangeCount)
-                        .copy(dailyMediaImageUrl = null)
+                        .copy(dailyMediaImageUrl = null, dailyStage = null, dailyStageChars = 0)
                 }
                 persistDailyKnowledgeChangeCount(historyChangeCount)
                 onDailyKnowledgeContentSet(latestKnowledge, requestId, history)
                 return@runFeature
             }
 
-            aiRepository.getDailyKnowledge(
+            // 流式加载：先清掉上一轮的阶段态并记开始时刻，让加载页从一开始就有真实阶段与时长
+            val startedAtMillis = System.currentTimeMillis()
+            updateIfCurrentRequest(requestId) { state ->
+                state.copy(
+                    dailyStage = null,
+                    dailyStageChars = 0,
+                    dailyStageExpectedChars = 0,
+                    dailyRequestStartedAtMillis = startedAtMillis
+                )
+            }
+            aiRepository.getDailyStream(
                 friendId = friendId,
                 watched = watchedTitles(),
                 forceRefresh = forceRefresh,
                 locale = locale
-            )
-                .onSuccess { daily ->
-                    if (!canContinueAiRequest(requestId, !forceRefresh && allowOfflineCache)) {
-                        return@onSuccess
-                    }
-                    updateIfCurrentRequest(requestId) { state ->
-                        val nextChangeCount = if (forceRefresh) {
-                            (maxOf(state.dailyKnowledgeChangeCount, historyChangeCount) + 1).coerceAtMost(2)
-                        } else {
-                            maxOf(state.dailyKnowledgeChangeCount, historyChangeCount)
-                        }
-                        if (forceRefresh) persistDailyKnowledgeChangeCount(nextChangeCount)
+            ).collect { event ->
+                when (event) {
+                    is AiDailyStreamEvent.Stage -> updateIfCurrentRequest(requestId) { state ->
                         state.copy(
-                            dailyKnowledge = daily,
-                            dailyKnowledgeChangeCount = nextChangeCount,
-                            dailyQuestionSelectedOptionId = null,
-                            dailyKnowledgeFeedback = null,
-                            dailyKnowledgeDifficultyFeedback = null,
-                            dailyMediaImageUrl = null,
-                            quota = daily.quota ?: state.quota
+                            dailyStage = event.stage,
+                            dailyStageExpectedChars = event.expectedChars,
+                            // 阶段重新开始（含修复轮）时进度归零，避免进度条停在上一轮的位置
+                            dailyStageChars = if (event.status == AiDailyStageStatus.START) 0 else state.dailyStageChars
                         )
                     }
-                    onDailyKnowledgeContentSet(daily, requestId, history)
+                    is AiDailyStreamEvent.Progress -> updateIfCurrentRequest(requestId) { state ->
+                        state.copy(dailyStage = event.stage, dailyStageChars = event.chars)
+                    }
+                    AiDailyStreamEvent.Ping -> Unit
+                    is AiDailyStreamEvent.Completed -> {
+                        if (!canContinueAiRequest(requestId, !forceRefresh && allowOfflineCache)) {
+                            return@collect
+                        }
+                        val daily = event.daily
+                        updateIfCurrentRequest(requestId) { state ->
+                            val nextChangeCount = if (forceRefresh) {
+                                (maxOf(state.dailyKnowledgeChangeCount, historyChangeCount) + 1).coerceAtMost(2)
+                            } else {
+                                maxOf(state.dailyKnowledgeChangeCount, historyChangeCount)
+                            }
+                            if (forceRefresh) persistDailyKnowledgeChangeCount(nextChangeCount)
+                            state.copy(
+                                dailyKnowledge = daily,
+                                dailyKnowledgeChangeCount = nextChangeCount,
+                                dailyQuestionSelectedOptionId = null,
+                                dailyKnowledgeFeedback = null,
+                                dailyKnowledgeDifficultyFeedback = null,
+                                dailyMediaImageUrl = null,
+                                dailyStage = null,
+                                dailyStageChars = 0,
+                                dailyStageExpectedChars = 0,
+                                quota = daily.quota ?: state.quota
+                            )
+                        }
+                        onDailyKnowledgeContentSet(daily, requestId, history)
+                    }
                 }
-                .getOrElse { throw it }
+            }
         }
     }
 
