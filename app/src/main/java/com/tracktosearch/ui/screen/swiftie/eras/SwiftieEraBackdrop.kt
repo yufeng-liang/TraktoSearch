@@ -1901,6 +1901,23 @@ private const val WAVE_SAMPLES = 28
  * 不用另写出入场动画。时间上四段各一个速度（见 [SNAKE_KEY_S]）：进场快、绕圈稳、
  * 抬头时几乎停住、末段甩出去 —— 那个「停住」就是攻击姿态的定格。
  *
+ * ## 两处接缝必须是切线连续的
+ *
+ * 三截曲线在段界处只对上**位置**是不够的：切线一拐折，蛇身立刻读作一条被掰过的管子
+ * ——「转弯时身体变成了折线」说的就是这个，而出圈那一刻正是蛇头抬起、最该好看的一刻。
+ * 所以进场段与出画段都是三次贝塞尔，它们的末端/首端控制点分别落在**椭圆在两个端点上的
+ * 切线**里：
+ *
+ * - 进场段从椭圆最左点的**下方**接上来（末端控制点在正下方），末端切线竖直向上；
+ * - 出画段从最右点**竖直向下**出发（首端控制点在正下方），再往右上兜出去。
+ *
+ * 椭圆在两个端点的切线恰好是竖直的，这条约束与屏幕宽高比无关 —— 换一台比例不同的机器
+ * 也不会重新长出折角。「抬头」因此不再是原地硬折一下，而是顺着绕圈的下半程兜上来：
+ * 颈先沉一下、再抬起来，就是蛇发力前那个 S。
+ *
+ * 段界上的**曲率**仍有跳变（三次贝塞尔对不上椭圆的曲率），但蛇身管径只有 0.017h，
+ * 这点偏差在屏幕上读不出来；切线不一致却是必现的一道折痕。
+ *
  * ## 为什么要分两趟画
  *
  * 「绕」和「压在上面」的差别只有一件事：远侧那半圈必须被王座挡住。所以蛇身按深度切段，
@@ -2026,8 +2043,8 @@ private fun DrawScope.drawHalftoneThrone(
         }
         path.close()
         drawPath(path = path, color = SNAKE_SCALE, alpha = alpha * 0.44f)
-        // 鳞：每隔 3 个采样横跨蛇身一道向后开口的弧。
-        // **不许画成整圈的圆** —— 第一轮那 26 个 300° 的环读作一串链节或气泡，
+        // 鳞：每隔 6 个采样（= 0.016 的 s，间距与 96 采样时的 3 个相同）横跨蛇身一道向后
+        // 开口的弧。**不许画成整圈的圆** —— 第一轮那 26 个 300° 的环读作一串链节或气泡，
         // 而蛇鳞是一排横跨身体的弯边。
         //
         // 只跨**背侧那一半**（从 -0.92 到 +0.15，不再到 +0.92）：背鳞与下面那排腹鳞
@@ -2048,7 +2065,7 @@ private fun DrawScope.drawHalftoneThrone(
             val by = ax * 0.60f
             path.moveTo(cx + ax * back * 0.92f, cy + ay * back * 0.92f)
             path.quadraticTo(cx + bx, cy + by, cx - ax * back * 0.15f, cy - ay * back * 0.15f)
-            i += 3
+            i += 6
         }
         drawPath(
             path = path,
@@ -2067,7 +2084,7 @@ private fun DrawScope.drawHalftoneThrone(
             val from = 0.94f - 0.52f * fade(s)
             path.moveTo(edgeX(s, side, from), edgeY(s, side, from))
             path.lineTo(edgeX(s, side, 0.94f), edgeY(s, side, 0.94f))
-            i += 2
+            i += 4
         }
         drawPath(
             path = path,
@@ -2461,8 +2478,16 @@ private val SNAKE_SCALE = Color(0xFF8A857F)
  */
 private const val SNAKE_LEN = 0.52f
 
-/** 蛇身采样点数。窗口是滑动的，所以这是「当前可见那一段」的分段数，不是整条曲线的。 */
-private const val SNAKE_SAMPLES = 96
+/**
+ * 蛇身采样点数。窗口是滑动的，所以这是「当前可见那一段」的分段数，不是整条曲线的。
+ *
+ * 192 而不是 96：蛇身的折线感有两个来源，除了段界上的切线拐折，还有一个是**采样太稀**。
+ * 绕圈那个椭圆极扁（0.176w × 0.032h），两端的曲率半径只有约 41px（1440×3200 上），
+ * 而可见那一段（`SNAKE_LEN` = 0.52 的 `s`）约 1800px 弧长 —— 96 个采样在那里一段要转 21°，
+ * 圈的两端就成了一小段一小段的折线。192 之后每段降到 10° 上下，肉眼已经读作圆弧。
+ * 代价只是每帧多几百个多边形顶点，与鳞、腹鳞的绘制调用数无关（那两个按采样**步长**走）。
+ */
+private const val SNAKE_SAMPLES = 192
 
 /** 求切线用的差分步长。太小会在段界处放大浮点误差，太大则弯处的法向偏出去。 */
 private const val SNAKE_DS = 0.0035f
@@ -2470,12 +2495,12 @@ private const val SNAKE_DS = 0.0035f
 /**
  * 行程曲线三段的 `s` 分界。
  *
- * 按各段的**实际弧长**分配，蛇的速度才是均匀的：进场约 785px、绕圈 1.5 圈约 1743px、
- * 抬头出画约 900px，合 3428px（1440×3200 上）。改椭圆半径或出画点都要跟着重算这两个数，
- * 不然蛇会在某一段忽然加速。
+ * 按各段的**实际弧长**分配，蛇的速度才是均匀的：进场约 838px、绕圈 1.5 圈约 1787px、
+ * 抬头出画约 906px，合 3531px（1440×3200 上）。改椭圆半径、进场/出画曲线的控制量或
+ * 出画点，都要跟着重算这两个数，不然蛇会在某一段忽然加速。
  */
-private const val SNAKE_S_ENTER = 0.229f
-private const val SNAKE_S_LOOP = 0.737f
+private const val SNAKE_S_ENTER = 0.237f
+private const val SNAKE_S_LOOP = 0.743f
 
 /** 绕王座那个椭圆：中心、两半轴、起始高度、1.5 圈总共抬多高。 */
 private const val SNAKE_LOOP_CX = 0.500f
@@ -2528,10 +2553,13 @@ private fun snakeHeadAt(p: Float): Float {
 /** 绕圈段的角度。从最左（π）起按 [SNAKE_TURNS] 转。 */
 private fun snakeLoopAngle(b: Float): Float = PI.toFloat() + b * SNAKE_TURNS * TAU
 
-/** 一段二次贝塞尔的取值，用在抬头出画那一段。 */
-private fun quadAt(t: Float, p0: Float, p1: Float, p2: Float): Float {
+/**
+ * 一段三次贝塞尔的取值。进场段与抬头出画那两截都用它：两端的控制点落在椭圆端点的
+ * 切线上，接缝才不拐折（见 [snakePointX] 的说明）。
+ */
+private fun cubicAt(t: Float, p0: Float, p1: Float, p2: Float, p3: Float): Float {
     val inv = 1f - t
-    return inv * inv * p0 + 2f * inv * t * p1 + t * t * p2
+    return inv * inv * inv * p0 + 3f * inv * inv * t * p1 + 3f * inv * t * t * p2 + t * t * t * p3
 }
 
 /**
@@ -2539,41 +2567,50 @@ private fun quadAt(t: Float, p0: Float, p1: Float, p2: Float): Float {
  *
  * 三段拼起来，**段界处两段的值必须相等**，不然蛇身会在接缝上断开：
  * 进场段末端 = 椭圆最左点，绕圈段末端（1.5 圈）= 椭圆最右点 = 出画段起点。
+ * 除了位置，**切线也要接上**：进场段与出画段的端点控制点都放在椭圆端点的切线上
+ * （两个端点处椭圆切线竖直，于是那两个控制点与端点同 x）—— 见 [drawHalftoneThrone] 的说明。
  * `s` 允许略微超出 `0..1`（求切线要取 `s ± SNAKE_DS`），两头都按同一个式子外推。
  */
 private fun snakePointX(s: Float): Float = when {
-    s <= SNAKE_S_ENTER -> {
-        val a = s / SNAKE_S_ENTER
-        SNAKE_ENTER_X + (SNAKE_LOOP_CX - SNAKE_LOOP_RX - SNAKE_ENTER_X) * a
-    }
+    s <= SNAKE_S_ENTER -> cubicAt(
+        s / SNAKE_S_ENTER,
+        SNAKE_ENTER_X,
+        SNAKE_ENTER_X + SNAKE_ENTER_PULL_X,
+        SNAKE_LOOP_CX - SNAKE_LOOP_RX,
+        SNAKE_LOOP_CX - SNAKE_LOOP_RX
+    )
     s <= SNAKE_S_LOOP -> {
         val b = (s - SNAKE_S_ENTER) / (SNAKE_S_LOOP - SNAKE_S_ENTER)
         SNAKE_LOOP_CX + cos(snakeLoopAngle(b)) * SNAKE_LOOP_RX
     }
-    else -> quadAt(
+    else -> cubicAt(
         (s - SNAKE_S_LOOP) / (1f - SNAKE_S_LOOP),
         SNAKE_LOOP_CX + SNAKE_LOOP_RX,
-        0.760f,
+        SNAKE_LOOP_CX + SNAKE_LOOP_RX,
+        SNAKE_EXIT_X - SNAKE_EXIT_PULL,
         SNAKE_EXIT_X
     )
 }
 
 /** 行程曲线的纵坐标（屏高的比例）。见 [snakePointX] 的段界要求。 */
 private fun snakePointY(s: Float): Float = when {
-    s <= SNAKE_S_ENTER -> {
-        val a = s / SNAKE_S_ENTER
-        // 进场那一截给一个整周期的小起伏：末端正好收平接上椭圆，接缝看不出来
-        SNAKE_ENTER_Y + (SNAKE_LOOP_CY - SNAKE_ENTER_Y) * a + sin(a * TAU) * 0.016f
-    }
+    s <= SNAKE_S_ENTER -> cubicAt(
+        s / SNAKE_S_ENTER,
+        SNAKE_ENTER_Y,
+        SNAKE_ENTER_Y + SNAKE_ENTER_PULL_Y,
+        SNAKE_LOOP_CY + SNAKE_ENTER_ARRIVE,
+        SNAKE_LOOP_CY
+    )
     s <= SNAKE_S_LOOP -> {
         val b = (s - SNAKE_S_ENTER) / (SNAKE_S_LOOP - SNAKE_S_ENTER)
         SNAKE_LOOP_CY - b * SNAKE_LOOP_RISE + sin(snakeLoopAngle(b)) * SNAKE_LOOP_RY
     }
-    else -> quadAt(
+    else -> cubicAt(
         (s - SNAKE_S_LOOP) / (1f - SNAKE_S_LOOP),
         SNAKE_LOOP_CY - SNAKE_LOOP_RISE,
-        0.098f,
-        0.232f
+        SNAKE_LOOP_CY - SNAKE_LOOP_RISE + SNAKE_EXIT_DIP,
+        SNAKE_EXIT_Y - SNAKE_EXIT_PULL * SNAKE_EXIT_SLOPE,
+        SNAKE_EXIT_Y
     )
 }
 
@@ -2593,6 +2630,37 @@ private fun snakeBehind(s: Float): Boolean {
 private const val SNAKE_ENTER_X = -0.22f
 private const val SNAKE_ENTER_Y = 0.360f
 private const val SNAKE_EXIT_X = 1.240f
+
+/** 出画点的高度。比椭圆最右点（0.218）略低：甩出去是往下走的，不是平着飞。 */
+private const val SNAKE_EXIT_Y = 0.232f
+
+/**
+ * 进场段（三次贝塞尔）的三个控制量。
+ *
+ * [SNAKE_ENTER_PULL_X] 是首端控制点的水平牵引：0.30w 让这一截大体是平推进来的，
+ * 只在最后压出一个「沉一下再上来」的弧。[SNAKE_ENTER_ARRIVE] 是末端控制点相对椭圆
+ * 最左点**向下**的距离 —— 就靠它在末端把切线掰成竖直，接上椭圆在那一点的切线。
+ * 少了它（或改小）接缝上就是一道折角：进场是横着来的，绕圈却一上来就往上走。
+ */
+private const val SNAKE_ENTER_PULL_X = 0.300f
+private const val SNAKE_ENTER_PULL_Y = 0.020f
+private const val SNAKE_ENTER_ARRIVE = 0.050f
+
+/**
+ * 出画段（三次贝塞尔）的三个控制量。
+ *
+ * 椭圆在最右点的切线是**竖直向下**的（椭圆越扁，两端的切线越接近竖直），绕完 1.5 圈的
+ * 蛇正是在这一点上、朝着正下方出圈：出画段只有从竖直向下接出去才不拐折。上一版是从
+ * 水平偏上 55° 直接起手 —— 接缝上蛇身被掰了一下，也就是「转弯时身体变成了折线」。
+ *
+ * [SNAKE_EXIT_DIP] 是首端控制点向下的距离（把出圈时朝下的那点势先收住），
+ * [SNAKE_EXIT_PULL] / [SNAKE_EXIT_SLOPE] 给出末端切线：从出画点往回 0.42w、
+ * 抬 0.126h，于是尾部是「右下斜着甩出屏外」。三者合起来正是颈部那个 S ——
+ * 先沉、再抬起来立住头、最后一甩。
+ */
+private const val SNAKE_EXIT_DIP = 0.050f
+private const val SNAKE_EXIT_PULL = 0.420f
+private const val SNAKE_EXIT_SLOPE = 0.300f
 
 // ─────────────────────── 7 · Lover ───────────────────────
 
