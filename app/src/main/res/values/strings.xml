@@ -1772,7 +1772,7 @@ Config:
     <string name="ai_quiz_next">Next question</string>
     <string name="ai_quiz_finish">See result</string>
     <string name="ai_quiz_score">%1$d / 100</string>
-    <string name="ai_quiz_replay">Draw another round</string>
+    <string name="ai_quiz_replay">Next round</string>
     <string name="ai_quiz_short_answer_optional">Short answer (optional)</string>
     <string name="ai_quiz_explanation">Explanation</string>
     <string name="ai_quiz_explanation_format">Explanation: %1$s</string>
@@ -1783,8 +1783,9 @@ Config:
     <string name="ai_quiz_prepare_ready">Questions are ready — tap start to begin</string>
     <string name="ai_quiz_prepare_running">Preparing today’s questions in the background…</string>
     <string name="ai_quiz_prepare_failed">Not ready yet — starting will generate it now</string>
+    <string name="ai_quiz_prepare_exhausted">Today’s sets are all played — starting again generates a new one</string>
     <string name="ai_quiz_stage_review">Writing and checking questions</string>
-    <string name="ai_quiz_wait_hint">First generation takes about 5 minutes; once it is done, later rounds today start right away.</string>
+    <string name="ai_quiz_wait_hint">This set takes a few minutes to generate; keep this page open — once it is done, later rounds today start right away.</string>
     <string name="ai_quiz_elapsed">Elapsed %1$s</string>
     <string name="ai_quiz_wait_cancel">Cancel and try later</string>
     <string name="ai_feature_loading">Preparing your answer</string>
@@ -1911,8 +1912,8 @@ Config:
     <string name="ai_quiz_feedback_hard">Too hard</string>
     <string name="ai_quiz_feedback_done">Got it — I\'ll tune the difficulty next time</string>
     <string name="ai_quiz_refresh_title">Discard this round?</string>
-    <string name="ai_quiz_refresh_message">Drawing a new round clears this round\'s answers (%1$d answered).</string>
-    <string name="ai_quiz_refresh_confirm">Draw a new round</string>
+    <string name="ai_quiz_refresh_message">Clears this round’s answers (%1$d answered); starting again moves on to today’s next set.</string>
+    <string name="ai_quiz_refresh_confirm">Discard round</string>
 
     <!-- AI workbench copy -->
     <string name="ai_sprite_workbench_title">AI studio</string>
@@ -1974,7 +1975,7 @@ Config:
     <string name="help_ai_sprite_b3">AI uses the nickname on your authorized account and your watched history.</string>
     <string name="help_ai_sprite_b4">Features include nickname welcome, watchlist roast, film quiz, and today’s film knowledge. The quiz picks 7 titles from your watched list and prepares the day’s questions ahead of time, so it needs at least 7 watched titles.</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota, and refreshing a feature spends one more. Offline, new requests are unavailable but cached content remains readable.</string>
-    <string name="help_ai_sprite_b7">Quiz answers survive leaving the round. Redraw and incomplete submission ask for confirmation; difficulty feedback helps tune later rounds.</string>
+    <string name="help_ai_sprite_b7">Quiz answers survive leaving the round. Discarding the round and incomplete submission ask for confirmation; difficulty feedback helps tune later rounds.</string>
     <!-- Main screen background glow -->
     <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>

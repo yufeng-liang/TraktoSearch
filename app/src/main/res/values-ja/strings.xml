@@ -1777,7 +1777,7 @@
     <string name="ai_quiz_next">次の問題</string>
     <string name="ai_quiz_finish">結果を見る</string>
     <string name="ai_quiz_score">%1$d / 100</string>
-    <string name="ai_quiz_replay">別のラウンド</string>
+    <string name="ai_quiz_replay">もう一度遊ぶ</string>
     <string name="ai_quiz_short_answer_optional">短答（任意）</string>
     <string name="ai_quiz_explanation">解説</string>
     <string name="ai_quiz_explanation_format">解説：%1$s</string>
@@ -1789,8 +1789,9 @@
     <string name="ai_quiz_prepare_ready">準備完了。開始ですぐ始められます</string>
     <string name="ai_quiz_prepare_running">今日の問題をバックグラウンドで準備中…</string>
     <string name="ai_quiz_prepare_failed">未準備です。開始すると今から生成します</string>
+    <string name="ai_quiz_prepare_exhausted">今日の分は遊び終わりました。もう一度始めると今から生成します</string>
     <string name="ai_quiz_stage_review">問題を生成して検証中</string>
-    <string name="ai_quiz_wait_hint">初回の生成は 5 分ほど。生成後は今日中すぐ始められます。</string>
+    <string name="ai_quiz_wait_hint">このセットの生成には数分かかります。このページを開いたままお待ちください。生成後は今日中すぐ始められます。</string>
     <string name="ai_quiz_elapsed">経過時間 %1$s</string>
     <string name="ai_quiz_wait_cancel">キャンセルして後で試す</string>
     <string name="ai_feature_loading">スプライトが考え中</string>
@@ -1916,8 +1917,8 @@
     <string name="ai_quiz_feedback_hard">むずかしすぎた</string>
     <string name="ai_quiz_feedback_done">ありがとう、次は難易度を調整するね</string>
     <string name="ai_quiz_refresh_title">今回のクイズをやめますか？</string>
-    <string name="ai_quiz_refresh_message">引き直すと今回の回答（%1$d 問）が消えます。</string>
-    <string name="ai_quiz_refresh_confirm">引き直す</string>
+    <string name="ai_quiz_refresh_message">今回の回答（%1$d 問）は消え、再開すると今日の次のセットになります。</string>
+    <string name="ai_quiz_refresh_confirm">今回はやめる</string>
 
     <!-- AI workbench copy -->
     <string name="ai_sprite_workbench_title">AI スタジオ</string>
@@ -1979,7 +1980,7 @@
     <string name="help_ai_sprite_b3">AI は認証済みアカウントのニックネームと視聴履歴を利用します。</string>
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、今日の映像知識を利用できます。クイズは視聴済みから 7 本を選び、その日の問題を事前に用意するため、視聴済み 7 本以上が必要です。</string>
     <string name="help_ai_sprite_b5">AI リクエストには日次上限があり、機能の更新でも 1 回消費します。オフラインでは新規リクエスト不可ですが、キャッシュは読めます。</string>
-    <string name="help_ai_sprite_b7">クイズを離れても回答は保持されます。引き直しと未回答のままの提出は確認され、難易度の感想は次回以降の調整に使われます。</string>
+    <string name="help_ai_sprite_b7">クイズを離れても回答は保持されます。ラウンドの中断と未回答のままの提出は確認され、難易度の感想は次回以降の調整に使われます。</string>
 <!-- メイン画面の背景グロー -->
     <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>

@@ -1764,7 +1764,7 @@
     <string name="ai_quiz_next">下一题</string>
     <string name="ai_quiz_finish">查看结果</string>
     <string name="ai_quiz_score">%1$d / 100</string>
-    <string name="ai_quiz_replay">重新抽一轮</string>
+    <string name="ai_quiz_replay">再玩一轮</string>
     <string name="ai_quiz_short_answer_optional">简答题（可选）</string>
     <string name="ai_quiz_explanation">解析</string>
     <string name="ai_quiz_explanation_format">解析：%1$s</string>
@@ -1776,8 +1776,9 @@
     <string name="ai_quiz_prepare_ready">题目已备好，点「开始」即可开题</string>
     <string name="ai_quiz_prepare_running">正在后台准备今天的题目…</string>
     <string name="ai_quiz_prepare_failed">题目还没备好，点「开始」会现场生成</string>
+    <string name="ai_quiz_prepare_exhausted">今天的题已玩完，再开一局会现场生成</string>
     <string name="ai_quiz_stage_review">正在逐题生成并校验</string>
-    <string name="ai_quiz_wait_hint">首次生成约需 5 分钟，请保持此页面打开；生成好后当天再玩就不用等了</string>
+    <string name="ai_quiz_wait_hint">本套生成约需几分钟，请保持此页面打开；生成好后当天再玩就不用等了</string>
     <string name="ai_quiz_elapsed">已等待 %1$s</string>
     <string name="ai_quiz_wait_cancel">取消，稍后再试</string>
     <string name="ai_feature_loading">精灵正在想办法</string>
@@ -1903,8 +1904,8 @@
     <string name="ai_quiz_feedback_hard">太难</string>
     <string name="ai_quiz_feedback_done">已收到反馈，会努力调整难度</string>
     <string name="ai_quiz_refresh_title">放弃本轮闯关？</string>
-    <string name="ai_quiz_refresh_message">重新抽题会清空当前这一轮的作答，已答 %1$d 题。</string>
-    <string name="ai_quiz_refresh_confirm">重新抽题</string>
+    <string name="ai_quiz_refresh_message">会清空本轮作答（已答 %1$d 题），重新开始将进入今天的下一套。</string>
+    <string name="ai_quiz_refresh_confirm">放弃本轮</string>
 
     <!-- AI workbench copy -->
     <string name="ai_sprite_workbench_title">AI 工作台</string>
@@ -1966,7 +1967,7 @@
     <string name="help_ai_sprite_b3">AI 会使用授权账号的昵称和你的已看历史。</string>
     <string name="help_ai_sprite_b4">功能包括昵称欢迎、看单锐评、影视闯关和今日影视知识；闯关会从已看影视里挑 7 部、并按天提前备好题目，因此需至少 7 部已看影视。</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，刷新功能会再消耗一次；离线时不能发起新请求，但仍可查看缓存内容。</string>
-    <string name="help_ai_sprite_b7">离开闯关会保留答案；重新抽题和未答完提交前会确认，难度反馈会用于调整后续题目。</string>
+    <string name="help_ai_sprite_b7">离开闯关会保留答案；放弃本轮和未答完提交前会确认，难度反馈会用于调整后续题目。</string>
 
     <!-- 主页面背景光晕 -->
     <string name="bg_glow_title">背景动效</string>

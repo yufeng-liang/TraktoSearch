@@ -1588,21 +1588,30 @@ class AiSpriteViewModel @Inject constructor(
                     return@launch
                 }
                 var completed: AiQuiz? = null
+                var dailySetsDone = false
                 aiRepository.getQuizStream(
                     friendId,
                     quizStreamRequest(enriched, day, prefetch = true),
                     forceRefresh = false
                 ).collect { event ->
                     if (!stillCurrent()) return@collect
-                    if (event is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed) {
-                        completed = event.quiz
+                    when (event) {
+                        is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed -> completed = event.quiz
+                        com.tracktosearch.data.ai.AiQuizStreamEvent.DailySetsDone -> dailySetsDone = true
+                        else -> Unit
                     }
                     _uiState.update { state -> state.withQuizStreamProgress(event) }
                 }
                 if (!stillCurrent()) return@launch
-                quizPreparedDay = if (completed != null) day else null
+                // 「当天该发的套都发过了」是当天的稳定结论（已玩套数只增不减），记下当天不再重试：
+                // 再进页面也不用再问一次服务端。
+                quizPreparedDay = if (completed != null || dailySetsDone) day else null
                 updateQuizPrepareState(
-                    if (completed != null) AiQuizPrepareState.READY else AiQuizPrepareState.FAILED
+                    when {
+                        completed != null -> AiQuizPrepareState.READY
+                        dailySetsDone -> AiQuizPrepareState.EXHAUSTED
+                        else -> AiQuizPrepareState.FAILED
+                    }
                 )
             } catch (e: CancellationException) {
                 throw e

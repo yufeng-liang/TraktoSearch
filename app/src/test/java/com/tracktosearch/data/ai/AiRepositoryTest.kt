@@ -199,6 +199,45 @@ class AiRepositoryTest {
     }
 
     @Test
+    fun quizStream_mapsDailySetsDoneToEventInsteadOfFailing() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { storage.read(any(), any(), any()) } returns null
+        // 当天该预生成的套都发过了：服务端拒发预生成。这不是故障，落成事件让界面说实话
+        coEvery { api.getQuizStream(any()) } returns Response.success(
+            """{"type":"error","code":"PREFETCH_DAILY_SETS_DONE","message":"Daily sets already generated"}"""
+                .toResponseBody("application/x-ndjson".toMediaType())
+        )
+
+        val events = buildAiRepository(api, storage).getQuizStream(
+            "friend-a",
+            AiQuizRequest(sessionId = "sprite-session", prefetch = true)
+        ).toList()
+
+        assertThat(events).containsExactly(AiQuizStreamEvent.DailySetsDone)
+    }
+
+    @Test
+    fun quizStream_otherErrorEventsStillThrow() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { storage.read(any(), any(), any()) } returns null
+        // 邻居保护：只有拒发码被转成事件，其它错误照旧抛出（不能被静默吞掉）
+        coEvery { api.getQuizStream(any()) } returns Response.success(
+            """{"type":"error","code":"AI_UPSTREAM_ERROR","message":"Quiz generation failed"}"""
+                .toResponseBody("application/x-ndjson".toMediaType())
+        )
+
+        val failure = runCatching {
+            buildAiRepository(api, storage)
+                .getQuizStream("friend-a", AiQuizRequest(prefetch = true)).toList()
+        }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(AiApiException::class.java)
+        assertThat((failure as AiApiException).serverCode).isEqualTo("AI_UPSTREAM_ERROR")
+    }
+
+    @Test
     fun quizStream_fallsBackToServerSideDateWhenRequestOmitsIt() = runTest {
         val api = mockk<AiApiService>()
         val storage = mockk<AiStorage>(relaxed = true)

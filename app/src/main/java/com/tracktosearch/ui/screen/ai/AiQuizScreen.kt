@@ -452,6 +452,7 @@ private fun quizPrepareLabelRes(state: AiQuizPrepareState): Int? = when (state) 
     AiQuizPrepareState.READY -> R.string.ai_quiz_prepare_ready
     AiQuizPrepareState.PREPARING -> R.string.ai_quiz_prepare_running
     AiQuizPrepareState.FAILED -> R.string.ai_quiz_prepare_failed
+    AiQuizPrepareState.EXHAUSTED -> R.string.ai_quiz_prepare_exhausted
     AiQuizPrepareState.IDLE -> null
 }
 

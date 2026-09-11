@@ -1777,7 +1777,7 @@
     <string name="ai_quiz_next">다음 문제</string>
     <string name="ai_quiz_finish">결과 보기</string>
     <string name="ai_quiz_score">%1$d / 100</string>
-    <string name="ai_quiz_replay">새 라운드 뽑기</string>
+    <string name="ai_quiz_replay">한 번 더 하기</string>
     <string name="ai_quiz_short_answer_optional">단답형 (선택)</string>
     <string name="ai_quiz_explanation">해설</string>
     <string name="ai_quiz_explanation_format">해설: %1$s</string>
@@ -1789,8 +1789,9 @@
     <string name="ai_quiz_prepare_ready">문제 준비 완료 — 시작을 누르면 바로 시작됩니다</string>
     <string name="ai_quiz_prepare_running">오늘 문제를 백그라운드에서 준비 중…</string>
     <string name="ai_quiz_prepare_failed">아직 준비되지 않았어요. 시작하면 지금 생성합니다</string>
+    <string name="ai_quiz_prepare_exhausted">오늘 몫은 모두 플레이했어요. 다시 시작하면 새로 생성합니다</string>
     <string name="ai_quiz_stage_review">문제 생성 및 검증 중</string>
-    <string name="ai_quiz_wait_hint">첫 생성은 약 5분. 한 번 생성되면 오늘은 바로 시작할 수 있어요.</string>
+    <string name="ai_quiz_wait_hint">이 세트는 생성에 몇 분 정도 걸려요. 이 페이지를 열어 두세요. 생성되면 오늘은 바로 시작할 수 있어요.</string>
     <string name="ai_quiz_elapsed">경과 %1$s</string>
     <string name="ai_quiz_wait_cancel">취소하고 나중에</string>
     <string name="ai_feature_loading">스프라이트가 생각 중입니다</string>
@@ -1916,8 +1917,8 @@
     <string name="ai_quiz_feedback_hard">너무 어려웠어요</string>
     <string name="ai_quiz_feedback_done">받았어요, 다음엔 난이도를 조정할게요</string>
     <string name="ai_quiz_refresh_title">이번 라운드를 포기할까요?</string>
-    <string name="ai_quiz_refresh_message">다시 뽑으면 이번 라운드 답변(%1$d문항)이 사라집니다.</string>
-    <string name="ai_quiz_refresh_confirm">다시 뽑기</string>
+    <string name="ai_quiz_refresh_message">이번 라운드 답변(%1$d문항)이 사라지고, 다시 시작하면 오늘의 다음 세트로 진행됩니다.</string>
+    <string name="ai_quiz_refresh_confirm">이번 라운드 포기</string>
 
     <!-- AI workbench copy -->
     <string name="ai_sprite_workbench_title">AI 스튜디오</string>
@@ -1979,7 +1980,7 @@
     <string name="help_ai_sprite_b3">AI는 인증된 계정의 닉네임과 시청 기록을 사용합니다.</string>
     <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈, 오늘의 영상 지식을 제공합니다. 퀴즈는 시청 목록에서 7편을 골라 하루치 문제를 미리 준비하므로 시청 완료 7편 이상이 필요합니다.</string>
     <string name="help_ai_sprite_b5">AI 요청에는 일일 한도가 있고 기능 새로 고침도 한 번 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다.</string>
-    <string name="help_ai_sprite_b7">퀴즈를 나가도 답변은 유지됩니다. 다시 뽑기와 미완료 제출 전에 확인하며, 난이도 의견은 이후 문제 조정에 사용됩니다.</string>
+    <string name="help_ai_sprite_b7">퀴즈를 나가도 답변은 유지됩니다. 라운드 포기와 미완료 제출 전에 확인하며, 난이도 의견은 이후 문제 조정에 사용됩니다.</string>
 <!-- 메인 화면 배경 글로우 -->
     <string name="bg_glow_title">배경 모션</string>
     <string name="bg_glow_off">끄기</string>

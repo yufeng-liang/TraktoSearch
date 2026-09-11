@@ -1322,6 +1322,53 @@ class AiSpriteViewModelTest {
         assertThat(viewModel.uiState.value.quizStarted).isTrue()
     }
 
+    @Test
+    fun prewarmRefusedForTheDayShowsUsedUpAndDoesNotAskAgain() = runTest {
+        val requests = mutableListOf<AiQuizRequest>()
+        val viewModel = viewModel()
+        stubQuizWatchedHistory()
+        // 当天该预生成的套都发过了：服务端拒发预生成（用户玩完了当天的量），这不是故障
+        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returns
+            flowOf(AiQuizStreamEvent.DailySetsDone)
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+
+        // 文案要说实话：不是「没备好」，是「今天的题已玩完」
+        assertThat(viewModel.uiState.value.quizPrepareState).isEqualTo(AiQuizPrepareState.EXHAUSTED)
+        assertThat(viewModel.uiState.value.errorCode).isNull()
+        assertThat(requests.map { it.prefetch }).containsExactly(true)
+
+        // 当天的结论稳定（已玩套数只增不减）：再进页面不该重新问一次服务端
+        viewModel.closeFeature()
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+
+        assertThat(requests.map { it.prefetch }).containsExactly(true)
+        assertThat(viewModel.uiState.value.quizPrepareState).isEqualTo(AiQuizPrepareState.EXHAUSTED)
+    }
+
+    @Test
+    fun usedUpDayStillStartsTheColdGenerationWhenTheUserAsks() = runTest {
+        val requests = mutableListOf<AiQuizRequest>()
+        val viewModel = viewModel()
+        stubQuizWatchedHistory()
+        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returnsMany listOf(
+            flowOf(AiQuizStreamEvent.DailySetsDone),
+            flowOf(AiQuizStreamEvent.Completed(quiz()))
+        )
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+        viewModel.startQuiz()
+        advanceUntilIdle()
+
+        // 拒发只针对预生成：正式请求照发，服务端按需生成，用户点开始仍然能玩
+        assertThat(requests.map { it.prefetch }).containsExactly(true, false)
+        assertThat(viewModel.uiState.value.quizStarted).isTrue()
+        assertThat(viewModel.uiState.value.quiz).isNotNull()
+    }
+
     /** 出题页需要 ≥7 部已看影视：所有出题用例共用这份桩。 */
     private fun stubQuizWatchedHistory(count: Int = 7) {
         val watched = (0 until count).map { index ->

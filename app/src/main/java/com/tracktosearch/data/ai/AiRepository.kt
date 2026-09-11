@@ -424,22 +424,31 @@ class AiRepository @Inject constructor(
             )
         }
         var completed: AiQuiz? = null
+        var dailySetsDone = false
         body.use { responseBody ->
             val source = responseBody.source()
             while (true) {
                 val line = source.readUtf8Line() ?: break
                 if (line.isBlank()) continue
                 val event = parseQuizStreamEvent(line) ?: continue
-                if (event is AiQuizStreamEvent.Completed) completed = event.quiz
+                when (event) {
+                    is AiQuizStreamEvent.Completed -> completed = event.quiz
+                    AiQuizStreamEvent.DailySetsDone -> dailySetsDone = true
+                    else -> Unit
+                }
                 emit(event)
             }
         }
+        // 拒发预生成是完整答复（当天该发的套都发过了），不是「流被截断」：此时没有题包是正常的。
+        // 漏了这一步，拒发事件会先被收下、再被下面这个兜底异常推翻，界面又回到「没备好」。
+        if (completed == null && !dailySetsDone) {
+            throw AiErrorMapper.exception("EMPTY_RESPONSE", "Quiz stream ended without a result", 200)
+        }
         val quiz = completed
-            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "Quiz stream ended without a result", 200)
         // 预生成不写本地镜像：镜像一旦存在，正式出题就会被本地缓存直接满足、不再发请求，
         // 而服务端要靠那次请求把「当天这一套」记为已玩（quizbank:used 的 usedSets）——
         // 漏记会让下一套题的序号原地不动，又抽回同一套题。预生成只负责把服务端题库暖热。
-        if (!request.prefetch) {
+        if (quiz != null && !request.prefetch) {
             storage.write(friendId, AiCacheFeature.QUIZ, json.encodeToString(AiQuiz.serializer(), quiz), suffix)
         }
     }.flowOn(Dispatchers.IO)
@@ -1296,11 +1305,20 @@ private fun parseQuizStreamEvent(line: String): AiQuizStreamEvent? {
             }) ?: throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz stream result is invalid", 200)
             AiQuizStreamEvent.Completed(quiz)
         }
-        "error" -> throw AiErrorMapper.exception(
-            serverCode = root["code"]?.jsonPrimitive?.contentOrNull,
-            message = root["message"]?.jsonPrimitive?.contentOrNull ?: "Quiz stream failed",
-            httpCode = 200
-        )
+        "error" -> {
+            // 「当天该预生成的套都发过了」是常态而非故障：正式请求仍会按需生成，
+            // 交给 ViewModel 换一句实话（今天的题已玩完），其余错误码照旧抛出去。
+            val code = root["code"]?.jsonPrimitive?.contentOrNull
+            if (code == QUIZ_PREWARM_DAILY_SETS_DONE) {
+                AiQuizStreamEvent.DailySetsDone
+            } else {
+                throw AiErrorMapper.exception(
+                    serverCode = code,
+                    message = root["message"]?.jsonPrimitive?.contentOrNull ?: "Quiz stream failed",
+                    httpCode = 200
+                )
+            }
+        }
         else -> null
     }
 }

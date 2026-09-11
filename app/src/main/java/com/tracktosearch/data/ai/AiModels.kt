@@ -300,7 +300,18 @@ sealed interface AiQuizStreamEvent {
 
     /** 完成：携带最终题包（服务端生成失败时给的是确定性兜底题）。 */
     data class Completed(val quiz: AiQuiz) : AiQuizStreamEvent
+
+    /**
+     * 服务端拒发预生成：当天该预生成的套已经发过（用户玩完了当天的量）。
+     *
+     * 这不是故障 —— 正式的出题请求仍会按需生成，只是要现场跑一遍，所以与「预生成失败」
+     * 分开表达：界面该说「今天的题已玩完，再开一局会现场生成」，而不是「没备好」。
+     */
+    data object DailySetsDone : AiQuizStreamEvent
 }
+
+/** 预生成拒发码：与 auth-worker 的 PREFETCH_DAILY_SETS_DONE 逐字对应。 */
+const val QUIZ_PREWARM_DAILY_SETS_DONE = "PREFETCH_DAILY_SETS_DONE"
 
 /** 每日知识阶段：CANDIDATE=挑选候选知识，REVIEW=复核改写。 */
 enum class AiDailyStage { CANDIDATE, REVIEW }
