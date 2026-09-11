@@ -125,3 +125,12 @@ verification-artifacts/
 
 # 本地密钥与跑批产物（zhipu/bailian key、quiz-lab 日志），绝不入库
 /.tmp/
+
+# 本地跑批与调试产物：接口返回转储、wrangler tail 日志、uiautomator 界面树，不入库
+/quiz-*.json
+/tail*.log
+/ui_*.xml
+
+# Agent 客户端本地配置（.claude/skills 等要入库，只忽略本地文件与目录）
+/.zcode/
+/.claude/launch.json
