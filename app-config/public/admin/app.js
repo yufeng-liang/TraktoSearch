@@ -2666,6 +2666,16 @@ const AI_PROVIDER_META = {
     // 与 bailian 同一规矩：按 handler 的链上顺序排（agnes-3.0-flash 首选、2.5-flash 同家降级），
     // 逐个探测就能看出当前换到了哪一档。
     agnes: { label: 'Agnes AI', consoleUrl: 'https://agnes-ai.com/', models: ['agnes-3.0-flash', 'agnes-2.5-flash'] },
+    // MiniMax 走 aiportx 网关。列表按实测字符/秒从快到慢排：M3 无 reasoning 直出 JSON（361~393），
+    // M2.x 都带 reasoning 且计入 max_tokens（M2.7 只有 23 字符/秒），M2.1 有「思考烧光额度、正文为空」记录。
+    minimax: {
+        label: 'MiniMax（aiportx）',
+        consoleUrl: 'https://platform.minimaxi.com/',
+        models: [
+            'MiniMax-M3', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.5', 'MiniMax-M2.7-highspeed',
+            'MiniMax-M2.7', 'MiniMax-M2.1-highspeed', 'MiniMax-M2.1', 'MiniMax-M2',
+        ],
+    },
     mimo: { label: '小米 MiMo', consoleUrl: 'https://platform.xiaomimimo.com/', models: ['mimo-v2.5-pro'] },
 };
 const AI_HEALTH_STATE = { window: '24h', data: null, providerFilter: 'all' };
