@@ -2,173 +2,74 @@
 CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments OK. Code/commits/security: write normal.
 <!-- caveman-end -->
 
-# 全局指令
+# 项目规则（TrackToSearch Android）
 
-## 用户信息
-- 邮箱：1577865546@qq.com，SMTP 授权码从 memory mcp 获取
-- Cloudflare 账号 ID：9fe1b3ef7e9891ea34b4d8f6d1210ff1
-- 团队域名：douban-movie-api-peak.cloudflareaccess.com（Cloudflare Access）
+## 0. 记忆纪律（agentmemory，本仓库所有 Agent 共享同一记忆库）
+服务常驻 http://localhost:3111（MCP 工具 memory_*；ZCode/Claude Code/Codex/dsh 已接线，Trae 未接）。
+- 开始非平凡任务**前**：`memory_smart_search` 查本项目相关决策/教训（一次 miss 只花一个调用）
+- 决策定案、问题解决**当下**：`memory_save`（content 含理由，2-5 个具体概念）；被纠正时存 `memory_lesson_save`（lesson 带置信度，会主动浮现）
+- 教训组 tag：`douban-sync` / `auth-revoke` / `common-pitfalls` / `cloudflare-deploy` / `adb-verify` / `splash-accept` / `viz-companion`（历史经验已全量在库）
+- 不存：代码里能读到的、瞬时状态、密钥、步骤流水账（hooks 已自动记录会话）
 
-## 用户偏好
-- 面向用户输出、解释用中文
-- 代码注释中文，Git commit 中文
-- ViewModel error 英文（非 UI 展示文字）
-- 命令行用 bash，Python 用 py
-- 网络搜索优先 anysearch（首选）或 firecrawl；涉及 api 必须用 context7 查明用法
+## 1. 安卓开发工作流（每项任务按此闭环）
+1. **了解**：先读相关代码与 §2 架构约定；非平凡任务先查记忆（§0）
+2. **计划**：重要修改/功能性损失先说明计划再执行；不确定/新增功能先用 grill-me 问清；UI 设计先走 Stark 定方向再实现
+3. **实现**：遵循 §3 规范
+   - 大任务拆可独立、范围不重叠子任务按依赖并行（子代理提示里写明「不要跑 Gradle」）；主代理统一审查/整合/验证/提交
+   - 子代理并行期间**禁止一切 Gradle 任务**：本机内存撑不住多 daemon，会拖死测试 worker 并静默漏跑末尾测试类
+   - 增/改/删功能后同步更新 App 内帮助与说明页
+4. **验证**：改动全部完成后统一验证——纯 Kotlin/UI 改动跑 `:app:compileDebugKotlin` 即可（别改一次构建一次）；确需产物/装机时再 assembleDebug → 功能/UI 改动真机核验（adb 安装后 exec am start + UI 树 + screencap + logcat -b crash，凭安装成功不宣称功能过）
+5. **提交**：验证通过即按实际改动提交（Conventional Commits 中文，§4），不合并无关功能；同文件多独立功能按 hunk 分暂存；大量删除前先本地提交一次便回滚
+6. **沉淀**：有价值教训 `memory_lesson_save`（勿写回本文件）
 
-## 项目架构概览
+## 2. 项目架构概览
 - Android Jetpack Compose + Hilt + MVVM
 - TraktRepository / TmdbRepository / ResourceRepository
 - TtlCache：过期+容量上限+线程安全+飞行中去重 getOrAwait
 - WatchlistWatchedIds：登录后加载一次（traktId/tmdbId 集合 + tmdb→trakt 映射）
 - searchByTmdbCache 永久缓存（tmdb↔trakt 映射不变）
+- 豆瓣爬取链路：内存缓存 → 磁盘缓存（awaitLoaded）→ 全局池（CloudDetailsPoolManager）→ 爬豆瓣（成功异步上传全局池）；反爬延迟爬前 3-5s、列表页 5-10s、失败重试≤1
+- 授权：网关 Pages 代理（https://tracktosearch-gateway.pages.dev/gateway-api）+ auth-worker
 
-## 缓存使用规范
-- 核心：一切缓存策略以尽量减少网络请求为第一目标；数据基本不变优先复用缓存
-- 内存缓存优先，命中同步返回（不转圈）；未命中先等磁盘缓存加载完再决定是否请求网络
-- 持久化缓存（基本不变数据）：TMDB/豆瓣详情、演职员、ID 映射、人物信息、海报 URL 用 DataStore（key→JSON）+ TtlCache 双级，跨重启复用
-- 写成功数据时同步更新内存缓存并异步落盘；缓存 key 带版本号，结构变化时用新 key 隔离旧格式
-- 图片沿用现有磁盘缓存目录/容量上限/LRU，不另建私有 filesDir，容量允许跨重启复用
-- 剧照等增量资源保留已缓存，仅发现新增 URL 时刷新并合并
+## 3. 编码与缓存规范
+**缓存**（核心：尽量减少网络请求；数据基本不变优先复用缓存）
+- 内存缓存优先，命中同步返回；未命中先等磁盘缓存加载完再决定是否请求网络
+- 持久化缓存（基本不变数据：TMDB/豆瓣详情、演职员、ID 映射、人物、海报 URL）：DataStore（key→JSON）+ TtlCache 双级，跨重启复用
+- 写成功同步更新内存缓存并异步落盘；**缓存 key 带版本号**，结构变化用新 key 隔离旧格式
+- 图片沿用现有磁盘缓存目录/容量上限/LRU；剧照等增量资源保留已缓存，仅新增 URL 时刷新合并
 - TTL 只控确有刷新必要的数据；基本不变数据用长期/永久缓存 + 显式 forceRefresh
 
-## 豆瓣爬取原则
-核心：尽量减爬，避反爬。
-链路：内存缓存 → 磁盘缓存（awaitLoaded）→ 全局池（CloudDetailsPoolManager）→ 爬豆瓣（成功异步上传全局池）
-- 反爬延迟：爬前 3-5s，列表页 5-10s，失败重试≤1
+**风格**
+- 依赖统一 gradle/libs.versions.toml（含开源页版本，见 §5 约束）
+- AlertDialog containerColor = surfaceVariant；新建页面：标题栏 + Tab 用 Box + hazeSource/hazeEffect 毛玻璃吸顶，小白条沉浸用 Scaffold(contentWindowInsets = WindowInsets(0,0,0,0)) 或 Box
+- API 代码生成/配置步骤用 context7 MCP；逆向/对接第三方接口先 GitHub + CSDN/掘金 查现成实现，多源交叉验证
+- UI 设计用 PureShowWidget 内联展示；前端新页面 web-dev 技能实时预览，批准后 ai-self-loop-ui-workflow 截图闭环
+- 安卓 CLI/skills：android --no-metrics run/install/emulator/screen/layout/docs/sdk；测试用 android-emulator-qa（功能/复现/截图/logcat）与 android-performance（CPU/内存/帧率剖析）
 
-## 国际化规范
-- 用户可见文字用 stringResource，不硬编码
-- strings.xml 同步：values/(英)、values-zh/(中)、values-ja/(日)、values-ko/(韩)
-- 非 Composable 用 context.getString(R.string.xxx)
+**国际化**：用户可见文字用 stringResource 不硬编码；strings.xml 同步 values/（英）、values-zh/（中）、values-ja/（日）、values-ko/（韩）；非 Composable 用 context.getString(R.string.xxx)
 
-## 编码风格
-- 优先沿用项目约定，改前先了解架构
-- 依赖统一 gradle/libs.versions.toml
-- AlertDialog containerColor = surfaceVariant
-- 新建页面标准模板：标题栏 + Tab 用 Box + hazeSource/hazeEffect 毛玻璃吸顶，小白条沉浸用 Scaffold(contentWindowInsets = WindowInsets(0,0,0,0)) 或 Box，内容延展到导航栏背后
-- API 代码生成/配置步骤用 context7 MCP
-- 逆向/对接第三方接口：先 GitHub + CSDN/掘金 查现成实现，多源交叉验证
-
-## 工作方式
-- 重要修改/功能性损失先说明计划再执行
-- 大任务拆可独立、范围不重叠子任务，按依赖用子智能体并行；主智能体统一审查/整合/验证/提交
-- 子代理并行期间禁止执行 Gradle（assembleDebug/test/lint 等一切 Gradle 任务）：本机可用内存撑不住多个 daemon，抢内存会让 daemon 起不来或测试 worker 被拖死并静默漏跑末尾的测试类。派子代理时在提示里明确写「不要跑 Gradle」，让它只改代码和写测试；构建与全部测试由主代理在所有子任务合并后统一跑一次
-- 修复/增功能/改 UI 验证通过后立即按实际改动提交，不合并无关功能
-- 大量删除前先本地提交一次便回滚
-- 多步任务按依赖推进：无共享写集并行，主智能体集成后最终 debug 验证
-- 增/改/删功能后及时更新 App 内帮助与说明页
-- 不确定先用 grill-me 问清（新增功能必用）
-- UI 设计用 PureShowWidget 内联展示（SVG/HTML）；前端新页面用 web-dev 技能生成实时预览（启本地 HTTP 服务 + OpenPreview 链接），批准后用 ai-self-loop-ui-workflow 截图闭环
-- 发布用 release skill 编排，说"发布"即触发
-- Android 官方 CLI/skills（命令、清单、触发、更新）见 android-cli-skills.md；Agent 按指令自动加载。常用：android --no-metrics run/install/emulator/screen/layout/docs/sdk（加 --no-metrics 避上报超时）
-- 安卓测试用 OpenAI 官方 skill（~/.agents/skills/），无需点名：
-  - android-emulator-qa：模拟器功能验证/UI bug 复现/截图/logcat
-  - android-performance：CPU/内存/帧率/卡顿剖析（Simpleperf/Perfetto/gfxinfo/meminfo/heap dump）
-  - 前提：adb devices 确认在线 → installDebug，可组合（先 qa 再 performance 采样）
-- UI/UX 设计用 Stark 插件（~/.agents/skills/，github.com/f0d010c/stark）：
-  - stark：总入口，先定产品流/平台/原创性/动效/Token 再实现
-  - android-design：Compose/Material 3 Expressive 设计（动态色彩/edge-to-edge/自适应）
-  - 设计需求先走 Stark 定方向，再交 ai-self-loop-ui-workflow 落地
-
-## Bug 修复工作流
-1. 复现，记步骤
-2. UI 层反向追数据层定位根因
-3. 最小改动修复
-4. 验证
-5. 有价值教训写入本文件
-
-## 豆瓣同步前置条件
-豆瓣独立模式无 Trakt 状态；同步完跳 Trakt 一致检查，但仍须继续云端上传本地同步数据，否则本地成功误报失败并跳上传
-
-## 授权撤销同步经验
-- 后台撤销设备后 App 不能只依赖进程启动 AuthManager.initialize()；前台恢复立即调 check()，并用网络约束 15 分钟周期 Worker 兜底
-- Worker 返 403 沿用 AuthManager.check() 清理逻辑，清本地令牌并切回激活页；撤销设备仍留记录，重绑用迁移邀请码
-
-## 常见陷阱
-- Haze 2.0 HazeMaterials.* 默认从 MaterialTheme.colorScheme.surface 读填充色；主题新增专属 surface 会同步改全站 haze，先确认是否须与其他主题一致
-- Retrofit @GET("") 进 OkHttp 前因空 URL 失败，被评分层宽泛异常静默降级；网关 base URL 含 /api/omdb/ 时用 @GET(".")，用 MockWebServer 锁最终路径
-- Kotlin 块注释支持嵌套：KDoc 正文写 `/api/ai/*` 这类通配符路径时 `/*` 会开启嵌套注释，`*/` 只闭合内层，外层 `/**` 永不闭合，后半文件全被吞进注释产生几十条级联编译错误；注释正文避免出现 `/*` 序列（写"xxx 系列接口"替代）
-- Brainstorm Companion 预览依赖 URL 查询参数 ?key=；部分应用内浏览器重写链接丢 key 显等待页或 403。先 Invoke-WebRequest 验证带 key 地址；服务端正常而浏览器丢 key 改独立本地静态预览服务器，不反复重启同 Companion 会话
-- Android/Gradle 测试构建可能超默认工具超时但仍在跑；用较长单次超时，超时后先查 Gradle 进程、app/build/test-results、app/build/reports、APK 输出，再判成败；勿把工具 timeout 等同 Gradle 失败
-- AuthManager.initialize() 可能同时由 MainActivity 和 AuthCheckWorker 进入；刷新锁内须按调用方看到的旧 access token 二次检查，避串行等待后第二次刷新再轮换 refresh token
-- AuthManager.check() 收到 401 后刷新成功只允许重试一次 check；重试仍 401 应直接失败，禁止再次进入刷新递归，否则会 StackOverflow。
-- 单测优先保留认证/安全/缓存一致性/数据库与网络契约及用户交互；仅静态渲染、存在性、不崩溃、精确视觉参数和同一实现分支的重复空输入/CRUD 测试属于低收益，设计调整时应删除或合并，不要靠同步旧快照维持总量。
-- Robolectric 测试若不验证 Application 启动，且清单 Application 会启动 WorkManager/后台线程，使用 `@Config(application = android.app.Application::class)` 隔离；否则沙箱销毁后的残留线程可能污染下一用例。
-- Git worktree 建新分支后 local.properties 不在版本库。本机 `ANDROID_HOME=H:\android\Sdk` 已设，缺 local.properties 也能构建（2026-09-01 实测 worktree 内无该文件仍 assembleDebug 成功）；只有该环境变量失效时才需从 F:\trae-project\local.properties 手动复制
-- 单测跨用例污染优先查 preferencesDataStore：委托是进程单例，各用例新建 Repository 仍读同一份磁盘数据；PersistentTtlCache 落盘还有 400ms 攒批且跑在 Repository 私有 scope 上，用例结束后仍会补写。setup 清 persistentCaches、teardown 取消落盘 scope 再清一次
-- Watchlist 四类离线快照共用 `media_items` 表，主键必须包含 `(traktId, type)`：Trakt 电影/剧集 ID 分属不同命名空间，想看/已看也可能同号；只用 `traktId` 会让后写分类覆盖电影快照，冷启动列表少一项并导致后续卡片整体前移。改主键时同步加无损 Room 迁移与跨分类同号回归测试。
-- 详情页「以 TMDB 为准」类优先级改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时无条件保留当前值会把豆瓣/Rexxar 结果永久挡在 UI 外
-- Compose 加载态对齐按容器语义处理：整页用 `Box(fillMaxSize, contentAlignment = Center)`，独占状态行用 `Row(fillMaxWidth, horizontalArrangement = Center)`，`AlertDialog.text` 内转圈也要先包全宽居中容器；按钮、图标槽、卡片遮罩等绑定具体操作对象的 loading 保持局部位置，勿一刀切改成整页居中
-- 激活页品牌场记板需要保持浅色模式外观时，不要直接复用深色 `MaterialTheme.colorScheme.primary/surface`；给 `CinemaClapperIcon` 提供显式颜色参数，只在激活页传入固定品牌棕与浅色纸面，其他页面继续保留主题适配。
-- 从 `ModalBottomSheet` 改成全屏内联面板时，清掉旧 Sheet 的 `fillMaxHeight(0.8f)` 等高度比例；`Column` 内标题栏后的可滚动内容用 `weight(1f)` 占满剩余高度，否则会在屏幕底部留下固定比例空白。用固定尺寸 Compose 布局测试比较内容底边与面板底边。
-- 开源相关页的依赖版本禁止手工复制：`app/build.gradle.kts` 从 `libs` Version Catalog 构建 `OPEN_SOURCE_VERSION_CATALOG_BASE64`，`OpenSourceData` 只声明版本别名；Gradle API 会把 `jieba-analysis` 这类连字符别名规范化成 `jieba.analysis`，解析时须统一 `-`/`_` 为 `.`
-- dsh plugin/dshmarket 更新报 ERR_PNPM_UNEXPECTED_STORE 是 pnpm 11 store 漂移：pnpm 11 配置键是驼峰 storeDir，只认 C:\Users\15778\AppData\Local\pnpm\config\config.yaml（profile .npmrc 连字符 store-dir 无效）；已全局写 storeDir: C:\Users\15778\.pnpm\store\v11 修复。git 源插件首次安装被 pnpm 拦 prepare 脚本，须 ~\.dsh\profiles\web\pnpm-workspace.yaml 的 allowBuilds 置 true 后重跑
-- 授权网关调试 App 默认用可直连 Pages 代理 https://tracktosearch-gateway.pages.dev/gateway-api 转发 auth-worker；勿把 workers.dev 直连写面向普通用户构建，否则部分网络超时
-- 激活后短暂进主界面又回激活页，先核 worktree gateway.base.url 和构建产物 GATEWAY_BASE_URL，再查 auth check 请求是否带 Bearer；不能只凭页面现象判邀请码失效
-- Trakt users/me?extended=full 可能只返用户名无头像；补拉优先 users/{username}/profile，网关或上游返 405 再回退 users/{username}，持久化成功返 images.avatar.full
-- assets/quotes.json 的 id 只增不删不改名：日签表 daily_stamp 只存 (epochDay, quoteId)，改名等于把用户翻过的历史卡片抹成打不开的空格子。要换台词或换片就新增一条 id，旧条目留着；池子里多一条只影响之后每天取模选到谁，不动已落库的历史。改台词文案、片名、关键词、海报路径都可以，唯独 id 不能动
-- 日签卡片外层用 `drawWithContent` 旁路录 `Picture` 时，不能再把 `Picture` 回放当屏幕内容：Coil `AsyncImage` 成功后的子绘制节点可能未被录入，表现为卡纸和文字正常但海报空白。屏幕应直接 `drawContent()`，`Picture` 只供导出；同时在 `onSuccess` 递增父层 draw 阶段读取的 revision，明确让整张卡重画。Robolectric `captureToImage` 对这条 Coil 位图链会误报，视觉结论用真机而非模拟器核验
-- 开屏每日台词可能先在登录页后台准备、进入主页后才真正显示；`SplashQuoteLoader` 只能组装画面和计算首看档位，禁止提前写“已展示”。首次序列进度、当天已看标记和日签签到统一放在 `SplashQuoteOverlay.onSplashQuoteShown`，否则用户在激活页退出或 OAuth 期间进程被回收会吞掉首次体验。
-- 访客模式不是独立授权态，而是“网关已激活 + Trakt 未连接 + 豆瓣未登录”的派生会话；勿再用单独 GuestModeStorage 决定启动路由，否则网关撤销/过期后会绕过激活页。激活成功页必须停留让用户选择 Trakt、豆瓣或访客，网关 EXPIRED 也不能自动拉起 Trakt OAuth
-- App 内平台登录提示必须携带明确目标（Trakt/豆瓣），不能只存 `showLoginPrompt` 布尔值；Trakt 确认按钮直调导航层 OAuth Custom Tab，豆瓣确认按钮直进 `DoubanLoginScreen`，`Routes.LOGIN` 仅用于网关未激活/失效，不得作为平台登录兜底
-- 删掉一层 `CompositionLocalProvider` 包裹时，删掉的 `{` 与 `}` 必须是同一对：开括号在页面上游（如 `Scaffold` 之前）、闭括号却顺手删了内层某个 provider 的那一个，全文件花括号仍然平衡、Kotlin 照样编译，但从那处起整棵树往里深了一层。DetailScreen 就这样把悬浮按钮、Snackbar 和全屏查看器全塞进了 `hazeSource` 的 Box，而注释还写着「hazeSource Box 结束」。改完用花括号计数核验块的真实闭合行，别信缩进和收尾注释——两者都不参与编译
-- haze 2.0.0-beta02 起 `hazeEffect` 采到的源里若有一个正处于自己的 `drawContent()`（即 effect 画在 source 子树内），直接 `IllegalArgumentException: Modifier.hazeEffect nodes cannot draw an ancestor Modifier.hazeSource`，旧版本只是静默丢源不模糊。`HazeSourceSelection.Behind` 靠 `findNearestAncestor` 找同 state 的祖先源再留 zIndex 更小的，能自动排除；显式传 `HazeSourceSelection.All` 的调用点（详情页/豆瓣详情页的悬浮按钮）没有这层保护，一旦被嵌进源子树就是必崩。R8 包的堆栈无用，用 debug 包取未混淆栈：`HazeSourceNode.draw` → `drawContentSafely` → …… → `HazeEffectNode.draw` 之间的 `LayoutNode.draw$ui` 数就是两者相隔的层数
-- macrobenchmark 前后对比之前先核实基线与被测构建之间只有本次改动：本仓库出现过并行会话的 fast-forward merge（`886cf78b`，改详情页头部 210 行 + ViewModel 109 行），四条转场用例里三条经过详情页，数据直接不可归因。跑 `git log --oneline <基线>..HEAD` 和 `git diff --stat <基线> HEAD` 确认改动范围，并记下被测 APK 的构建时刻与 merge 时刻的先后
-- Compose 共享元素「整页容器变形」的成本是转场期每帧 `layer.record { drawContent() }` 再 `drawLayer`：整页绘制命令逐帧重记，而静止页面根本不 record、只由 GPU 合成。页面里有热力图网格、词云这类内容时这一项就是转场期 CPU 帧耗时的主因，`scaleToBounds` / `skipToLookaheadSize` 都省不掉它（那两个省的是测量，不是绘制）。`sharedBounds(renderInOverlayDuringTransition = false)` 能省掉 record，但整页配对不能用：pop 时目标页画在上面，正在收缩的来源页被完全盖住，收缩动画看不见
-- 别把「在组合阶段读动画值」当成默认要修的性能问题，先量：把 `animateDp` 从组合阶段推到绘制阶段（自定义读 State 的 `Shape` + `graphicsLayer {}` block）在本项目实测反而更差（统计页转场 frameDurationCpuMs P90 22.1→23.6 ms），因为整页 body 的子项全 skippable、重组本身很便宜，而 `graphicsLayer {}` 的 block 每帧触发的放置阶段失效比那次重组更贵
-- 整页容器变形的共享节点内侧必须自己铺一层不透明底色（`.appSharedBounds(...).background(colorScheme.background)`，并把该页 Scaffold 的 `containerColor` 置透明）。少了这一层，变形期那块区域就直接看到对面那一页：打开标记记录页的瞬间设置页的「外观」「搜索源」整块叠在本页上。底色只能挂在共享节点内侧，挂外侧会先铺满一整屏，「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。七个整页入口曾漏掉标记记录页和发现筛选页两处，排查时逐个 grep `corner = SharedCorner.flattenFrom` 后面有没有 `.background(`
-- 整页容器变形不能带 `fadeIn`/`fadeOut`：容器覆盖半屏到整屏，淡的那段时间它整片半透明，两页互相穿透。`SharedElementType.Bounds` 的默认进出动画因此是 `None`，揭示完全交给边界裁剪 + 圆角动画。代价是旧页内容在收缩结束时硬切消失，而不是 Material 规范里的容器内交叉溶解 —— 交叉溶解在两页内容差异大时看着像脏叠影，本项目选了硬切
-- git bash 里 `adb pull /sdcard/x.png` 会被 msys 路径转换改成 `C:/Program Files/Git/sdcard/x.png` 而报 `failed to stat remote object`；写成 `//sdcard/x.png` 或加 `MSYS_NO_PATHCONV=1`。`adb shell '...'` 单引号里的设备路径不受影响，所以「screencap 成功、pull 失败」是正常现象，不是设备没生成文件
-- compileSdk 37 给 View 加了 performHapticFeedback(HapticFeedbackRequest) 重载，MockK 里单参 `performHapticFeedback(any())` 在它与 `(int)` 之间歧义，报 `Cannot infer type for type parameter 'T'`；mock View 触感一律写 `any<Int>()`。同类问题适用于任何被新重载撑成多签名的方法：报这条错先查 SDK 是否新增重载，而不是改 mock 结构
-
-## Git 规范
-- commit 须 Conventional Commits：<type>(<scope>): <中文描述>
-- type 按实际改动选：feat/fix/refactor/style/test/docs/chore
-- scope 用受影响模块/功能，中文动宾短语，≤50 字，不加句号
+## 4. Git 规范
+- commit 须 Conventional Commits：`<type>(<scope>): <中文描述>`；type 按实际改动选 feat/fix/refactor/style/test/docs/chore；scope 用受影响模块/功能，中文动宾短语 ≤50 字不加句号
 - 不同改动拆不同提交；同文件多独立功能按 hunk 分暂存
-- 提交前 git diff --cached --check 并查 git diff --cached --name-only，勿混入未授权文件/截图/构建产物/临时目录/敏感配置
-- 改动过针对性测试/构建验证立即提交；多步任务每逻辑改动验证通过分别提交，勿最后笼统 chore 提交
+- 提交前 `git diff --cached --check` 并查 `--cached --name-only`，勿混入未授权文件/截图/构建产物/临时目录/敏感配置
+- 改动过针对性测试/构建验证立即提交；多步任务每逻辑改动验证通过分别提交，勿最后笼统 chore
 
-## Cloudflare 生产部署经验
-- AI TTS IP 限流不能用 KV get→put 读改写（并发覆盖计数）；须 D1 单条条件 UPSERT 原子完成窗口重置/递增/上限判断，定期清过期窗口行
-- X-Real-IP 只信来自 gateway.internal service binding 请求；公开 workers.dev 须用 Cloudflare 注入 CF-Connecting-IP，避客户端伪造转发头绕过限流
-- Pages 生产部署显式 --branch master：npx wrangler pages deploy public --project-name app-config --branch master
-- 部署后不只看 Wrangler 成功输出；用 npx wrangler pages deployment list --project-name app-config 确认最新 Environment=Production、Branch=master、提交 SHA，开部署 URL 查实际静态资源版本
-- Pages 受 Cloudflare Access 保护时，未带登录 Cookie 的 curl/Invoke-WebRequest 可能只拿 302 或登录 HTML，不能据此判页面代码未更新；应已登录浏览器强制刷新，或直查部署哈希 URL 资源内容
-- Worker 部署后记录版本 ID，至少验健康检查和本次变更 API；Pages+Worker 部署成功≠业务流程已验证
-- Wrangler 部署超时/无输出不能直接判成败：**先查 deployment list 确认是否其实已成功**（最新记录 SHA 与本地提交一致即为成功，无需重试，重试只会重复部署）；确认失败再查并结束残留 wrangler/node 子进程（用 Get-CimInstance 过滤 CommandLine 含 wrangler 的进程，勿误杀 DSH 自身 node），再分别用直连和 Clash 代理重试。Windows Clash 常见 HTTP 代理 http://127.0.0.1:7890，只当前命令临时设 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY，勿写全局；重试仍记 Worker 版本 ID、Pages Production/master 记录和健康检查结果。部署后直查部署哈希 URL 静态资源内容（匹配新代码标记如函数名）验证前端已更新；受 Access 保护的 Functions 端点未登录返 401 属正常拦截，不能据此判函数未部署
-- Pages Functions 须从 app-config 项目根部署（或显式指定该目录配置），确保读 app-config/wrangler.toml 并传 functions/；其他目录直传 public 只发静态，致 /admin-api/* 返 HTML/Access 页并触发前端 Invalid server response。部署后于部署哈希域名请 /admin-api/admin/health，未登录应返 JSON 401 而非 HTML
+## 5. 防回归硬约束（改到相关代码必须遵守，违反即出难查的 bug）
+- `assets/quotes.json` 的 id **只增不删不改名**：daily_stamp 只存 (epochDay, quoteId)，改名会把历史卡片抹成空格子；换内容新增 id，旧条目留着
+- Watchlist 离线快照共用 `media_items` 表，**主键必须含 (traktId, type)**（Trakt 电影/剧集 ID 分属不同命名空间，可能同号）；改主键同步加无损 Room 迁移 + 跨分类同号回归测试
+- 开源相关页依赖版本禁止手工复制：从 `libs` Version Catalog 构建 `OPEN_SOURCE_VERSION_CATALOG_BASE64`；Gradle 会把 `jieba-analysis` 规范化成 `jieba.analysis`，解析统一 `-`/`_` 为 `.`
+- 详情页「以 TMDB 为准」类改动须区分纯豆瓣条目（tmdbId=0）：无 TMDB 数据时不得无条件保留当前值
+- 授权网关 base URL 含 /api/omdb/ 时 Retrofit 用 `@GET(".")`（空 URL 会被静默降级）；用 MockWebServer 锁最终路径
+- 注释正文避免出现 `/*` 序列（KDoc 嵌套注释会把后半文件吞掉）
 
-## Android ADB 设备核验经验
-- Gradle installDebug 设备筛选可能因 ADB 返 API 属性异常跳过；先用 adb -s <serial> shell getprop ro.build.version.release 和 ro.build.version.sdk 记实际值
-- Gradle 提示 minSdkVersion 不兼容仍用 adb -s <serial> install -r <apk> 事实核验；曾 Gradle 报 API 21 但 ADB 直装返 Success 不一致
-- 安装成功须续 exec am start、UI 树检查、screencap 后 adb pull 截图、logcat -b crash，不能凭安装成功宣称功能过。系统属性与用户描述不一致保留命令输出报差异
-- 装 debug/benchmark 包报 INSTALL_FAILED_UPDATE_INCOMPATIBLE 先查签名不一致，勿当成「残留包没清干净」：本机设了 ANDROID_SDK_HOME=H:\Android_SDK\.android，AGP 在其后再拼一层 .android/debug.keystore，实际用的是 H:\Android_SDK\.android\.android\debug.keystore（该目录名本身以 .android 结尾，所以路径是双层，别照 ANDROID_SDK_HOME 直接拼一层去找，找不到不等于没用它）；而机上已装的应用是 Android Studio 用 C:\Users\15778\.android\debug.keystore 签的，两把不是同一把。benchmark 构建同样受影响（initWith(release) 后把 signingConfig 指回 debug）
-- macrobenchmark 的 test APK 不需要与被测应用同签名：pm list instrumentation 显示它 target 的是自己（com.tracktosearch.benchmark），instrumentation 的同签名限制只对「作用于别的包」成立。benchmark/build.gradle.kts 里那条「必须与被测应用同签名」的注释是错的，别照它去重签 test APK
-- 签名不一致禁止用卸载重装解决：会连带清掉网关激活态、Trakt/豆瓣登录和想看已看本地数据。正确做法是用 Studio 那把 keystore 重签后原地 install -r，apksigner sign --ks C:\Users\15778\.android\debug.keystore --ks-pass pass:android（debug keystore 的公开默认口令，非本项目凭证）--ks-key-alias androiddebugkey
-- 核对两边证书：apksigner verify --print-certs <apk> 看 APK 实际证书 SHA-256，keytool -list -v -keystore <path> 看 keystore 指纹，二者一致才可原地覆盖安装
-- macrobenchmark 报 `ERRORS (not suppressed): DEBUGGABLE` 而本地产物明明不是 debuggable（`aapt2 dump badging` 无 application-debuggable）时，先看 `dumpsys package com.tracktosearch | grep -E "flags|codePath|lastUpdateTime"`：若 flags 仍带 DEBUGGABLE、codePath 与 lastUpdateTime 都是旧的，说明上一次 `install -r` 走的是 "Performing Incremental Install" —— 那条路径只增量替换 dex/资源，PackageManager 缓存的 ApplicationInfo 不刷新，跑的代码是新的但 benchmark 读到的元数据是旧的。再 `install -r` 一次通常会走 "Performing Streamed Install"，元数据随之刷新，不必卸载、不清数据。**不要**用 `androidx.benchmark.suppressErrors=DEBUGGABLE` 掩盖：真 debuggable 的包测出来的数字没有意义，这个错误值得每次都查
-- `:benchmark:connectedBenchmarkAndroidTest` 是歧义任务名（候选 connectedBenchmarkBenchmarkAndroidTest / connectedBenchmarkReleaseAndroidTest / connectedNonMinifiedBenchmarkAndroidTest）；而这台 HyperOS 上 `adb shell getprop` 整体返空（`adb shell echo ok` 正常），Gradle 因此把设备判成 `deviceApiLevel [21]` 并 Skipping device。绕过办法是手工 instrument，不必跟 Gradle 的设备筛选纠缠：
-  `adb shell am instrument -w -r -e class com.tracktosearch.benchmark.TransitionBenchmark -e additionalTestOutputDir /sdcard/Android/media/com.tracktosearch.benchmark/bench -e androidx.benchmark.output.enable true com.tracktosearch.benchmark/androidx.test.runner.AndroidJUnitRunner`
-- 单条 macrobenchmark 用例的 frameOverrunMs P90 自身噪声在本机可达 ±3ms（同一 APK 同一用例两次跑到过 4.2 与 0.95）。判回归前先复测那一条，并核对该路径本次有没有改过代码；单次超出历史区间 1~2ms 不足以定性
+## 6. 用户偏好与安全
+- 面向用户输出、解释用中文；代码注释中文；ViewModel error 英文（非 UI 展示文字）；命令行 bash、Python 用 py
+- 网络搜索优先 anysearch（首选）或 firecrawl；涉及 api 必须用 context7 查明用法
+- 不硬编码密码/密钥；配置文件敏感信息提醒用户保护
+- 不确定就主动问：不要瞎猜，讲清权衡，有更简单做法直说，该反对时反对
 
-## Android 开屏截图验收经验
-- 开屏视觉验收须记设备实际分辨率/密度/API/安装结果/主 Activity/启动进程/UI 树/logcat -b crash；构建成功≠真机视觉过
-- Windows PowerShell 用 > 收 adb exec-out screencap -p 破 PNG 二进制；截图应 cmd.exe /c 或其他二进制安全方式存，存后图片解析确认尺寸格式
-- 系统 Splash 底部 branding_image 虚线框是原型安全区标记，复刻须保留；系统 branding 区有尺寸限制，不能盲目放大资源实现网页全宽，必要改自定义 Compose 启动内容
-- 对照动画至少抓初始/延迟后/闭合后/进首屏四时间点；拍板图标须同时核 stick 棕上沿/白斜纹/旋转轴/场记板主体嵌入关系
-
-## 安全意识
-- 不硬编码密码、密钥
-- 配置文件敏感信息提醒用户注意保护
-
-## 不确定就主动问
-不要瞎猜，讲清权衡。有问题明说，有更简单做法直说，该反对时反对
-
-## 可视化伴侣踩坑经验
-- 头脑风暴可视化伴侣重启可能建新 session 目录，复用原端口和 key；勿只凭旧 server-info 判当前服务状态
-- 排查须确认当前端口对应监听 Node 进程，及最新 session server-info 的 screen_dir。HTML 写旧 session 目录时带 key 请求可能成功但页面仍显 waiting
-- session 不一致将 HTML 同步到实际运行 session 的 screen_dir，用带 key 会话验 /files/<filename> 与首页都返
-- key URL 首访写同源 cookie 后跳裸地址，是伴侣正常 bootstrap；浏览器未留 cookie 续供完整 key URL
-- 授权刷新 challenge 勿用 Cloudflare KV 做一次性凭证（KV 不保原子读写一致）；用 D1 条件更新或 Durable Object 原子消费，并为重复消费留重放检测
+## 环境事实
+- 邮箱 1577865546@qq.com，SMTP 授权码在 C:\Users\15778\Downloads\1577865546@qq.com.txt
+- Cloudflare 账号 ID：9fe1b3ef7e9891ea34b4d8f6d1210ff1；团队域名 douban-movie-api-peak.cloudflareaccess.com
+- 本机 ANDROID_HOME=H:\android\Sdk；Android Studio keystore 在 C:\Users\15778\.android\debug.keystore（重签用，见 lessons adb-verify 组）
+- 子代理并行期间 Gradle 禁令见 §1.3；worktree 开发注意 lessons（common-pitfalls 组）
