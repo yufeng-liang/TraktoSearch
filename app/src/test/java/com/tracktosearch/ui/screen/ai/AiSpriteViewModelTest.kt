@@ -18,6 +18,7 @@ import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.ai.AiQuizOption
 import com.tracktosearch.data.ai.AiQuizRequest
+import com.tracktosearch.data.ai.AiQuizStreamEvent
 import com.tracktosearch.data.ai.AiTasteAnalysis
 import com.tracktosearch.data.ai.AiVoiceCapture
 import com.tracktosearch.data.ai.AiVoiceCaptureEvent
@@ -130,7 +131,7 @@ class AiSpriteViewModelTest {
         assertThat(viewModel.uiState.value.isLoading).isFalse()
         coVerify(exactly = 0) { aiRepository.getGreeting(any(), any(), any()) }
         coVerify(exactly = 0) { aiRepository.getTaste(any(), any(), any()) }
-        coVerify(exactly = 0) { aiRepository.getQuiz(any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getQuizStream(any(), any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllShowHistory(any(), any()) }
     }
@@ -1160,7 +1161,11 @@ class AiSpriteViewModelTest {
         assertThat(previewState.quizPreviewLocalizedTitles.values)
             .containsExactlyElementsIn(localizedRequests.map { "本地化标题-$it" })
 
-        coEvery { aiRepository.getQuiz("friend-a", capture(quizRequests), false) } returns Result.success(quiz())
+        // 出题已改流式：出题请求从流事件里捕获（同为 3 个参数，中间那个是请求体）。
+        // 注意 getQuizStream 不是 suspend 函数，桩必须返回 flow{}／flowOf，不能用 coAnswers。
+        coEvery {
+            aiRepository.getQuizStream("friend-a", capture(quizRequests), false)
+        } returns flowOf(AiQuizStreamEvent.Completed(quiz()))
         viewModel.startQuiz()
         advanceUntilIdle()
 
