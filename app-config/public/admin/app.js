@@ -2646,6 +2646,18 @@ render();
 
 // ===== AI 健康 =====
 const AI_PROVIDER_META = {
+    // 百炼是当前主力（额度按模型独立、吞吐不受智谱账号级限制），模型列表按 handler 的
+    // 梯队顺序排（qwen3.6-flash 主模型在最前），用于额度耗尽后逐个探测换挡状态。
+    bailian: {
+        label: '阿里云百炼',
+        consoleUrl: 'https://modelstudio.console.alibabacloud.com/ap-southeast-1/costing-balance/free-quota',
+        models: [
+            'qwen3.6-flash', 'qwen3.7-flash', 'deepseek-v4-flash', 'qwen-flash', 'qwen3.8-flash',
+            'qwen3.5-flash', 'glm-5.2', 'glm-5.1', 'kimi-k3', 'qwen3.6-plus', 'qwen3.6-max-preview',
+            'qwen3-max', 'qwen-max', 'qwen-plus', 'qwen-turbo', 'deepseek-v4-pro', 'deepseek-v4-pro-0813',
+            'qwen3.7-plus', 'qwen3.8-max', 'qwen3.7-max',
+        ],
+    },
     zhipu: {
         label: '智谱 GLM',
         consoleUrl: 'https://open.bigmodel.cn/console/overview',
