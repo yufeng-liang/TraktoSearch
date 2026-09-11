@@ -76,11 +76,49 @@ test('callMinimaxJson 发 max_tokens 与 stream:false，默认不带 response_fo
     }
 });
 
-test('未白名单的模型名一律拒绝（含 agnes/bailian 的模型名）', async () => {
+test('白名单只放行 M3：M2 系与其他家的模型名一律拒绝', async () => {
+    // 用户 2026-09-12 决定「只取 M3」——M2.x 带 reasoning 且计入 max_tokens，别再悄悄放开
+    for (const model of ['agnes-3.0-flash', 'MiniMax-M2.5', 'MiniMax-M2.7-highspeed', 'MiniMax-M2']) {
+        await assert.rejects(
+            () => callMinimaxJson({ MINIMAX_API_KEY: 'k' }, model, [{ role: 'user', content: 'hi' }]),
+            (error) => error.code === 'INVALID_MODEL',
+            `${model} 应该被拒`,
+        );
+    }
+});
+
+test('请求里写 MiniMax-M2.5 时不再路由到 minimax（白名单已收窄）', async () => {
     await assert.rejects(
-        () => callMinimaxJson({ MINIMAX_API_KEY: 'k' }, 'agnes-3.0-flash', [{ role: 'user', content: 'hi' }]),
+        () => call('/api/ai/greeting', {
+            body: { characterId: 'usagi', sessionId: 'minimax-m2-rejected', model: 'MiniMax-M2.5' },
+            env: createTestEnv({ MINIMAX_API_KEY: 'sk-minimax-test' }),
+        }),
         (error) => error.code === 'INVALID_MODEL',
     );
+});
+
+test('供应商优先级 minimax 在 bailian 与 zhipu 之间：百炼没 key 时先轮 minimax 再轮 zhipu', async () => {
+    const urls = [];
+    globalThis.fetch = async (url) => {
+        urls.push(String(url));
+        return new Response(greetingPayload(), { status: 200 });
+    };
+    try {
+        const { response, json } = await call('/api/ai/greeting', {
+            body: { characterId: 'usagi', sessionId: 'minimax-priority', forceRefresh: true },
+            env: createTestEnv({
+                AI_DEFAULT_PROVIDER: 'bailian',
+                MINIMAX_API_KEY: 'sk-minimax-test',
+                ZHIPU_API_KEY: 'sk-zhipu-test',
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.greeting, '你好');
+        // 只发出一次上游请求，且落在 minimax（zhipu 有 key 但排在 minimax 之后，不该被触达）
+        assert.deepEqual(urls, ['https://api.aiportx.com/v1/chat/completions']);
+    } finally {
+        globalThis.fetch = undefined;
+    }
 });
 
 test('callMinimaxJson 遇 5xx 退避重试一次，第二次成功即返回', async () => {

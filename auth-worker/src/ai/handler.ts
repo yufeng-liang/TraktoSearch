@@ -222,14 +222,16 @@ interface TasteEvidence {
     confidence: 'high' | 'medium' | 'low';
 }
 
-// 文本供应商梯队：bailian > zhipu > agnes > mimo > minimax（主路径由 resolveTextModel 决定，互备顺序固定）
+// 文本供应商优先级：bailian > minimax > zhipu > agnes > mimo（2026-09-12 用户定的次序；
+// 主路径由 resolveTextModel 决定，这份次序同时用作互备轮替的基准）。
 // 百炼打头：它破了账号级吞吐墙（智谱同模型稳定 ~40 字符/秒，百炼 flash 档实测 ~217 字符/秒），
 // 同一套槽位流水线 87~129s vs 智谱 314~536s，且免费额度按模型独立发放、与智谱计费互不相干。
-// minimax 暂列队尾占位：它的模型优先级（谁当首选、排第几）待用户定，先不挤占现有四家的相对次序。
+// minimax 插在 bailian 与 zhipu 之间：M3 实测 361~393 字符/秒、一套 13 题 134s/0 降级格，
+// 比 zhipu 快一个量级，故排在智谱之前；它只有 M3 一档，家内无模型级降级。
 type TextProvider = 'mimo' | 'agnes' | 'zhipu' | 'bailian' | 'minimax';
 
-// 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
-const PROVIDER_LADDER: readonly TextProvider[] = ['bailian', 'zhipu', 'agnes', 'mimo', 'minimax'];
+// 互备轮替的基准次序：callLlmJson 从主供应商起按它循环，generateQuiz 的质量轮替也用它
+const PROVIDER_LADDER: readonly TextProvider[] = ['bailian', 'minimax', 'zhipu', 'agnes', 'mimo'];
 
 // 出题链路上游超时（本地闭环实测，glm-4.7 关思考、13 题全字段）：
 // units 段 139~174s / 输出 5.2~7k 字符，review 段 256~271s / 输出 16~17.5k 字符。
@@ -274,7 +276,7 @@ const DAILY_UPSTREAM_TIMEOUT_MS = 180_000;
 
 /** 各供应商的主模型：admin 探针与出题共用同一份，避免两处各写一份后默认模型漂移。 */
 export const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
-    // 暂定 M3（实测最快且不思考）；用户定优先级后改 MINIMAX_DEFAULT_MODEL 一处即可
+    // 白名单只有 M3（实测最快且不思考），首选无歧义
     minimax: MINIMAX_DEFAULT_MODEL,
     agnes: AGNES_DEFAULT_MODEL,
     zhipu: 'glm-4.7',
@@ -286,8 +288,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
 // 同供应商内的模型级降级链（失败按序换下一个）：zhipu 多档、agnes 两家、bailian 走额度轮换；
 // mimo 文本只有一个模型，空数组表示无模型级降级，直接轮下一供应商。
 const MODEL_FALLBACKS_BY_PROVIDER: Record<TextProvider, readonly string[]> = {
-    // 家内降级链待用户定：M2.x 都带 reasoning（占 max_tokens 预算），M2.1 还有「思考把额度烧光、
-    // 正文为空」的记录，别按 M 序号从新到旧盲排。默认空 = M3 失败直接轮下一家。
+    // 只接 M3 一档，家内没有可降级的模型：M3 失败直接轮下一家（zhipu）。
     minimax: [],
     // 3.0-flash 首选；它挂了（模型级 5xx/超时）时退到 2.5-flash，仍留在 Agnes 家内，
     // 不到 key 池全冷却那种账号级问题上，不必跨家轮替。
@@ -3544,7 +3545,7 @@ function resolveTextModel(
         ? env.AI_DEFAULT_PROVIDER.trim().toLowerCase()
         : '';
     // 未指定模型时默认主供应商走 bailian（百炼 flash 档实测比同账号智谱快 3~4 倍，
-    // 免费额度独立），主模型不可用时按 PROVIDER_LADDER 轮 zhipu/agnes/mimo。
+    // 免费额度独立），主模型不可用时按 PROVIDER_LADDER 轮 minimax/zhipu/agnes/mimo。
     // 生产可用 AI_DEFAULT_PROVIDER 显式覆盖；agnes 共享池 429 冷却会整场挂起，不作默认。
     if (configuredProvider === 'zhipu') {
         return { provider: 'zhipu', model: DEFAULT_MODEL_BY_PROVIDER.zhipu, fallbackModel: mimoDefault };
@@ -3574,19 +3575,10 @@ async function callLlmJson(
     context: LlmRequestContext,
     health?: HealthRouteContext,
 ): Promise<LlmJsonResult | null> {
-    // 五家互备，固定优先级 bailian > zhipu > agnes > mimo > minimax：主供应商失败（常见：Agnes
-    // 共享池 429 把全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
-    // GLM 实测可用且独立计费，作为默认主供应商；每家主路径都要含自己在内先试主模型。
-    // minimax 排在每家队尾：位置是占位，等用户定完它的优先级再调整（只动这里的数组）。
-    const order: TextProvider[] = provider === 'zhipu'
-        ? ['zhipu', 'bailian', 'agnes', 'mimo', 'minimax']
-        : provider === 'agnes'
-            ? ['agnes', 'zhipu', 'bailian', 'mimo', 'minimax']
-            : provider === 'bailian'
-                ? ['bailian', 'zhipu', 'agnes', 'mimo', 'minimax']
-                : provider === 'minimax'
-                    ? ['minimax', 'bailian', 'zhipu', 'agnes', 'mimo']
-                    : ['mimo', 'agnes', 'zhipu', 'bailian', 'minimax'];
+    // 五家互备：主供应商失败（常见：Agnes 共享池 429 把全部 key 打进 5 分钟冷却）后按 PROVIDER_LADDER
+    // 轮替，而不是整场出题/每日知识静默降级到离线兜底。轮替次序一律「先自己，再按基准次序排他」——
+    // 以前五条手写数组各写各的，agnes 路径的尾巴就和基准次序对不上（zhipu 排到了 bailian 前面）。
+    const order: TextProvider[] = [provider, ...PROVIDER_LADDER.filter(p => p !== provider)];
     let lastError: unknown = null;
     const healthCtx: HealthRouteContext | undefined = health;
     // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，

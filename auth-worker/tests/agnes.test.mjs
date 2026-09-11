@@ -277,10 +277,12 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         // 健康事件链路（route 为阶段级：quiz-units/quiz-review 分开落库）：
         // - taste 成功 1 条；
         // - quiz-units：两轮 agnes 上游 200（各记 success）但本地校验判废（各补记
-        //   invalid_output，与上游 success 是两条独立信号）；中间一轮 mimo（TEST_MODE
-        //   无 key，null=不可用）记 upstream_error。units 从未通过，故无 quiz-review 行；
+        //   invalid_output，与上游 success 是两条独立信号）；中间那轮轮到别家（TEST_MODE
+        //   下未配 key，null=不可用）记 upstream_error。units 从未通过，故无 quiz-review 行；
         // - daily 两阶段（daily-candidate/daily-review）各 1 条。
-        // zhipu 未配 key 且在 ladder 中位置靠后，本轮未触达，故无 zhipu 行。
+        // 未配 key 的家会在轮替里逐个记 upstream_error（bailian 一家就有 19 个候选模型），
+        // 条数取决于该轮扫过几家、以及它们在 PROVIDER_LADDER 里排在主供应商前后的位置，
+        // 所以这里不钉总条数，只钉「真实事件 + 不可用事件」这个性质。
         const healthRows = env.healthInserts.map(row => row.args);
         assert.ok(healthRows.some(r => r[2] === 'taste' && r[3] === 'agnes' && r[5] === 'success'));
         const unitRows = healthRows.filter(r => r[2] === 'quiz-units');
@@ -294,7 +296,12 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         // 每行都必须携带 request_id，且 duration_ms 为实测数值或 null
         assert.ok(healthRows.every(r => typeof r[9] === 'string' && r[9].length > 0));
         assert.ok(healthRows.every(r => r[8] === null || typeof r[8] === 'number'));
-        assert.equal(healthRows.length, 8);
+        assert.ok(
+            healthRows.every(r => (r[3] === 'agnes' && (r[5] === 'success' || r[5] === 'invalid_output'))
+                || r[5] === 'upstream_error'),
+            '每行要么是 agnes 的真实结果，要么是某家不可用',
+        );
+        assert.ok(healthRows.filter(r => r[5] === 'upstream_error').length >= 1, '未配 key 的家要留下不可用记录');
     } finally {
         globalThis.fetch = originalFetch;
         await new Promise(resolve => setTimeout(resolve, 20));

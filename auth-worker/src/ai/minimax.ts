@@ -1,42 +1,33 @@
-// MiniMax 提供商：api.aiportx.com 网关的 OpenAI 兼容接口（模型白名单固定为 MiniMax-M* 系）。
+// MiniMax 提供商：api.aiportx.com 网关的 OpenAI 兼容接口。
 //
-// 2026-09-12 接网关实测（同题长输出、max_tokens 6000、3 轮）：
-// - MiniMax-M3 无 reasoning_content、直出 JSON（偶带 ``` 包裹），实测 361~393 字符/秒 —— 与
-//   bailian 的 qwen3.6-flash（217）和 agnes-2.5-flash（360~550）同档，是这批里唯一「快且不思考」的。
-// - MiniMax-M2.5 / M2.5-highspeed / M2.7-highspeed 都带 reasoning_content，reasoning 动辄 4k~7k
-//   字符且计入 max_tokens：97~168 / 123~139 / 81~116 字符/秒。M2.7 单次 23 字符/秒（84s 一发）。
-// - M2.1 / M2.1-highspeed 更差：400 token 预算下 reasoning 就把额度烧光、正文为空
-//   （finish_reason=length 或 content=""），这正是 handler 里「200 但没正文 → 当上游失败轮下一家」
-//   要防的那种输出，不进模型降级链。
-// - response_format/json_schema 传了会被静默忽略（200 但回散文），所以与 agnes 同策略：
-//   默认不发，靠提示词约束 JSON；options.responseFormat 显式开启时才带上。
-//
-// 模型优先级（谁当首选、谁进降级链、最小接哪档）由用户定，本文件只提供顺序候选；
-// 梯队位置见 handler 的 DEFAULT_MODEL_BY_PROVIDER / MODEL_FALLBACKS_BY_PROVIDER。
+// 只接 MiniMax-M3（2026-09-12 用户拍板「只取里面的 M3」）。选它的实测依据（同题长输出、
+// max_tokens 6000、3 轮）：无 reasoning_content、直出 JSON（偶带 ``` 包裹），361~393 字符/秒，
+// 真链路出一套 13 题 134s / degradedSlots=0 —— 同批 8 档里唯一「快且不思考」的。
+// 网关同批还有 M2/M2.1/M2.5/M2.7 及其 highspeed 档，都不接，理由：
+// - M2.x 全系每次调用都返回 reasoning_content，且 reasoning 计入 max_tokens：97~168
+//   （M2.5）/123~139（M2.5-highspeed）/81~116（M2.7-highspeed）字符/秒，M2.7 只有 23；
+// - M2.1 系在 400 token 预算下思考就把额度烧光、正文为空（finish_reason=length），正是
+//   handler 里「200 但没正文 → 当上游失败轮下一家」要防的那种输出；
+// - 真链路实测 M2.7-highspeed 一套 509s 且 3 次产出非法、要靠 M3 接手（M2.5 也要 254s）；
+// - 关思考的开关（enable_thinking / chat_template_kwargs.enable_thinking / reasoning.effort）
+//   对这个网关全部无效，接进来就得忍受「思考吃预算」。
+// 另外 response_format/json_schema 传了会被静默忽略（200 但回散文），所以与 agnes 同策略：
+// 默认不发，靠提示词约束 JSON；options.responseFormat 显式开启时才带上。
 import { AppError } from '../util/errors.ts';
 
 /** 默认 base URL：aiportx 网关；可用 MINIMAX_BASE_URL 覆盖（换区域/换代理时不必改代码）。 */
 export const MINIMAX_DEFAULT_BASE_URL = 'https://api.aiportx.com/v1';
 
 /**
- * 可用模型白名单（网关 /models 实际返回的 8 档，按实测字符/秒从快到慢排）。
- * 只作请求校验用，不等于梯队顺序——梯队由用户在 handler 里定。
+ * 可用模型白名单：只留 M3。请求里写别的 MiniMax 档（M2.x 等）一律 INVALID_MODEL，
+ * 想放开得先按上面那几条实测理由重新评估。
  */
-export const MINIMAX_MODELS = [
-    'MiniMax-M3',
-    'MiniMax-M2.5-highspeed',
-    'MiniMax-M2.5',
-    'MiniMax-M2.7-highspeed',
-    'MiniMax-M2.7',
-    'MiniMax-M2.1-highspeed',
-    'MiniMax-M2.1',
-    'MiniMax-M2',
-] as const;
+export const MINIMAX_MODELS = ['MiniMax-M3'] as const;
 export type MinimaxModel = typeof MINIMAX_MODELS[number];
 
 /**
- * MiniMax 首选模型（暂定 M3：实测最快且不思考，候选里唯一 360+ 字符/秒）。
- * 用户确认优先级后改这里即可，handler 与探针都引用它。
+ * MiniMax 首选模型：白名单里只有 M3，它就是无歧义的首选（handler 与探针都引用这里）。
+ * 以后若放开更多档，改这一处即可让 DEFAULT_MODEL_BY_PROVIDER 与探针跟着走。
  */
 export const MINIMAX_DEFAULT_MODEL: MinimaxModel = 'MiniMax-M3';
 
