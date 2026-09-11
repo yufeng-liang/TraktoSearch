@@ -2663,7 +2663,9 @@ const AI_PROVIDER_META = {
         consoleUrl: 'https://open.bigmodel.cn/console/overview',
         models: ['glm-5.3-flash', 'glm-4.7', 'glm-4.7-flash', 'glm-4.6v', 'glm-4.5-air'],
     },
-    agnes: { label: 'Agnes AI', consoleUrl: 'https://agnes-ai.com/', models: ['agnes-2.5-flash'] },
+    // 与 bailian 同一规矩：按 handler 的链上顺序排（agnes-3.0-flash 首选、2.5-flash 同家降级），
+    // 逐个探测就能看出当前换到了哪一档。
+    agnes: { label: 'Agnes AI', consoleUrl: 'https://agnes-ai.com/', models: ['agnes-3.0-flash', 'agnes-2.5-flash'] },
     mimo: { label: '小米 MiMo', consoleUrl: 'https://platform.xiaomimimo.com/', models: ['mimo-v2.5-pro'] },
 };
 const AI_HEALTH_STATE = { window: '24h', data: null, providerFilter: 'all' };
