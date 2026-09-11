@@ -1970,13 +1970,14 @@ private fun DrawScope.drawHalftoneThrone(
         return if (len < 0.001f) 1f else e / len
     }
 
-    // 粗细：颈细一档 → 颈后最粗 → 三段折线收到尾尖。数见 [SNAKE_NECK] 那一段
+    // 粗细：颈就是最粗处 → 前 30% 一路等粗 → 之后单调收到尾尖。数见 [SNAKE_NECK] 那一段
     fun thick(s: Float): Float {
         val u = ((sHead - s) / SNAKE_LEN).coerceIn(0f, 1f)
         val shape = when {
-            u < SNAKE_KNEE -> SNAKE_NECK + (1f - SNAKE_NECK) * (u / SNAKE_KNEE)
+            u < SNAKE_KNEE -> SNAKE_NECK
             u < SNAKE_MID_KNEE ->
-                SNAKE_MID + (1f - SNAKE_MID) * ((SNAKE_MID_KNEE - u) / (SNAKE_MID_KNEE - SNAKE_KNEE))
+                SNAKE_MID + (SNAKE_NECK - SNAKE_MID) *
+                    ((SNAKE_MID_KNEE - u) / (SNAKE_MID_KNEE - SNAKE_KNEE))
             u < SNAKE_TAIL_KNEE ->
                 SNAKE_TAIL + (SNAKE_MID - SNAKE_TAIL) *
                     ((SNAKE_TAIL_KNEE - u) / (SNAKE_TAIL_KNEE - SNAKE_MID_KNEE))
@@ -2307,29 +2308,39 @@ private fun DrawScope.drawSnakeSkull(
         drawPath(path = path, color = Color.Black, alpha = alpha * 0.62f * gape)
     }
 
-    // 下颌：颌线在上、颌底在下
+    // 下颌：颌线在上、颌底在下。
+    //
+    // 后缘收成一个**尖**（`-0.30, 0.10`），不是一道横切口。两件事一起解决：
+    //  1. 描边是沿整条闭合路径走的，横切口会被描出一条亮线横在颈上 ——
+    //     屏幕上就是「头接在身子上」的那道缝。收成尖之后闭合边退化成零长，缝没了。
+    //  2. 尖落在**蛇身里面**，头根因此整块坐在身子的末端里 —— 颈到头是一路胀开的，
+    //     不是「接上去一块」。上一版后缘在 +0.66（横切口），根部 1.87 × maxThick，
+    //     比颈（1.24）粗一半，就是「蛇头尾部厚度厚于蛇身」。
     path.rewind()
-    path.moveTo(gx(-0.10f, 0.02f), gy(-0.10f, 0.02f))
+    path.moveTo(gx(-0.30f, 0.26f), gy(-0.30f, 0.26f))
     path.cubicTo(
-        gx(0.42f, 0.12f), gy(0.42f, 0.12f),
-        gx(0.80f, 0.12f), gy(0.80f, 0.12f),
+        gx(0.24f, 0.10f), gy(0.24f, 0.10f),
+        gx(0.72f, 0.12f), gy(0.72f, 0.12f),
         gx(0.98f, 0.06f), gy(0.98f, 0.06f)
     )
     path.cubicTo(
         gx(0.84f, 0.46f), gy(0.84f, 0.46f),
         gx(0.40f, 0.62f), gy(0.40f, 0.62f),
-        gx(-0.10f, 0.66f), gy(-0.10f, 0.66f)
+        gx(-0.30f, 0.26f), gy(-0.30f, 0.26f)
     )
     path.close()
-    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.90f)
+    // 0.94 与蛇身**同一档**：头根压在身子上，只要亮一档，那道头形的浅色印子
+    // 就比轮廓差出来的那两三像素显眼得多
+    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.94f)
     drawPath(path = path, color = Color.Black, alpha = alpha * 0.22f)
 
-    // 上颅：颈背 → 眉脊隆起 → 吻背下坡 → 吻端 → 上唇线收回颈
+    // 上颅：颈背 → 眉脊隆起 → 吻背下坡 → 吻端 → 上唇线收回颈背。
+    // 起点与终点是同一个点（-0.34, -0.44），同 [下颌] 的收尖，后缘那道边为零长
     path.rewind()
-    path.moveTo(fx(-0.12f, -0.86f), fy(-0.12f, -0.86f))
+    path.moveTo(fx(-0.34f, -0.44f), fy(-0.34f, -0.44f))
     path.cubicTo(
-        fx(0.16f, -1.10f), fy(0.16f, -1.10f),
-        fx(0.50f, -1.00f), fy(0.50f, -1.00f),
+        fx(0.06f, -0.90f), fy(0.06f, -0.90f),
+        fx(0.50f, -1.04f), fy(0.50f, -1.04f),
         fx(0.80f, -0.58f), fy(0.80f, -0.58f)
     )
     path.cubicTo(
@@ -2339,11 +2350,11 @@ private fun DrawScope.drawSnakeSkull(
     )
     path.cubicTo(
         fx(0.84f, 0.22f), fy(0.84f, 0.22f),
-        fx(0.46f, 0.28f), fy(0.46f, 0.28f),
-        fx(-0.12f, 0.18f), fy(-0.12f, 0.18f)
+        fx(0.46f, 0.26f), fy(0.46f, 0.26f),
+        fx(-0.34f, -0.44f), fy(-0.34f, -0.44f)
     )
     path.close()
-    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.97f)
+    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.94f)
     drawPath(
         path = path,
         color = SNAKE_SCALE,
@@ -2352,9 +2363,10 @@ private fun DrawScope.drawSnakeSkull(
     )
 
     // 上唇线：沿上颅下缘单独描一道深线。闭口时上下颌两块正好重合，
-    // 少了这一条整个头是一块无缝的楔子 —— 嘴在哪里看不出来，头就只是个头形
+    // 少了这一条整个头是一块无缝的楔子 —— 嘴在哪里看不出来，头就只是个头形。
+    // 起笔从 0.20 起（不是后缘）：后缘那一段已经在蛇身里了，画出来是一道悬在身上的线
     path.rewind()
-    path.moveTo(fx(-0.12f, 0.18f), fy(-0.12f, 0.18f))
+    path.moveTo(fx(0.20f, 0.24f), fy(0.20f, 0.24f))
     path.cubicTo(
         fx(0.46f, 0.28f), fy(0.46f, 0.28f),
         fx(0.84f, 0.22f), fy(0.84f, 0.22f),
@@ -2383,12 +2395,13 @@ private fun DrawScope.drawSnakeSkull(
         )
     }
 
-    // 眉脊：压在眼睛上方的一道骨棱。蝮蛇的「凶」全在这一条，少了它就是一条温和的水蛇
+    // 眉脊：压在眼睛上方的一道骨棱。蝮蛇的「凶」全在这一条，少了它就是一条温和的水蛇。
+    // 三个数跟着上颅那道眉峰走（峰在 a ≈ 0.4、b ≈ -0.85），高出去两三像素才是「棱」
     path.rewind()
-    path.moveTo(fx(0.14f, -0.86f), fy(0.14f, -0.86f))
+    path.moveTo(fx(0.16f, -0.80f), fy(0.16f, -0.80f))
     path.quadraticTo(
-        fx(0.42f, -1.06f), fy(0.42f, -1.06f),
-        fx(0.68f, -0.72f), fy(0.68f, -0.72f)
+        fx(0.44f, -0.98f), fy(0.44f, -0.98f),
+        fx(0.66f, -0.64f), fy(0.66f, -0.64f)
     )
     drawPath(
         path = path,
@@ -2429,11 +2442,11 @@ private fun DrawScope.drawSnakeSkull(
         alpha = alpha * 0.52f
     )
 
-    // 颅顶三片鳞：向后开口的短弧，跟蛇身的鳞是同一种画法
+    // 颅顶三片鳞：向后开口的短弧，跟蛇身的鳞是同一种画法（起点跟着上颅的轮廓收进 0.76）
     path.rewind()
     for (s in 0..2) {
         val a = 0.20f + s * 0.19f
-        path.moveTo(fx(a, -0.84f), fy(a, -0.84f))
+        path.moveTo(fx(a, -0.76f), fy(a, -0.76f))
         path.quadraticTo(
             fx(a - 0.13f, -0.42f), fy(a - 0.13f, -0.42f),
             fx(a, -0.04f), fy(a, -0.04f)
@@ -2500,35 +2513,49 @@ private const val SNAKE_THICK = 0.0110f
 /**
  * 蛇头半高 = 最粗处的半管径 × 这个系数。
  *
- * **头不跟身体的比例走**。头画出来高约 `1.76 × hh`，颈的宽是 `2 × 0.62 × maxThick`，
- * 于是这个系数就是「头比脖子宽多少」：1.10 时头是颈的 1.77 倍、也比身最粗处（1.0）
- * 略宽 —— 真蛇的宽度比就在 1.3–1.8 之间，头该是全身最宽的一处，否则读作管子接了个帽。
- * 绝对尺寸是 `thick(头) × 1.15` 那版的 90%（0.0121h），眼睛和牙照旧看得清。
+ * **头不跟身体的比例走**。头的最大高（颅顶 -0.86 到下颌底 +0.70）约 `1.56 × hh`：
+ * 1.18 时是 `1.84 × maxThick` ≈ 65px，比颈（47.9）宽三成半 —— 与真蛇的 1.3–1.8
+ * 同量级。头认得出靠的是**特征**（竖瞳、眉脊、毒牙、分叉舌），不是宽度：
+ * 这一档再往上加，头会肥成一只鞋。
+ *
+ * 头的根部不参与接缝的计算：上颅与下颌的后缘都收成一个尖，尖落在蛇身**里面**
+ * （见 [drawSnakeSkull]），根部没有可量的宽度，颈到头就是蛇身那道锥度一路胀开。
+ * 上一版两条后缘都是横切口、根部合起来 1.87 × maxThick（比颈粗一半），
+ * 屏幕上读作颈上接了块比身还粗的疙瘩，就是「蛇头尾部厚度厚于蛇身」。
+ *
+ * **改这个数要连着 [SNAKE_NECK] 一起改**：头在 `a = 0`（蛇身末端那一点）的外轮廓
+ * 是 `1.16 × hh`，必须与颈一样宽，接缝才看不出来。
  */
-private const val SNAKE_HEAD_HALF = 1.10f
+private const val SNAKE_HEAD_HALF = 1.18f
 
 /**
- * 粗细沿身的四折线：颈 0.62 → 颈后最粗 1.0（u = 0.16）→ 0.68（u = 0.50）
- * → 0.44（u = 0.88）→ 尾尖 0.26。
+ * 粗细沿身的四折线：颈 0.68（**最粗处就是颈**，等粗到 u = 0.30）→ 0.56（u = 0.62）
+ * → 0.40（u = 0.88）→ 尾尖 0.26。
  *
- * 被点名过两次，两次是同一个病：**尾太细，头身尾不匀称**。
+ * 被点名过四次，三次都是**前后粗细不对**。
  *
- * 第一次的曲线是「1.0 一条直线收到 0.16」，可见的那截尾巴正好落在最细处，一路收到
- * 11px，读作一根线；第二次改成「缓收到 0.30、最后 6% 收成尖 0.08」，尾**尖**反而更细
- * 了 —— 而屏幕上看得到的尾，恰恰就是尾尖本身：它在 s 上是滑动窗口的末端，永远跟着
- * 蛇走，尾巴拖出来时最先露出来的就是这一点。
+ * 第一次是「1.0 一条直线收到 0.16」：可见的那截尾巴正好落在最细处，一路收到 11px，
+ * 读作一根线。第二次是「缓收到 0.30、最后 6% 收成尖 0.08」：尾**尖**反而更细了 ——
+ * 而屏幕上看得到的尾，恰恰就是尾尖本身（它在 s 上是滑动窗口的末端，永远跟着蛇走）。
+ * 第三次是「颈细一档 0.62 → 颈后最粗 1.0」：最粗处落在 u = 0.16，于是
+ * **靠头那截反而比后面细**，整条蛇读作一片叶子 —— 两头尖、中间鼓。
  *
- * 所以这一次按**真蛇的宽度比**来定：最粗 70px（0.0110h × 2），尾尖 18px（0.26），
- * 也就是尾尖约最粗处的四分之一；中后段（0.44–0.68）整段留在 31–48px，
- * 拖着的那截尾巴才有体量。四个数各管一段：颈 0.62 让脖子与头衔接住，
- * u = 0.16 把最粗处放在头后不远（真蛇的胃部那一带），0.50 与 0.88 两个折点
- * 把收细推到后半程，尾尖 0.26 收口不收成针。
+ * 所以最粗处放在**颈上**（u = 0）并让前 30% 等粗，之后单调收到尾尖：
+ * 47.9 → 47.9px（前 30%）→ 39 → 28 → 18（尾尖）。真蛇就是这个形状，
+ * 蛇头后面那一截本来就是全身最粗的地方。
+ *
+ * 0.68 同时是**接缝值**：蛇身末端要与蛇头的根部齐平。头根整块收尖、落在蛇身
+ * 里面，头在 `a = 0`（正是蛇身末端那一点）的外轮廓是 `1.16 × hh` ≈ 48px，
+ * 与颈的 47.9px 齐平，屏幕上找不到接缝（见 [SNAKE_HEAD_HALF] 那条约束）。
  */
-private const val SNAKE_NECK = 0.62f
-private const val SNAKE_KNEE = 0.16f
-private const val SNAKE_MID = 0.68f
-private const val SNAKE_MID_KNEE = 0.50f
-private const val SNAKE_TAIL = 0.44f
+private const val SNAKE_NECK = 0.68f
+
+/** 等粗段一直到这里。真蛇最粗的一截在头后，不在再往后 16% 的地方。 */
+private const val SNAKE_KNEE = 0.30f
+
+private const val SNAKE_MID = 0.56f
+private const val SNAKE_MID_KNEE = 0.62f
+private const val SNAKE_TAIL = 0.40f
 private const val SNAKE_TAIL_KNEE = 0.88f
 private const val SNAKE_TIP = 0.26f
 
