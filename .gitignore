@@ -139,3 +139,7 @@ verification-artifacts/
 # 排查过程的中间测量（after-run1/2、after-corner-fix 等）不入库
 /benchmark/baseline/after-*.json
 !/benchmark/baseline/after-benchmarkData.json
+
+# 豆瓣爬虫独立仓库：本地克隆，主仓不再跟踪（gitlink 没有 .gitmodules 映射，新克隆反正拿不到；
+# 内层仓库自己的 git 历史与 GitHub 远端不受影响）
+/douban-movie-api/
