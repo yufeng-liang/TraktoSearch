@@ -23,6 +23,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -2250,252 +2251,686 @@ private fun DrawScope.drawPineSprig(color: Color, alpha: Float, w: Float, h: Flo
     drawPath(needles, color, alpha = alpha * 1.1f, style = Stroke(width = u * 0.006f))
 }
 
-/** 9 · evermore：霉霉的背影 —— 法式辫 + 格纹呢大衣。照封面原图复刻。 */
+/** 9 · evermore：霉霉的背影 —— 从颅顶编下来的法式辫 + 格纹呢大衣。照封面原图复刻。 */
 private fun DrawScope.drawBraidPlaid(color: Color, phase: Float, lowRam: Boolean, alpha: Float) {
     branchTexture(color, phase, lowRam)
     val box = propBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
     translate(left = box.left, top = box.top) {
-        drawBackView(color, phase, alpha, w, h, u)
+        drawBackView(color, phase, alpha, box.width, box.height)
     }
 }
 
 /**
- * 背影：后脑与收进辫子的头发 → 合身段呢大衣 → 垂在后背左侧的法式辫。
+ * 原图 px → 道具框 px 的一次换算。
  *
- * *evermore* 的封面就是这一张，这一版按 800×800 原图逐像素量过比例：
+ * 这一版的几何**全部按原图（800×800）的像素值写**，只在入口换一次坐标 ——
+ * 量出来的数（「y 436 那一行是五段明暗」「辫花半宽 105 → 26」）在代码里一眼能对上原图，
+ * 改任何一个数都能立刻回到图上核对。上一版按「道具框的百分比」写，量的时候少一步，
+ * 几轮改下来几何和照片早就对不上了。
  *
- * 1. **一颗后脑**。头（含发）宽约为 0.53S（S = 颅顶到外撇缝），两侧头发收进辫子。
- * 2. **一件两段式呢大衣**。合身段从头底一直垂到 1.0S、宽 0.67S（原图 y 185–460 那条
- *    暗色柱），下摆从 1.0S 处**外撇**成 A 字、垂到 1.85S 出框 —— 外撇缝上有一整道
- *    横向亮带（原图 y 457–495），是这件外套最亮的特征。格子间距 0.32S。
- * 3. **一条法式辫**。挂在后背**偏左**（中心比身体中线偏左 0.25S —— 原图头心在
- *    x 420、辫柱在 x 315），从颈后垂到外撇缝就结束，粗细几乎不变（0.13S 上下）。
- *    之前那一版辫子居中、垂进下摆 0.93S，整张读作「帽子挂在口袋上」。
- *
- * ## 辫花为什么是「一叠朝下的弧」
- *
- * 从背后看一条辫子的真实结构是**一叠嵌套的 V**：每一道辫花横跨整个柱宽、中间往下坠，
- * 相邻两道重叠一半。辫花画成**填充的带**而不是描边的线：柱宽要能逐道微调，
- * 一条描边只有一个线宽。
+ * [k] 是比例：真机道具框宽 413.44px 时整幅乘 0.90（图幅 800 → 720，铺满一列、下摆外撇出框）。
+ * [ox]/[oy] 是原图的 (414, 118)（头中线、颅顶）落在道具框里的位置。
  */
-private fun DrawScope.drawBackView(
-    color: Color,
-    phase: Float,
-    alpha: Float,
-    w: Float,
-    h: Float,
-    u: Float
-) {
-    val cx = w * 0.50f
-    val crownY = h * 0.100f
-    val headCy = h * 0.155f
-    val headRx = w * 0.250f
-    val napeY = h * 0.215f
-    val napeHalf = w * 0.150f
-    // 外撇缝：合身段转 A 字下摆的那道横缝（原图最亮的一条带）
-    val seamY = h * 0.720f
-    val torsoHalf = w * 0.320f
-    val flareHalf = w * 0.950f
-    // 辫子挂点：后背中线偏左 0.25S（原图实测头心 x 420、辫柱 x 315）
-    val braidCx0 = cx - w * 0.240f
+private class FigX(val k: Float, val ox: Float, val oy: Float) {
+    fun x(px: Float) = ox + (px - EVERMORE_CX) * k
+    fun y(py: Float) = oy + (py - EVERMORE_CROWN) * k
+    fun s(v: Float) = v * k
+}
 
-    // 某个高度上发块的半宽：耳际最宽，往上往下都收
-    val hairHalf = { y: Float ->
-        val s = ((y - headCy) / (napeY - headCy)).coerceIn(-1.35f, 1f)
-        if (s >= 0f) headRx - (headRx - napeHalf) * s * s else headRx * (1f - 0.60f * s * s)
+/** 原图里头/身的中线（x）。 */
+private const val EVERMORE_CX = 414f
+
+/** 原图颅顶（y）。 */
+private const val EVERMORE_CROWN = 118f
+
+/** 原图 px → 道具框 px 的比例：0.90 ÷ 413.44（真机上量到的道具框宽）。 */
+private const val EVERMORE_K = 0.0021772f
+
+/** 头中线落在道具框宽的哪儿。右缘留出下摆外撇的那一截。 */
+private const val EVERMORE_X = 0.46f
+
+/** 颅顶落在道具框高的哪儿。 */
+private const val EVERMORE_Y = 0.0375f
+
+/** 领折（大衣最亮的那道横线）在原图的 y。 */
+private const val EVERMORE_FOLD_Y = 468f
+
+/** 发块半宽表：原图 alpha 轮廓的实测值。 */
+private val HAIR_HALF_Y = floatArrayOf(
+    118f, 140f, 157f, 181f, 200f, 230f, 260f, 290f, 320f, 350f, 370f, 390f, 420f, 450f
+)
+private val HAIR_HALF_H =
+    floatArrayOf(10f, 68f, 91f, 105f, 109f, 110f, 119f, 118f, 116f, 108f, 100f, 100f, 104f, 106f)
+
+/** 肩线表：(y, 半宽)。同上，量自原图轮廓 —— 肩上那道急斜、臂顶之后近乎竖直。 */
+private val COAT_SHOULDER_Y = floatArrayOf(468f, 490f, 520f, 560f, 600f, 660f, 720f, 800f, 840f)
+private val COAT_SHOULDER_H = floatArrayOf(178f, 216f, 255f, 288f, 312f, 322f, 330f, 335f, 337f)
+
+/**
+ * 发块在高度 y 上的半宽 —— 折线插值。也用来夹住辫花的臂：
+ * 颅顶那几道辫花的臂几乎横跨整个后脑，不夹就会伸到发块外面去。
+ */
+private fun evermoreHairHalf(y: Float): Float {
+    if (y <= HAIR_HALF_Y[0]) return HAIR_HALF_H[0]
+    for (i in 1 until HAIR_HALF_Y.size) {
+        if (y <= HAIR_HALF_Y[i]) {
+            return HAIR_HALF_H[i - 1] +
+                (HAIR_HALF_H[i] - HAIR_HALF_H[i - 1]) * (y - HAIR_HALF_Y[i - 1]) /
+                (HAIR_HALF_Y[i] - HAIR_HALF_Y[i - 1])
+        }
     }
+    return HAIR_HALF_H[HAIR_HALF_H.size - 1]
+}
 
-    // ── 头发 ──
+/**
+ * 一条**锥形带**：中心线两侧各偏 [w0]/2 → [w1]/2，闭合成多边形写进 [path]。
+ *
+ * 一条描边只有一个线宽，而头发这十几缕每一缕都要两头不一样粗（发缕从发根到发梢、
+ * 发尾从发圈散开）。两次单点求值（去程走一侧、回程走另一侧），不存中间数组 ——
+ * draw 阶段每帧 new 一个 FloatArray 就是白给的 GC 抖动。
+ */
+private inline fun taperedBand(
+    path: Path,
+    count: Int,
+    w0: Float,
+    w1: Float,
+    at: (Int) -> Offset
+) {
+    if (count < 2) return
+    for (pass in 0..1) {
+        val forward = pass == 0
+        for (i in 0 until count) {
+            val idx = if (forward) i else count - 1 - i
+            val p = at(idx)
+            val a = at((idx - 1).coerceAtLeast(0))
+            val b = at((idx + 1).coerceAtMost(count - 1))
+            val dx = b.x - a.x
+            val dy = b.y - a.y
+            val len = hypot(dx, dy).coerceAtLeast(1e-4f)
+            val half = (w0 + (w1 - w0) * (idx.toFloat() / (count - 1))) * 0.5f
+            val side = if (forward) half else -half
+            if (idx == 0 && forward) {
+                path.moveTo(p.x - dy / len * side, p.y + dx / len * side)
+            } else {
+                path.lineTo(p.x - dy / len * side, p.y + dx / len * side)
+            }
+        }
+    }
+    path.close()
+}
+
+/** 一股头发：本体 + 上缘那道光。辫子与发缕「有体积」的读法全靠这两层。 */
+private fun DrawScope.evermoreStrand(path: Path, color: Color, alpha: Float, over: Float, w: Float) {
+    drawPath(path, Color.White, alpha = alpha * over)
+    drawPath(path, color, alpha = alpha * 0.32f)
+    drawPath(
+        path, Color.White, alpha = alpha * 0.34f,
+        style = Stroke(width = (w * 0.20f).coerceAtLeast(1f))
+    )
+}
+
+/** 一枚**斜躺的胖瓣**（辫花）：长轴 [ax],[ay] → [bx],[by]，横向半宽 [hw]（均为道具框坐标）。 */
+private fun lobeInto(path: Path, ax: Float, ay: Float, bx: Float, by: Float, hw: Float) {
+    val dx = bx - ax
+    val dy = by - ay
+    val len = hypot(dx, dy).coerceAtLeast(1e-4f)
+    val nx = -dy / len
+    val ny = dx / len
+    // 三次曲线控制点偏 cw 时弧的实际最大偏离只有 0.75cw —— 要按 0.75 折算，否则瓣圆成疙瘩
+    val cw = hw / 0.75f
+    val c1x = ax + dx * 0.34f
+    val c1y = ay + dy * 0.34f
+    val c2x = bx - dx * 0.34f
+    val c2y = by - dy * 0.34f
+    path.rewind()
+    path.moveTo(ax, ay)
+    path.cubicTo(c1x + nx * cw, c1y + ny * cw, c2x + nx * cw, c2y + ny * cw, bx, by)
+    path.cubicTo(c2x - nx * cw, c2y - ny * cw, c1x - nx * cw, c1y - ny * cw, ax, ay)
+    path.close()
+}
+
+/** 三次贝塞尔在 [u] 处的点：锥形带要沿中心线两次单点求值，就得能只算一个点。 */
+private fun cubicAt(
+    x0: Float, y0: Float, x1: Float, y1: Float,
+    x2: Float, y2: Float, x3: Float, y3: Float, u: Float
+): Offset {
+    val v = 1f - u
+    val a = v * v * v
+    val b = 3f * v * v * u
+    val c = 3f * v * u * u
+    val d = u * u * u
+    return Offset(a * x0 + b * x1 + c * x2 + d * x3, a * y0 + b * y1 + c * y2 + d * y3)
+}
+
+/**
+ * 背影：后脑的编发 → 两侧收拢的发缕 → 宽肩呢大衣 → 垂在背后的辫子。
+ *
+ * *evermore* 的封面就是这一张，几何逐点量自原图（800×800）：
+ *
+ * 1. **发块** 宽约 230，从颅顶 y=118 一直到肩 y≈448；下缘**不是一条直线** —— 颈后那一段
+ *    留两道凹口，原图 y≈436 那一行是「亮—暗—亮—暗—亮」五段（左垂发 / 领子 / 辫子 /
+ *    领子 / 右垂发），凹口里露出来的就是领子。
+ * 2. **法式辫自颅顶编下来**：从 y=198 到颈后 y=412 共 8 道辫花，臂宽自 105 一路收到 26；
+ *    y<198 是颅顶往外铺开的那几缕散发。上一版把辫子画成一根等宽的柱子挂在后脑中间、
+ *    还偏左 0.24 宽 —— 原图里它**贴着中线**，颅顶那几道是横跨整个后脑的。
+ * 3. **辫子继续垂在背上**：y=416 起、到 y=612 的发圈收尾，再散成发尾到 y=737。
+ * 4. **呢大衣**：上缘就是领口，领子折到肩上的**亮线在 y≈468**（整幅最亮的一条）；
+ *    肩线从折线两端斜到 y≈520 的臂顶，之后侧缝近乎竖直、微外撇到出框。上一版把发块
+ *    当成了大衣的「合身段」（原图 y 185–460 那条暗色柱其实是**头发**），整个上半身错位。
+ *
+ * ## 辫花为什么是一叠「斜躺的胖瓣」
+ *
+ * 试过三种画法，结论记在这儿免得再走一遍：左右两族斜股交叉会读成鞋带格子；每枚辫花
+ * 当独立的「胖 V」各自描边会读成鱼骨 / 锯齿墙；一串朝下的弧会读成笑纹。
+ *
+ * 真辫子（原图 6 倍放大逐枚看）是**一枚枚斜躺的瓣**，瓣与瓣之间**没有轮廓**，只有瓣
+ * 自己的体积：上缘受光、下缘落影。所以瓣要**填实填亮**（比柱底亮一档半），暗只出现在
+ * 瓣的下缘 —— 做法是把同一枚瓣整枚往右下偏一点点**先画**，瓣本体压上去，露出来的
+ * 正好是一道月牙形的影子。
+ */
+private fun DrawScope.drawBackView(color: Color, phase: Float, alpha: Float, w: Float, h: Float) {
+    val k = w * EVERMORE_K
+    val fig = FigX(k, w * EVERMORE_X, h * EVERMORE_Y)
+    // 呼吸：整条辫子一点点横向摇摆，卡片才不是一张静物
+    val swing = sin(phase * TAU) * k * 6f
     val hair = Path()
-    hair.moveTo(cx - headRx, headCy)
-    hair.cubicTo(
-        cx - headRx, headCy - h * 0.083f,
-        cx + headRx, headCy - h * 0.083f,
-        cx + headRx, headCy
-    )
-    hair.cubicTo(
-        cx + headRx, headCy + h * 0.048f,
-        cx + headRx * 0.80f, napeY - h * 0.020f,
-        cx + napeHalf, napeY
-    )
-    hair.cubicTo(
-        cx + napeHalf * 0.42f, napeY + h * 0.016f,
-        cx - napeHalf * 0.42f, napeY + h * 0.016f,
-        cx - napeHalf, napeY
-    )
-    hair.cubicTo(
-        cx - headRx * 0.80f, napeY - h * 0.020f,
-        cx - headRx, headCy + h * 0.048f,
-        cx - headRx, headCy
-    )
+    val shape = Path()
+    val band = Path()
+
+    // ── 呢大衣 ──（最后面：头发与辫子都压在它上面）
+    drawEvermoreCoat(color, alpha, fig, hair, shape)
+
+    // ── 发块 ──
+    hair.rewind()
+    hair.moveTo(fig.x(EVERMORE_CX), fig.y(118f))
+    hair.cubicTo(fig.x(378f), fig.y(121f), fig.x(342f), fig.y(139f), fig.x(325f), fig.y(157f))
+    hair.cubicTo(fig.x(312f), fig.y(170f), fig.x(305f), fig.y(183f), fig.x(304f), fig.y(200f))
+    hair.cubicTo(fig.x(299f), fig.y(228f), fig.x(293f), fig.y(256f), fig.x(291f), fig.y(290f))
+    hair.cubicTo(fig.x(289f), fig.y(324f), fig.x(296f), fig.y(348f), fig.x(300f), fig.y(372f))
+    hair.cubicTo(fig.x(302f), fig.y(396f), fig.x(306f), fig.y(424f), fig.x(308f), fig.y(448f))
+    hair.cubicTo(fig.x(322f), fig.y(452f), fig.x(338f), fig.y(440f), fig.x(348f), fig.y(420f))
+    hair.cubicTo(fig.x(356f), fig.y(402f), fig.x(366f), fig.y(398f), fig.x(380f), fig.y(400f))
+    hair.cubicTo(fig.x(398f), fig.y(404f), fig.x(430f), fig.y(404f), fig.x(448f), fig.y(400f))
+    hair.cubicTo(fig.x(462f), fig.y(398f), fig.x(472f), fig.y(402f), fig.x(480f), fig.y(420f))
+    hair.cubicTo(fig.x(490f), fig.y(440f), fig.x(506f), fig.y(452f), fig.x(520f), fig.y(448f))
+    hair.cubicTo(fig.x(522f), fig.y(424f), fig.x(526f), fig.y(396f), fig.x(528f), fig.y(372f))
+    hair.cubicTo(fig.x(532f), fig.y(348f), fig.x(539f), fig.y(324f), fig.x(537f), fig.y(290f))
+    hair.cubicTo(fig.x(535f), fig.y(256f), fig.x(529f), fig.y(228f), fig.x(524f), fig.y(200f))
+    hair.cubicTo(fig.x(523f), fig.y(183f), fig.x(516f), fig.y(170f), fig.x(503f), fig.y(157f))
+    hair.cubicTo(fig.x(486f), fig.y(139f), fig.x(450f), fig.y(121f), fig.x(EVERMORE_CX), fig.y(118f))
     hair.close()
     drawPath(hair, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(hair, color, alpha = alpha * 1.05f)
-    drawPath(hair, color, alpha = alpha * 1.70f, style = Stroke(width = u * 0.007f))
-
-    // 耳朵：封面上露在发外。填充比头发浅一档 —— 皮肤不是头发
+    drawPath(hair, color, alpha = alpha * 0.62f)
+    // 耳后到颌侧那两块是发根阴影，不是亮面
     for (side in 0..1) {
-        val dir = if (side == 0) -1f else 1f
-        val ex = cx + dir * headRx * 0.96f
-        val ey = headCy + h * 0.038f
-        val ear = Path()
-        ear.moveTo(ex - dir * u * 0.006f, ey - h * 0.026f)
-        ear.cubicTo(
-            ex + dir * u * 0.032f, ey - h * 0.023f,
-            ex + dir * u * 0.028f, ey + h * 0.018f,
-            ex - dir * u * 0.004f, ey + h * 0.024f
+        val sgn = if (side == 0) -1f else 1f
+        val x0 = EVERMORE_CX + sgn * 86f
+        shape.rewind()
+        shape.moveTo(fig.x(x0), fig.y(226f))
+        shape.cubicTo(
+            fig.x(x0 + sgn * 26f), fig.y(280f), fig.x(x0 + sgn * 30f), fig.y(350f),
+            fig.x(x0 + sgn * 16f), fig.y(436f)
         )
-        ear.close()
-        drawPath(ear, Color.White, alpha = alpha * PROP_MASK)
-        drawPath(ear, color, alpha = alpha * 0.55f)
-        drawPath(ear, color, alpha = alpha * 1.25f, style = Stroke(width = u * 0.006f))
+        shape.cubicTo(
+            fig.x(x0 + sgn * 4f), fig.y(446f), fig.x(x0 - sgn * 12f), fig.y(444f),
+            fig.x(x0 - sgn * 20f), fig.y(432f)
+        )
+        shape.cubicTo(
+            fig.x(x0 - sgn * 8f), fig.y(350f), fig.x(x0 - sgn * 8f), fig.y(280f),
+            fig.x(x0 - sgn * 16f), fig.y(232f)
+        )
+        shape.close()
+        drawPath(shape, color, alpha = alpha * 0.28f)
     }
 
-    // 把两侧头发收进辫子的那一批发缕。辫子挂在后背偏左，发缕整体朝**左下**的
-    // 挂点收，而不是往正中 —— 原图上头发是从颅顶往左侧那条辫柱里拧进去的
-    val sweeps = Path()
-    repeat(12) { index ->
-        val t = (index / 2) / 5f
-        val dir = if (index % 2 == 0) -1f else 1f
-        val y0 = napeY - (napeY - (headCy - h * 0.085f)) * t
-        val hw = hairHalf(y0)
-        // 终点一律偏向辫子挂点那一侧：左侧的发缕几乎竖直下去，右侧的斜穿过后脑
-        val endX = braidCx0 + dir * hw * (0.30f + 0.20f * t)
-        val rise = h * (0.060f - 0.038f * t)
-        sweeps.moveTo(cx + dir * hw * 0.95f, y0)
-        sweeps.quadraticTo(
-            (cx + dir * hw * 0.95f + endX) / 2f, y0 - rise * 0.9f,
-            endX, y0 - rise
+    // ── 耳朵 ──（发外，两侧各一只）
+    for (side in 0..1) {
+        val sgn = if (side == 0) -1f else 1f
+        val ex = EVERMORE_CX + sgn * 96f
+        val ey = 324f
+        shape.rewind()
+        shape.moveTo(fig.x(ex - sgn * 12f), fig.y(ey - 28f))
+        shape.cubicTo(
+            fig.x(ex + sgn * 20f), fig.y(ey - 28f), fig.x(ex + sgn * 26f), fig.y(ey + 6f),
+            fig.x(ex + sgn * 12f), fig.y(ey + 26f)
+        )
+        shape.cubicTo(
+            fig.x(ex + sgn * 2f), fig.y(ey + 38f), fig.x(ex - sgn * 12f), fig.y(ey + 34f),
+            fig.x(ex - sgn * 16f), fig.y(ey + 20f)
+        )
+        shape.cubicTo(
+            fig.x(ex - sgn * 20f), fig.y(ey + 6f), fig.x(ex - sgn * 18f), fig.y(ey - 14f),
+            fig.x(ex - sgn * 12f), fig.y(ey - 28f)
+        )
+        shape.close()
+        drawPath(shape, Color.White, alpha = alpha * PROP_MASK * 0.35f)
+        drawPath(shape, color, alpha = alpha * 0.72f)
+        hair.rewind()
+        hair.moveTo(fig.x(ex - sgn * 6f), fig.y(ey - 16f))
+        hair.quadraticTo(fig.x(ex + sgn * 8f), fig.y(ey + 2f), fig.x(ex - sgn * 4f), fig.y(ey + 20f))
+        drawPath(
+            hair, Color.Black, alpha = alpha * 0.20f,
+            style = Stroke(width = (k * 2.2f).coerceAtLeast(1f), cap = StrokeCap.Round)
         )
     }
-    drawPath(sweeps, color, alpha = alpha * 1.35f, style = Stroke(width = u * 0.0055f))
-    // ── 格纹呢大衣：合身段 + A 字下摆 ──
-    // 原图是两段式：合身段（宽 0.67S）从颈后直垂到外撇缝，下摆从缝上**外撇**出框。
-    // 上一版肩部直接外扩到出框，整块读作一只梯形口袋 —— 那件外套上半身是合身的。
-    // 一整条剪影：格纹连着穿过合身段与下摆，分两块画交界处必然错纹
-    val coat = Path()
-    coat.moveTo(cx - torsoHalf, napeY)
-    coat.quadraticTo(cx, napeY - h * 0.018f, cx + torsoHalf, napeY)
-    coat.lineTo(cx + torsoHalf, seamY)
-    coat.quadraticTo(
-        cx + w * 0.72f, seamY + h * 0.14f,
-        cx + flareHalf, h * 1.04f
-    )
-    coat.lineTo(cx - flareHalf, h * 1.04f)
-    coat.quadraticTo(
-        cx - w * 0.72f, seamY + h * 0.14f,
-        cx - torsoHalf, seamY
-    )
-    coat.close()
-    drawPath(coat, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(coat, color, alpha = alpha * 0.62f)
-    // 格纹间距 0.32S ≈ 0.31u，一个循环三条宽窄不同的带（宽深带 + 窄深带 + 亮细条）。
-    // 深格不另调色（纵横两条带子叠起来自然深一档），亮条用白 —— 那是封面上锈橙的那几道
-    clipPath(coat) {
-        val span = flareHalf * 2f
-        val left = cx - flareHalf
-        val pitch = u * 0.310f
-        var x = left - pitch * 0.35f
-        while (x < cx + flareHalf) {
-            drawRect(color, Offset(x, napeY), Size(u * 0.132f, h * 0.84f), alpha = alpha * 0.46f)
-            drawRect(color, Offset(x + u * 0.170f, napeY), Size(u * 0.052f, h * 0.84f), alpha = alpha * 0.30f)
-            drawRect(
-                Color.White, Offset(x + u * 0.246f, napeY), Size(u * 0.030f, h * 0.84f),
-                alpha = alpha * 0.34f
+
+    // ── 颅顶的散发缕 + 两侧收进辫子的发缕 ──
+    for (side in 0..1) {
+        val sgn = if (side == 0) -1f else 1f
+        // 颅顶往外铺的那四缕：原图里辫子就是从这儿起编的
+        for (i in 0..3) {
+            val t = i / 3f
+            val ye = 168f + 62f * t
+            val w0 = fig.s(16f - 4f * t)
+            taperedBand(
+                path = band, count = 18, w0 = w0, w1 = fig.s(12f - 3f * t),
+                at = { idx ->
+                    cubicAt(
+                        fig.x(EVERMORE_CX + sgn * (6f + 16f * t)), fig.y(124f + 10f * t),
+                        fig.x(EVERMORE_CX + sgn * (62f + 26f * t)), fig.y(132f + 30f * t),
+                        fig.x(EVERMORE_CX + sgn * evermoreHairHalf(ye - 24f) * 0.92f), fig.y(ye - 26f),
+                        fig.x(EVERMORE_CX + sgn * evermoreHairHalf(ye) * 0.92f), fig.y(ye),
+                        idx / 17f
+                    )
+                }
             )
-            x += pitch
+            evermoreStrand(band, color, alpha, over = 0.60f, w = w0)
         }
-        var y = napeY - u * 0.105f
-        while (y < h * 1.06f) {
-            drawRect(color, Offset(left, y), Size(span, u * 0.132f), alpha = alpha * 0.46f)
-            drawRect(color, Offset(left, y + u * 0.170f), Size(span, u * 0.052f), alpha = alpha * 0.30f)
-            drawRect(
-                Color.White, Offset(left, y + u * 0.246f), Size(span, u * 0.030f),
-                alpha = alpha * 0.34f
+        // 从发际扫进辫柱的那两缕：越靠下越斜
+        for (i in 0..1) {
+            val t = i.toFloat()
+            val y0 = 176f + 96f * t
+            val x0 = EVERMORE_CX + sgn * evermoreHairHalf(y0) * (0.88f - 0.06f * t)
+            val ye = 196f + 88f * t
+            val xe = evermoreBraidCx(ye) + sgn * evermoreBraidHalf(ye) * (0.92f - 0.10f * t)
+            val w0 = fig.s(13f - 3f * t)
+            taperedBand(
+                path = band, count = 18, w0 = w0, w1 = fig.s(9f - 3f * t),
+                at = { idx ->
+                    cubicAt(
+                        fig.x(x0), fig.y(y0),
+                        fig.x(x0 + sgn * 18f), fig.y(y0 + 26f + 12f * t),
+                        fig.x(xe + sgn * 26f), fig.y(ye - 32f),
+                        fig.x(xe), fig.y(ye), idx / 17f
+                    )
+                }
             )
-            y += pitch
+            evermoreStrand(band, color, alpha, over = 0.50f, w = w0)
         }
-        // 外撇缝亮带：原图 y 457–495 那道整宽的横向亮带，是这件外套最亮的特征，
-        // 也是「合身段转下摆」的读法来源。少了它两段的分界就没了
-        drawRect(
-            Color.White,
-            Offset(cx - flareHalf, seamY),
-            Size(flareHalf * 2f, h * 0.048f),
-            alpha = alpha * 0.30f
-        )
-        drawLine(
-            color = color,
-            start = Offset(cx - flareHalf, seamY),
-            end = Offset(cx + flareHalf, seamY),
-            strokeWidth = u * 0.008f,
-            alpha = alpha * 1.30f
-        )
     }
 
-    // ── 法式辫 ──
-    // 挂在后背偏左（braidCx0），从颈后垂到外撇缝为止，粗细几乎不变（原图 32→40px）。
-    // 之前那一版从颅顶编起、居中、垂进下摆 0.93S —— 三处都不像
-    val braidTop = napeY + h * 0.010f
-    val braidTip = seamY + h * 0.020f
-    val swing = sin(phase * TAU) * u * 0.010f
-    val braidUnder = Path()
-    val braid = Path()
-    val creases = Path()
-    val gloss = Path()
-    var by = braidTop
-    var tipX = braidCx0
-    var guard = 0
-    while (by < braidTip && guard < 64) {
-        val f = ((by - braidTop) / (braidTip - braidTop)).coerceIn(0f, 1f)
-        // 等粗微收：0.058w → 0.046w。原图辫柱两端的宽度差不到三成，
-        // 强锥形会把辫子读成胡萝卜
-        val half = w * (0.058f - 0.012f * f)
-        val pitch = half * 1.06f
-        val bx = braidCx0 - w * 0.022f * f + swing * f * f
-        val dip = pitch * 1.70f
-        band(braidUnder, bx, by, half * 1.02f, dip, pitch * 1.02f)
-        band(braid, bx, by, half, dip, pitch * 0.96f)
-        band(creases, bx, by + pitch * 0.50f, half * 0.64f, dip * 0.86f, pitch * 0.15f)
-        band(gloss, bx - half * 0.30f, by + pitch * 0.20f, half * 0.34f, dip * 0.55f, pitch * 0.11f)
-        tipX = bx
-        by += pitch
-        guard++
-    }
-    drawPath(braidUnder, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(braid, color, alpha = alpha * 0.72f)
-    drawPath(creases, color, alpha = alpha * 2.20f)
-    drawPath(gloss, Color.White, alpha = alpha * 0.20f)
+    // ── 头顶的编发 ──
+    drawEvermoreBraid(
+        color, alpha, fig, band, swing * 0.40f, 198f, 412f, 8,
+        ::evermoreBraidCx, ::evermoreBraidHalf
+    )
 
-    // 散开的发尾：辫子末端没有发圈，直接散成一撮
-    val ends = Path()
-    repeat(5) { index ->
-        val spread = (index - 2) / 2f
-        ends.moveTo(tipX + spread * u * 0.007f, braidTip - h * 0.004f)
-        ends.quadraticTo(
-            tipX + spread * u * 0.026f, braidTip + h * 0.020f,
-            tipX + spread * u * 0.046f, braidTip + h * 0.042f
+    // ── 背后的辫子：颈后 → 发圈 → 散尾 ──
+    val plaitTop = 416f
+    val plaitTie = 612f
+    val plaitSwing = swing * 1.10f
+    // 柱体：一条上宽下窄的带（辫花压在它上面）
+    shape.rewind()
+    var py = plaitTop - 16f
+    var first = true
+    while (py <= plaitTie + 2f) {
+        val px = fig.x(evermorePlaitCx(py) + plaitSwing) - fig.s(evermorePlaitHalf(py))
+        if (first) {
+            shape.moveTo(px, fig.y(py))
+            first = false
+        } else {
+            shape.lineTo(px, fig.y(py))
+        }
+        py += 6f
+    }
+    py = plaitTie + 2f
+    while (py >= plaitTop - 16f) {
+        shape.lineTo(
+            fig.x(evermorePlaitCx(py) + plaitSwing) + fig.s(evermorePlaitHalf(py)), fig.y(py)
+        )
+        py -= 6f
+    }
+    shape.close()
+    drawPath(shape, Color.White, alpha = alpha * PROP_MASK * 0.95f)
+    drawPath(shape, color, alpha = alpha * 0.28f)
+    drawEvermoreBraid(
+        color, alpha, fig, band, plaitSwing, plaitTop, plaitTie, 9,
+        ::evermorePlaitCx, ::evermorePlaitHalf
+    )
+    // 发圈
+    val tieX = fig.x(evermorePlaitCx(plaitTie) + plaitSwing)
+    val tieHalf = fig.s(evermorePlaitHalf(plaitTie)) * 1.25f
+    drawLine(
+        color = Color.White, start = Offset(tieX - tieHalf, fig.y(plaitTie)),
+        end = Offset(tieX + tieHalf, fig.y(plaitTie)),
+        strokeWidth = fig.s(6.5f), alpha = alpha, cap = StrokeCap.Round
+    )
+    drawLine(
+        color = color, start = Offset(tieX - tieHalf, fig.y(plaitTie - 4f)),
+        end = Offset(tieX + tieHalf, fig.y(plaitTie - 4f)),
+        strokeWidth = fig.s(2.4f), alpha = alpha * 0.65f, cap = StrokeCap.Round
+    )
+    // 散尾：发圈以下散开的那一撮
+    val tailCx = evermorePlaitCx(plaitTie) + plaitSwing
+    for (e in EVERMORE_TAIL_ENDS.indices step 2) {
+        val sx = EVERMORE_TAIL_ENDS[e]
+        val ln = EVERMORE_TAIL_ENDS[e + 1]
+        val y1 = plaitTie + (737f - plaitTie) * ln
+        val x1 = tailCx + sx * 30f
+        val w0 = fig.s(11f * (1f - 0.30f * abs(sx))) * 1.25f
+        taperedBand(
+            path = band, count = 16, w0 = w0, w1 = w0 * 0.224f,
+            at = { idx ->
+                cubicAt(
+                    fig.x(tailCx + sx * 4f), fig.y(plaitTie - 6f),
+                    fig.x(tailCx + sx * 22f), fig.y(plaitTie + 34f),
+                    fig.x(x1 + sx * 10f), fig.y(y1 - 40f),
+                    fig.x(x1), fig.y(y1), idx / 15f
+                )
+            }
+        )
+        evermoreStrand(band, color, alpha, over = 1.05f, w = w0)
+    }
+
+    // ── 碎发 ──（少这一层，头发就是塑料的）
+    for (i in 0..7) {
+        val t = i / 7f
+        val hy = 150f + 270f * t
+        val hw = evermoreHairHalf(hy)
+        for (side in 0..1) {
+            val sgn = if (side == 0) -1f else 1f
+            val x0 = EVERMORE_CX + sgn * hw * 0.80f
+            hair.rewind()
+            hair.moveTo(fig.x(x0), fig.y(hy))
+            hair.lineTo(fig.x(x0 + sgn * hw * 0.14f), fig.y(hy - 16f - 10f * t))
+            hair.lineTo(fig.x(x0 + sgn * hw * 0.22f), fig.y(hy - 30f - 16f * t))
+            drawPath(
+                hair, color, alpha = alpha * 0.34f,
+                style = Stroke(width = (k * 1.6f).coerceAtLeast(1f), cap = StrokeCap.Round)
+            )
+        }
+    }
+    for (i in 0..8) {
+        val t = i / 8f
+        val qy = plaitTop + (plaitTie - plaitTop) * t
+        val hf = evermorePlaitHalf(qy)
+        for (side in 0..1) {
+            val sgn = if (side == 0) -1f else 1f
+            val x0 = evermorePlaitCx(qy) + plaitSwing + sgn * hf * 0.9f
+            hair.rewind()
+            hair.moveTo(fig.x(x0), fig.y(qy))
+            hair.lineTo(fig.x(x0 + sgn * (8f + 12f * t)), fig.y(qy + 12f))
+            hair.lineTo(fig.x(x0 + sgn * (11f + 22f * t)), fig.y(qy + 32f))
+            drawPath(
+                hair, color, alpha = alpha * 0.42f,
+                style = Stroke(width = (k * 1.4f).coerceAtLeast(1f), cap = StrokeCap.Round)
+            )
+        }
+    }
+    for (i in 0..5) {
+        val t = i / 5f
+        val cy = 134f + 30f * t
+        hair.rewind()
+        hair.moveTo(fig.x(EVERMORE_CX - evermoreHairHalf(cy) * 0.60f + 22f * t), fig.y(cy + 10f))
+        hair.lineTo(fig.x(EVERMORE_CX - 34f + 8f * t), fig.y(cy + 4f))
+        hair.lineTo(fig.x(EVERMORE_CX - 10f), fig.y(cy + 18f))
+        drawPath(
+            hair, Color.White, alpha = alpha * 0.55f,
+            style = Stroke(width = (k * 2.2f).coerceAtLeast(1f), cap = StrokeCap.Round)
         )
     }
-    drawPath(ends, color, alpha = alpha * 1.05f, style = Stroke(width = u * 0.0055f, cap = StrokeCap.Round))
+}
+
+/** 发尾那一撮的横向偏移与长度（成对：[偏移], [长度]）。 */
+private val EVERMORE_TAIL_ENDS = floatArrayOf(
+    -0.95f, 0.62f, -0.78f, 0.84f, -0.58f, 1.0f, -0.34f, 0.92f, -0.10f, 1.0f,
+    0.14f, 0.94f, 0.38f, 1.0f, 0.62f, 0.84f, 0.84f, 0.68f, 1.0f, 0.50f
+)
+
+/**
+ * 一串辫花。头顶的编发与背后的辫子共用。
+ *
+ * [cxAt]/[halfAt] 收原图坐标下的函数（见 [evermoreBraidHalf]）。瓣的粗细**不跟着柱宽走** ——
+ * 原图颅顶那几道辫花的臂有 200 宽、却仍只有二十几厚；瓣跟着柱宽一起胖成球，又成毛毛虫了。
+ */
+private inline fun DrawScope.drawEvermoreBraid(
+    color: Color,
+    alpha: Float,
+    fig: FigX,
+    path: Path,
+    swing: Float,
+    top: Float,
+    bot: Float,
+    n: Int,
+    cxAt: (Float) -> Float,
+    halfAt: (Float) -> Float
+) {
+    val step = (bot - top) / n
+    // 柱底：压暗一档再垫白，瓣叠上去才有「缝」
+    val steps = n * 5
+    path.rewind()
+    for (i in 0..steps) {
+        val py = top + i * step * 0.2f
+        val px = fig.x(cxAt(py) + swing) - fig.s(bandHalf(halfAt(py)))
+        if (i == 0) path.moveTo(px, fig.y(py)) else path.lineTo(px, fig.y(py))
+    }
+    for (i in steps downTo 0) {
+        val py = top + i * step * 0.2f
+        val px = fig.x(cxAt(py) + swing) + fig.s(bandHalf(halfAt(py)))
+        path.lineTo(px, fig.y(py))
+    }
+    path.close()
+    drawPath(path, Color.Black, alpha = alpha * 0.20f)
+    drawPath(path, Color.White, alpha = alpha * 0.40f)
+
+    for (i in 0..n) {
+        val py = top + i * step
+        val half = halfAt(py)
+        val cx = cxAt(py) + swing
+        val dirn = if (i % 2 == 0) 1f else -1f
+        val ax = cx - dirn * half * 0.43f
+        val ay = py - step
+        val bx = cx + dirn * half * 0.43f
+        val by = py + step
+        val tt = ((py - top) / (bot - top)).coerceIn(0f, 1f)
+        val hw = fig.s((20f - 5f * tt) * 0.94f)
+        // 落影：整枚瓣往右下偏一点点先画，本体压上去，露出来的正好是下缘那道月牙
+        lobeInto(
+            path, fig.x(ax + step * 0.22f), fig.y(ay + step * 0.26f),
+            fig.x(bx + step * 0.22f), fig.y(by + step * 0.26f), hw * 0.94f
+        )
+        drawPath(path, Color.Black, alpha = alpha * 0.19f)
+        lobeInto(path, fig.x(ax), fig.y(ay), fig.x(bx), fig.y(by), hw)
+        drawPath(path, Color.White, alpha = alpha * 1.25f)
+        drawPath(path, color, alpha = alpha * 0.20f)
+    }
+}
+
+/** 辫柱底那一条带的半宽：柱宽的一半，但不细于 26（原图颈后最窄处）。 */
+private fun bandHalf(half: Float): Float = (half * 0.50f).coerceAtLeast(26f)
+
+/**
+ * 头顶编发的中线：贴着后脑中线下行，下端略往左偏。
+ *
+ * 上一版把它画在 `cx − 0.24 宽`（当成「辫子挂在后背偏左」），原图里它是**贴着中线**的。
+ */
+private fun evermoreBraidCx(py: Float): Float {
+    val t = ((py - 198f) / (412f - 198f)).coerceIn(0f, 1f)
+    return EVERMORE_CX - 1.5f * t - 2.5f * t * t
 }
 
 /**
- * 往 [path] 里加一道**朝下的弧带**：外弧从 (cx−half, cy−th/2) 坠到 cy+dip−th/2 再回升，
- * 内弧反向回来，闭合成一条等厚的带。
+ * 辫花在高度 py 上的半宽：**自颅顶一路收到颈后**，不是「两端收、中间鼓」。
  *
- * 辫花不用描边而用填充，就是为了让宽度能逐道收窄 —— 一条 Path 只有一个线宽。
+ * 实测：y=170 时辫花的臂几乎横跨整个后脑（半宽约 105），到颈后只剩 26 —— 法式辫的每一道
+ * 辫花都要吃掉两侧一大片头发，读出来才是「编」的；按等宽柱画，屏幕上就只是「光头中间
+ * 挂了一条装饰」。行尾夹住发块轮廓，臂不会伸到头发外面去。
  */
-private fun band(path: Path, cx: Float, cy: Float, half: Float, dip: Float, th: Float) {
-    val up = cy - th * 0.5f
-    val down = cy + th * 0.5f
-    path.moveTo(cx - half, up)
-    path.quadraticTo(cx, up + dip, cx + half, up)
-    path.lineTo(cx + half, down)
-    path.quadraticTo(cx, down + dip, cx - half, down)
-    path.close()
+private fun evermoreBraidHalf(py: Float): Float {
+    val t = ((py - 198f) / (412f - 198f)).coerceIn(0f, 1f)
+    return min(26f + 78f * (1f - t).pow(0.90f), evermoreHairHalf(py) * 0.96f)
+}
+
+/** 背后那道辫子的中线。 */
+private fun evermorePlaitCx(py: Float): Float {
+    val t = ((py - 416f) / (612f - 416f)).coerceIn(0f, 1f)
+    return 419f + 8f * sin(t * 2.1f) - 7f * t * t
+}
+
+/** 背后那道辫子的半宽：颈后 30，到发圈收到 9。 */
+private fun evermorePlaitHalf(py: Float): Float {
+    val t = ((py - 416f) / (612f - 416f)).coerceIn(0f, 1f)
+    return 30f + (9f - 30f) * t.pow(0.72f)
+}
+
+/**
+ * 格纹呢大衣：立领 → 领折亮带 → 肩线 → 大格。
+ *
+ * 原图的读法是「**立领 + 宽肩**」：颈后那截立领是**暗的**（y 405–465，两侧露在头发外面），
+ * 领子折到肩上的**亮线在 y≈468**（整幅最亮的一条），肩线从折线两端一路斜到 y≈520 的
+ * 臂顶，之后侧缝近乎竖直、微外撇到出框。
+ */
+private fun DrawScope.drawEvermoreCoat(
+    color: Color,
+    alpha: Float,
+    fig: FigX,
+    // 大衣轮廓。也在同一个函数里当裁剪路径给格纹用
+    outline: Path,
+    scratch: Path
+) {
+    val bodySteps = ((840f - EVERMORE_FOLD_Y) / 8f).toInt()
+    outline.rewind()
+    for (i in 0..bodySteps) {
+        val py = EVERMORE_FOLD_Y + i * 8f
+        val px = fig.x(EVERMORE_CX - evermoreShoulderHalf(py))
+        if (i == 0) outline.moveTo(px, fig.y(py)) else outline.lineTo(px, fig.y(py))
+    }
+    for (i in bodySteps downTo 0) {
+        val py = EVERMORE_FOLD_Y + i * 8f
+        outline.lineTo(fig.x(EVERMORE_CX + evermoreShoulderHalf(py)), fig.y(py))
+    }
+    outline.close()
+    drawPath(outline, Color.White, alpha = alpha * PROP_MASK)
+    drawPath(outline, color, alpha = alpha * 1.40f)
+
+    // 大格：**亮块与深块交替**，不是「深底 + 亮细线」。节距 145（原图量到），亮块 62、深块 46
+    val pitch = 145f
+    val bright = 62f
+    val dark = 46f
+    val left = EVERMORE_CX - 350f
+    clipPath(outline) {
+        var gx = left - pitch * 0.30f
+        while (gx < EVERMORE_CX + 350f) {
+            drawRect(
+                Color.White, Offset(fig.x(gx), fig.y(396f)),
+                Size(fig.s(bright), fig.s(464f)), alpha = alpha * 0.52f
+            )
+            drawRect(
+                color, Offset(fig.x(gx + bright), fig.y(396f)),
+                Size(fig.s(dark), fig.s(464f)), alpha = alpha * 0.62f
+            )
+            gx += pitch
+        }
+        var gy = 340f
+        while (gy < 860f) {
+            drawRect(
+                Color.White, Offset(fig.x(left), fig.y(gy)),
+                Size(fig.s(700f), fig.s(bright)), alpha = alpha * 0.52f
+            )
+            drawRect(
+                color, Offset(fig.x(left), fig.y(gy + bright)),
+                Size(fig.s(700f), fig.s(dark)), alpha = alpha * 0.62f
+            )
+            gy += pitch
+        }
+        // 肩缝：领折下方那道浅带，是「肩」与「身」的分界
+        drawRect(
+            Color.White, Offset(fig.x(left), fig.y(516f)),
+            Size(fig.s(700f), fig.s(30f)), alpha = alpha * 0.28f
+        )
+        drawRect(
+            Color.Black, Offset(fig.x(left), fig.y(546f)),
+            Size(fig.s(700f), fig.s(8f)), alpha = alpha * 0.24f
+        )
+    }
+
+    // 立领：颈后那个下宽上窄的暗锥。上半截被头发压住
+    scratch.rewind()
+    scratch.moveTo(fig.x(EVERMORE_CX - 172f), fig.y(EVERMORE_FOLD_Y + 2f))
+    scratch.cubicTo(
+        fig.x(EVERMORE_CX - 146f), fig.y(446f), fig.x(EVERMORE_CX - 128f), fig.y(428f),
+        fig.x(EVERMORE_CX - 112f), fig.y(414f)
+    )
+    scratch.cubicTo(
+        fig.x(EVERMORE_CX - 66f), fig.y(406f), fig.x(EVERMORE_CX + 66f), fig.y(406f),
+        fig.x(EVERMORE_CX + 112f), fig.y(414f)
+    )
+    scratch.cubicTo(
+        fig.x(EVERMORE_CX + 128f), fig.y(428f), fig.x(EVERMORE_CX + 146f), fig.y(446f),
+        fig.x(EVERMORE_CX + 172f), fig.y(EVERMORE_FOLD_Y + 2f)
+    )
+    scratch.close()
+    drawPath(scratch, Color.White, alpha = alpha * PROP_MASK * 0.55f)
+    drawPath(scratch, color, alpha = alpha * 1.45f)
+
+    // 领折：整幅最亮的那条带
+    clipPath(outline) {
+        drawRect(
+            Color.White, Offset(fig.x(left), fig.y(EVERMORE_FOLD_Y - 14f)),
+            Size(fig.s(700f), fig.s(34f)), alpha = alpha * 0.50f
+        )
+    }
+    drawLine(
+        color = Color.White,
+        start = Offset(fig.x(EVERMORE_CX - 176f), fig.y(EVERMORE_FOLD_Y - 12f)),
+        end = Offset(fig.x(EVERMORE_CX + 176f), fig.y(EVERMORE_FOLD_Y - 12f)),
+        strokeWidth = fig.s(6f), alpha = alpha * 0.95f, cap = StrokeCap.Round
+    )
+    drawLine(
+        color = color,
+        start = Offset(fig.x(EVERMORE_CX - 176f), fig.y(EVERMORE_FOLD_Y + 15f)),
+        end = Offset(fig.x(EVERMORE_CX + 176f), fig.y(EVERMORE_FOLD_Y + 15f)),
+        strokeWidth = fig.s(4f), alpha = alpha * 1.35f, cap = StrokeCap.Round
+    )
+    // 折线两端顺着肩斜下去的一小段收口
+    for (side in 0..1) {
+        val sgn = if (side == 0) -1f else 1f
+        scratch.rewind()
+        scratch.moveTo(fig.x(EVERMORE_CX + sgn * 172f), fig.y(EVERMORE_FOLD_Y - 12f))
+        scratch.cubicTo(
+            fig.x(EVERMORE_CX + sgn * 186f), fig.y(EVERMORE_FOLD_Y - 4f),
+            fig.x(EVERMORE_CX + sgn * 188f), fig.y(EVERMORE_FOLD_Y + 14f),
+            fig.x(EVERMORE_CX + sgn * 176f), fig.y(EVERMORE_FOLD_Y + 24f)
+        )
+        drawPath(
+            scratch, Color.White, alpha = alpha * 0.55f,
+            style = Stroke(width = fig.s(5f), cap = StrokeCap.Round)
+        )
+        scratch.rewind()
+        scratch.moveTo(fig.x(EVERMORE_CX + sgn * 174f), fig.y(EVERMORE_FOLD_Y - 14f))
+        scratch.cubicTo(
+            fig.x(EVERMORE_CX + sgn * 190f), fig.y(EVERMORE_FOLD_Y - 4f),
+            fig.x(EVERMORE_CX + sgn * 192f), fig.y(EVERMORE_FOLD_Y + 16f),
+            fig.x(EVERMORE_CX + sgn * 180f), fig.y(EVERMORE_FOLD_Y + 28f)
+        )
+        drawPath(
+            scratch, color, alpha = alpha * 0.85f,
+            style = Stroke(width = fig.s(2.4f), cap = StrokeCap.Round)
+        )
+    }
+}
+
+/** 肩线在高度 py 上的半宽（折线插值）。 */
+private fun evermoreShoulderHalf(py: Float): Float {
+    if (py <= COAT_SHOULDER_Y[0]) return COAT_SHOULDER_H[0]
+    for (i in 1 until COAT_SHOULDER_Y.size) {
+        if (py <= COAT_SHOULDER_Y[i]) {
+            return COAT_SHOULDER_H[i - 1] +
+                (COAT_SHOULDER_H[i] - COAT_SHOULDER_H[i - 1]) * (py - COAT_SHOULDER_Y[i - 1]) /
+                (COAT_SHOULDER_Y[i] - COAT_SHOULDER_Y[i - 1])
+        }
+    }
+    return COAT_SHOULDER_H[COAT_SHOULDER_H.size - 1]
 }
 
 /** 10 · Midnights：一只打火机（风罩栅格 + 拨轮 + 呼吸的火苗）+ 几颗四芒星。 */
