@@ -80,8 +80,19 @@ import kotlinx.coroutines.delay
 // ChoiceRow 的选中高亮，用户来得及确认自己选了哪项，又不必每题手动「下一题」拖慢 13 题节奏。
 private const val QUIZ_AUTO_ADVANCE_DELAY_MS = 1000L
 
-/** 闯关流程阶段，AnimatedContent 按 phase 切换预览/生成中/答题/出分。 */
-private enum class QuizPhase { PREVIEW, PREPARING, QUESTIONS, RESULT, UNAVAILABLE }
+/**
+ * 闯关流程阶段，AnimatedContent 按 phase 切换预览/生成中/答题/出分。
+ *
+ * 答题与出分把要渲染的数据一起带上：转场期间退场分支仍会重组，而「放弃本轮」会在同一帧把
+ * state 里的题目与成绩清空，只有 targetState 自己握着当时那份数据，退场画面才不会撞上空值。
+ */
+private sealed interface QuizPhase {
+    data object Preview : QuizPhase
+    data object Preparing : QuizPhase
+    data object Unavailable : QuizPhase
+    data class Questions(val quiz: AiQuiz) : QuizPhase
+    data class Result(val result: AiQuizResult) : QuizPhase
+}
 
 @Composable
 fun AiQuizScreen(
@@ -90,13 +101,14 @@ fun AiQuizScreen(
     onResultAnchorBoundsChanged: (Rect) -> Unit = {}
 ) {
     val quiz = state.quiz
+    val quizResult = state.quizResult
     val phase = when {
-        state.quizResult != null -> QuizPhase.RESULT
+        quizResult != null -> QuizPhase.Result(quizResult)
         // 用户点了开始、题目还没到：等待页必须现在就在，否则「开始」只是把按钮灰掉
-        state.quizGenerating -> QuizPhase.PREPARING
-        !state.quizStarted -> QuizPhase.PREVIEW
-        quiz == null || quiz.questions.isEmpty() -> QuizPhase.UNAVAILABLE
-        else -> QuizPhase.QUESTIONS
+        state.quizGenerating -> QuizPhase.Preparing
+        !state.quizStarted -> QuizPhase.Preview
+        quiz == null || quiz.questions.isEmpty() -> QuizPhase.Unavailable
+        else -> QuizPhase.Questions(quiz)
     }
     // 此前预览→答题→出分是 if/else 直切，这里统一 fade+slide 转场（300ms 标准缓动）
     AnimatedContent(
@@ -111,8 +123,8 @@ fun AiQuizScreen(
         label = "quiz_phase"
     ) { target ->
         when (target) {
-            QuizPhase.RESULT -> QuizResultScreen(
-                result = state.quizResult!!,
+            is QuizPhase.Result -> QuizResultScreen(
+                result = target.result,
                 quiz = state.quiz,
                 answers = state.quizAnswers,
                 feedbackDifficulty = state.quizFeedbackDifficulty,
@@ -120,7 +132,7 @@ fun AiQuizScreen(
                 onReplay = viewModel::replayQuiz,
                 onResultAnchorBoundsChanged = onResultAnchorBoundsChanged
             )
-            QuizPhase.PREVIEW -> QuizPreviewScreen(
+            QuizPhase.Preview -> QuizPreviewScreen(
                 movies = state.quizPreviewMovies,
                 localizedTitles = state.quizPreviewLocalizedTitles,
                 prepareState = state.quizPrepareState,
@@ -128,8 +140,8 @@ fun AiQuizScreen(
                 onStart = viewModel::startQuiz
             )
             // 生成中的等待页与「有开始没题目」兜底共用同一份进度视图
-            QuizPhase.PREPARING,
-            QuizPhase.UNAVAILABLE -> if (target == QuizPhase.UNAVAILABLE && !state.isLoading) {
+            QuizPhase.Preparing,
+            QuizPhase.Unavailable -> if (target == QuizPhase.Unavailable && !state.isLoading) {
                 QuizUnavailable()
             } else {
                 QuizLoadingPlaceholder(
@@ -143,10 +155,10 @@ fun AiQuizScreen(
                     onCancel = viewModel::cancelActiveFeatureRequest
                 )
             }
-            QuizPhase.QUESTIONS -> QuizQuestionScreen(
+            is QuizPhase.Questions -> QuizQuestionScreen(
                 state = state,
                 viewModel = viewModel,
-                quiz = quiz!!
+                quiz = target.quiz
             )
         }
     }
