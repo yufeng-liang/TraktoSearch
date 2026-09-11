@@ -1391,17 +1391,21 @@ private fun DrawScope.drawSeagull(color: Color, phase: Float, alpha: Float, w: F
     )
 }
 
-/** 6 · reputation：盘起来的蛇（昂头做攻击姿态）+ 一枚蛇戒。 */
+/** 6 · reputation：盘起来的蛇（昂头做攻击姿态）+ 一枚蛇戒（在卡片右上角）。 */
 private fun DrawScope.drawCoiledSnake(color: Color, phase: Float, lowRam: Boolean, alpha: Float) {
     halftoneTexture(color, phase, lowRam)
     val box = propBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
     translate(left = box.left, top = box.top) {
-        drawSnakeCoil(color, phase, lowRam, alpha, w, h, u)
-        drawSnakeRing(color, alpha, w, h, u)
+        drawSnakeCoil(color, phase, lowRam, alpha, box.width, box.height, min(box.width, box.height))
     }
+    // 戒指挪出道具框、上到卡片右上角：留在框里就得跟盘蛇分那 32% 卡宽，
+    // 被压到 20dp 见方，蛇头细节一个也画不下。口径与 Lover 那只蝴蝶一致（见 [drawSnakeRing]）
+    drawSnakeRing(
+        color = color,
+        alpha = alpha,
+        center = Offset(size.width * 0.800f, 52.dp.toPx()),
+        radius = box.width * 0.26f
+    )
 }
 
 /**
@@ -1442,9 +1446,9 @@ private fun DrawScope.drawSnakeCoil(
     // 尾尖：从最下那圈的**左**侧甩出来一小截，**在盘之前画**，根部由盘的下缘压住。
     // 少了这一截，最下面那圈是一个闭合的环，读作一只轮胎。
     //
-    // 在左边而不是右边：[drawSnakeRing] 那枚蛇形戒指钉在 `(0.80w, 0.930h)`，
-    // 半径 `0.088u` —— 上一版的右侧尾尖末端落在 `(0.78w, 0.876h)`，正好压进戒指的外圈，
-    // 截出来两件道具糊成一件。左下角整片是空的。
+    // 在**左**侧：盘蛇自己的重心偏右（三圈 + 立起来的颈与头都在右半边），左下角整片是空的，
+    // 尾巴甩到那边正好补上。上一版甩在右边，末端落在 `(0.78w, 0.876h)` ——
+    // 那里当年正压着戒指的外圈（戒指现已挪去卡片右上角），两件道具糊成一件。
     //
     // 起点 y 取 `0.768h` 不是随手挑的：那是最下那圈在 `x = 0.22w` 处下缘带子的中心
     // （椭圆上 `dx = -0.722` 对应 `dy = 0.048h`）。三圈都只是**描边**、内部是空的，
@@ -1802,52 +1806,224 @@ private fun DrawScope.drawSnakeHead(
 }
 
 /**
- * 蛇戒：指环 + 环顶盘着的一只小蛇头。
+ * 蛇戒：蛇身盘成一枚戒指，头在缺口上咬住自己的尾尖。
  *
- * 指环故意画成**开口的两段弧**（缺口在环顶），蛇头咬在缺口上 ——
- * 闭合的圆环加一个头会读成「戒指上粘了个东西」。
+ * ## 位置
+ *
+ * 钉在卡片**右上角**（`0.80w`、52dp，半径 `0.26 × 道具框宽`，约 27dp），和 Lover 那只
+ * 蝴蝶同一套口径：横向按卡宽比例、竖向按 dp —— 竖锚点若按卡高比例，31 首的 TTPD 与
+ * 11 首的 reputation 会把它放在两个高度（顶上那条标题带是 `CARD_CHROME_HEIGHT` 的 dp 预算）。
+ * 上一版它缩在道具框的右下角（半径 `0.088u` ≈ 10dp、20dp 见方，还被点名「太小」）：
+ * 道具框整块要让给盘蛇，戒指塞在角上只剩一个圆点。
+ *
+ * ## 环不是一个等宽的圆
+ *
+ * 蛇身从尾尖到颈一路变粗（`0.060r → 0.190r`），所以环是「外缘 + 内缘两条弧夹出来的
+ * 多边形」，不是 Stroke：描边整圈只能一个线宽，那就又成了一枚普通金属环，蛇身的锥度
+ * 全丢。环顶留 34° 缺口，蛇头**按缺口那道弦**接出去 —— 头长取弦长、方向取弦的倾角，
+ * 头尖就正好落在尾尖上，缺口由头这段接上，整枚戒指读作闭环。
+ *
+ * 缺口与管径是按「头占环径几成」定的：弦长 `2r·sin(gap/2)`，0.60 弧度下头长 0.59r，
+ * 约占环径三成 —— 真戒指上那颗蛇头就是这个量级；0.82 弧度那一版头长 0.80r，
+ * 装上去是一颗鱼头把环吞了一半，吻尖还从环的外缘戳出去。
+ *
+ * 细节：外缘一道亮边（受光）、内缘一道反光、环身 13 片鳞、头按盘蛇那颗头的语言画
+ * （颅 + 下颌 + 口腔 + 两颗毒牙 + 金瞳、竖瞳），只是尺寸缩到五分之一。
+ * 白卡上「亮」等于色少，所以这几笔都是白的。
+ *
+ * @param center 环心（卡片坐标）
+ * @param radius 环身中心线的半径，管径、头、鳞的尺寸都从它派生
  */
-private fun DrawScope.drawSnakeRing(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
-    // 挪到右下角、并收小一档：新的那盘蛇底圈铺到 0.82h、右到 0.89w，
-    // 戒指原来的位置（0.74w / 0.88h、半径 0.115u）正压在盘的右下沿上
-    val center = Offset(w * 0.80f, h * 0.930f)
-    val radius = u * 0.088f
-    val band = Stroke(width = u * 0.021f)
-    drawArc(
-        color = color,
-        startAngle = -60f,
-        sweepAngle = 200f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius, center.y - radius),
-        size = Size(radius * 2f, radius * 2f),
-        alpha = alpha * 1.5f,
-        style = band
-    )
-    drawArc(
-        color = color,
-        startAngle = 160f,
-        sweepAngle = 70f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius, center.y - radius),
-        size = Size(radius * 2f, radius * 2f),
-        alpha = alpha * 1.1f,
-        style = Stroke(width = u * 0.018f)
-    )
-    // 环顶的蛇头：一个水滴 + 一只眼
-    val headCenter = Offset(center.x + radius * 0.52f, center.y - radius * 0.86f)
-    val headPath = Path()
-    headPath.moveTo(headCenter.x - u * 0.030f, headCenter.y + u * 0.022f)
-    headPath.quadraticTo(
-        headCenter.x - u * 0.034f, headCenter.y - u * 0.030f,
-        headCenter.x + u * 0.014f, headCenter.y - u * 0.034f
-    )
-    headPath.quadraticTo(
-        headCenter.x + u * 0.048f, headCenter.y - u * 0.020f,
-        headCenter.x + u * 0.020f, headCenter.y + u * 0.026f
-    )
-    headPath.close()
-    drawPath(headPath, color, alpha = alpha * 1.8f)
-    drawCircle(Color.White, u * 0.008f, Offset(headCenter.x + u * 0.008f, headCenter.y - u * 0.012f), alpha = alpha * 2.4f)
+private fun DrawScope.drawSnakeRing(color: Color, alpha: Float, center: Offset, radius: Float) {
+    // 角度从正上（12 点）起、顺时针为正：蛇身从尾尖（缺口右沿）顺时针盘满一圈到环顶的颈
+    val gap = 0.60f
+    val span = TAU - gap
+    val tailHalf = radius * 0.060f
+    val neckHalf = radius * 0.190f
+    val steps = 36
+
+    // 管径沿身：尾尖细、颈部粗。smoothstep 起收，缺口两侧才不露折点
+    fun halfAt(t: Float) = tailHalf + (neckHalf - tailHalf) * (t * t * (3f - 2f * t))
+    fun at(t: Float, k: Float): Offset {
+        val a = gap + t * span
+        val r = radius + halfAt(t) * k
+        return Offset(center.x + sin(a) * r, center.y - cos(a) * r)
+    }
+
+    // 环身本体 + 外缘亮边 + 内缘反光：三条带子共用同一组采样点，一次走完
+    val band = Path()
+    val ridge = Path()
+    val gloss = Path()
+    for (i in 0..steps) {
+        val t = i / steps.toFloat()
+        val o = at(t, 1f)
+        val ro = at(t, 0.98f)
+        val go = at(t, -0.98f)
+        if (i == 0) {
+            band.moveTo(o.x, o.y)
+            ridge.moveTo(ro.x, ro.y)
+            gloss.moveTo(go.x, go.y)
+        } else {
+            band.lineTo(o.x, o.y)
+            ridge.lineTo(ro.x, ro.y)
+            gloss.lineTo(go.x, go.y)
+        }
+    }
+    for (i in steps downTo 0) {
+        val t = i / steps.toFloat()
+        val p = at(t, -1f)
+        val ri = at(t, 0.56f)
+        val gi = at(t, -0.62f)
+        band.lineTo(p.x, p.y)
+        ridge.lineTo(ri.x, ri.y)
+        gloss.lineTo(gi.x, gi.y)
+    }
+    band.close()
+    ridge.close()
+    gloss.close()
+    drawPath(band, Color.White, alpha = alpha * PROP_MASK)
+    drawPath(band, color, alpha = alpha * 0.92f)
+    drawPath(ridge, Color.White, alpha = alpha * 1.25f)
+    drawPath(gloss, Color.White, alpha = alpha * 0.70f)
+
+    // 鳞：横跨管径的短弧，自由边朝尾（控制点沿切向反着推），所以是叠着的。
+    // 细的那一端不排鳞（`t < 0.20`，正是缺口右沿那一小截）：按角度均分的话，
+    // 到了细端每一片都跟管径差不多长，读作一串挂在环上的白刺
+    val scales = Path()
+    val pieces = 11
+    for (k in 1..pieces) {
+        val t = k / (pieces + 1f)
+        if (t < 0.20f) continue
+        val a = gap + t * span
+        val hw = halfAt(t)
+        val o = at(t, 0.88f)
+        val n = at(t, -0.88f)
+        scales.moveTo(o.x, o.y)
+        scales.quadraticTo(
+            (o.x + n.x) * 0.5f - cos(a) * hw * 0.55f,
+            (o.y + n.y) * 0.5f - sin(a) * hw * 0.55f,
+            n.x, n.y
+        )
+    }
+    // 鳞用主色加深（不是白）：卡片上道具的有效 alpha 只有 0.32（`PROP_ALPHA`），
+    // 环身合出来是一层浅灰，压在上面的白线跟它只差一档，缩到 27dp 就什么也看不见了。
+    // 与盘蛇身上那套鳞同一个写法 —— 浅底上「可见」等于色多
+    drawPath(scales, color, alpha = alpha * 1.35f, style = Stroke(width = radius * 0.017f))
+
+    // ── 头 ──
+    // 颈在环顶、切向朝右（顺时针），而缺口那道弦从颈往右下斜 `gap / 2` ——
+    // 头沿着弦长出去，头尖才落在尾尖上
+    val hx = center.x
+    val hy = center.y - radius
+    val tilt = gap * 0.5f * (180f / PI.toFloat())
+    rotate(degrees = tilt, pivot = Offset(hx, hy)) {
+        val hl = 2f * radius * sin(gap * 0.5f)
+        val hw = radius * 0.22f
+        fun fx(a: Float) = hx + a * hl
+        fun fy(b: Float) = hy + b * hw
+        // 张口 0.18 固定，口正好夹住尾尖那一段（0.15r 高）。这是**咬住**的那一帧 ——
+        // 盘蛇那颗头张到 0.62 是攻击姿态，戒指这枚缩到五分之一，大张的颌在这个尺寸上
+        // 只读作一块多出来的肉。卡片是定格的一张图（低配机上相位恒为 0），
+        // 开合动画在这里本来也看不见
+        val gape = 0.18f
+        val hx0 = fx(0.20f)
+        val hy0 = fy(0.26f)
+        val jux = cos(gape)
+        val juy = sin(gape)
+        fun jx(a: Float, b: Float) = hx0 + jux * a * hl - juy * b * hw
+        fun jy(a: Float, b: Float) = hy0 + juy * a * hl + jux * b * hw
+
+        // 口腔：上下颌之间那一块。比环上任何一处都重 —— 那是个洞
+        val mouth = Path()
+        mouth.moveTo(hx0, hy0)
+        mouth.lineTo(fx(1.00f), fy(0.06f))
+        mouth.lineTo(jx(0.97f, -0.06f), jy(0.97f, -0.06f))
+        mouth.close()
+        drawPath(mouth, Color.White, alpha = alpha * PROP_MASK)
+        drawPath(mouth, color, alpha = alpha * 2.1f)
+
+        // 下颌：铰在 (0.20, 0.26)，舌尖朝前收
+        val jaw = Path()
+        jaw.moveTo(jx(-0.10f, -0.06f), jy(-0.10f, -0.06f))
+        jaw.cubicTo(
+            jx(0.44f, 0.04f), jy(0.44f, 0.04f),
+            jx(0.78f, 0.06f), jy(0.78f, 0.06f),
+            jx(0.98f, 0.00f), jy(0.98f, 0.00f)
+        )
+        jaw.cubicTo(
+            jx(0.84f, 0.34f), jy(0.84f, 0.34f),
+            jx(0.40f, 0.48f), jy(0.40f, 0.48f),
+            jx(-0.10f, 0.52f), jy(-0.10f, 0.52f)
+        )
+        jaw.close()
+        drawPath(jaw, Color.White, alpha = alpha * PROP_MASK)
+        drawPath(jaw, color, alpha = alpha * 1.10f)
+
+        // 上颅：颈背 → 眉脊隆起 → 吻背下坡 → 吻端 → 上唇线收回颈
+        val skull = Path()
+        skull.moveTo(fx(-0.12f), fy(-0.82f))
+        skull.cubicTo(
+            fx(0.14f), fy(-1.08f),
+            fx(0.48f), fy(-0.98f),
+            fx(0.78f), fy(-0.54f)
+        )
+        skull.cubicTo(
+            fx(0.94f), fy(-0.34f),
+            fx(1.02f), fy(-0.12f),
+            fx(1.00f), fy(0.06f)
+        )
+        skull.cubicTo(
+            fx(0.80f), fy(0.22f),
+            fx(0.42f), fy(0.26f),
+            fx(-0.12f), fy(0.18f)
+        )
+        skull.close()
+        drawPath(skull, Color.White, alpha = alpha * PROP_MASK)
+        drawPath(skull, color, alpha = alpha * 1.20f)
+
+        // 毒牙：两颗，从上颌垂进口腔
+        val fangs = Path()
+        repeat(2) { k ->
+            val a = 0.86f - k * 0.12f
+            fangs.moveTo(fx(a), fy(0.10f))
+            fangs.lineTo(fx(a - 0.06f), fy(0.42f))
+        }
+        drawPath(
+            fangs, Color.White,
+            alpha = alpha * 2.4f,
+            style = Stroke(width = radius * 0.026f, cap = StrokeCap.Round)
+        )
+
+        // 眉脊：压在眼上方的一道骨棱，蝮蛇的「凶」全在这一条
+        val brow = Path()
+        brow.moveTo(fx(0.14f), fy(-0.80f))
+        brow.quadraticTo(fx(0.42f), fy(-1.00f), fx(0.66f), fy(-0.62f))
+        drawPath(
+            brow, color,
+            alpha = alpha * 2.2f,
+            style = Stroke(width = radius * 0.024f, cap = StrokeCap.Round)
+        )
+
+        // 眼：金瞳 + 竖梭形瞳孔（两段二次曲线拼的，画椭圆的话跟着头转会横过来）
+        val eyeA = 0.40f
+        val eyeB = -0.34f
+        val eyeR = radius * 0.10f
+        drawCircle(PROP_GOLD, eyeR, Offset(fx(eyeA), fy(eyeB)), alpha = alpha * 2.6f)
+        val pupil = Path()
+        pupil.moveTo(fx(eyeA), fy(eyeB) - eyeR * 0.88f)
+        pupil.quadraticTo(
+            fx(eyeA + 0.032f), fy(eyeB),
+            fx(eyeA), fy(eyeB) + eyeR * 0.88f
+        )
+        pupil.quadraticTo(
+            fx(eyeA - 0.032f), fy(eyeB),
+            fx(eyeA), fy(eyeB) - eyeR * 0.88f
+        )
+        drawPath(pupil, color, alpha = alpha * 2.6f)
+
+        // 鼻孔
+        drawCircle(color, radius * 0.028f, Offset(fx(0.88f), fy(-0.26f)), alpha = alpha * 2.0f)
+    }
 }
 
 /**
