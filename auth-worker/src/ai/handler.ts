@@ -212,11 +212,13 @@ interface TasteEvidence {
     confidence: 'high' | 'medium' | 'low';
 }
 
-// 文本供应商三梯队：zhipu > agnes > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
+// 文本供应商四梯队：bailian > zhipu > agnes > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
+// 百炼打头：它破了账号级吞吐墙（智谱同模型稳定 ~40 字符/秒，百炼 flash 档实测 ~217 字符/秒），
+// 同一套槽位流水线 87~129s vs 智谱 314~536s，且免费额度按模型独立发放、与智谱计费互不相干。
 type TextProvider = 'mimo' | 'agnes' | 'zhipu' | 'bailian';
 
 // 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
-const PROVIDER_LADDER: readonly TextProvider[] = ['zhipu', 'bailian', 'agnes', 'mimo'];
+const PROVIDER_LADDER: readonly TextProvider[] = ['bailian', 'zhipu', 'agnes', 'mimo'];
 
 // 出题链路上游超时（本地闭环实测，glm-4.7 关思考、13 题全字段）：
 // units 段 139~174s / 输出 5.2~7k 字符，review 段 256~271s / 输出 16~17.5k 字符。
@@ -855,11 +857,11 @@ async function generateQuiz(
     budget: QuizGenerationBudget = QUIZ_LEGACY_BUDGET,
 ): Promise<QuizCacheData | null> {
     // 两阶段（units→review）整体最多跑三轮：第一轮上游返回 200 但输出过不了本地硬校验
-    // 时换下一家供应商重试（实测 Agnes 会连续输出不合格 JSON，同家重试无效），三家全试仍
+    // 时换下一家供应商重试（实测 Agnes 会连续输出不合格 JSON，同家重试无效），四家全试仍
     // 失败才降级离线兜底题库。INVALID_MODEL 属请求配置错误，重试无意义，直接上抛。
     // 从主供应商在梯队中的位置开始向后试；主供应商位于梯队中游时先试自己再试下游，
-    // 位于末位（mimo）时从头绕回 agnes/zhipu——保证最多三轮内三家都被覆盖。
-    // 每轮开头检查总预算：单轮实测 280~420s，三家全试会把用户等待拖到十几分钟，
+    // 位于末位（mimo）时从头绕回 bailian/zhipu——保证最多四轮内四家都被覆盖。
+    // 每轮开头检查总预算：单轮实测 87~420s（供应商差异极大），四家全试会把等待拖到十几分钟，
     // 超预算立即返回 null 走确定性兜底（流式端点会把兜底结果作为 result 事件下发）。
     const startedAtMs = Date.now();
     const startIndex = Math.max(0, PROVIDER_LADDER.indexOf(provider));
@@ -1487,7 +1489,7 @@ async function runQuizGenerationRound(
     }
     if (!unitsUpstream) {
         console.warn('[QUIZ_DIAG]', JSON.stringify({ stage: 'units_upstream_null', requestId, attempt }));
-        // 主供应商返回 null = 三家全试过仍不可用，重试只是重复同样失败。
+        // 主供应商返回 null = 四家全试过仍不可用，重试只是重复同样失败。
         return null;
     }
 
@@ -3297,16 +3299,19 @@ function resolveTextModel(
     const configuredProvider = typeof env.AI_DEFAULT_PROVIDER === 'string'
         ? env.AI_DEFAULT_PROVIDER.trim().toLowerCase()
         : '';
-    // 未指定模型时默认主供应商走 zhipu（GLM 独立计费、输出稳定），agnes 作第一备选；
-    // 生产可用 AI_DEFAULT_PROVIDER 显式覆盖。agnes 共享池 429 冷却会整场挂起，不作为默认。
-    if (configuredProvider === 'bailian') {
-        return { provider: 'bailian', model: DEFAULT_MODEL_BY_PROVIDER.bailian, fallbackModel: mimoDefault };
+    // 未指定模型时默认主供应商走 bailian（百炼 flash 档实测比同账号智谱快 3~4 倍，
+    // 免费额度独立），主模型不可用时按 PROVIDER_LADDER 轮 zhipu/agnes/mimo。
+    // 生产可用 AI_DEFAULT_PROVIDER 显式覆盖；agnes 共享池 429 冷却会整场挂起，不作默认。
+    if (configuredProvider === 'zhipu') {
+        return { provider: 'zhipu', model: DEFAULT_MODEL_BY_PROVIDER.zhipu, fallbackModel: mimoDefault };
     }
-    return configuredProvider === 'mimo'
-        ? { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault }
-        : configuredProvider === 'agnes'
-            ? { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault }
-            : { provider: 'zhipu', model: DEFAULT_MODEL_BY_PROVIDER.zhipu, fallbackModel: mimoDefault };
+    if (configuredProvider === 'mimo') {
+        return { provider: 'mimo', model: mimoDefault, fallbackModel: agnesDefault };
+    }
+    if (configuredProvider === 'agnes') {
+        return { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault };
+    }
+    return { provider: 'bailian', model: DEFAULT_MODEL_BY_PROVIDER.bailian, fallbackModel: mimoDefault };
 }
 
 // 统一文本生成入口：Agnes 失败交给业务确定性 fallback；显式/兼容 MiMo 主路径仍可回退 Agnes 一次。
@@ -3321,7 +3326,7 @@ async function callLlmJson(
     context: LlmRequestContext,
     health?: HealthRouteContext,
 ): Promise<LlmJsonResult | null> {
-    // 三家互备，固定优先级 zhipu > agnes > mimo：主供应商失败（常见：Agnes 共享池 429 把
+    // 四家互备，固定优先级 bailian > zhipu > agnes > mimo：主供应商失败（常见：Agnes 共享池 429 把
     // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
     // GLM 实测可用且独立计费，作为默认主供应商；每家主路径都要含自己在内先试主模型。
     const order: TextProvider[] = provider === 'zhipu'
@@ -3384,7 +3389,7 @@ async function callLlmJson(
             }
         }
     }
-    // 主供应商是 agnes/zhipu 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
+    // 主供应商是 bailian/zhipu/agnes 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
     // （taste/daily/quiz 都有本地 fallback，不向用户抛错）；mimo 主路径维持上抛语义。
     if (provider !== 'mimo') return null;
     throw lastError ?? new AppError('AI_UPSTREAM_ERROR', 'All AI providers failed', 502);

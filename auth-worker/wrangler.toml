@@ -53,7 +53,8 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # 不配则用代码里的默认域名。免费额度按模型独立（每模型 1M token），用尽返 403
 # AllocationQuota.FreeTierOnly，由 MODEL_FALLBACKS_BY_PROVIDER.bailian 自动换下一个模型）
 # AGNES_API_KEYS（Agnes AI 多 key：兼容单值、JSON 数组、逗号/换行分隔；多 key 自动轮换容灾）
-# AI_DEFAULT_PROVIDER 在 [vars] 中配置（主路径 zhipu：GLM 独立计费、输出稳定；agnes 共享池 429 会整场挂起，仅作第一备选轮替）；不在此处写密钥
+# AI_DEFAULT_PROVIDER 在 [vars] 中配置（主路径 bailian：免费额度按模型独立发放，flash 档实测比智谱快 3~4 倍；
+# 主模型不可用按 bailian > zhipu > agnes > mimo 轮替）；不在此处写密钥
 # ADMIN_EMAIL
 # ACCESS_TEAM_DOMAIN
 # ACCESS_AUDIENCE
@@ -78,8 +79,9 @@ AUDIO_PUBLIC_BASE_URL = "https://tracktosearch-gateway.pages.dev/gateway-api"
 # 今日影视知识概念插图：生产已开启，独立于文字 AI 配额并按账号每日限流
 AI_DAILY_ILLUSTRATION_ENABLED = "true"
 AI_DAILY_ILLUSTRATION_DAILY_LIMIT = "10"
-# 文本生成默认供应商：Agnes（主文本模型）；MiMo 文本仅显式旧请求/配置兼容，Agnes 失败不回退 MiMo；MiMo TTS 仍可用
-AI_DEFAULT_PROVIDER = "zhipu"
+# 文本生成默认供应商：百炼（免费额度按模型独立、吞吐不受智谱账号级 40 字符/秒拖累）；
+# 轮替顺序 bailian > zhipu > agnes > mimo，BAILIAN_API_KEY 未配置时自动落到 zhipu，不会整场降级。
+AI_DEFAULT_PROVIDER = "bailian"
 # Brevo 已验证的 Sender 地址
 EMAIL_FROM = "TraktoSearch <Yu-Fengliang@outlook.com>"
 EMAIL_REPLY_TO = "1577865546@qq.com"
