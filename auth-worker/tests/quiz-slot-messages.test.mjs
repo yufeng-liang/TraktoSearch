@@ -119,6 +119,44 @@ test('证据块沿用 WATCHED_EVIDENCE 包裹，含传入影片标题与防注�
     assert.deepEqual(parsed[0].evidence, ['NJ 在东京与旧情人重逢', '洋洋用相机拍别人的后脑勺']);
 });
 
+test('题位证据块只带单元关联的那一部片，不把整套候选片重复发一遍', () => {
+    const [, user] = questionSlotMessages('小明', MOVIES, UNIT, QUESTION_SLOT, BASE_SPEC);
+    const userText = textOf(user);
+    const raw = userText.slice(userText.indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length, userText.indexOf('</WATCHED_EVIDENCE>'));
+    const parsed = JSON.parse(raw);
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].title, '《一一》');
+    assert.equal(userText.includes('《大佛普拉斯》'), false);
+    assert.match(userText, /只给这一部/);
+    // 入参体积是免费额度和 TTFB 的直接成本：裁剪后不该再把其它影片的简介带上
+    assert.ok(userText.length < bothTexts(unitSlotMessages('小明', MOVIES, UNIT_SLOT, BASE_SPEC)).length);
+});
+
+test('单元关联片名对不上传入列表时退回全量证据，不能把材料清空', () => {
+    const strayUnit = { ...UNIT, relatedMediaTitle: '《牯岭街少年杀人事件》' };
+    const [, user] = questionSlotMessages('小明', MOVIES, strayUnit, QUESTION_SLOT, BASE_SPEC);
+    const userText = textOf(user);
+    const raw = userText.slice(userText.indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length, userText.indexOf('</WATCHED_EVIDENCE>'));
+    assert.equal(JSON.parse(raw).length, 2);
+    assert.equal(userText.includes('只给这一部'), false);
+
+    // 单元压根没带 relatedMedia 时同样退回全量
+    const bareUnit = { unitId: 'unit-2', subject: '电影学', concept: '家庭记忆的代际传递' };
+    const [, bareUser] = questionSlotMessages('小明', MOVIES, bareUnit, QUESTION_SLOT, BASE_SPEC);
+    const bareRaw = textOf(bareUser).slice(
+        textOf(bareUser).indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length,
+        textOf(bareUser).indexOf('</WATCHED_EVIDENCE>'),
+    );
+    assert.equal(JSON.parse(bareRaw).length, 2);
+});
+
+test('单元槽位保留全部候选片：选哪部片出概念是单元自己的自由', () => {
+    const [, user] = unitSlotMessages('小明', MOVIES, UNIT_SLOT, BASE_SPEC);
+    const userText = textOf(user);
+    const raw = userText.slice(userText.indexOf('<WATCHED_EVIDENCE>') + '<WATCHED_EVIDENCE>'.length, userText.indexOf('</WATCHED_EVIDENCE>'));
+    assert.equal(JSON.parse(raw).length, 2);
+});
+
 test('repairHint 传值时追加在 user 末尾，且只出现一次', () => {
     const hint = 'subjectGroup 写成了 film_expression，与槽位指定的 people_and_mind 不符';
     const [system, user] = unitSlotMessages('小明', MOVIES, UNIT_SLOT, BASE_SPEC, hint);
