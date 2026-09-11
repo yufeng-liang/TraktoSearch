@@ -172,7 +172,7 @@ test('callLlmJson success path writes exactly one health event', async () => {
         const args = healthRows[0].args;
         assert.equal(args[2], 'greeting');
         assert.equal(args[3], 'agnes');
-        assert.equal(args[4], 'agnes-2.5-flash');
+        assert.equal(args[4], 'agnes-3.0-flash');
         assert.equal(args[5], 'success');
         assert.equal(args[6], null);
         assert.equal(args[9], 'req-health-1');

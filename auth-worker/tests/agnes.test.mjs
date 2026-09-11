@@ -149,7 +149,7 @@ test('greeting routes to Agnes when AI_DEFAULT_PROVIDER=agnes', async () => {
             env: createTestEnv({ AI_DEFAULT_PROVIDER: 'agnes', AGNES_API_KEYS: AGNES_KEYS }),
         });
         assert.equal(response.status, 200);
-        assert.equal(captured.body.model, 'agnes-2.5-flash');
+        assert.equal(captured.body.model, 'agnes-3.0-flash');
         assert.match(captured.auth, /^Bearer sk-agnes-/);
         assert.equal(json.data.greeting, '你好');
     } finally {
@@ -186,7 +186,7 @@ test('missing or invalid default provider stays on Agnes instead of MiMo text', 
         }
         assert.equal(requests.length, 3);
         assert.ok(requests.every(request => request.url === 'https://apihub.agnes-ai.com/v1/chat/completions'));
-        assert.ok(requests.every(request => request.model === 'agnes-2.5-flash'));
+        assert.ok(requests.every(request => request.model === 'agnes-3.0-flash'));
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -269,7 +269,7 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         // zhipu/mimo 未配 key（AI_TEST_MODE 下不可用）轮空，agnes 第二次兜住又输出不合格
         // units，三轮全失败走确定性兜底——Agnes 共收到两次 quiz-units 请求。
         assert.deepEqual(requests.map(request => request.route), ['taste', 'quiz', 'quiz', 'daily', 'daily']);
-        assert.ok(requests.every(request => request.model === 'agnes-2.5-flash'));
+        assert.ok(requests.every(request => request.model === 'agnes-3.0-flash'));
         assert.ok(requests.every(request => request.hasBearer));
         assert.ok(requests.every(request => !request.hasResponseFormat));
         // 等所有 fire-and-forget 健康写入落地后再断言
@@ -284,7 +284,7 @@ test('taste, quiz, and daily route to Agnes as the default text provider', async
         const healthRows = env.healthInserts.map(row => row.args);
         assert.ok(healthRows.some(r => r[2] === 'taste' && r[3] === 'agnes' && r[5] === 'success'));
         const unitRows = healthRows.filter(r => r[2] === 'quiz-units');
-        assert.equal(unitRows.filter(r => r[3] === 'agnes' && r[4] === 'agnes-2.5-flash' && r[5] === 'success').length, 2, 'units 两轮上游 200 各记 success');
+        assert.equal(unitRows.filter(r => r[3] === 'agnes' && r[4] === 'agnes-3.0-flash' && r[5] === 'success').length, 2, 'units 两轮上游 200 各记 success');
         assert.equal(unitRows.filter(r => r[3] === 'agnes' && r[5] === 'invalid_output' && r[6] === 'INVALID_AI_OUTPUT').length, 2, 'units 本地判废各补一条 invalid_output');
         assert.ok(unitRows.some(r => r[3] === 'mimo' && r[5] === 'upstream_error' && r[6] === 'AI_UPSTREAM_ERROR'));
         assert.equal(healthRows.filter(r => r[2] === 'quiz-review').length, 0, 'units 未通过，不应有 review 行');
@@ -533,6 +533,39 @@ test('explicit legacy MiMo text request keeps the compatibility fallback to Agne
             // 主路径 mimo：显式模型失败后先试 mimo 家内降级（v2.5-pro），再轮 agnes
             { url: 'https://api.xiaomimimo.com/v1/chat/completions', model: 'mimo-v2.5' },
             { url: 'https://api.xiaomimimo.com/v1/chat/completions', model: 'mimo-v2.5-pro' },
+            { url: 'https://apihub.agnes-ai.com/v1/chat/completions', model: 'agnes-3.0-flash' },
+        ]);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('preferred Agnes model is agnes-3.0-flash, with 2.5-flash kept as the in-provider downgrade', async () => {
+    const { DEFAULT_MODEL_BY_PROVIDER } = await import('../src/ai/handler.ts');
+    assert.equal(DEFAULT_MODEL_BY_PROVIDER.agnes, 'agnes-3.0-flash');
+
+    // 首选模型上游 500 时不出 Agnes 家：先退到同家的 agnes-2.5-flash。
+    // 单 key 池（只配一把 key）避免 key 轮换把 500 变成「同模型重试三次」，一次失败就换模型。
+    const originalFetch = globalThis.fetch;
+    const requests = [];
+    globalThis.fetch = async (input, init = {}) => {
+        const model = JSON.parse(init.body).model;
+        requests.push({ url: String(input), model });
+        if (model === 'agnes-3.0-flash') return new Response('upstream boom', { status: 500 });
+        return new Response(
+            JSON.stringify({ choices: [{ message: { content: JSON.stringify({ greeting: '降级成功', nicknameMeaning: '同家降级', comment: '2.5 接手' }) } }] }),
+            { status: 200 },
+        );
+    };
+    try {
+        const { response, json } = await call('/api/ai/greeting', {
+            body: { characterId: 'usagi', sessionId: 'agnes-model-fallback', forceRefresh: true },
+            env: createTestEnv({ AI_DEFAULT_PROVIDER: 'agnes', AGNES_API_KEYS: 'sk-agnes-single' }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(json.data.greeting, '降级成功');
+        assert.deepEqual(requests, [
+            { url: 'https://apihub.agnes-ai.com/v1/chat/completions', model: 'agnes-3.0-flash' },
             { url: 'https://apihub.agnes-ai.com/v1/chat/completions', model: 'agnes-2.5-flash' },
         ]);
     } finally {

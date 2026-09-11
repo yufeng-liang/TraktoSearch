@@ -24,7 +24,9 @@ import {
 import {
     callAgnesJson,
     AGNES_MODELS,
+    AGNES_DEFAULT_MODEL,
     type AgnesMessage,
+    type AgnesModel,
     type AgnesEnvironment,
 } from './agnes.ts';
 import {
@@ -263,17 +265,19 @@ const DAILY_UPSTREAM_TIMEOUT_MS = 180_000;
 
 /** 各供应商的主模型：admin 探针与出题共用同一份，避免两处各写一份后默认模型漂移。 */
 export const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
-    agnes: 'agnes-2.5-flash',
+    agnes: AGNES_DEFAULT_MODEL,
     zhipu: 'glm-4.7',
     // 百炼主模型取实测最快的一档（4 套 87~129s、0 降级格），额度梯队在 MODEL_FALLBACKS_BY_PROVIDER
     bailian: 'qwen3.6-flash',
     mimo: 'mimo-v2.5-pro',
 };
 
-// 同供应商内的模型级降级链（失败按序换下一个）：目前仅 zhipu 有多模型；
-// agnes/mimo 文本各只有一个模型，空数组表示无模型级降级，直接轮下一供应商。
+// 同供应商内的模型级降级链（失败按序换下一个）：zhipu 多档、agnes 两家、bailian 走额度轮换；
+// mimo 文本只有一个模型，空数组表示无模型级降级，直接轮下一供应商。
 const MODEL_FALLBACKS_BY_PROVIDER: Record<TextProvider, readonly string[]> = {
-    agnes: [],
+    // 3.0-flash 首选；它挂了（模型级 5xx/超时）时退到 2.5-flash，仍留在 Agnes 家内，
+    // 不到 key 池全冷却那种账号级问题上，不必跨家轮替。
+    agnes: ['agnes-2.5-flash'],
     zhipu: ['glm-4.7-flash', 'glm-5.3-flash', 'glm-4.5-air', 'glm-4.6v'],
     mimo: [],
     // 百炼的梯队本质是「免费额度轮换」：每个模型 100 万 token 独立额度，用尽返回
@@ -496,7 +500,7 @@ async function handleGreeting(
     // 健康事件上下文：透传 background 让写入挂到 waitUntil，不阻塞响应。
     const healthCtx: HealthRouteContext = { route: 'greeting', requestId, background };
     const character = requireCharacter(body);
-    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', AGNES_DEFAULT_MODEL);
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
     const includeAudio = readOptionalBoolean(body, 'includeAudio');
     const nickname = await getFriendNickname(env, payload.sub);
@@ -576,7 +580,7 @@ async function handleTaste(
     background: BackgroundScheduler | undefined,
 ): Promise<Response> {
     const healthCtx: HealthRouteContext = { route: 'taste', requestId, background };
-    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', AGNES_DEFAULT_MODEL);
     const movies = readMovies(body);
     const nickname = await getFriendNickname(env, payload.sub);
     const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
@@ -625,7 +629,7 @@ async function handleQuiz(
     background: BackgroundScheduler | undefined,
 ): Promise<Response> {
     const healthCtx: HealthRouteContext = { route: 'quiz', requestId, background };
-    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', AGNES_DEFAULT_MODEL);
     if (body.questionCount !== undefined && body.questionCount !== QUIZ_QUESTION_COUNT) {
         throw new AppError('INVALID_QUESTION_COUNT', 'Quiz must contain exactly 13 questions', 400);
     }
@@ -700,7 +704,7 @@ async function handleQuizStream(
     background: BackgroundScheduler | undefined,
 ): Promise<Response> {
     const healthCtx: HealthRouteContext = { route: 'quiz', requestId, background };
-    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', 'agnes-2.5-flash');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5-pro', AGNES_DEFAULT_MODEL);
     if (body.questionCount !== undefined && body.questionCount !== QUIZ_QUESTION_COUNT) {
         throw new AppError('INVALID_QUESTION_COUNT', 'Quiz must contain exactly 13 questions', 400);
     }
@@ -1828,7 +1832,7 @@ async function handleDaily(
     audioOrigin: string,
     background: BackgroundScheduler | undefined,
 ): Promise<Response> {
-    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', AGNES_DEFAULT_MODEL);
     const { forceRefresh, locale, movies, day, watchedKey, cacheKey } = await readDailyContext(body, payload);
     if (!forceRefresh) {
         const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
@@ -1874,7 +1878,7 @@ async function handleDailyStream(
     audioOrigin: string,
     background: BackgroundScheduler | undefined,
 ): Promise<Response> {
-    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', AGNES_DEFAULT_MODEL);
     const { forceRefresh, locale, movies, day, watchedKey, cacheKey } = await readDailyContext(body, payload);
 
     // 标准 TransformStream：Workers 与 Node 测试环境都可用（IdentityTransformStream 是 workerd 专有扩展）
@@ -3497,13 +3501,13 @@ async function readQuizCacheCompat(
 }
 
 // 解析文本生成模型与供应商：
-// - 显式 model 优先（agnes-2.5-flash 走 Agnes，mimo-* 走 MiMo）
+// - 显式 model 优先（AGNES_MODELS 白名单里的走 Agnes，mimo-* 走 MiMo）
 // - 未指定时取 AI_DEFAULT_PROVIDER；仅显式 mimo 选择 MiMo，其余情况默认 Agnes
 function resolveTextModel(
     body: Record<string, unknown>,
     env: AiEnvironment,
     mimoDefault: 'mimo-v2.5' | 'mimo-v2.5-pro',
-    agnesDefault: 'agnes-2.5-flash',
+    agnesDefault: AgnesModel,
 ): ResolvedTextModel {
     const requested = body.model;
     if (requested !== undefined) {

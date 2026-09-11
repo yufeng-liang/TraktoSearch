@@ -5,10 +5,20 @@ import { AppError } from '../util/errors.ts';
 import { KeyPool, fetchWithKeyRotation } from '../util/key-pool.ts';
 
 export const AGNES_BASE_URL = 'https://apihub.agnes-ai.com/v1';
-export const AGNES_MODELS = ['agnes-2.5-flash'] as const;
+// 白名单顺序 = 首选在前。两家实测差异（同一账号、同一 key 池，3 轮同题长输出）：
+// - agnes-3.0-flash：直接吐纯 JSON（无 ``` 包裹），不带 reasoning_content，输出更稳；
+// - agnes-2.5-flash：字符/秒约为 3.0 的 2 倍（360~550 vs 144~257），但带 reasoning 且常包 ```。
+// 所以 3.0 首选、2.5 作为同家模型级降级（见 handler 的 MODEL_FALLBACKS_BY_PROVIDER.agnes）；
+// 两家共用同一账号的共享限流池，key 轮换只解决单 key 限流，账号级 429 会整池冷却。
+export const AGNES_MODELS = ['agnes-3.0-flash', 'agnes-2.5-flash'] as const;
 export const AGNES_IMAGE_MODELS = ['agnes-image-2.5-flash'] as const;
 export type AgnesModel = typeof AGNES_MODELS[number];
 export type AgnesImageModel = typeof AGNES_IMAGE_MODELS[number];
+/**
+ * Agnes 首选模型：隐式选 Agnes（未指定 model 且 AI_DEFAULT_PROVIDER=agnes）与健康探针都用它。
+ * handler 的 DEFAULT_MODEL_BY_PROVIDER 与 resolveTextModel 调用点统一引用这里，避免多处各写一份后漂移。
+ */
+export const AGNES_DEFAULT_MODEL: AgnesModel = 'agnes-3.0-flash';
 
 export type AgnesMessage = {
     role: 'system' | 'user' | 'assistant';
