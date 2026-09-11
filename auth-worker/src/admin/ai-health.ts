@@ -8,6 +8,7 @@ import { callZhipuJson, ZHIPU_MODELS, type ZhipuEnvironment } from '../ai/zhipu.
 import { callAgnesJson, AGNES_MODELS, type AgnesEnvironment } from '../ai/agnes.ts';
 import { callMimoJson, MIMO_MODELS, type MimoEnvironment, type MimoModel } from '../ai/mimo.ts';
 import { callBailianJson, BAILIAN_MODELS, type BailianEnvironment } from '../ai/bailian.ts';
+import { callMinimaxJson, MINIMAX_MODELS, type MinimaxEnvironment } from '../ai/minimax.ts';
 import { DEFAULT_MODEL_BY_PROVIDER } from '../ai/handler.ts';
 
 const WINDOW_SECONDS: Record<string, number> = { '24h': 86_400, '7d': 7 * 86_400 };
@@ -19,27 +20,29 @@ const PROBE_OPTIONS = { maxCompletionTokens: 16, temperature: 0, responseFormat:
 
 // 默认模型直接取 handler 那一份，不再维护同值副本——主供应商换人（如 zhipu→bailian）时
 // 探针漏掉新家就等于健康页看不到主力到底通不通。
-type ProbeProvider = 'zhipu' | 'agnes' | 'mimo' | 'bailian';
+type ProbeProvider = 'zhipu' | 'agnes' | 'mimo' | 'bailian' | 'minimax';
 
 const PROBE_DEFAULT_MODEL: Record<ProbeProvider, string> = {
     zhipu: DEFAULT_MODEL_BY_PROVIDER.zhipu,
     agnes: DEFAULT_MODEL_BY_PROVIDER.agnes,
     mimo: DEFAULT_MODEL_BY_PROVIDER.mimo,
     bailian: DEFAULT_MODEL_BY_PROVIDER.bailian,
+    minimax: DEFAULT_MODEL_BY_PROVIDER.minimax,
 };
 
 // 显式数组判定，避免 `in` 运算符把原型链上的属性（constructor / hasOwnProperty 等）当成合法值
-const PROBE_PROVIDERS: readonly ProbeProvider[] = ['zhipu', 'bailian', 'agnes', 'mimo'];
+const PROBE_PROVIDERS: readonly ProbeProvider[] = ['zhipu', 'bailian', 'agnes', 'mimo', 'minimax'];
 
 const VALID_MODELS: Record<string, readonly string[]> = {
     zhipu: ZHIPU_MODELS,
     agnes: AGNES_MODELS,
     mimo: MIMO_MODELS,
     bailian: BAILIAN_MODELS,
+    minimax: MINIMAX_MODELS,
 };
 
 // 探针要读四家密钥；DB/KV 均可选，与 AiHealthEnvironment 的尽力而为语义一致
-interface ProbeEnvironment extends ZhipuEnvironment, AgnesEnvironment, MimoEnvironment, BailianEnvironment {
+interface ProbeEnvironment extends ZhipuEnvironment, AgnesEnvironment, MimoEnvironment, BailianEnvironment, MinimaxEnvironment {
     DB?: D1Database;
     KV?: KVNamespace;
 }
@@ -71,6 +74,8 @@ async function probeOne(
             await callBailianJson(env, model, PROBE_MESSAGES, PROBE_OPTIONS);
         } else if (provider === 'agnes') {
             await callAgnesJson(env, model, PROBE_MESSAGES, PROBE_OPTIONS);
+        } else if (provider === 'minimax') {
+            await callMinimaxJson(env, model, PROBE_MESSAGES, PROBE_OPTIONS);
         } else {
             // 模型已在 handleAiHealthProbe 里过 VALID_MODELS 白名单，这里窄化仅为通过类型检查
             await callMimoJson(env, model as MimoModel, PROBE_MESSAGES, PROBE_OPTIONS);

@@ -30,6 +30,14 @@ import {
     type AgnesEnvironment,
 } from './agnes.ts';
 import {
+    callMinimaxJson,
+    MINIMAX_MODELS,
+    MINIMAX_DEFAULT_MODEL,
+    validateMinimaxModel,
+    type MinimaxMessage,
+    type MinimaxEnvironment,
+} from './minimax.ts';
+import {
     callZhipuJson,
     ZHIPU_MODELS,
     type ZhipuMessage,
@@ -99,7 +107,7 @@ const QUIZ_DIFFICULTY_EASY_HINT = '用户反馈近期题目偏简单：本轮适
 const AI_TEXT_CACHE_VERSION = 'v2';
 const LEGACY_AI_CACHE_VERSION = 'v1';
 
-export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, ZhipuEnvironment, BailianEnvironment, DailyIllustrationEnvironment {
+export interface AiEnvironment extends MimoEnvironment, AiStoreEnvironment, AgnesEnvironment, ZhipuEnvironment, BailianEnvironment, MinimaxEnvironment, DailyIllustrationEnvironment {
     AI_VOICE_SAMPLES?: R2Bucket;
     // 概念插图优先使用专用绑定；未配置时由 daily-illustration 复用现有私有媒体桶。
     AI_IMAGE_CACHE?: R2Bucket;
@@ -214,13 +222,14 @@ interface TasteEvidence {
     confidence: 'high' | 'medium' | 'low';
 }
 
-// 文本供应商四梯队：bailian > zhipu > agnes > mimo（主路径由 resolveTextModel 决定，互备顺序固定）
+// 文本供应商梯队：bailian > zhipu > agnes > mimo > minimax（主路径由 resolveTextModel 决定，互备顺序固定）
 // 百炼打头：它破了账号级吞吐墙（智谱同模型稳定 ~40 字符/秒，百炼 flash 档实测 ~217 字符/秒），
 // 同一套槽位流水线 87~129s vs 智谱 314~536s，且免费额度按模型独立发放、与智谱计费互不相干。
-type TextProvider = 'mimo' | 'agnes' | 'zhipu' | 'bailian';
+// minimax 暂列队尾占位：它的模型优先级（谁当首选、排第几）待用户定，先不挤占现有四家的相对次序。
+type TextProvider = 'mimo' | 'agnes' | 'zhipu' | 'bailian' | 'minimax';
 
 // 与 callLlmJson 互备同序的完整梯队：输出质量轮替（normalize 失败）时按此跨家重试
-const PROVIDER_LADDER: readonly TextProvider[] = ['bailian', 'zhipu', 'agnes', 'mimo'];
+const PROVIDER_LADDER: readonly TextProvider[] = ['bailian', 'zhipu', 'agnes', 'mimo', 'minimax'];
 
 // 出题链路上游超时（本地闭环实测，glm-4.7 关思考、13 题全字段）：
 // units 段 139~174s / 输出 5.2~7k 字符，review 段 256~271s / 输出 16~17.5k 字符。
@@ -265,6 +274,8 @@ const DAILY_UPSTREAM_TIMEOUT_MS = 180_000;
 
 /** 各供应商的主模型：admin 探针与出题共用同一份，避免两处各写一份后默认模型漂移。 */
 export const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
+    // 暂定 M3（实测最快且不思考）；用户定优先级后改 MINIMAX_DEFAULT_MODEL 一处即可
+    minimax: MINIMAX_DEFAULT_MODEL,
     agnes: AGNES_DEFAULT_MODEL,
     zhipu: 'glm-4.7',
     // 百炼主模型取实测最快的一档（4 套 87~129s、0 降级格），额度梯队在 MODEL_FALLBACKS_BY_PROVIDER
@@ -275,6 +286,9 @@ export const DEFAULT_MODEL_BY_PROVIDER: Record<TextProvider, string> = {
 // 同供应商内的模型级降级链（失败按序换下一个）：zhipu 多档、agnes 两家、bailian 走额度轮换；
 // mimo 文本只有一个模型，空数组表示无模型级降级，直接轮下一供应商。
 const MODEL_FALLBACKS_BY_PROVIDER: Record<TextProvider, readonly string[]> = {
+    // 家内降级链待用户定：M2.x 都带 reasoning（占 max_tokens 预算），M2.1 还有「思考把额度烧光、
+    // 正文为空」的记录，别按 M 序号从新到旧盲排。默认空 = M3 失败直接轮下一家。
+    minimax: [],
     // 3.0-flash 首选；它挂了（模型级 5xx/超时）时退到 2.5-flash，仍留在 Agnes 家内，
     // 不到 key 池全冷却那种账号级问题上，不必跨家轮替。
     agnes: ['agnes-2.5-flash'],
@@ -3501,7 +3515,7 @@ async function readQuizCacheCompat(
 }
 
 // 解析文本生成模型与供应商：
-// - 显式 model 优先（AGNES_MODELS 白名单里的走 Agnes，mimo-* 走 MiMo）
+// - 显式 model 优先（各家模型白名单各归各家，MiniMax-M* 走 minimax，mimo-* 走 MiMo）
 // - 未指定时取 AI_DEFAULT_PROVIDER；仅显式 mimo 选择 MiMo，其余情况默认 Agnes
 function resolveTextModel(
     body: Record<string, unknown>,
@@ -3519,6 +3533,9 @@ function resolveTextModel(
         }
         if (typeof requested === 'string' && (BAILIAN_MODELS as readonly string[]).includes(requested)) {
             return { provider: 'bailian', model: validateBailianModel(requested), fallbackModel: mimoDefault };
+        }
+        if (typeof requested === 'string' && (MINIMAX_MODELS as readonly string[]).includes(requested)) {
+            return { provider: 'minimax', model: validateMinimaxModel(requested), fallbackModel: mimoDefault };
         }
         return { provider: 'mimo', model: validateMimoModel(requested), fallbackModel: agnesDefault };
     }
@@ -3538,6 +3555,10 @@ function resolveTextModel(
     if (configuredProvider === 'agnes') {
         return { provider: 'agnes', model: agnesDefault, fallbackModel: mimoDefault };
     }
+    // minimax 只有显式配置才当主路径（模型优先级待用户定，不参与默认轮替的第一顺位）
+    if (configuredProvider === 'minimax') {
+        return { provider: 'minimax', model: DEFAULT_MODEL_BY_PROVIDER.minimax, fallbackModel: mimoDefault };
+    }
     return { provider: 'bailian', model: DEFAULT_MODEL_BY_PROVIDER.bailian, fallbackModel: mimoDefault };
 }
 
@@ -3553,16 +3574,19 @@ async function callLlmJson(
     context: LlmRequestContext,
     health?: HealthRouteContext,
 ): Promise<LlmJsonResult | null> {
-    // 四家互备，固定优先级 bailian > zhipu > agnes > mimo：主供应商失败（常见：Agnes 共享池 429 把
-    // 全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
+    // 五家互备，固定优先级 bailian > zhipu > agnes > mimo > minimax：主供应商失败（常见：Agnes
+    // 共享池 429 把全部 key 打进 5 分钟冷却）后按此顺序轮替，而不是整场出题/每日知识静默降级到离线兜底。
     // GLM 实测可用且独立计费，作为默认主供应商；每家主路径都要含自己在内先试主模型。
+    // minimax 排在每家队尾：位置是占位，等用户定完它的优先级再调整（只动这里的数组）。
     const order: TextProvider[] = provider === 'zhipu'
-        ? ['zhipu', 'bailian', 'agnes', 'mimo']
+        ? ['zhipu', 'bailian', 'agnes', 'mimo', 'minimax']
         : provider === 'agnes'
-            ? ['agnes', 'zhipu', 'bailian', 'mimo']
+            ? ['agnes', 'zhipu', 'bailian', 'mimo', 'minimax']
             : provider === 'bailian'
-                ? ['bailian', 'zhipu', 'agnes', 'mimo']
-                : ['mimo', 'agnes', 'zhipu', 'bailian'];
+                ? ['bailian', 'zhipu', 'agnes', 'mimo', 'minimax']
+                : provider === 'minimax'
+                    ? ['minimax', 'bailian', 'zhipu', 'agnes', 'mimo']
+                    : ['mimo', 'agnes', 'zhipu', 'bailian', 'minimax'];
     let lastError: unknown = null;
     const healthCtx: HealthRouteContext | undefined = health;
     // 每家供应商按「请求模型（仅主路径）→ 默认模型 → 该家模型降级链」逐个尝试，
@@ -3584,7 +3608,9 @@ async function callLlmJson(
                         ? await callZhipuJson(env, m, messages as unknown as ZhipuMessage[], options)
                         : p === 'bailian'
                             ? await callBailianJson(env, m, messages as unknown as BailianMessage[], options)
-                            : await callMimoJson(env, m as MimoModel, messages, options);
+                            : p === 'minimax'
+                                ? await callMinimaxJson(env, m, messages as unknown as MinimaxMessage[], options)
+                                : await callMimoJson(env, m as MimoModel, messages, options);
                 const durationMs = Date.now() - startedAtMs;
                 // 未配置/测试模式下供应商返回 null 表示该家不可用：继续轮下一家；
                 // 全部轮完仍未成功时由函数末尾按主供应商契约返回 null 或上抛。
@@ -3616,7 +3642,7 @@ async function callLlmJson(
             }
         }
     }
-    // 主供应商是 bailian/zhipu/agnes 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
+    // 主供应商是 bailian/zhipu/agnes/minimax 时保持旧契约：失败返回 null，由各业务的确定性兜底接手
     // （taste/daily/quiz 都有本地 fallback，不向用户抛错）；mimo 主路径维持上抛语义。
     if (provider !== 'mimo') return null;
     throw lastError ?? new AppError('AI_UPSTREAM_ERROR', 'All AI providers failed', 502);

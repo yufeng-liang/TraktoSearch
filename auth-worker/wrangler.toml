@@ -53,6 +53,9 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 # 不配则用代码里的默认域名。免费额度按模型独立（每模型 1M token），用尽返 403
 # AllocationQuota.FreeTierOnly，由 MODEL_FALLBACKS_BY_PROVIDER.bailian 自动换下一个模型）
 # AGNES_API_KEYS（Agnes AI 多 key：兼容单值、JSON 数组、逗号/换行分隔；多 key 自动轮换容灾）
+# MINIMAX_API_KEY（MiniMax 文本模型；走 aiportx 网关 https://api.aiportx.com/v1，可用
+# MINIMAX_BASE_URL 覆盖域名。用 `wrangler secret put MINIMAX_API_KEY` 写入。模型白名单见
+# src/ai/minimax.ts，梯队位置与首选模型待定：先在梯队队尾占位，不挤占现有四家次序）
 # AI_DEFAULT_PROVIDER 在 [vars] 中配置（主路径 bailian：免费额度按模型独立发放，flash 档实测比智谱快 3~4 倍；
 # 主模型不可用按 bailian > zhipu > agnes > mimo 轮替）；不在此处写密钥
 # ADMIN_EMAIL

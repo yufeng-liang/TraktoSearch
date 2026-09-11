@@ -189,8 +189,8 @@ test('probe endpoint returns per-provider result and writes probe events', async
     globalThis.fetch = async (input, init) => {
         const body = JSON.parse(init.body);
         calls.push({ model: body.model, auth: init.headers });
-        // zhipu/bailian/agnes 200 OK、mimo 402（fetchWithKeyRotation 内部 fetch 同 mock）
-        if (body.model?.startsWith('glm') || body.model?.startsWith('agnes') || body.model?.startsWith('qwen')) {
+        // zhipu/bailian/agnes/minimax 200 OK、mimo 402（fetchWithKeyRotation 内部 fetch 同 mock）
+        if (body.model?.startsWith('glm') || body.model?.startsWith('agnes') || body.model?.startsWith('qwen') || body.model?.startsWith('MiniMax')) {
             return new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), { status: 200 });
         }
         return new Response(JSON.stringify({ error: { message: 'insufficient balance' } }), { status: 402 });
@@ -210,6 +210,7 @@ test('probe endpoint returns per-provider result and writes probe events', async
         MIMO_API_KEY: 'test-mimo',
         AGNES_API_KEYS: 'test-agnes-key',
         BAILIAN_API_KEY: 'test-bailian',
+        MINIMAX_API_KEY: 'test-minimax',
         AI_TEST_MODE: false,
     };
     try {
@@ -229,11 +230,14 @@ test('probe endpoint returns per-provider result and writes probe events', async
         // 主供应商换成百炼后探针必须覆盖它，否则健康页看不到主力通不通
         assert.equal(byProvider.bailian.outcome, 'success');
         assert.equal(byProvider.bailian.model, 'qwen3.6-flash');
-        // 四家各写一条 probe 健康事件
+        // 新增 MiniMax 后探针要覆盖到它（默认模型取 MINIMAX_DEFAULT_MODEL）
+        assert.equal(byProvider.minimax.outcome, 'success');
+        assert.equal(byProvider.minimax.model, 'MiniMax-M3');
+        // 五家各写一条 probe 健康事件
         const probeRows = statements.filter(s => s.sql.includes('ai_health_events'));
-        assert.equal(probeRows.length, 4);
+        assert.equal(probeRows.length, 5);
         // 落库必须挂在 waitUntil 上，避免响应返回后 isolate 回收丢事件
-        assert.equal(waits.length, 4);
+        assert.equal(waits.length, 5);
         await Promise.all(waits);
         const mimoRow = probeRows.map(r => r.args).find(a => a[3] === 'mimo');
         assert.equal(mimoRow[1], 'probe');   // source
