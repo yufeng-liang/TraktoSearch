@@ -340,6 +340,12 @@ export async function handleAiApi(
         return handleDaily(body, env, requestId, requireAiPayload(payload), audioOrigin, background);
     }
 
+    if (path === '/api/ai/daily/stream' && request.method === 'POST') {
+        const body = await readJsonBody(request);
+        assertAction(body, 'daily');
+        return handleDailyStream(body, env, requestId, requireAiPayload(payload), audioOrigin, background);
+    }
+
     if (request.method !== 'POST') {
         throw new AppError('NOT_FOUND', 'Not found', 404);
     }
@@ -837,6 +843,27 @@ export type QuizStreamEvent =
 const QUIZ_STAGE_EXPECTED_CHARS: Record<'units' | 'review', number> = { units: 5200, review: 17500 };
 
 type QuizStreamEmitter = (event: QuizStreamEvent) => void;
+
+/**
+ * 每日知识流式事件：/api/ai/daily/stream 逐行 NDJSON 推给客户端。
+ * 两段式（candidate 挑选 → review 复核）实测合计数十秒，干转圈会让用户以为卡死，
+ * stage/progress 让 App 端显示真实阶段与生成进度，ping 用于长等待期间保活连接。
+ */
+export type DailyStreamEvent =
+    | { type: 'stage'; stage: 'candidate' | 'review'; status: 'start' | 'done'; provider: TextProvider; expectedChars: number }
+    | { type: 'progress'; stage: 'candidate' | 'review'; chars: number }
+    | { type: 'ping'; elapsedMs: number }
+    | { type: 'result'; daily: unknown; quota?: unknown }
+    | { type: 'error'; code: string; message: string };
+
+/** 阶段预期输出字符数（qwen3.6-flash 真实跑批实测：候选 1781 字符、复核 1775 字符，取整到 1800），
+ *  供客户端换算进度百分比；上游长度会浮动，客户端应封顶到 100%。 */
+const DAILY_STAGE_EXPECTED_CHARS: Record<'candidate' | 'review', number> = { candidate: 1800, review: 1800 };
+
+/** 每日知识的修复轮上限：本地门槛判废时带原因重写一次，仍不合格才降级到种子内容。 */
+const DAILY_REPAIR_ROUNDS = 1;
+
+type DailyStreamEmitter = (event: DailyStreamEvent) => void;
 
 /**
  * 共享学习单元出题：第一阶段生成并审校 3～6 个学习单元，第二阶段把单元转换成 13 题。
@@ -1745,6 +1772,46 @@ async function readQuizDifficultyHint(env: AiEnvironment, friendId: string): Pro
     return null;
 }
 
+/**
+ * 每日知识的请求上下文：日期（东八区自然日）、locale、片单与缓存键。
+ * JSON 与流式两条端点共用同一套口径，避免「缓存键算得不一样」导致同一天两份内容。
+ */
+async function readDailyContext(
+    body: Record<string, unknown>,
+    payload: AiJwtPayload,
+): Promise<{ forceRefresh: boolean; locale: DailyLocale; movies: WatchMovie[]; day: string; watchedKey: string | null; cacheKey: string }> {
+    const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
+    const locale = readDailyLocale(body.locale);
+    const movies = readOptionalMovies(body);
+    // 每日知识按东八区自然日切换；locale 与片单摘要都进入缓存键，避免语言或个性化结果串用。
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const watchedKey = movies.length > 0 ? await cacheKeyDigest(JSON.stringify(stableMovieDigest(movies))) : null;
+    return { forceRefresh, locale, movies, day, watchedKey, cacheKey: dailyKnowledgeCacheKey(payload.sub, day, locale, watchedKey) };
+}
+
+/** 生成一天的知识：两段式生成 + 来源可达性校验。两条端点共用，onEvent 只给流式端点。 */
+async function produceDailyKnowledge(
+    env: AiEnvironment,
+    provider: TextProvider,
+    model: string,
+    fallbackModel: string,
+    day: string,
+    locale: DailyLocale,
+    movies: WatchMovie[],
+    requestId: string,
+    background: BackgroundScheduler | undefined,
+    onEvent?: DailyStreamEmitter,
+): Promise<DailyResponse> {
+    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId, background, onEvent);
+    const response = dailyResponseFromUnit(unit, day);
+    // 来源 URL 不可达就整条撤掉，宁可不展示来源也不能给一个死链。
+    if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) {
+        response.sourceUrl = null;
+        response.source = { ...response.source, url: '' };
+    }
+    return response;
+}
+
 async function handleDaily(
     body: Record<string, unknown>,
     env: AiEnvironment,
@@ -1754,13 +1821,7 @@ async function handleDaily(
     background: BackgroundScheduler | undefined,
 ): Promise<Response> {
     const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
-    const forceRefresh = readOptionalBoolean(body, 'forceRefresh');
-    const locale = readDailyLocale(body.locale);
-    const movies = readOptionalMovies(body);
-    // 每日知识按东八区自然日切换；locale 与片单摘要都进入缓存键，避免语言或个性化结果串用。
-    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const watchedKey = movies.length > 0 ? await cacheKeyDigest(JSON.stringify(stableMovieDigest(movies))) : null;
-    const cacheKey = dailyKnowledgeCacheKey(payload.sub, day, locale, watchedKey);
+    const { forceRefresh, locale, movies, day, watchedKey, cacheKey } = await readDailyContext(body, payload);
     if (!forceRefresh) {
         const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
         if (cached) {
@@ -1776,12 +1837,7 @@ async function handleDaily(
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId, background);
-    const response = dailyResponseFromUnit(unit, day);
-    if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) {
-        response.sourceUrl = null;
-        response.source = { ...response.source, url: '' };
-    }
+    const response = await produceDailyKnowledge(env, provider, model, fallbackModel, day, locale, movies, requestId, background);
     // 文字缓存不包含动态插图状态；每次响应按 D1 状态重新装配并新签短期 URL。
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
     const responseWithIllustration = await attachDailyIllustration(
@@ -1792,6 +1848,106 @@ async function handleDaily(
         background,
     );
     return successResponse(responseWithIllustration, requestId, publicQuota(quota));
+}
+
+/**
+ * 流式每日知识：参数/缓存等前置处理同上，命中当天缓存直接下发 result（秒开），
+ * 需要生成时按 candidate → review 两段推送 stage/progress，最后 result（含插图）或 error。
+ *
+ * 为什么要它：两段生成实测数十秒，客户端 OkHttp 读超时按「两次数据间隔」计时，
+ * 一次性响应在慢供应商（如 glm-5.2 227s/套同族）下会被掐断；流式下每 10s 有字节，
+ * 客户端可以一直等，同时把真实阶段暴露给 UI，等待不再是黑箱。
+ */
+async function handleDailyStream(
+    body: Record<string, unknown>,
+    env: AiEnvironment,
+    requestId: string,
+    payload: AiJwtPayload,
+    audioOrigin: string,
+    background: BackgroundScheduler | undefined,
+): Promise<Response> {
+    const { provider, model, fallbackModel } = resolveTextModel(body, env, 'mimo-v2.5', 'agnes-2.5-flash');
+    const { forceRefresh, locale, movies, day, watchedKey, cacheKey } = await readDailyContext(body, payload);
+
+    // 标准 TransformStream：Workers 与 Node 测试环境都可用（IdentityTransformStream 是 workerd 专有扩展）
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+    const startedAtMs = Date.now();
+    let closed = false;
+    const writeEvent = async (event: DailyStreamEvent): Promise<void> => {
+        if (closed) return;
+        try {
+            await writer.write(encoder.encode(JSON.stringify(event) + '\n'));
+        } catch {
+            // 客户端断开：停止推送，生成侧仍跑完当前轮（上游超时兜底），不做中途取消
+            closed = true;
+        }
+    };
+    const configuredHeartbeat = Number(env.AI_QUIZ_STREAM_HEARTBEAT_MS);
+    const heartbeat = setInterval(() => {
+        void writeEvent({ type: 'ping', elapsedMs: Date.now() - startedAtMs });
+    }, Number.isFinite(configuredHeartbeat) && configuredHeartbeat > 0 ? configuredHeartbeat : 10_000);
+
+    void (async () => {
+        try {
+            if (!forceRefresh) {
+                const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
+                if (cached) {
+                    const cachedWithIllustration = await attachDailyIllustration(cached, env, payload.sub, audioOrigin, background);
+                    await writeEvent({ type: 'result', daily: cachedWithIllustration });
+                    return;
+                }
+            }
+            const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+            const response = await produceDailyKnowledge(
+                env,
+                provider,
+                model,
+                fallbackModel,
+                day,
+                locale,
+                movies,
+                requestId,
+                background,
+                event => { void writeEvent(event); },
+            );
+            // 文字缓存不包含动态插图状态；每次响应按 D1 状态重新装配并新签短期 URL。
+            await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
+            const responseWithIllustration = await attachDailyIllustration(response, env, payload.sub, audioOrigin, background);
+            await writeEvent({ type: 'result', daily: responseWithIllustration, quota: publicQuota(quota) });
+        } catch (error) {
+            // 流内异常必须留痕：否则只能看到 App 端「加载失败」，无法区分存储、鉴权还是上游问题
+            console.warn('[DAILY_DIAG]', JSON.stringify({
+                stage: 'stream_error',
+                requestId,
+                error: error instanceof AppError ? error.code : 'UNKNOWN',
+                errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN',
+            }));
+            await writeEvent({
+                type: 'error',
+                code: error instanceof AppError ? error.code : 'AI_UPSTREAM_ERROR',
+                message: 'Daily knowledge failed',
+            });
+        } finally {
+            clearInterval(heartbeat);
+            closed = true;
+            try {
+                await writer.close();
+            } catch {
+                // 连接已断开
+            }
+        }
+    })();
+
+    return new Response(readable, {
+        headers: {
+            'Content-Type': 'application/x-ndjson; charset=utf-8',
+            // no-transform 阻止边缘压缩：gzip 会把小事件缓冲起来，心跳就失去意义
+            'Cache-Control': 'no-store, no-transform',
+            'X-Accel-Buffering': 'no',
+        },
+    });
 }
 
 /**
@@ -1808,60 +1964,96 @@ async function generateDailyKnowledgeUnit(
     movies: WatchMovie[],
     requestId: string,
     background: BackgroundScheduler | undefined,
+    onEvent?: DailyStreamEmitter,
 ): Promise<KnowledgeUnit> {
     const healthCtx: HealthRouteContext = { route: 'daily-candidate', requestId, background };
-    let candidateUpstream: LlmJsonResult | null;
-    try {
-        candidateUpstream = await callLlmJson(
-            env,
-            provider,
-            model,
-            dailyCandidateMessages(day, locale, movies),
-            { maxCompletionTokens: 2600, timeoutMs: DAILY_UPSTREAM_TIMEOUT_MS },
-            fallbackModel,
-            { route: 'daily-candidate', requestId },
-            healthCtx,
-        );
-    } catch (error) {
-        if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
-        return fallbackDailyKnowledgeUnit(day, locale);
-    }
-    if (!candidateUpstream) return fallbackDailyKnowledgeUnit(day, locale);
+    // 进度回调来自上游 SSE（数十毫秒一次），节流后转发，避免把流式通道刷成噪声。
+    // 间隔可由 env 覆盖：测试用小间隔，线上保持 1s 粒度——一天只跑两格，比出题细一点体感更好。
+    const configuredThrottle = Number(env.AI_QUIZ_PROGRESS_THROTTLE_MS);
+    const progressThrottleMs = Number.isFinite(configuredThrottle) && configuredThrottle >= 0
+        ? configuredThrottle
+        : 1_000;
+    let lastProgressAt = 0;
+    const emitProgress = (stage: 'candidate' | 'review') => (chars: number) => {
+        if (!onEvent) return;
+        const now = Date.now();
+        if (now - lastProgressAt < progressThrottleMs) return;
+        lastProgressAt = now;
+        onEvent({ type: 'progress', stage, chars });
+    };
+    // 流式只对支持增量进度的供应商开：其余供应商保持一次性返回，阶段事件照发，UI 退化为阶段级进度
+    const streamProgress = provider === 'zhipu' || provider === 'bailian';
 
-    let candidate: KnowledgeUnit;
-    try {
-        candidate = normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(candidateUpstream.payload), { day, locale, movies });
-    } catch (error) {
-        // 上游 200 但候选单元判废：补记 invalid_output（上游 success 已单独落库）
-        recordHealthEvent(env, healthCtx, 'traffic', candidateUpstream.provider, candidateUpstream.model, 'invalid_output', error);
-        return fallbackDailyKnowledgeUnit(day, locale);
-    }
+    /**
+     * 单阶段生成 + 修复轮：本地门槛判废时把原因回灌给模型重写，而不是直接降级到种子内容。
+     * 与出题槽位同一套打法（实测把「几乎必废」拉到稳定通过）：模型踩的常常只是形状或一条硬规则，
+     * 告诉它错在哪比重新抽一次有效得多；上游四家全挂才放弃，那种情况重试没有意义。
+     */
+    const generateStage = async (
+        stage: 'candidate' | 'review',
+        buildMessages: (repairHint: string | null) => MimoMessage[],
+        maxTokens: number,
+    ): Promise<KnowledgeUnit | null> => {
+        let hint: string | null = null;
+        for (let round = 0; round <= DAILY_REPAIR_ROUNDS; round += 1) {
+            onEvent?.({ type: 'stage', stage, status: 'start', provider, expectedChars: DAILY_STAGE_EXPECTED_CHARS[stage] });
+            let upstream: LlmJsonResult | null;
+            try {
+                upstream = await callLlmJson(
+                    env,
+                    provider,
+                    model,
+                    buildMessages(hint),
+                    {
+                        maxCompletionTokens: maxTokens,
+                        timeoutMs: DAILY_UPSTREAM_TIMEOUT_MS,
+                        stream: streamProgress,
+                        onProgress: emitProgress(stage),
+                    },
+                    fallbackModel,
+                    { route: stage === 'candidate' ? 'daily-candidate' : 'daily-review', requestId },
+                    { ...healthCtx, route: stage === 'candidate' ? 'daily-candidate' : 'daily-review' },
+                );
+            } catch (error) {
+                if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+                return null;
+            }
+            // 上游不可用（四家轮完仍失败）：重试同一批供应商不会变好，直接交给调用方降级
+            if (!upstream) return null;
+            try {
+                const unit = normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(upstream.payload), { day, locale, movies });
+                onEvent?.({ type: 'stage', stage, status: 'done', provider, expectedChars: DAILY_STAGE_EXPECTED_CHARS[stage] });
+                return unit;
+            } catch (error) {
+                // 上游 200 但单元判废：补记 invalid_output（上游 success 已单独落库），并把原因带回下一轮
+                recordHealthEvent(env, { ...healthCtx, route: stage === 'candidate' ? 'daily-candidate' : 'daily-review' }, 'traffic', upstream.provider, upstream.model, 'invalid_output', error);
+                logDailyFallback(`${stage}_rejected`, requestId, upstream, error, round);
+                hint = error instanceof Error ? error.message.slice(0, 200) : '未知原因';
+            }
+        }
+        return null;
+    };
 
-    let reviewUpstream: LlmJsonResult | null;
-    try {
-        reviewUpstream = await callLlmJson(
-            env,
-            provider,
-            model,
-            dailyReviewMessages(candidate, locale, movies),
-            { maxCompletionTokens: 3000, timeoutMs: DAILY_UPSTREAM_TIMEOUT_MS },
-            fallbackModel,
-            { route: 'daily-review', requestId },
-            { ...healthCtx, route: 'daily-review' },
-        );
-    } catch (error) {
-        if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
-        return fallbackDailyKnowledgeUnit(day, locale);
-    }
-    if (!reviewUpstream) return fallbackDailyKnowledgeUnit(day, locale);
+    const candidate = await generateStage('candidate', hint => dailyCandidateMessages(day, locale, movies, hint), 2600);
+    if (!candidate) return fallbackDailyKnowledgeUnit(day, locale);
+    const reviewed = await generateStage('review', hint => dailyReviewMessages(candidate, locale, movies, hint), 3000);
+    return reviewed ?? fallbackDailyKnowledgeUnit(day, locale);
+}
 
-    try {
-        return normalizeDailyKnowledgeUnit(parseAssistantJson<unknown>(reviewUpstream.payload), { day, locale, movies });
-    } catch (error) {
-        // 上游 200 但二审单元判废：补记 invalid_output
-        recordHealthEvent(env, { ...healthCtx, route: 'daily-review' }, 'traffic', reviewUpstream.provider, reviewUpstream.model, 'invalid_output', error);
-        return fallbackDailyKnowledgeUnit(day, locale);
-    }
+/**
+ * 每日知识降级留痕：判废原因（哪一条门槛）是唯一能区分「提示词要改」与「模型选错」的证据。
+ * 只记错误摘要，不落上游正文（用户可见文本可能含隐私）。
+ */
+function logDailyFallback(stage: string, requestId: string, upstream: LlmJsonResult | null, error: unknown, round = 0): void {
+    console.warn('[DAILY_DIAG]', JSON.stringify({
+        stage,
+        requestId,
+        round,
+        provider: upstream?.provider ?? null,
+        model: upstream?.model ?? null,
+        error: error instanceof AppError ? error.code : 'PARSE',
+        errorDetail: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN',
+    }));
 }
 
 async function attachDailyIllustration<T>(response: T, env: AiEnvironment, friendId: string, origin: string, background: BackgroundScheduler | undefined): Promise<T> {

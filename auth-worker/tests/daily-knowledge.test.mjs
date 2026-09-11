@@ -558,11 +558,13 @@ test('daily prompts forbid subject-generic methodology and unsupported external 
         assert.equal(json.data.unitId, 'prompt-rule-reviewed');
         const candidatePrompt = String(fetchState.requests[0].messages[0].content);
         const reviewPrompt = String(fetchState.requests[1].messages[0].content);
-        assert.match(candidatePrompt, /学科标签必须与题目真正检验的内容一致/);
+        assert.match(candidatePrompt, /学科标签必须与内容真正检验的东西一致/);
         assert.match(candidatePrompt, /避免过度解读/);
         assert.match(candidatePrompt, /source\.evidence 与 URL 的实质支持/);
-        assert.match(reviewPrompt, /学科标签与内容不符/);
-        assert.match(reviewPrompt, /外部事实没有来源摘要实质支撑/);
+        // 二审是最后一道闸：内容规则与字段形状规范必须同样出现在复核提示词里
+        assert.match(reviewPrompt, /学科标签必须与内容真正检验的东西一致/);
+        assert.match(reviewPrompt, /外部事实必须得到 source\.evidence 与 URL 的实质支持/);
+        assert.match(reviewPrompt, /字段硬性形状/);
     } finally {
         fetchState.restore();
     }
@@ -675,4 +677,117 @@ test('精简单元与完整单元同口径：没回到影片原文、学科越�
     assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ subjectGroup: 'people_and_mind' }), options), /controlled catalog/);
     assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ subject: '物理', subjectGroup: 'science_and_nature' }), options), /external source evidence/);
     assert.throws(() => normalizeQuizSlotUnit(slimSlotUnit({ version: 2 }), options), /unitVersion/);
+});
+
+// ---- /api/ai/daily/stream：流式每日知识 ----
+
+async function callDailyStream(body, env, friendId = 'friend-1') {
+    const path = '/api/ai/daily/stream';
+    const request = new Request(`https://gateway.test${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    return handleAiApi(request, env, 'request-daily-stream', path, { sub: friendId, device: 'device-1' });
+}
+
+async function readStreamEvents(response) {
+    const text = await response.text();
+    return text.split('\n').map(line => line.trim()).filter(line => line.length > 0).map(line => JSON.parse(line));
+}
+
+test('daily stream 按 candidate→review 推进阶段并以 result 收尾', async () => {
+    const candidate = validKnowledgeUnit({ unitId: 'candidate-unit', title: '候选标题足够具体' });
+    const reviewed = validKnowledgeUnit({ unitId: 'reviewed-unit', title: '审校后的标题' });
+    const fetchState = installDailyFetch({ candidate, review: reviewed });
+
+    try {
+        const env = createLegacyMimoTextEnv();
+        const response = await callDailyStream(
+            { action: 'daily', sessionId: 'daily-stream', watched: watchedMovies(), forceRefresh: true },
+            env,
+        );
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('Content-Type') ?? '', /application\/x-ndjson/);
+        assert.match(response.headers.get('Cache-Control') ?? '', /no-transform/);
+
+        const events = await readStreamEvents(response);
+        assert.deepEqual(
+            events.filter(event => event.type === 'stage').map(event => event.stage + ':' + event.status),
+            ['candidate:start', 'candidate:done', 'review:start', 'review:done'],
+        );
+        for (const event of events.filter(event => event.type === 'stage')) {
+            assert.ok(event.expectedChars > 0, '阶段事件必须带预期字符数供客户端换算进度');
+        }
+        const result = events.at(-1);
+        assert.equal(result.type, 'result');
+        assert.equal(result.daily.unitId, 'reviewed-unit');
+        assert.equal(result.daily.title, '审校后的标题');
+        assert.ok(result.quota, '生成路径要带上配额，客户端才知道剩余次数');
+        // 两段式：候选与复核各打一次上游，流式不改调用次数
+        assert.equal(fetchState.requests.length, 2);
+    } finally {
+        fetchState.restore();
+    }
+});
+
+test('daily stream 命中当天缓存只下发 result，不打上游也不发阶段事件', async () => {
+    const unit = validKnowledgeUnit({ unitId: 'cached-unit' });
+    const fetchState = installDailyFetch({ candidate: unit, review: unit });
+
+    try {
+        const env = createLegacyMimoTextEnv();
+        const first = await readStreamEvents(await callDailyStream(
+            { action: 'daily', sessionId: 'daily-warm', watched: watchedMovies(), forceRefresh: true },
+            env,
+        ));
+        assert.equal(first.at(-1).type, 'result');
+        assert.equal(fetchState.requests.length, 2);
+
+        // 同一 env 再请求：命中上面写入的当天缓存，秒开
+        const second = await readStreamEvents(await callDailyStream(
+            { action: 'daily', sessionId: 'daily-warm-2', watched: watchedMovies() },
+            env,
+        ));
+        assert.deepEqual(second.map(event => event.type), ['result']);
+        assert.equal(second[0].daily.unitId, 'cached-unit');
+        assert.equal(fetchState.requests.length, 2, '缓存命中不许再打上游');
+        assert.equal(second[0].quota, undefined, '缓存命中不消耗配额，也不该回带新配额');
+    } finally {
+        fetchState.restore();
+    }
+});
+
+test('daily stream 上游全挂时下发确定性兜底 result，而不是 error', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_input, init = {}) => {
+        if (init.method === 'HEAD') return new Response(null, { status: 204 });
+        return new Response('upstream down', { status: 500 });
+    };
+    try {
+        const env = createLegacyMimoTextEnv();
+        const response = await callDailyStream(
+            { action: 'daily', sessionId: 'daily-fallback', watched: watchedMovies(), forceRefresh: true },
+            env,
+        );
+        const events = await readStreamEvents(response);
+        assert.equal(events.some(event => event.type === 'error'), false);
+        const result = events.at(-1);
+        assert.equal(result.type, 'result');
+        // 兜底单元也要是完整可渲染的知识（客户端不允许出现空白卡）
+        assert.ok(result.daily.unitId);
+        assert.ok(result.daily.title);
+        assert.ok(result.daily.explanation);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('daily stream 前置参数非法时不开流，直接抛给外层按 JSON 错误返回', async () => {
+    const env = createLegacyMimoTextEnv();
+    // readDailyContext 在开流前先跑，所以参数非法时流根本没建立，外层仍按普通 JSON 错误返回 400
+    await assert.rejects(
+        () => callDailyStream({ action: 'daily', locale: 'fr-FR', watched: watchedMovies() }, env),
+        (error) => error.code === 'INVALID_REQUEST' && error.statusCode === 400,
+    );
 });

@@ -426,7 +426,10 @@ test('Agnes HTTP 200 with invalid JSON or structure uses deterministic route fal
         assert.equal(daily.response.status, 200);
         assert.match(daily.json.data.unitId, /^seed-/);
         assert.match(daily.json.data.sourceUrl, /^https?:\/\//);
-        assert.deepEqual(requests, ['greeting', 'taste', 'daily']);
+        assert.equal(requests[0], 'greeting');
+        assert.equal(requests[1], 'taste');
+        // daily 的无效输出现在会触发一次带原因的修复轮（首轮 + 修复 = 2 次调用），仍不合格才回落到种子单元
+        assert.deepEqual(requests.slice(2), ['daily', 'daily']);
         assert.equal(mimoTextRequests, 0);
     } finally {
         globalThis.fetch = originalFetch;
