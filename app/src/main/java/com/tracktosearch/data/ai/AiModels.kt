@@ -260,7 +260,19 @@ data class AiQuizRequest(
     val watched: List<AiWatchedTitleDto> = emptyList(),
     val excludedQuizIds: List<String> = emptyList(),
     val questionCount: Int = 13,
-    val sessionId: String = "quiz"
+    val sessionId: String = "quiz",
+    /**
+     * 客户端本地日期（YYYY-MM-DD，东八区）。
+     *
+     * 服务端当天题库按 `(用户, 日期, 套序号)` 定片与定 id，不传日期时它只能取 UTC 日期，
+     * 东八区用户会在早上 8 点整「换日」；服务端允许与 UTC 今天相差 ±1 天，传本地日期是安全区间。
+     */
+    val date: String? = null,
+    /**
+     * 静默预生成：只为把当天题目提前备好，不消耗用户额度、不计入「已玩套数」。
+     * 预生成与正式出题必须落在同一 (用户, 日期, 套序号) 上，正式请求才会命中题库秒开。
+     */
+    val prefetch: Boolean = false
 )
 
 /** 出题阶段：UNITS=提炼学习单元，REVIEW=把单元转换成 13 题。 */

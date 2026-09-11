@@ -1771,10 +1771,8 @@
     <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">ラウンドを開始</string>
     <string name="ai_quiz_need_more_movies">クイズを始めるには視聴済みが 7 本以上必要です</string>
-    <string name="ai_quiz_preview_title">今回の作品を選ぶ</string>
-    <string name="ai_quiz_preview_count">視聴済みの%1$d作品から今回の問題を出します</string>
-    <string name="ai_quiz_replace">入れ替え</string>
-    <string name="ai_quiz_replace_remaining">残りの入れ替え：%1$d回</string>
+    <string name="ai_quiz_preview_title">今日の出題作品</string>
+    <string name="ai_quiz_preview_count">今日は視聴済みの%1$d作品から出題します</string>
     <string name="ai_quiz_submit">回答を送信</string>
     <string name="ai_quiz_next">次の問題</string>
     <string name="ai_quiz_finish">結果を見る</string>
@@ -1787,8 +1785,12 @@
     <string name="ai_feature_back">戻る</string>
     <string name="ai_feature_refresh">更新</string>
     <string name="ai_quiz_stage_units">知識ユニットを抽出中</string>
+    <string name="ai_quiz_wait_title">今日の問題を準備中</string>
+    <string name="ai_quiz_prepare_ready">準備完了。開始ですぐ始められます</string>
+    <string name="ai_quiz_prepare_running">今日の問題をバックグラウンドで準備中…</string>
+    <string name="ai_quiz_prepare_failed">未準備です。開始すると今から生成します</string>
     <string name="ai_quiz_stage_review">問題を生成して検証中</string>
-    <string name="ai_quiz_wait_hint">初回は 5 分ほどかかります。この画面を開いたままにしてください。</string>
+    <string name="ai_quiz_wait_hint">初回の生成は 5 分ほど。生成後は今日中すぐ始められます。</string>
     <string name="ai_quiz_elapsed">経過時間 %1$s</string>
     <string name="ai_quiz_wait_cancel">キャンセルして後で試す</string>
     <string name="ai_feature_loading">スプライトが考え中</string>
@@ -1903,8 +1905,6 @@
     <string name="ai_quiz_unanswered_title">未回答の問題があります</string>
     <string name="ai_quiz_unanswered_message">%1$d 問が未回答で 0 点になります。それでも提出しますか？</string>
     <string name="ai_quiz_submit_anyway">このまま提出</string>
-    <string name="ai_quiz_replace_exhausted">交換できる作品がもうありません</string>
-    <string name="ai_quiz_redraw_all">すべて引き直す</string>
     <string name="ai_quiz_accuracy">正答率 %1$d%%</string>
     <string name="ai_quiz_comment_perfect">満点宣言！あなたは歩く映画事典</string>
     <string name="ai_quiz_comment_great">なかなかすごい、精霊も拍手しています</string>
@@ -1977,7 +1977,7 @@
     <string name="help_ai_sprite">AI スプライト</string>
     <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動し、その後は常時聞き取りません。音声は最大 5 回まで試せ、失敗時やマイク不可時は名前を入力できます。</string>
     <string name="help_ai_sprite_b3">AI は認証済みアカウントのニックネームと視聴履歴を利用します。</string>
-    <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、今日の映像知識を利用できます。クイズには視聴済み 7 本以上が必要です。</string>
+    <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、今日の映像知識を利用できます。クイズは視聴済みから 7 本を選び、その日の問題を事前に用意するため、視聴済み 7 本以上が必要です。</string>
     <string name="help_ai_sprite_b5">AI リクエストには日次上限があり、機能の更新でも 1 回消費します。オフラインでは新規リクエスト不可ですが、キャッシュは読めます。</string>
     <string name="help_ai_sprite_b7">クイズを離れても回答は保持されます。引き直しと未回答のままの提出は確認され、難易度の感想は次回以降の調整に使われます。</string>
 <!-- メイン画面の背景グロー -->

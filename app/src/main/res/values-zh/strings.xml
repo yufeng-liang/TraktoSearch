@@ -1758,10 +1758,8 @@
     <string name="ai_quiz_media_separator">、</string>
     <string name="ai_quiz_start">开始本轮闯关</string>
     <string name="ai_quiz_need_more_movies">开始闯关至少需要 7 部已看影视</string>
-    <string name="ai_quiz_preview_title">先挑选本轮影视</string>
-    <string name="ai_quiz_preview_count">本轮会从 %1$d 部已看影视出题</string>
-    <string name="ai_quiz_replace">换一部</string>
-    <string name="ai_quiz_replace_remaining">还可以替换：%1$d 次</string>
+    <string name="ai_quiz_preview_title">今日考点</string>
+    <string name="ai_quiz_preview_count">今天会从这 %1$d 部已看影视出题</string>
     <string name="ai_quiz_submit">提交答案</string>
     <string name="ai_quiz_next">下一题</string>
     <string name="ai_quiz_finish">查看结果</string>
@@ -1774,8 +1772,12 @@
     <string name="ai_feature_back">返回</string>
     <string name="ai_feature_refresh">刷新</string>
     <string name="ai_quiz_stage_units">正在提炼知识单元</string>
+    <string name="ai_quiz_wait_title">正在准备今天的题目</string>
+    <string name="ai_quiz_prepare_ready">题目已备好，点「开始」即可开题</string>
+    <string name="ai_quiz_prepare_running">正在后台准备今天的题目…</string>
+    <string name="ai_quiz_prepare_failed">题目还没备好，点「开始」会现场生成</string>
     <string name="ai_quiz_stage_review">正在逐题生成并校验</string>
-    <string name="ai_quiz_wait_hint">首次生成约需 5 分钟，请保持此页面打开</string>
+    <string name="ai_quiz_wait_hint">首次生成约需 5 分钟，请保持此页面打开；生成好后当天再玩就不用等了</string>
     <string name="ai_quiz_elapsed">已等待 %1$s</string>
     <string name="ai_quiz_wait_cancel">取消，稍后再试</string>
     <string name="ai_feature_loading">精灵正在想办法</string>
@@ -1890,8 +1892,6 @@
     <string name="ai_quiz_unanswered_title">还有题没答</string>
     <string name="ai_quiz_unanswered_message">还有 %1$d 题未作答，未作答不得分。仍然提交吗？</string>
     <string name="ai_quiz_submit_anyway">仍然提交</string>
-    <string name="ai_quiz_replace_exhausted">没有更多可换的影视了</string>
-    <string name="ai_quiz_redraw_all">全部重抽</string>
     <string name="ai_quiz_accuracy">正确率 %1$d%%</string>
     <string name="ai_quiz_comment_perfect">满分宣言！你就是片场行走的影视百科</string>
     <string name="ai_quiz_comment_great">相当不错，精灵都在鼓掌</string>
@@ -1964,7 +1964,7 @@
     <string name="help_ai_sprite">AI 精灵</string>
     <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，之后不会持续监听；语音最多尝试 5 次，失败或麦克风不可用时可改为输入角色名。</string>
     <string name="help_ai_sprite_b3">AI 会使用授权账号的昵称和你的已看历史。</string>
-    <string name="help_ai_sprite_b4">功能包括昵称欢迎、看单锐评、影视闯关和今日影视知识；闯关需至少 7 部已看影视。</string>
+    <string name="help_ai_sprite_b4">功能包括昵称欢迎、看单锐评、影视闯关和今日影视知识；闯关会从已看影视里挑 7 部、并按天提前备好题目，因此需至少 7 部已看影视。</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，刷新功能会再消耗一次；离线时不能发起新请求，但仍可查看缓存内容。</string>
     <string name="help_ai_sprite_b7">离开闯关会保留答案；重新抽题和未答完提交前会确认，难度反馈会用于调整后续题目。</string>
 

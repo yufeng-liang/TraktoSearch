@@ -131,6 +131,7 @@ class AiSpriteViewModelTest {
         assertThat(viewModel.uiState.value.isLoading).isFalse()
         coVerify(exactly = 0) { aiRepository.getGreeting(any(), any(), any()) }
         coVerify(exactly = 0) { aiRepository.getTaste(any(), any(), any()) }
+        // 离线时连静默预生成也不能发出去
         coVerify(exactly = 0) { aiRepository.getQuizStream(any(), any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllShowHistory(any(), any()) }
@@ -1128,6 +1129,12 @@ class AiSpriteViewModelTest {
         val networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.ONLINE)
         val localizedRequests = mutableListOf<Int>()
         val quizRequests = mutableListOf<AiQuizRequest>()
+        // 出题已改流式：请求从流事件里捕获。注意 getQuizStream 不是 suspend 函数，
+        // 桩必须返回 flow{}／flowOf，不能用 coAnswers（会被 runBlocking 焊死测试线程）。
+        // 进入出题页会先静默预生成，所以捕获到的是 [预生成, 正式出题] 两条。
+        coEvery {
+            aiRepository.getQuizStream("friend-a", capture(quizRequests), any())
+        } returns flowOf(AiQuizStreamEvent.Completed(quiz()))
         val viewModel = viewModel(
             networkStatus = networkStatus,
             language = MutableStateFlow(LanguageStorage.LANGUAGE_CHINESE)
@@ -1161,20 +1168,18 @@ class AiSpriteViewModelTest {
         assertThat(previewState.quizPreviewLocalizedTitles.values)
             .containsExactlyElementsIn(localizedRequests.map { "本地化标题-$it" })
 
-        // 出题已改流式：出题请求从流事件里捕获（同为 3 个参数，中间那个是请求体）。
-        // 注意 getQuizStream 不是 suspend 函数，桩必须返回 flow{}／flowOf，不能用 coAnswers。
-        coEvery {
-            aiRepository.getQuizStream("friend-a", capture(quizRequests), false)
-        } returns flowOf(AiQuizStreamEvent.Completed(quiz()))
+        val prewarmCallCount = quizRequests.size
         viewModel.startQuiz()
         advanceUntilIdle()
 
-        assertThat(quizRequests).hasSize(1)
-        assertThat(quizRequests.single().watched.map { it.title })
+        val submit = quizRequests.last()
+        assertThat(submit.prefetch).isFalse()
+        assertThat(quizRequests).hasSize(prewarmCallCount + 1)
+        assertThat(submit.watched.map { it.title })
             .containsExactlyElementsIn(watched.map { it.movie.title })
-        assertThat(quizRequests.single().watched.map { it.title })
+        assertThat(submit.watched.map { it.title })
             .containsNoneIn(previewState.quizPreviewLocalizedTitles.values)
-        val watched100 = quizRequests.single().watched.single {
+        val watched100 = submit.watched.single {
             it.mediaIds.tmdbId == 100
         }
         assertThat(watched100.overview).isEqualTo("TMDB 可靠剧情简介 100")
@@ -1230,6 +1235,113 @@ class AiSpriteViewModelTest {
         assertThat(state.quizPreviewMovies.single { it.mediaIds.tmdbId == failedTmdbId }.title)
             .isEqualTo("Original 3")
     }
+
+    @Test
+    fun openingQuiz_preparesTodaysSetSilentlyAndStartOnlySubmitsIt() = runTest {
+        val requests = mutableListOf<AiQuizRequest>()
+        val viewModel = viewModel()
+        stubQuizWatchedHistory()
+        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returns
+            flowOf(AiQuizStreamEvent.Completed(quiz()))
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+
+        // 进页面就静默预生成当天这一套，并把状态摆给用户看
+        assertThat(requests.map { it.prefetch }).containsExactly(true)
+        assertThat(viewModel.uiState.value.quizPrepareState).isEqualTo(AiQuizPrepareState.READY)
+        val prepared = requests.single()
+        assertThat(prepared.date).isEqualTo(currentBeijingDate())
+
+        viewModel.startQuiz()
+        advanceUntilIdle()
+
+        // 正式出题仍要发一次请求：服务端靠它把当天这一套记为「已玩」，否则下一套会重复；
+        // 但参数与预生成逐字一致，所以这次是命中题库的快速返回。
+        assertThat(requests.map { it.prefetch }).containsExactly(true, false)
+        val submit = requests.last()
+        assertThat(submit.date).isEqualTo(prepared.date)
+        assertThat(submit.watched.map { it.mediaIds.tmdbId })
+            .containsExactlyElementsIn(prepared.watched.map { it.mediaIds.tmdbId })
+        assertThat(viewModel.uiState.value.quizStarted).isTrue()
+        assertThat(viewModel.uiState.value.quiz).isNotNull()
+        assertThat(viewModel.uiState.value.quizGenerating).isFalse()
+    }
+
+    @Test
+    fun startQuizWhilePrewarmRuns_waitsForThatStreamInsteadOfStartingASecondOne() = runTest {
+        val requests = mutableListOf<AiQuizRequest>()
+        val release = CompletableDeferred<Unit>()
+        val viewModel = viewModel()
+        stubQuizWatchedHistory()
+        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returns flow {
+            release.await()
+            emit(AiQuizStreamEvent.Completed(quiz()))
+        }
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        runCurrent()
+        assertThat(requests.map { it.prefetch }).containsExactly(true)
+
+        viewModel.startQuiz()
+        runCurrent()
+
+        // 预生成还在跑：等待页当场可见，而且没有第二条流（同一套题生成两遍要多烧几十次上游调用）
+        assertThat(viewModel.uiState.value.quizGenerating).isTrue()
+        assertThat(requests).hasSize(1)
+
+        release.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(requests.map { it.prefetch }).containsExactly(true, false)
+        assertThat(viewModel.uiState.value.quizStarted).isTrue()
+    }
+
+    @Test
+    fun prewarmFailure_staysSilentAndStartFallsBackToColdGeneration() = runTest {
+        val requests = mutableListOf<AiQuizRequest>()
+        val viewModel = viewModel()
+        stubQuizWatchedHistory()
+        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returnsMany listOf(
+            flow { throw IllegalStateException("upstream down") },
+            flowOf(AiQuizStreamEvent.Completed(quiz()))
+        )
+
+        viewModel.openFeature(AiFeature.QUIZ)
+        advanceUntilIdle()
+
+        // 预生成失败不打扰用户：没有错误态，只在预览页说明「点开始会现场生成」
+        assertThat(viewModel.uiState.value.quizPrepareState).isEqualTo(AiQuizPrepareState.FAILED)
+        assertThat(viewModel.uiState.value.errorCode).isNull()
+        assertThat(viewModel.uiState.value.quizPreviewMovies).hasSize(7)
+
+        viewModel.startQuiz()
+        advanceUntilIdle()
+
+        assertThat(requests.map { it.prefetch }).containsExactly(true, false)
+        assertThat(viewModel.uiState.value.quizStarted).isTrue()
+    }
+
+    /** 出题页需要 ≥7 部已看影视：所有出题用例共用这份桩。 */
+    private fun stubQuizWatchedHistory(count: Int = 7) {
+        val watched = (0 until count).map { index ->
+            TraktWatchlistMovieItem(
+                watched_at = "2024-03-${"%02d".format(index + 1)}T00:00:00Z",
+                movie = TraktMovie(
+                    title = "Quiz Watch $index",
+                    year = 2024,
+                    ids = TraktIds(trakt = index + 1, tmdb = 300 + index),
+                    genres = listOf("drama")
+                )
+            )
+        }
+        coEvery { traktRepository.getAllMovieHistory(extended = "full") } returns Result.success(watched)
+        coEvery { traktRepository.getAllShowHistory(extended = "full") } returns Result.success(emptyList())
+        every { tmdbRepository.peekMovieEnrichment(any(), any(), any()) } returns null
+    }
+
+    private fun currentBeijingDate(): String =
+        LocalDate.now(java.time.ZoneId.of("GMT+8")).toString()
 
     @Test
     fun openingSpriteCenterRotatesSessionIdSoSessionQuotaResetsPerOpen() = runTest {

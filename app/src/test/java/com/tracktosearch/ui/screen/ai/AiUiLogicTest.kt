@@ -119,28 +119,51 @@ class AiUiLogicTest {
     }
 
     @Test
-    fun replaceIsBlockedWhenCandidatesRunOutNotJustWhenCountUsedUp() {
-        val seven = (1..7).map { id ->
+    fun dailyQuizPreviewStaysTheSameWithinADayAndDependsOnSeedOnly() {
+        val watched = (1..12).map { id ->
             com.tracktosearch.data.ai.AiWatchedTitleDto(
                 mediaId = id.toString(),
                 mediaType = "movie",
                 title = "片名$id"
             )
         }
-        // 已看正好 7 部：候选全部在用，之前按钮仍可点但点了原样返回
-        assertThat(canReplaceQuizPreview(seven, seven, replacementCount = 0)).isFalse()
 
-        val nine = seven + (8..9).map { id ->
-            com.tracktosearch.data.ai.AiWatchedTitleDto(
-                mediaId = id.toString(),
-                mediaType = "movie",
-                title = "片名$id"
-            )
-        }
-        assertThat(canReplaceQuizPreview(seven, nine, replacementCount = 0)).isTrue()
-        assertThat(canReplaceQuizPreview(seven, nine, replacementCount = 2)).isFalse()
-        assertThat(remainingQuizReplacements(0)).isEqualTo(2)
-        assertThat(remainingQuizReplacements(3)).isEqualTo(0)
+        val first = selectDailyQuizPreview(watched, seed = "friend-a:2026-09-11")
+        // 同一天怎么重进都是这 7 部：预生成与正式出题必须落在同一批片，否则题库命中的题
+        // 会和预览页展示的考点对不上
+        assertThat(selectDailyQuizPreview(watched, seed = "friend-a:2026-09-11")).isEqualTo(first)
+        assertThat(first).hasSize(7)
+        assertThat(first.map { it.key() }).hasSize(7)
+
+        // 已看列表顺序变了（Trakt 重排、新看一部）不改变选中集合：排序键只跟种子与片名有关
+        val shuffled = watched.sortedByDescending { it.mediaId }
+        assertThat(selectDailyQuizPreview(shuffled, seed = "friend-a:2026-09-11").map { it.key() })
+            .containsExactlyElementsIn(first.map { it.key() })
+
+        // 换天换人换一批（至少不总是同一批，避免抽片粘在固定几部上）
+        val other = selectDailyQuizPreview(watched, seed = "friend-a:2026-09-12")
+        assertThat(other.map { it.key() }).isNotEqualTo(first.map { it.key() })
+    }
+
+    @Test
+    fun dailyQuizPreviewDeduplicatesAndNeverExceedsCandidates() {
+        val duplicateIds = listOf(
+            com.tracktosearch.data.ai.AiWatchedTitleDto("42", "show", "剧集"),
+            com.tracktosearch.data.ai.AiWatchedTitleDto("42", "tv", "旧类型别名"),
+            com.tracktosearch.data.ai.AiWatchedTitleDto("43", "movie", "电影")
+        )
+        val picked = selectDailyQuizPreview(duplicateIds, seed = "friend-a:2026-09-11")
+        assertThat(picked).hasSize(2)
+        assertThat(picked.map { it.mediaId }).containsExactly("42", "43")
+
+        // 同一部片（同名不同 id）不会在一批里出现两次
+        val sameTitle = listOf(
+            com.tracktosearch.data.ai.AiWatchedTitleDto("1", "movie", "同名片"),
+            com.tracktosearch.data.ai.AiWatchedTitleDto("2", "movie", "同名片"),
+            com.tracktosearch.data.ai.AiWatchedTitleDto("3", "movie", "另一部")
+        )
+        assertThat(selectDailyQuizPreview(sameTitle, seed = "s").map { it.mediaId })
+            .containsExactly("1", "3")
     }
 
     @Test
@@ -153,8 +176,8 @@ class AiUiLogicTest {
             com.tracktosearch.data.ai.AiWatchedTitleDto("42", "tv", "旧类型别名"),
             com.tracktosearch.data.ai.AiWatchedTitleDto("43", "movie", "电影")
         )
-        assertThat(selectQuizPreview(candidates, kotlin.random.Random(7))).hasSize(2)
-        assertThat(selectQuizPreview(candidates, kotlin.random.Random(7)).map { it.mediaId })
+        assertThat(selectDailyQuizPreview(candidates, seed = "s")).hasSize(2)
+        assertThat(selectDailyQuizPreview(candidates, seed = "s").map { it.mediaId })
             .containsExactly("42", "43")
     }
 

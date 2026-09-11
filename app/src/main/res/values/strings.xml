@@ -1766,10 +1766,8 @@ Config:
     <string name="ai_quiz_media_separator">, </string>
     <string name="ai_quiz_start">Start this round</string>
     <string name="ai_quiz_need_more_movies">A quiz round needs at least 7 watched titles</string>
-    <string name="ai_quiz_preview_title">Choose this round’s films</string>
-    <string name="ai_quiz_preview_count">%1$d watched films will enter this round</string>
-    <string name="ai_quiz_replace">Replace</string>
-    <string name="ai_quiz_replace_remaining">Replacements remaining: %1$d</string>
+    <string name="ai_quiz_preview_title">Today’s quiz picks</string>
+    <string name="ai_quiz_preview_count">%1$d watched films will be quizzed today</string>
     <string name="ai_quiz_submit">Submit answer</string>
     <string name="ai_quiz_next">Next question</string>
     <string name="ai_quiz_finish">See result</string>
@@ -1781,8 +1779,12 @@ Config:
     <string name="ai_feature_back">Back</string>
     <string name="ai_feature_refresh">Refresh</string>
     <string name="ai_quiz_stage_units">Distilling knowledge units</string>
+    <string name="ai_quiz_wait_title">Preparing today’s questions</string>
+    <string name="ai_quiz_prepare_ready">Questions are ready — tap start to begin</string>
+    <string name="ai_quiz_prepare_running">Preparing today’s questions in the background…</string>
+    <string name="ai_quiz_prepare_failed">Not ready yet — starting will generate it now</string>
     <string name="ai_quiz_stage_review">Writing and checking questions</string>
-    <string name="ai_quiz_wait_hint">First run takes about 5 minutes. Keep this screen open.</string>
+    <string name="ai_quiz_wait_hint">First generation takes about 5 minutes; once it is done, later rounds today start right away.</string>
     <string name="ai_quiz_elapsed">Elapsed %1$s</string>
     <string name="ai_quiz_wait_cancel">Cancel and try later</string>
     <string name="ai_feature_loading">Preparing your answer</string>
@@ -1898,8 +1900,6 @@ Config:
     <string name="ai_quiz_unanswered_title">Unanswered questions</string>
     <string name="ai_quiz_unanswered_message">%1$d question(s) are unanswered and score zero. Submit anyway?</string>
     <string name="ai_quiz_submit_anyway">Submit anyway</string>
-    <string name="ai_quiz_replace_exhausted">No more titles left to swap in</string>
-    <string name="ai_quiz_redraw_all">Redraw all</string>
     <string name="ai_quiz_accuracy">Accuracy %1$d%%</string>
     <string name="ai_quiz_comment_perfect">A perfect run — you\'re a walking film encyclopedia!</string>
     <string name="ai_quiz_comment_great">Pretty great — even the sprite is applauding</string>
@@ -1972,7 +1972,7 @@ Config:
     <string name="help_ai_sprite">AI Sprite</string>
     <string name="help_ai_sprite_b2">Choose a character and say its name once. The app does not keep listening; after up to five voice attempts, or when the microphone is unavailable, type the name instead.</string>
     <string name="help_ai_sprite_b3">AI uses the nickname on your authorized account and your watched history.</string>
-    <string name="help_ai_sprite_b4">Features include nickname welcome, watchlist roast, film quiz, and today’s film knowledge; the quiz needs at least 7 watched titles.</string>
+    <string name="help_ai_sprite_b4">Features include nickname welcome, watchlist roast, film quiz, and today’s film knowledge. The quiz picks 7 titles from your watched list and prepares the day’s questions ahead of time, so it needs at least 7 watched titles.</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota, and refreshing a feature spends one more. Offline, new requests are unavailable but cached content remains readable.</string>
     <string name="help_ai_sprite_b7">Quiz answers survive leaving the round. Redraw and incomplete submission ask for confirmation; difficulty feedback helps tune later rounds.</string>
     <!-- Main screen background glow -->

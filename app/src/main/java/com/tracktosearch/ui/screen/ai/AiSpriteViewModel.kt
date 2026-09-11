@@ -89,7 +89,9 @@ enum class AiActivationState {
 
 private val BEIJING_ZONE = ZoneId.of("GMT+8")
 private const val WATCHED_TITLES_TTL_MS = 10 * 60 * 1000L
-private const val QUIZ_PREVIEW_SIZE = 7
+private const val QUIZ_PREVIEW_SIZE = QUIZ_MOVIE_COUNT
+/** 每套固定 13 题：服务端对 questionCount 做严格校验，客户端不能传别的值。 */
+private const val QUIZ_QUESTION_COUNT = 13
 
 /**
  * 松手后继续采集的尾音宽限窗口。
@@ -143,9 +145,10 @@ data class AiSpriteUiState(
     val quizRequestStartedAtMillis: Long = 0L,
     val quizPreviewMovies: List<AiWatchedTitleDto> = emptyList(),
     val quizPreviewLocalizedTitles: Map<String, String> = emptyMap(),
-    val quizReplacementCount: Int = 0,
-    // 「换一部」是否还有没用过的候选：已看正好 7 部时候选会被用光，按钮必须跟着禁用
-    val quizReplaceAvailable: Boolean = false,
+    // 用户此刻正在等生成：等待页据此进入真实进度视图（静默预生成不置这个标志）
+    val quizGenerating: Boolean = false,
+    // 今日题目的准备状态：预览页据此说明点「开始」是秒开还是现场生成
+    val quizPrepareState: AiQuizPrepareState = AiQuizPrepareState.IDLE,
     val quizStarted: Boolean = false,
     val quizIndex: Int = 0,
     val quizAnswers: Map<String, AiQuizAnswer> = emptyMap(),
@@ -269,9 +272,19 @@ class AiSpriteViewModel @Inject constructor(
     /** 请求代际用于隔离已取消请求的 finally，避免旧请求覆盖新请求的加载态。 */
     private var requestGeneration = 0L
     private var recentQuizIds = emptyList<String>()
-    private var quizCandidates = emptyList<AiWatchedTitleDto>()
-    /** 当前问答预览的 TMDB 本地化标题补全任务；替换预览时取消旧任务，避免旧结果覆盖新列表。 */
-    private var quizLocalizationJob: Job? = null
+    /**
+     * 静默预生成：进入出题页就把当天这一套题备好，用户点「开始」时直接命中服务端题库。
+     *
+     * 单独一个 Job（不进 requestJob）：切换功能、取消等待都不该中断它 —— 它产出的是当天
+     * 固定那一套题，中断了下次还得重来，而服务端并不会因为客户端断开而停止生成。
+     * [quizAwaitPrewarm] 置位时表示用户已经点了「开始」正在等这一条流。
+     */
+    private var quizPrewarmJob: Job? = null
+    /** 预生成完成的那一天的日期；换天即作废（跨零点后旧结果属于昨天的题）。 */
+    private var quizPreparedDay: String? = null
+    /** 作废令牌：取消/重开预生成后，旧 Job 的迟到回调不能再写状态。 */
+    private var quizPrewarmToken = 0L
+    private var quizAwaitPrewarm = false
     /** 开始答题构造请求时复用预览阶段的富化结果。 */
     private var quizPreviewEnrichmentLanguage: String? = null
     private var quizPreviewEnrichments = emptyMap<String, QuizPreviewEnrichment>()
@@ -428,9 +441,12 @@ class AiSpriteViewModel @Inject constructor(
         if (!isNetworkAvailable()) AI_OFFLINE_ERROR_CODE else errorCode(error)
 
     private fun setRequestError(requestId: Long, code: String) {
+        // 出错时把等待页收掉：错误由功能页的错误态呈现，不能让用户停在生成中的进度页
+        quizAwaitPrewarm = false
         updateIfCurrentRequest(requestId) { state ->
             state.copy(
-                errorCode = if (!isNetworkAvailable()) AI_OFFLINE_ERROR_CODE else code
+                errorCode = if (!isNetworkAvailable()) AI_OFFLINE_ERROR_CODE else code,
+                quizGenerating = false
             )
         }
     }
@@ -617,9 +633,7 @@ class AiSpriteViewModel @Inject constructor(
         previewJob?.cancel()
         previewJob = null
         recentQuizIds = emptyList()
-        quizCandidates = emptyList()
-        quizLocalizationJob?.cancel()
-        quizLocalizationJob = null
+        cancelQuizPrewarm()
         watchedTitlesCache = null
         // 重新登录后要能再从落盘值恢复，所以放开这道闸
         activationRestored = false
@@ -642,8 +656,8 @@ class AiSpriteViewModel @Inject constructor(
                 quiz = null,
                 quizPreviewMovies = emptyList(),
                 quizPreviewLocalizedTitles = emptyMap(),
-                quizReplacementCount = 0,
-                quizReplaceAvailable = false,
+                quizGenerating = false,
+                quizPrepareState = AiQuizPrepareState.IDLE,
                 quizStarted = false,
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
@@ -1096,6 +1110,9 @@ class AiSpriteViewModel @Inject constructor(
     fun openFeature(feature: AiFeature) {
         cancelTasteGuard()
         cancelDailyKnowledgeJobs()
+        // 离开出题页就不再承接「点过开始」的那次等待：否则预生成一跑完，用户正在看别的
+        // 功能页时会突然被切进答题。预生成本身继续跑，回来点开始仍命中题库。
+        if (feature != AiFeature.QUIZ) quizAwaitPrewarm = false
         _uiState.update { it.copy(activeFeature = feature, errorCode = null) }
         // 「锐评我的看单」先过隐私守卫：首次点击弹说明（同意才上传）；离线时直接
         // 留在功能页展示不可用文案，不能再发请求后弹服务器错误遮罩。
@@ -1263,7 +1280,11 @@ class AiSpriteViewModel @Inject constructor(
      */
     fun cancelActiveFeatureRequest() {
         beginRequest()
-        _uiState.update { it.copy(isLoading = false, loadingFeature = null) }
+        // 预生成本身不取消：它产出的是当天固定那一套题，中断了下次还得重来
+        quizAwaitPrewarm = false
+        _uiState.update {
+            it.copy(isLoading = false, loadingFeature = null, quizGenerating = false)
+        }
     }
 
     fun setQuizAnswer(questionId: String, optionIds: List<String>, textAnswer: String? = null) {
@@ -1343,8 +1364,11 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun replayQuiz() {
-        quizLocalizationJob?.cancel()
-        quizLocalizationJob = null
+        // 不取消进行中的预生成：它备的就是「下一套」（预生成不吃 usedSets，序号没动），
+        // 重开一次只会让服务端把同一套题再生成一遍。作废只在换账号时做（见
+        // clearPrivateStateAfterUnauthorized）。但要撤掉「点过开始」的那次等待承接：
+        // 用户此刻要的是重新看一遍考点，不该等预生成跑完就自动开考。
+        quizAwaitPrewarm = false
         _uiState.update {
             it.copy(
                 quiz = null,
@@ -1352,15 +1376,12 @@ class AiSpriteViewModel @Inject constructor(
                 quizStarted = false,
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
-                quizReplacementCount = 0,
-                quizReplaceAvailable = false,
                 quizPreviewMovies = emptyList(),
                 quizPreviewLocalizedTitles = emptyMap(),
                 quizFeedbackDifficulty = null,
                 quizFeedbackState = AiQuizFeedbackState.NOT_SUBMITTED
             )
         }
-        quizCandidates = emptyList()
         prepareQuizPreview()
     }
 
@@ -1504,63 +1525,131 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     /**
-     * 预览页「全部重抽」：基于已缓存的候选池本地重新抽一批（尽量避开当前 7 部），
-     * 不重新拉 Trakt 已看列表。非破坏性操作（还没作答），无需二次确认。
+     * 开始闯关。
+     *
+     * 预生成正在跑时必须接同一条流而不是另发一次请求：同一套题生成两遍要烧两次几十次上游
+     * 调用，而服务端没有「同一套题正在生成」的合并。承接方式是等它跑完 —— 生成完的那一刻
+     * 服务端题库里就有这一套了，随后的正式请求必然命中，返回是秒回。
      */
-    fun redrawAllQuizPreview() {
-        val state = _uiState.value
-        if (state.quizStarted) return
-        if (quizCandidates.isEmpty()) {
-            prepareQuizPreview()
-            return
-        }
-        val preview = redrawQuizPreview(state.quizPreviewMovies, quizCandidates)
-        if (preview == state.quizPreviewMovies) return
-        _uiState.update {
-            it.copy(
-                quizPreviewMovies = preview,
-                quizPreviewLocalizedTitles = it.quizPreviewLocalizedTitles.filterKeys { key ->
-                    preview.any { movie -> quizPreviewTitleKey(movie) == key }
-                },
-                quizReplacementCount = 0,
-                quizReplaceAvailable = canReplaceQuizPreview(preview, quizCandidates, 0)
-            )
-        }
-        refreshQuizPreviewLocalizedTitles(preview)
-    }
-
     fun startQuiz() {
         val preview = _uiState.value.quizPreviewMovies
-        if (preview.size < 7) {
+        if (preview.size < QUIZ_PREVIEW_SIZE) {
             setError("NOT_ENOUGH_MOVIES")
+            return
+        }
+        val prewarm = quizPrewarmJob
+        if (prewarm != null && prewarm.isActive) {
+            // 等待页立即可见，计时从用户点下的这一刻算起（预生成先跑的那段不算在他头上）
+            _uiState.update {
+                it.copy(
+                    quizGenerating = true,
+                    quizRequestStartedAtMillis = System.currentTimeMillis(),
+                    errorCode = null
+                )
+            }
+            quizAwaitPrewarm = true
+            viewModelScope.launch {
+                runCatching { prewarm.join() }
+                // 等待期间用户点了取消或离开了这一页：不自动接着开题
+                if (!quizAwaitPrewarm) return@launch
+                quizAwaitPrewarm = false
+                loadQuiz(_uiState.value.quizPreviewMovies, forceRefresh = false)
+            }
             return
         }
         loadQuiz(preview, forceRefresh = false)
     }
 
-    fun replaceQuizMovie(index: Int) {
-        val state = _uiState.value
-        val next = replaceQuizPreview(
-            current = state.quizPreviewMovies,
-            candidates = quizCandidates,
-            index = index,
-            replacementCount = state.quizReplacementCount
-        )
-        if (next != state.quizPreviewMovies) {
-            val nextReplacementCount = state.quizReplacementCount + 1
-            _uiState.update {
-                it.copy(
-                    quizPreviewMovies = next,
-                    quizPreviewLocalizedTitles = it.quizPreviewLocalizedTitles.filterKeys { key ->
-                        next.any { movie -> quizPreviewTitleKey(movie) == key }
-                    },
-                    quizReplacementCount = nextReplacementCount,
-                    quizReplaceAvailable = canReplaceQuizPreview(next, quizCandidates, nextReplacementCount)
+    /**
+     * 静默预生成当天这一套题。
+     *
+     * 进页面就把题备好，用户点「开始」时服务端题库已命中，不必等几分钟。预生成不扣用户额度、
+     * 不计已玩套数（服务端 prefetch 分支），所以「猜错了用户不会玩」也不可惜。
+     * 已有结果、已在跑、离线、未授权都直接返回 —— 它只是增强路径，失败要静默。
+     */
+    private fun scheduleQuizPrewarm(preview: List<AiWatchedTitleDto>) {
+        val friendId = authManager.friendId.value.orEmpty()
+        val day = currentDailyKnowledgeChangeDay()
+        if (preview.size < QUIZ_PREVIEW_SIZE || friendId.isBlank()) {
+            return
+        }
+        if (quizPreparedDay == day || quizPrewarmJob?.isActive == true) return
+        if (!isNetworkAvailable() || !hasLiveAiSession()) return
+        quizPreparedDay = null
+        quizAwaitPrewarm = false
+        updateQuizPrepareState(AiQuizPrepareState.PREPARING)
+        val token = ++quizPrewarmToken
+        val stillCurrent = { token == quizPrewarmToken }
+        quizPrewarmJob = viewModelScope.launch {
+            try {
+                val enriched = enrichQuizPreviewMovies(preview)
+                if (!isNetworkAvailable() || !hasLiveAiSession()) {
+                    updateQuizPrepareState(AiQuizPrepareState.FAILED)
+                    return@launch
+                }
+                var completed: AiQuiz? = null
+                aiRepository.getQuizStream(
+                    friendId,
+                    quizStreamRequest(enriched, day, prefetch = true),
+                    forceRefresh = false
+                ).collect { event ->
+                    if (!stillCurrent()) return@collect
+                    if (event is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed) {
+                        completed = event.quiz
+                    }
+                    _uiState.update { state -> state.withQuizStreamProgress(event) }
+                }
+                if (!stillCurrent()) return@launch
+                quizPreparedDay = if (completed != null) day else null
+                updateQuizPrepareState(
+                    if (completed != null) AiQuizPrepareState.READY else AiQuizPrepareState.FAILED
                 )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 预生成失败不打扰用户：预览页会说明「点开始会现场生成」，点开始走冷路径
+                if (stillCurrent()) updateQuizPrepareState(AiQuizPrepareState.FAILED)
+            } finally {
+                if (stillCurrent()) {
+                    quizPrewarmJob = null
+                    _uiState.update { it.copy(quizStage = null, quizStageChars = 0, quizStageExpectedChars = 0) }
+                }
             }
-            refreshQuizPreviewLocalizedTitles(next)
         }
     }
+
+    /** 丢弃预生成：Job 取消 + 结果作废。服务端生成不受客户端断开影响，不必补偿。 */
+    private fun cancelQuizPrewarm() {
+        quizPrewarmToken += 1L
+        quizPrewarmJob?.cancel()
+        quizPrewarmJob = null
+        quizPreparedDay = null
+        quizAwaitPrewarm = false
+    }
+
+    /** 生成态收敛：清进度并回 IDLE，需要时再单独置目标态。 */
+    private fun updateQuizPrepareState(state: AiQuizPrepareState) {
+        _uiState.update { it.copy(quizPrepareState = state) }
+    }
+
+    /**
+     * 出题请求体：预生成与正式出题只差 [prefetch] 一个字段。
+     *
+     * 其余字段必须逐字一致 —— 服务端按 (用户, 日期, 套序号) 定 quizId、按片单定内容，
+     * 客户端本地缓存键又由这套参数派生；只要有一处不同，预生成就白做。
+     */
+    private fun quizStreamRequest(
+        watched: List<AiWatchedTitleDto>,
+        day: String,
+        prefetch: Boolean
+    ) = com.tracktosearch.data.ai.AiQuizRequest(
+        watched = watched,
+        excludedQuizIds = recentQuizIds,
+        questionCount = QUIZ_QUESTION_COUNT,
+        sessionId = spriteSessionId,
+        date = day,
+        prefetch = prefetch
+    )
 
     fun clearError() {
         _uiState.update {
@@ -1776,25 +1865,34 @@ class AiSpriteViewModel @Inject constructor(
             val watched = watchedTitles()
             if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             if (!canContinueAiRequest(requestId)) return@runFeature
-            val preview = selectQuizPreview(watched)
+            val friendId = authManager.friendId.value.orEmpty()
+            // 片单按 (用户, 本地日期) 稳定：同一天怎么重进都是这 7 部，预生成才对得上
+            val preview = selectDailyQuizPreview(
+                candidates = watched,
+                seed = quizDaySeed(friendId, currentDailyKnowledgeChangeDay()),
+                count = QUIZ_PREVIEW_SIZE
+            )
             val localizedTitles = resolveQuizPreviewLocalizedTitles(preview)
             if (!canContinueAiRequest(requestId)) return@runFeature
-            quizCandidates = watched
             updateIfCurrentRequest(requestId) {
                 it.copy(
                     quiz = null,
                     quizResult = null,
                     quizStarted = false,
+                    quizGenerating = false,
                     quizIndex = 0,
                     quizAnswers = emptyMap(),
                     quizPreviewMovies = preview,
-                    quizPreviewLocalizedTitles = localizedTitles,
-                    quizReplacementCount = 0,
-                    quizReplaceAvailable = canReplaceQuizPreview(preview, watched, 0)
+                    quizPreviewLocalizedTitles = localizedTitles
                 )
             }
+            // 预览页一出来就把当天这一套题备好：用户看完考点直接点开始，不必现场等几分钟
+            scheduleQuizPrewarm(preview)
         }
     }
+
+    /** 出题片单种子：同 (用户, 本地日期) 恒定，与传服务端的日期同源。 */
+    private fun quizDaySeed(friendId: String, day: String): String = "$friendId:$day"
 
     /**
      * 为最多 7 部预览影视补齐安全的 TMDB 依据字段。
@@ -1915,84 +2013,86 @@ class AiSpriteViewModel @Inject constructor(
         val localizedTitle: String?
     )
 
-    private fun refreshQuizPreviewLocalizedTitles(movies: List<AiWatchedTitleDto>) {
-        quizLocalizationJob?.cancel()
-        if (movies.isEmpty()) {
-            _uiState.update { it.copy(quizPreviewLocalizedTitles = emptyMap()) }
-            quizLocalizationJob = null
-            return
-        }
-        quizLocalizationJob = viewModelScope.launch {
-            val localizedTitles = resolveQuizPreviewLocalizedTitles(movies)
-            if (_uiState.value.quizPreviewMovies == movies) {
-                _uiState.update { it.copy(quizPreviewLocalizedTitles = localizedTitles) }
-            }
-        }
-    }
-
     private fun quizPreviewTitleKey(movie: AiWatchedTitleDto): String =
         quizMediaKey(movie.mediaType, movie.mediaId)
 
     private fun loadQuiz(watched: List<AiWatchedTitleDto>, forceRefresh: Boolean) {
         runFeature(AiFeature.QUIZ) { requestId ->
-            if (watched.size < 7) throw IllegalStateException("NOT_ENOUGH_MOVIES")
+            if (watched.size < QUIZ_PREVIEW_SIZE) throw IllegalStateException("NOT_ENOUGH_MOVIES")
             if (!canContinueAiRequest(requestId)) return@runFeature
             val enrichedWatched = enrichQuizPreviewMovies(watched)
             if (!canContinueAiRequest(requestId)) return@runFeature
+            val day = currentDailyKnowledgeChangeDay()
             updateIfCurrentRequest(requestId) {
-                it.copy(quizRequestStartedAtMillis = System.currentTimeMillis())
+                it.copy(
+                    quizRequestStartedAtMillis = System.currentTimeMillis(),
+                    // 等待页立刻可见：生成中不再只是把「开始」按钮灰掉、什么都不说
+                    quizGenerating = true
+                )
             }
             // 流式出题：两阶段实测 280~420s，服务端每 10s 至少写一行事件（真实进度或心跳），
             // 等待页因此能显示「提炼单元 → 逐题生成」的真实阶段与进度，而不是干转圈。
             aiRepository.getQuizStream(
                 authManager.friendId.value.orEmpty(),
-                com.tracktosearch.data.ai.AiQuizRequest(
-                    watched = enrichedWatched,
-                    excludedQuizIds = recentQuizIds,
-                    questionCount = 13,
-                    sessionId = spriteSessionId
-                ),
+                quizStreamRequest(enrichedWatched, day, prefetch = false),
                 forceRefresh
             ).collect { event ->
-                when (event) {
-                    is com.tracktosearch.data.ai.AiQuizStreamEvent.Stage -> {
-                        val expected = if (event.status == com.tracktosearch.data.ai.AiQuizStageStatus.START) {
-                            event.expectedChars
-                        } else {
-                            0
-                        }
-                        updateIfCurrentRequest(requestId) {
-                            it.copy(
-                                quizStage = event.stage,
-                                quizStageExpectedChars = expected,
-                                quizStageChars = if (event.status == com.tracktosearch.data.ai.AiQuizStageStatus.DONE) 0 else it.quizStageChars
-                            )
-                        }
-                    }
-                    is com.tracktosearch.data.ai.AiQuizStreamEvent.Progress -> updateIfCurrentRequest(requestId) {
-                        it.copy(quizStage = event.stage, quizStageChars = event.chars)
-                    }
-                    com.tracktosearch.data.ai.AiQuizStreamEvent.Ping -> Unit
-                    is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed -> {
-                        val quiz = event.quiz
-                        recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
-                        updateIfCurrentRequest(requestId) {
-                            it.copy(
-                                quiz = quiz,
-                                quizStarted = true,
-                                quizIndex = 0,
-                                quizAnswers = emptyMap(),
-                                quizResult = null,
-                                quota = quiz.quota ?: it.quota,
-                                quizStage = null,
-                                quizStageChars = 0,
-                                quizStageExpectedChars = 0
-                            )
-                        }
-                    }
+                if (event is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed) {
+                    if (canContinueAiRequest(requestId)) applyQuiz(event.quiz)
+                    return@collect
                 }
+                updateIfCurrentRequest(requestId) { state -> state.withQuizStreamProgress(event) }
             }
         }
+    }
+
+    /**
+     * 把一套题送进答题态。现场生成与预生成命中都走这里，保证状态收敛方式只有一种。
+     */
+    private fun applyQuiz(quiz: AiQuiz) {
+        recentQuizIds = (listOf(quiz.quizId) + recentQuizIds).take(3)
+        // 这一套已经玩上了：预生成结果与「已就绪」标记都不再对应当前预览页
+        quizPreparedDay = null
+        _uiState.update {
+            it.copy(
+                quiz = quiz,
+                quizStarted = true,
+                quizIndex = 0,
+                quizAnswers = emptyMap(),
+                quizResult = null,
+                quota = quiz.quota ?: it.quota,
+                quizStage = null,
+                quizStageChars = 0,
+                quizStageExpectedChars = 0,
+                quizGenerating = false,
+                quizPrepareState = AiQuizPrepareState.IDLE
+            )
+        }
+    }
+
+    /** 阶段/进度事件统一写进等待页字段：预生成与现场生成共用一套语义。 */
+    private fun AiSpriteUiState.withQuizStreamProgress(
+        event: com.tracktosearch.data.ai.AiQuizStreamEvent
+    ): AiSpriteUiState = when (event) {
+        is com.tracktosearch.data.ai.AiQuizStreamEvent.Stage -> copy(
+            quizStage = event.stage,
+            quizStageExpectedChars = if (event.status == com.tracktosearch.data.ai.AiQuizStageStatus.START) {
+                event.expectedChars
+            } else {
+                0
+            },
+            // 阶段重新开始（含修复轮）时进度归零，避免进度条停在上一轮的位置
+            quizStageChars = if (event.status == com.tracktosearch.data.ai.AiQuizStageStatus.START) {
+                0
+            } else {
+                quizStageChars
+            }
+        )
+        is com.tracktosearch.data.ai.AiQuizStreamEvent.Progress -> copy(
+            quizStage = event.stage,
+            quizStageChars = event.chars
+        )
+        else -> this
     }
 
     private fun loadDaily(

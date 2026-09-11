@@ -152,6 +152,70 @@ class AiRepositoryTest {
         assertThat(suffixes[0]).isNotEqualTo(suffixes[1])
     }
 
+    /** 与 /api/ai/quiz/stream 实际下发格式一致的 NDJSON。 */
+    private fun quizStreamBody(quizId: String): String = """
+        {"type":"stage","stage":"units","status":"start","provider":"bailian","expectedChars":5200}
+        {"type":"progress","stage":"units","chars":900}
+        {"type":"ping","elapsedMs":10000}
+        {"type":"result","quiz":${Json.encodeToString(AiQuizDto.serializer(), validQuizDto(quizId))}}
+    """.trimIndent()
+
+    @Test
+    fun quizStream_prefetchWarmsServerWithoutWritingLocalMirror() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { storage.read(any(), any(), any()) } returns null
+        val sent = mutableListOf<AiQuizRequest>()
+        // 每次调用都要给新的 ResponseBody：流式响应体只能被消费一次，复用同一个实例
+        // 第二次就会读到空流（表现为「流没有下发结果」）
+        coEvery { api.getQuizStream(capture(sent)) } answers {
+            Response.success(
+                quizStreamBody("quiz-1").toResponseBody("application/x-ndjson".toMediaType())
+            )
+        }
+        val writes = mutableListOf<String?>()
+        coEvery { storage.write(any(), any(), any(), any()) } coAnswers { writes += arg<String?>(3) }
+        val repository = buildAiRepository(api, storage)
+        val request = AiQuizRequest(
+            watched = listOf(AiWatchedTitleDto(mediaId = "tmdb:1", mediaType = "movie", title = "A")),
+            sessionId = "sprite-session",
+            date = "2026-09-11"
+        )
+
+        val events = repository.getQuizStream("friend-a", request.copy(prefetch = true)).toList()
+
+        assertThat(events.filterIsInstance<AiQuizStreamEvent.Completed>()).hasSize(1)
+        assertThat(sent.single().prefetch).isTrue()
+        assertThat(sent.single().date).isEqualTo("2026-09-11")
+        // 预生成绝不能写本地镜像：镜像一在，正式出题就被本地缓存挡下、不再发请求，服务端
+        // 于是漏记「当天这一套已玩」（quizbank usedSets），下一套又会抽回同一套题
+        assertThat(writes).isEmpty()
+
+        repository.getQuizStream("friend-a", request).toList()
+
+        assertThat(sent).hasSize(2)
+        assertThat(sent.last().prefetch).isFalse()
+        assertThat(writes).hasSize(1)
+    }
+
+    @Test
+    fun quizStream_fallsBackToServerSideDateWhenRequestOmitsIt() = runTest {
+        val api = mockk<AiApiService>()
+        val storage = mockk<AiStorage>(relaxed = true)
+        coEvery { storage.read(any(), any(), any()) } returns null
+        val sent = mutableListOf<AiQuizRequest>()
+        coEvery { api.getQuizStream(capture(sent)) } returns Response.success(
+            quizStreamBody("quiz-2").toResponseBody("application/x-ndjson".toMediaType())
+        )
+
+        buildAiRepository(api, storage).getQuizStream("friend-a", AiQuizRequest()).toList()
+
+        // 客户端不发日期时服务端只能取 UTC 日期，东八区用户会在早上 8 点整「换日」；
+        // 所以这里必须兜底成本地日期（服务端容错 ±1 天）
+        assertThat(sent.single().date)
+            .isEqualTo(java.time.LocalDate.now(java.time.ZoneId.of("GMT+8")).toString())
+    }
+
     /** 与 /api/ai/daily/stream 实际下发格式一致的 NDJSON：事件之间必须逐行，最后一行不带换行也要能解析。 */
     private val dailyStreamBody = """
         {"type":"stage","stage":"candidate","status":"start","provider":"bailian","expectedChars":1800}

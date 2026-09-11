@@ -80,8 +80,8 @@ import kotlinx.coroutines.delay
 // ChoiceRow 的选中高亮，用户来得及确认自己选了哪项，又不必每题手动「下一题」拖慢 13 题节奏。
 private const val QUIZ_AUTO_ADVANCE_DELAY_MS = 1000L
 
-/** 闯关流程阶段，AnimatedContent 按 phase 切换预览/答题/出分。 */
-private enum class QuizPhase { PREVIEW, QUESTIONS, RESULT, UNAVAILABLE }
+/** 闯关流程阶段，AnimatedContent 按 phase 切换预览/生成中/答题/出分。 */
+private enum class QuizPhase { PREVIEW, PREPARING, QUESTIONS, RESULT, UNAVAILABLE }
 
 @Composable
 fun AiQuizScreen(
@@ -92,6 +92,8 @@ fun AiQuizScreen(
     val quiz = state.quiz
     val phase = when {
         state.quizResult != null -> QuizPhase.RESULT
+        // 用户点了开始、题目还没到：等待页必须现在就在，否则「开始」只是把按钮灰掉
+        state.quizGenerating -> QuizPhase.PREPARING
         !state.quizStarted -> QuizPhase.PREVIEW
         quiz == null || quiz.questions.isEmpty() -> QuizPhase.UNAVAILABLE
         else -> QuizPhase.QUESTIONS
@@ -121,14 +123,15 @@ fun AiQuizScreen(
             QuizPhase.PREVIEW -> QuizPreviewScreen(
                 movies = state.quizPreviewMovies,
                 localizedTitles = state.quizPreviewLocalizedTitles,
-                replacementCount = state.quizReplacementCount,
-                replaceAvailable = state.quizReplaceAvailable,
+                prepareState = state.quizPrepareState,
                 isLoading = state.isLoading,
-                onReplace = viewModel::replaceQuizMovie,
-                onStart = viewModel::startQuiz,
-                onRedrawAll = viewModel::redrawAllQuizPreview
+                onStart = viewModel::startQuiz
             )
-            QuizPhase.UNAVAILABLE -> if (state.isLoading) {
+            // 生成中的等待页与「有开始没题目」兜底共用同一份进度视图
+            QuizPhase.PREPARING,
+            QuizPhase.UNAVAILABLE -> if (target == QuizPhase.UNAVAILABLE && !state.isLoading) {
+                QuizUnavailable()
+            } else {
                 QuizLoadingPlaceholder(
                     stage = state.quizStage,
                     progress = quizStreamProgressFraction(
@@ -139,8 +142,6 @@ fun AiQuizScreen(
                     startedAtMillis = state.quizRequestStartedAtMillis,
                     onCancel = viewModel::cancelActiveFeatureRequest
                 )
-            } else {
-                QuizUnavailable()
             }
             QuizPhase.QUESTIONS -> QuizQuestionScreen(
                 state = state,
@@ -320,20 +321,24 @@ private fun QuizQuestionScreen(
     }
 }
 
+/**
+ * 「今日考点」预览：只读列出今天出题用的影视。
+ *
+ * 片单由客户端按 (用户, 当天) 稳定选出并交给服务端，所以这里不再提供换片/重抽 ——
+ * 用户看到的就是今天这一套题实际会用到的片。顶部一行说明题目准备到哪一步：
+ * 已就绪（点开始秒开）/ 准备中（后台生成）/ 未就绪（点开始会现场生成，需等待）。
+ */
 @Composable
 private fun QuizPreviewScreen(
     movies: List<AiWatchedTitleDto>,
     localizedTitles: Map<String, String>,
-    replacementCount: Int,
-    replaceAvailable: Boolean,
+    prepareState: AiQuizPrepareState,
     isLoading: Boolean,
-    onReplace: (Int) -> Unit,
-    onStart: () -> Unit,
-    onRedrawAll: () -> Unit
+    onStart: () -> Unit
 ) {
     if (movies.isEmpty()) {
         if (isLoading) {
-            // 预览阶段没有流式进度（还没开始出题），退化为不确定进度条
+            // 预览阶段还没有流式进度（连片单都没定），退化为不确定进度条
             QuizLoadingPlaceholder(stage = null, progress = 0f, startedAtMillis = 0L)
         } else {
             QuizUnavailable()
@@ -341,9 +346,6 @@ private fun QuizPreviewScreen(
         return
     }
     val haptics = rememberAppHaptics()
-    // 一屏预算：7 行候选 + 标题 + 底部操作必须完整落在首屏，
-    // 否则「开始本轮闯关」被挤出屏幕外，手势导航机上还点不到（只能靠滚动救）。
-    // 行内边距 8dp + 34dp 序号圈 + 8dp 行距 + 双按钮并排，总高 ~605dp，640dp 级屏幕也放得下。
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -361,6 +363,18 @@ private fun QuizPreviewScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            quizPrepareLabelRes(prepareState)?.let { labelRes ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(labelRes),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = when (prepareState) {
+                        AiQuizPrepareState.READY -> MaterialTheme.colorScheme.primary
+                        AiQuizPrepareState.FAILED -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         }
         itemsIndexed(movies, key = { _, movie -> quizMediaKey(movie.mediaType, movie.mediaId) }) { index, movie ->
             Surface(
@@ -393,79 +407,41 @@ private fun QuizPreviewScreen(
                             Text(it.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    OutlinedButton(
-                        onClick = {
-                            // 7 行里每行一个，成片出现的行内操作按列表项那档给轻一记
-                            haptics.lightTap()
-                            onReplace(index)
-                        },
-                        // 候选被用光（已看正好 7 部）时必须禁用，否则是个点了没反应的死按钮
-                        enabled = replaceAvailable && !isLoading,
-                        // 压到 32dp 内容高度配合紧凑行，按钮默认 40dp 最小高会把行撑到 88dp+
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text(stringResource(R.string.ai_quiz_replace))
-                    }
                 }
             }
         }
         item {
-            Text(
-                if (!replaceAvailable && remainingQuizReplacements(replacementCount) > 0) {
-                    stringResource(R.string.ai_quiz_replace_exhausted)
-                } else {
-                    stringResource(R.string.ai_quiz_replace_remaining, remainingQuizReplacements(replacementCount))
+            // 已看不足 7 部时开始按钮禁用，说明原因而不是留一个死按钮
+            if (movies.size < QUIZ_MOVIE_COUNT) {
+                Text(
+                    text = stringResource(R.string.ai_quiz_need_more_movies),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = {
+                    haptics.tap()
+                    onStart()
                 },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        item {
-            // 主/次操作并排一行：竖排两颗全宽按钮会把选题页总高再抬 56dp，
-            // 正是「开始」被挤出首屏的最后一根稻草；横排后两者同屏可见。
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                enabled = movies.size == QUIZ_MOVIE_COUNT && !isLoading,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // 已看不足 7 部时开始按钮禁用，占满整行说明原因而不是留一个死按钮
-                if (movies.size < 7) {
-                    Text(
-                        text = stringResource(R.string.ai_quiz_need_more_movies),
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Button(
-                    onClick = {
-                        haptics.tap()
-                        onStart()
-                    },
-                    enabled = movies.size == 7 && !isLoading,
-                    modifier = Modifier.weight(1.4f)
-                ) {
-                    Text(stringResource(R.string.ai_quiz_start), maxLines = 1)
-                }
-                // 「全部重抽」是次级操作：OutlinedButton 不抢主按钮视觉；非破坏性（还没作答），无需二次确认
-                OutlinedButton(
-                    onClick = {
-                        haptics.tap()
-                        onRedrawAll()
-                    },
-                    // 与「换一部」共用可用性判断：没有未用候选时重抽必然原样返回，禁用免得变死按钮
-                    enabled = replaceAvailable && !isLoading,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(stringResource(R.string.ai_quiz_redraw_all), maxLines = 1)
-                }
+                Text(stringResource(R.string.ai_quiz_start), maxLines = 1)
             }
         }
     }
 }
 
-
+/** 准备状态文案；IDLE 不占位（离线或还没开始准备时不必多一行字）。 */
+@androidx.annotation.StringRes
+private fun quizPrepareLabelRes(state: AiQuizPrepareState): Int? = when (state) {
+    AiQuizPrepareState.READY -> R.string.ai_quiz_prepare_ready
+    AiQuizPrepareState.PREPARING -> R.string.ai_quiz_prepare_running
+    AiQuizPrepareState.FAILED -> R.string.ai_quiz_prepare_failed
+    AiQuizPrepareState.IDLE -> null
+}
 
 private fun quizDifficultyLabelRes(difficulty: String): Int = when (difficulty.trim().lowercase(Locale.ROOT)) {
     "easy", "warmup", "basic" -> R.string.ai_quiz_difficulty_easy
@@ -1027,7 +1003,7 @@ private fun QuizLoadingPlaceholder(
     val stageLabel = when (stage) {
         com.tracktosearch.data.ai.AiQuizStage.UNITS -> stringResource(R.string.ai_quiz_stage_units)
         com.tracktosearch.data.ai.AiQuizStage.REVIEW -> stringResource(R.string.ai_quiz_stage_review)
-        null -> stringResource(R.string.ai_feature_loading)
+        null -> stringResource(R.string.ai_quiz_wait_title)
     }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
@@ -1048,6 +1024,8 @@ private fun QuizLoadingPlaceholder(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            // 两阶段时间线：让「还要等多久」有结构，而不是一句抽象的「生成中」
+            QuizStageTimeline(current = stage)
             Text(
                 text = stringResource(R.string.ai_quiz_wait_hint),
                 textAlign = TextAlign.Center,
@@ -1064,9 +1042,71 @@ private fun QuizLoadingPlaceholder(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            // 长等待必须给出路：等不下去时回到预览页，不把用户锁在转圈里
+            // 长等待必须给出路：等不下去时回到预览页，不把用户锁在转圈里。
+            // 预生成不会被这次取消打断，「今日考点」页随后会继续显示准备进度。
             TextButton(onClick = onCancel) {
                 Text(stringResource(R.string.ai_quiz_wait_cancel))
+            }
+        }
+    }
+}
+
+/**
+ * 两阶段时间线（提炼单元 → 逐题生成）。
+ *
+ * 只做「已完成 / 进行中 / 待开始」三态，不显示百分比数字：进度本来是按输出字符数估的，
+ * 给个假精确的数值反而会让人盯着一个不动的数字。修复轮会重跑同一阶段，此时它回到进行中。
+ */
+@Composable
+private fun QuizStageTimeline(current: com.tracktosearch.data.ai.AiQuizStage?) {
+    val stages = listOf(
+        com.tracktosearch.data.ai.AiQuizStage.UNITS to R.string.ai_quiz_stage_units,
+        com.tracktosearch.data.ai.AiQuizStage.REVIEW to R.string.ai_quiz_stage_review
+    )
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        stages.forEach { (stage, labelRes) ->
+            val done = current == com.tracktosearch.data.ai.AiQuizStage.REVIEW &&
+                stage == com.tracktosearch.data.ai.AiQuizStage.UNITS
+            val active = current == stage
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (done) {
+                    Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(
+                                if (active) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                }
+                            )
+                    )
+                    Spacer(Modifier.size(8.dp))
+                }
+                Text(
+                    text = stringResource(labelRes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                    color = when {
+                        active -> MaterialTheme.colorScheme.onSurface
+                        done -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    }
+                )
             }
         }
     }

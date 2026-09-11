@@ -18,14 +18,14 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.ai.AiWatchedTitleDto
 import java.util.Locale
 import kotlin.math.log10
-import kotlin.random.Random
 
 private const val MAX_VOICE_ACTIVATION_ATTEMPTS = 5
 private const val MAX_TEXT_ACTIVATION_ATTEMPTS = 5
 private const val MAX_OVERLAY_SESSION_COUNT = 3
 private const val MAX_OVERLAY_DAILY_COUNT = 6
 private const val IDLE_TRIGGER_DELAY_MS = 8_000L
-private const val MAX_QUIZ_REPLACEMENTS = 2
+/** 每套题涉及几部影视：客户端预览、服务端门槛与出题片单都是 7，改要一起改。 */
+const val QUIZ_MOVIE_COUNT = 7
 // 出题两阶段在总进度中的权重：units 实测约 140s、review 约 250s
 private const val QUIZ_UNITS_PROGRESS_WEIGHT = 0.35f
 // 今日知识两阶段实测耗时接近（候选约 6s、复核约 7s），各占一半
@@ -507,24 +507,6 @@ fun hasQuizInProgress(state: AiSpriteUiState): Boolean =
     state.quizStarted && state.quiz != null && state.quizResult == null
 
 /**
- * 「换一部」是否还能点：次数没用满 **且** 还有没用过的候选。
- *
- * 已看正好 7 部时候选恰好被用光，之前按钮仍可点但点了原样返回，成了死按钮。
- */
-fun canReplaceQuizPreview(
-    current: List<AiWatchedTitleDto>,
-    candidates: List<AiWatchedTitleDto>,
-    replacementCount: Int
-): Boolean {
-    if (replacementCount >= MAX_QUIZ_REPLACEMENTS) return false
-    val usedKeys = current.map { it.key() }.toSet()
-    return candidates.any { it.key() !in usedKeys }
-}
-
-fun remainingQuizReplacements(replacementCount: Int): Int =
-    (MAX_QUIZ_REPLACEMENTS - replacementCount).coerceAtLeast(0)
-
-/**
  * 出题等待页的总进度（0f..1f）。
  *
  * 两阶段按实测耗时分配权重：units 约 140s、review 约 250s（本地闭环实测），
@@ -605,49 +587,79 @@ internal fun quizMediaKey(mediaType: String, mediaId: String): String =
 
 internal fun AiWatchedTitleDto.key(): String = quizMediaKey(mediaType, mediaId)
 
-fun selectQuizPreview(
-    candidates: List<AiWatchedTitleDto>,
-    random: Random = Random.Default
-): List<AiWatchedTitleDto> = candidates
-    .distinctBy { it.key() }
-    .shuffled(random)
-    .take(7)
+/** 今日题目的准备状态：预览页据此告诉用户点「开始」是秒开还是要现场等生成。 */
+enum class AiQuizPrepareState {
+    /** 还没开始准备：离线、未授权、已看不满 7 部，或还没进过出题页 */
+    IDLE,
 
-/**
- * 预览页「全部重抽」的新一批：尽量整批避开当前已展示的 7 部；
- * 候选不够凑一整批全新的（已看恰好只有 7 部等）时退回全量随机，
- * 此时可换候选也已用光，按钮会被禁用，走到这里只会原样返回。
- */
-fun redrawQuizPreview(
-    current: List<AiWatchedTitleDto>,
-    candidates: List<AiWatchedTitleDto>,
-    random: Random = Random.Default
-): List<AiWatchedTitleDto> {
-    val currentKeys = current.map { it.key() }.toSet()
-    val fresh = candidates.distinctBy { it.key() }.filterNot { it.key() in currentKeys }
-    return if (fresh.size >= current.size) {
-        fresh.shuffled(random).take(current.size)
-    } else {
-        selectQuizPreview(candidates, random)
-    }
+    /** 静默预生成进行中 */
+    PREPARING,
+
+    /** 已就绪：点「开始」命中当天题库，秒开 */
+    READY,
+
+    /** 预生成失败：点「开始」会现场生成（冷路径，需要等几分钟） */
+    FAILED
 }
 
-fun replaceQuizPreview(
-    current: List<AiWatchedTitleDto>,
+/**
+ * 当天出题片单：按「种子 + 片名」稳定排序取前 [count] 部（默认 7 部）。
+ *
+ * 与服务端 `quiz-bank.selectDailyMovies` 同一套思路：排序键只取决于种子与片名，与影视在
+ * 列表里的先后无关 —— 同一天同一用户无论重进页面、重启 App 还是换设备，选出的都是同一批片。
+ *
+ * 这是「静默预生成」的前提：预生成与正式出题必须落在同一批片上，命中服务端题库时内容才会
+ * 与预览页展示的今日考点一致；片单飘了，用户就会看到预览里没预告过的影视。
+ * 所以这里刻意不用随机洗牌，也刻意不随「已看列表顺序变化」而变。
+ *
+ * 先去重（同 id 归一 + 同片名只留一部，避免一批里出现同一部片），再按原始顺序输出选中项。
+ */
+fun selectDailyQuizPreview(
     candidates: List<AiWatchedTitleDto>,
-    index: Int,
-    replacementCount: Int,
-    random: Random = Random.Default
+    seed: String,
+    count: Int = 7
 ): List<AiWatchedTitleDto> {
-    if (replacementCount >= MAX_QUIZ_REPLACEMENTS || index !in current.indices) return current
-    val usedKeys = current.map { it.key() }.toSet()
-    val replacement = candidates
+    val distinct = candidates
         .distinctBy { it.key() }
-        .filterNot { it.key() in usedKeys }
-        .shuffled(random)
-        .firstOrNull()
-        ?: return current
-    return current.toMutableList().also { it[index] = replacement }
+        .distinctBy { it.title.trim().lowercase(Locale.ROOT) }
+    if (count <= 0 || distinct.size <= count) return distinct
+    val picked = distinct
+        .withIndex()
+        .sortedWith(compareBy({ quizMovieRankKey(seed, it.value.title) }, { it.index }))
+        .take(count)
+        .map { it.index }
+        .toSet()
+    return distinct.filterIndexed { index, _ -> index in picked }
+}
+
+/**
+ * 片单排序键：FNV-1a + murmur3 收尾混淆，值域 [0, 2^32)，按无符号比较。
+ *
+ * 种子与片名共享很长前缀（同一用户同一天），不混淆的话相邻 seed 的键低位相关性偏强，
+ * 抽出来的片会老是贴着同几部。转成 Long 的无符号值比较，与 JS 侧同一算法的排序一致。
+ */
+internal fun quizMovieRankKey(seed: String, title: String): Long =
+    (mix32(fnv1a32(seed + "\u0000" + title)).toLong() and 0xFFFF_FFFFL)
+
+/** FNV-1a 32 位哈希。Kotlin 的 Int 乘法与 JS Math.imul 一样是 32 位回绕。 */
+private fun fnv1a32(input: String): Int {
+    var hash = 0x811c9dc5.toInt()
+    for (element in input) {
+        hash = hash xor element.code
+        hash *= 0x01000193
+    }
+    return hash
+}
+
+/** 32 位收尾混淆（murmur3 finalizer 结构）。 */
+private fun mix32(value: Int): Int {
+    var hash = value
+    hash = hash xor (hash ushr 16)
+    hash *= 0x7feb352d
+    hash = hash xor (hash ushr 15)
+    hash *= 0x846ca68b.toInt()
+    hash = hash xor (hash ushr 16)
+    return hash
 }
 
 fun recommendationHasDetailRoute(recommendation: AiRecommendation): Boolean =

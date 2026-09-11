@@ -357,16 +357,17 @@ class AiRepository @Inject constructor(
         val watched = request.watched.take(MAX_WATCHED_ITEMS)
         val refresh = forceRefresh
         val sessionId = sessionIdFor(friendId, request.sessionId)
+        val date = request.date ?: currentCacheDate()
         return cachedRequest(
             friendId = friendId,
             feature = AiCacheFeature.QUIZ,
             forceRefresh = refresh,
             // 缓存 key 带会话 ID：每次进入精灵中心会话都拿新题包，避免重做上一局"开卷考"
-            suffix = quizCacheSuffix(sessionId, request.excludedQuizIds, watched),
+            suffix = quizCacheSuffix(sessionId, date, request.excludedQuizIds, watched),
             serializer = AiQuiz.serializer()
         ) {
             val payload = api.getQuiz(
-                request.copy(watched = watched, sessionId = sessionId)
+                request.copy(watched = watched, sessionId = sessionId, date = date)
             ).requirePayload()
             val quiz = payload.data.toDomainOrNull(payload.quota)
             if (quiz == null || !quiz.isThirteenQuestionStructure) {
@@ -382,6 +383,10 @@ class AiRepository @Inject constructor(
      * 两阶段实测 280~420s，单次请求会被 OkHttp 90s 读超时掐断；流式下服务端每 10s 至少写
      * 一行（真实进度或心跳），因此连接可以一直保持，等待页也能显示真实阶段。
      * 命中本地缓存时不打网络，直接以 [AiQuizStreamEvent.Completed] 收尾。
+     *
+     * request.prefetch=true 是静默预生成：服务端不扣额度、不计已玩套数，只为把当天这一套
+     * 提前备好。预生成与正式出题共用同一份请求参数（日期/套序号/片单都一样），所以正式请求
+     * 必然命中服务端题库、秒回；预生成本身不写本地镜像（见下方 write 处的原因）。
      */
     fun getQuizStream(
         friendId: String,
@@ -393,7 +398,8 @@ class AiRepository @Inject constructor(
         }
         val watched = request.watched.take(MAX_WATCHED_ITEMS)
         val sessionId = sessionIdFor(friendId, request.sessionId)
-        val suffix = quizCacheSuffix(sessionId, request.excludedQuizIds, watched)
+        val date = request.date ?: currentCacheDate()
+        val suffix = quizCacheSuffix(sessionId, date, request.excludedQuizIds, watched)
         if (!forceRefresh) {
             readCachedWithFallback(friendId, AiCacheFeature.QUIZ, AiQuiz.serializer(), suffix, null)
                 ?.takeIf { it.isThirteenQuestionStructure }
@@ -402,7 +408,9 @@ class AiRepository @Inject constructor(
                     return@flow
                 }
         }
-        val response = api.getQuizStream(request.copy(watched = watched, sessionId = sessionId))
+        val response = api.getQuizStream(
+            request.copy(watched = watched, sessionId = sessionId, date = date)
+        )
         val body = response.body()
         if (!response.isSuccessful || body == null) {
             throw AiErrorMapper.exception(
@@ -428,7 +436,12 @@ class AiRepository @Inject constructor(
         }
         val quiz = completed
             ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "Quiz stream ended without a result", 200)
-        storage.write(friendId, AiCacheFeature.QUIZ, json.encodeToString(AiQuiz.serializer(), quiz), suffix)
+        // 预生成不写本地镜像：镜像一旦存在，正式出题就会被本地缓存直接满足、不再发请求，
+        // 而服务端要靠那次请求把「当天这一套」记为已玩（quizbank:used 的 usedSets）——
+        // 漏记会让下一套题的序号原地不动，又抽回同一套题。预生成只负责把服务端题库暖热。
+        if (!request.prefetch) {
+            storage.write(friendId, AiCacheFeature.QUIZ, json.encodeToString(AiQuiz.serializer(), quiz), suffix)
+        }
     }.flowOn(Dispatchers.IO)
 
     suspend fun submitQuiz(
@@ -1003,12 +1016,20 @@ class AiRepository @Inject constructor(
     private fun watchedDigest(watched: List<AiWatchedTitleDto>): String =
         jsonForCacheKeys.encodeToString(ListSerializer(AiWatchedTitleDto.serializer()), watched).sha256Hex()
 
+    /**
+     * 出题本地缓存键：会话 + 日期 + 已排除套 + 片单摘要。
+     *
+     * 带日期是为了让「当天那一套」逐日隔离：同一天内预生成与正式出题共用一键（命中即秒开），
+     * 跨天必然失效 —— 否则进程长期驻留时会拿昨天的题当今天的。
+     */
     private fun quizCacheSuffix(
         sessionId: String,
+        date: String,
         excludedQuizIds: List<String>,
         watched: List<AiWatchedTitleDto>
     ): String = listOf(
         sessionId,
+        date,
         excludedQuizIds.sorted().joinToString(","),
         watchedDigest(watched)
     ).joinToString("|").sha256Hex()

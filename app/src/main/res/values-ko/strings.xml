@@ -1771,10 +1771,8 @@
     <string name="ai_quiz_media_separator">, </string>
     <string name="ai_quiz_start">라운드 시작</string>
     <string name="ai_quiz_need_more_movies">퀴즈를 시작하려면 시청 완료 7편 이상이 필요합니다</string>
-    <string name="ai_quiz_preview_title">이번 라운드 작품 고르기</string>
-    <string name="ai_quiz_preview_count">이번 라운드는 본 영화 %1$d편에서 출제됩니다</string>
-    <string name="ai_quiz_replace">바꾸기</string>
-    <string name="ai_quiz_replace_remaining">남은 교체 횟수: %1$d</string>
+    <string name="ai_quiz_preview_title">오늘의 출제 작품</string>
+    <string name="ai_quiz_preview_count">오늘은 본 작품 %1$d편에서 출제합니다</string>
     <string name="ai_quiz_submit">답변 제출</string>
     <string name="ai_quiz_next">다음 문제</string>
     <string name="ai_quiz_finish">결과 보기</string>
@@ -1787,8 +1785,12 @@
     <string name="ai_feature_back">뒤로</string>
     <string name="ai_feature_refresh">새로고침</string>
     <string name="ai_quiz_stage_units">지식 단위 추출 중</string>
+    <string name="ai_quiz_wait_title">오늘 문제를 준비하는 중</string>
+    <string name="ai_quiz_prepare_ready">문제 준비 완료 — 시작을 누르면 바로 시작됩니다</string>
+    <string name="ai_quiz_prepare_running">오늘 문제를 백그라운드에서 준비 중…</string>
+    <string name="ai_quiz_prepare_failed">아직 준비되지 않았어요. 시작하면 지금 생성합니다</string>
     <string name="ai_quiz_stage_review">문제 생성 및 검증 중</string>
-    <string name="ai_quiz_wait_hint">첫 생성은 5분 정도 걸립니다. 이 화면을 열어 두세요.</string>
+    <string name="ai_quiz_wait_hint">첫 생성은 약 5분. 한 번 생성되면 오늘은 바로 시작할 수 있어요.</string>
     <string name="ai_quiz_elapsed">경과 %1$s</string>
     <string name="ai_quiz_wait_cancel">취소하고 나중에</string>
     <string name="ai_feature_loading">스프라이트가 생각 중입니다</string>
@@ -1903,8 +1905,6 @@
     <string name="ai_quiz_unanswered_title">답하지 않은 문제가 있습니다</string>
     <string name="ai_quiz_unanswered_message">%1$d문항이 미답으로 0점 처리됩니다. 그래도 제출할까요?</string>
     <string name="ai_quiz_submit_anyway">그대로 제출</string>
-    <string name="ai_quiz_replace_exhausted">바꿀 수 있는 작품이 더 없습니다</string>
-    <string name="ai_quiz_redraw_all">전부 다시 뽑기</string>
     <string name="ai_quiz_accuracy">정답률 %1$d%%</string>
     <string name="ai_quiz_comment_perfect">만점 코스! 당신은 걸어 다니는 영화 백과</string>
     <string name="ai_quiz_comment_great">꽤 훌륭해요, 정령도 박수를 쳐요</string>
@@ -1977,7 +1977,7 @@
     <string name="help_ai_sprite">AI 스프라이트</string>
     <string name="help_ai_sprite_b2">캐릭터 이름을 한 번 말해 활성화하고 이후 계속 듣지 않습니다. 음성은 최대 5회까지 시도하며, 실패하거나 마이크를 쓸 수 없으면 이름을 입력할 수 있습니다.</string>
     <string name="help_ai_sprite_b3">AI는 인증된 계정의 닉네임과 시청 기록을 사용합니다.</string>
-    <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈, 오늘의 영상 지식을 제공합니다. 퀴즈는 시청 완료 7편 이상이 필요합니다.</string>
+    <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈, 오늘의 영상 지식을 제공합니다. 퀴즈는 시청 목록에서 7편을 골라 하루치 문제를 미리 준비하므로 시청 완료 7편 이상이 필요합니다.</string>
     <string name="help_ai_sprite_b5">AI 요청에는 일일 한도가 있고 기능 새로 고침도 한 번 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다.</string>
     <string name="help_ai_sprite_b7">퀴즈를 나가도 답변은 유지됩니다. 다시 뽑기와 미완료 제출 전에 확인하며, 난이도 의견은 이후 문제 조정에 사용됩니다.</string>
 <!-- 메인 화면 배경 글로우 -->
