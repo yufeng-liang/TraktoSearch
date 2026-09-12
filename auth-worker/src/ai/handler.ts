@@ -47,13 +47,17 @@ import {
     dailyCandidateMessages,
     dailyReviewMessages,
     DAILY_LOCALES,
+    DAILY_NO_SOURCE_EVIDENCE,
+    DAILY_NO_SOURCE_NAME,
     fallbackDailyKnowledgeUnit,
     isGenericMethodologyMismatch,
+    isTrustedDailySourceHost,
     normalizeDailyKnowledgeUnit,
     normalizeQuizSlotUnit,
     readDailyLocale,
     stripTrailingSentencePunctuation,
     type DailyLocale,
+    type DailyRecentUsage,
     type KnowledgeUnit,
     type QuizSlotUnit,
 } from './daily-knowledge.ts';
@@ -206,6 +210,8 @@ interface DailyResponse extends KnowledgeUnit {
     characterLine: string | null;
     relatedMediaTitle?: string | null;
     containsSpoiler?: boolean;
+    // true 表示本条是种子兜底（AI 生成失败），用于客户端展示「备用内容」提示。
+    isFallback?: boolean;
     // 只在响应阶段动态装配，不写入文字缓存，避免签名 URL 过期后污染缓存。
     illustration?: DailyIllustrationPublic;
 }
@@ -1828,15 +1834,59 @@ async function produceDailyKnowledge(
     requestId: string,
     background: BackgroundScheduler | undefined,
     onEvent?: DailyStreamEmitter,
+    recentUsage: readonly DailyRecentUsage[] = [],
 ): Promise<DailyResponse> {
-    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId, background, onEvent);
-    const response = dailyResponseFromUnit(unit, day);
-    // 来源 URL 不可达就整条撤掉，宁可不展示来源也不能给一个死链。
-    if (response.sourceUrl && !(await isDailySourceReachable(response.sourceUrl))) {
+    const unit = await generateDailyKnowledgeUnit(env, provider, model, fallbackModel, day, locale, movies, requestId, background, onEvent, recentUsage);
+    const response = dailyResponseFromUnit(unit, day, isFallbackUnitId(unit.unitId));
+    // 来源链路只留「已验证可用」一种形态：URL 不在可信域或 HEAD 核验失败时，整条来源换成
+    // 「AI 综合解读」占位——只把 URL 置空会留下「中国电影资料馆 + 编造摘要」这种半句假引用。
+    const placeholder = stripPlaceholderSourceUrl(response);
+    if (placeholder.sourceUrl && !(await isDailySourceReachable(placeholder.sourceUrl))) {
+        placeholder.sourceUrl = null;
+        placeholder.source = {
+            name: DAILY_NO_SOURCE_NAME,
+            url: '',
+            evidence: DAILY_NO_SOURCE_EVIDENCE,
+        };
+        placeholder.sourceName = placeholder.source.name;
+    }
+    return placeholder;
+}
+
+/**
+ * 「AI 综合解读」= 没有具体来源，链接必须恒为空。
+ * 命中场景：缓存或上游里存着模型照抄形状示例得到的「占位名 + 真实站点首页」。
+ */
+function stripPlaceholderSourceUrl<T extends DailyResponse>(response: T): T {
+    const source = response.source;
+    if (source && source.name === DAILY_NO_SOURCE_NAME) {
         response.sourceUrl = null;
-        response.source = { ...response.source, url: '' };
+        response.source = {
+            name: DAILY_NO_SOURCE_NAME,
+            url: '',
+            evidence: source.evidence || DAILY_NO_SOURCE_EVIDENCE,
+        };
+        response.sourceName = source.name;
     }
     return response;
+}
+
+/** 同一条规则作用于缓存响应：旧缓存里可能已经写死了占位名 + 站点首页，不能原样回给用户。 */
+function stripPlaceholderSourceUrlFromCached<T>(response: T): T {
+    if (!isRecord(response)) return response;
+    const structured = isRecord(response.source) ? response.source : null;
+    // 旧 v2 缓存只有顶层 sourceName/sourceUrl，也要一起兜住。
+    const name = structured ? structured.name : response.sourceName;
+    if (name !== DAILY_NO_SOURCE_NAME) return response;
+    const evidence = structured && typeof structured.evidence === 'string' && structured.evidence
+        ? structured.evidence
+        : DAILY_NO_SOURCE_EVIDENCE;
+    return {
+        ...response,
+        sourceName: DAILY_NO_SOURCE_NAME,
+        sourceUrl: null,
+        source: { name: DAILY_NO_SOURCE_NAME, url: '', evidence },
+    } as T;
 }
 
 async function handleDaily(
@@ -1853,18 +1903,20 @@ async function handleDaily(
         const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
         if (cached) {
             const cachedWithIllustration = await attachDailyIllustration(
-                cached,
+                stripPlaceholderSourceUrlFromCached(cached),
                 env,
                 payload.sub,
                 audioOrigin,
                 background,
+                requestId,
             );
             return successResponse(cachedWithIllustration, requestId);
         }
     }
 
     const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
-    const response = await produceDailyKnowledge(env, provider, model, fallbackModel, day, locale, movies, requestId, background);
+    const recentUsage = await readRecentDailyUsage(env, payload.sub, day, locale, watchedKey);
+    const response = await produceDailyKnowledge(env, provider, model, fallbackModel, day, locale, movies, requestId, background, undefined, recentUsage);
     // 文字缓存不包含动态插图状态；每次响应按 D1 状态重新装配并新签短期 URL。
     await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
     const responseWithIllustration = await attachDailyIllustration(
@@ -1873,6 +1925,7 @@ async function handleDaily(
         payload.sub,
         audioOrigin,
         background,
+        requestId,
     );
     return successResponse(responseWithIllustration, requestId, publicQuota(quota));
 }
@@ -1921,12 +1974,13 @@ async function handleDailyStream(
             if (!forceRefresh) {
                 const cached = await readDailyCacheCompat(env, payload.sub, day, locale, watchedKey);
                 if (cached) {
-                    const cachedWithIllustration = await attachDailyIllustration(cached, env, payload.sub, audioOrigin, background);
+                    const cachedWithIllustration = await attachDailyIllustration(stripPlaceholderSourceUrlFromCached(cached), env, payload.sub, audioOrigin, background, requestId);
                     await writeEvent({ type: 'result', daily: cachedWithIllustration });
                     return;
                 }
             }
             const quota = await reserveAiQuota(env, payload.sub, payload.device, readSessionId(body));
+            const recentUsage = await readRecentDailyUsage(env, payload.sub, day, locale, watchedKey);
             const response = await produceDailyKnowledge(
                 env,
                 provider,
@@ -1938,10 +1992,11 @@ async function handleDailyStream(
                 requestId,
                 background,
                 event => { void writeEvent(event); },
+                recentUsage,
             );
             // 文字缓存不包含动态插图状态；每次响应按 D1 状态重新装配并新签短期 URL。
             await writeAiCache(env, cacheKey, response, 2 * 24 * 60 * 60, payload.sub, 'daily');
-            const responseWithIllustration = await attachDailyIllustration(response, env, payload.sub, audioOrigin, background);
+            const responseWithIllustration = await attachDailyIllustration(response, env, payload.sub, audioOrigin, background, requestId);
             await writeEvent({ type: 'result', daily: responseWithIllustration, quota: publicQuota(quota) });
         } catch (error) {
             // 流内异常必须留痕：否则只能看到 App 端「加载失败」，无法区分存储、鉴权还是上游问题
@@ -1992,6 +2047,7 @@ async function generateDailyKnowledgeUnit(
     requestId: string,
     background: BackgroundScheduler | undefined,
     onEvent?: DailyStreamEmitter,
+    recentUsage: readonly DailyRecentUsage[] = [],
 ): Promise<KnowledgeUnit> {
     const healthCtx: HealthRouteContext = { route: 'daily-candidate', requestId, background };
     // 进度回调来自上游 SSE（数十毫秒一次），节流后转发，避免把流式通道刷成噪声。
@@ -2061,9 +2117,9 @@ async function generateDailyKnowledgeUnit(
         return null;
     };
 
-    const candidate = await generateStage('candidate', hint => dailyCandidateMessages(day, locale, movies, hint), 2600);
+    const candidate = await generateStage('candidate', hint => dailyCandidateMessages(day, locale, movies, hint, recentUsage), 2600);
     if (!candidate) return fallbackDailyKnowledgeUnit(day, locale);
-    const reviewed = await generateStage('review', hint => dailyReviewMessages(candidate, locale, movies, hint), 3000);
+    const reviewed = await generateStage('review', hint => dailyReviewMessages(candidate, locale, movies, hint, recentUsage), 3000);
     return reviewed ?? fallbackDailyKnowledgeUnit(day, locale);
 }
 
@@ -2083,7 +2139,7 @@ function logDailyFallback(stage: string, requestId: string, upstream: LlmJsonRes
     }));
 }
 
-async function attachDailyIllustration<T>(response: T, env: AiEnvironment, friendId: string, origin: string, background: BackgroundScheduler | undefined): Promise<T> {
+async function attachDailyIllustration<T>(response: T, env: AiEnvironment, friendId: string, origin: string, background: BackgroundScheduler | undefined, requestId = 'unknown'): Promise<T> {
     // 旧 v2 缓存没有 unitId/locale，不追加插图字段，保持旧响应合同不变。
     if (!isRecord(response) || typeof response.unitId !== 'string' || typeof response.locale !== 'string') return response;
     if (!(DAILY_LOCALES as readonly string[]).includes(response.locale)) return response;
@@ -2093,12 +2149,15 @@ async function attachDailyIllustration<T>(response: T, env: AiEnvironment, frien
         concept: typeof response.concept === 'string' ? response.concept : '',
         takeaway: typeof response.takeaway === 'string' ? response.takeaway : '',
         explanation: typeof response.explanation === 'string' ? response.explanation : '',
+        // 视觉隐喻（英文短句）：优先使用；旧缓存/旧单元没有该字段时由图片提示词本地兜底。
+        brief: typeof response.illustrationBrief === 'string' ? response.illustrationBrief : null,
+        requestId,
     };
     const illustration = await publicDailyIllustration(env, unit, friendId, origin, background);
     return { ...response, illustration };
 }
 
-function dailyResponseFromUnit(unit: KnowledgeUnit, day: string): DailyResponse {
+function dailyResponseFromUnit(unit: KnowledgeUnit, day: string, isFallback: boolean): DailyResponse {
     return {
         ...unit,
         unitVersion: unit.version,
@@ -2110,11 +2169,62 @@ function dailyResponseFromUnit(unit: KnowledgeUnit, day: string): DailyResponse 
         publishedAt: Date.now(),
         relatedMediaTitle: unit.relatedMedia?.title ?? null,
         containsSpoiler: unit.spoilerLevel !== 'none',
+        // 兜底内容与 AI 生成内容对用户是两条不同的信任信号：客户端据此给出「备用内容」提示。
+        isFallback,
     };
+}
+
+/** 兜底判定只看前缀：种子单元 id 固定以 seed- 开头，正常生成的 id 是 u_* / 模型自造英文 id。 */
+function isFallbackUnitId(unitId: string): boolean {
+    return unitId.startsWith('seed-');
 }
 
 function dailyKnowledgeCacheKey(friendId: string, day: string, locale: DailyLocale, watchedKey: string | null): string {
     return aiCacheKey('v3', 'daily', friendId, day, locale, watchedKey ?? 'none');
+}
+
+/** 东八区自然日往前推 N 天（与 readDailyContext 的 day 计算保持同一时区口径）。 */
+function beijingDayOffset(day: string, offset: number): string {
+    const base = new Date(`${day}T00:00:00+08:00`);
+    if (Number.isNaN(base.getTime())) return day;
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' })
+        .format(new Date(base.getTime() - offset * 24 * 60 * 60 * 1000));
+}
+
+/**
+ * 读取最近几天的今日知识，喂给提示词做「避免重复」。
+ *
+ * 为什么要有它：6 次真上游抽样里 4 次都锁定同一部片、概念互为近义改写，
+ * 用户连着看几天会觉得每天都是同一条。历史就在自己的 daily 缓存里，回读成本为零。
+ */
+async function readRecentDailyUsage(
+    env: AiEnvironment,
+    friendId: string,
+    day: string,
+    locale: DailyLocale,
+    watchedKey: string | null,
+): Promise<DailyRecentUsage[]> {
+    const usage: DailyRecentUsage[] = [];
+    for (let offset = 1; offset <= 3; offset += 1) {
+        const pastDay = beijingDayOffset(day, offset);
+        // 只读当前片单摘要下的同键缓存：个性化结果不同不该互相压制。
+        const cached = await readAiCache(env, dailyKnowledgeCacheKey(friendId, pastDay, locale, watchedKey))
+            ?? (locale === 'zh-CN'
+                ? await readAiCache(env, watchedKey === null
+                    ? aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', friendId, pastDay)
+                    : aiCacheKey(AI_TEXT_CACHE_VERSION, 'daily', friendId, pastDay, watchedKey))
+                : null);
+        if (!isRecord(cached)) continue;
+        const concept = typeof cached.concept === 'string' ? cached.concept.trim() : '';
+        const subject = typeof cached.subject === 'string' ? cached.subject.trim() : '';
+        // 种子兜底的内容不作为「已用」依据：它每天按固定索引轮换，会无端压制正常生成。
+        if (!concept || !subject || (typeof cached.unitId === 'string' && cached.unitId.startsWith('seed-'))) continue;
+        const mediaTitle = isRecord(cached.relatedMedia) && typeof cached.relatedMedia.title === 'string'
+            ? cached.relatedMedia.title.trim()
+            : (typeof cached.relatedMediaTitle === 'string' ? cached.relatedMediaTitle.trim() : '');
+        usage.push({ day: pastDay, concept, subject, mediaTitle: mediaTitle || null });
+    }
+    return usage;
 }
 
 /** v3 locale 键未命中时，zh-CN 继续读取旧 v2 daily 缓存；其他语言不回读旧中文内容。 */
@@ -2134,35 +2244,9 @@ async function readDailyCacheCompat(
     return readAiCache(env, legacyKey);
 }
 
-/** P0 只核验常见可信百科/机构/影视资料域，避免被片单注入诱导访问任意 URL。 */
-const TRUSTED_DAILY_SOURCE_HOSTS = new Set([
-    'www.britannica.com',
-    'dictionary.apa.org',
-    'www.apa.org',
-    'plato.stanford.edu',
-    'pmc.ncbi.nlm.nih.gov',
-    'www.who.int',
-    'www.stlouisfed.org',
-    'llis.nasa.gov',
-    'science.nasa.gov',
-    'www.computerhistory.org',
-    'www.law.cornell.edu',
-    'www.imdb.com',
-    'www.themoviedb.org',
-    'en.wikipedia.org',
-    'zh.wikipedia.org',
-    'ja.wikipedia.org',
-    'ko.wikipedia.org',
-]);
-
-function isTrustedDailySourceHost(hostname: string): boolean {
-    if (TRUSTED_DAILY_SOURCE_HOSTS.has(hostname)) return true;
-    // 维基百科各语言子域统一放行；其余域保持精确匹配。
-    return hostname.endsWith('.wikipedia.org');
-}
-
 /**
  * HEAD 核验 LLM 给出的 daily 来源链接是否真实可达，拦截编造链接。
+ * 可信域目录与提示词共用 daily-knowledge 的 DAILY_TRUSTED_SOURCE_HOSTS，避免两边漂移。
  * 403/405 多为反爬拦截而非幻觉，与 2xx/3xx 一样视为可达；
  * 404/410、网络异常、超时、跳转后离开可信域或任何抛错都视为不可达。
  */

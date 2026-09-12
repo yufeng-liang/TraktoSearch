@@ -107,7 +107,18 @@ export function generateRequestId(): string {
     return crypto.randomUUID();
 }
 
+/**
+ * 可注入时钟：默认取真实时间。
+ * 只给测试用——插图状态机里「租约过期」「失败冷却」这类分支都是分钟级窗口，
+ * 没有可控时钟就只能睡真实时间，测试既慢又不可靠。
+ */
+let clockOverride: (() => number) | null = null;
+
+export function __setNowForTests(fn: (() => number) | null): void {
+    clockOverride = fn;
+}
+
 // 当前时间（Unix 秒）
 export function now(): number {
-    return Math.floor(Date.now() / 1000);
+    return clockOverride ? clockOverride() : Math.floor(Date.now() / 1000);
 }

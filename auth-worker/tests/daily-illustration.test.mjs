@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleAiApi } from '../src/ai/handler.ts';
-import { DAILY_ILLUSTRATION_STYLE_VERSION, handleAiIllustration } from '../src/ai/daily-illustration.ts';
+import { DAILY_ILLUSTRATION_STYLE_VERSION, handleAiIllustration, publicDailyIllustration } from '../src/ai/daily-illustration.ts';
 import { fallbackDailyKnowledgeUnit } from '../src/ai/daily-knowledge.ts';
 
 function today() {
@@ -104,11 +104,11 @@ function toBase64(bytes) {
     return btoa(String.fromCharCode(...bytes));
 }
 
-function installDailyFetch({ imageMode = 'valid', unit = null } = {}) {
+function installDailyFetch({ imageMode = 'valid', unit = null, isFailure = null } = {}) {
     const originalFetch = globalThis.fetch;
     const imageRequests = [];
     let imageCalls = 0;
-    const knowledgeUnit = unit ?? fallbackDailyKnowledgeUnit(today(), 'zh-CN');
+    let knowledgeUnit = unit ?? fallbackDailyKnowledgeUnit(today(), 'zh-CN');
     globalThis.fetch = async (input, init = {}) => {
         const url = new URL(typeof input === 'string' ? input : input.url);
         if (init.method === 'HEAD') return new Response(null, { status: 204 });
@@ -121,15 +121,17 @@ function installDailyFetch({ imageMode = 'valid', unit = null } = {}) {
             imageCalls += 1;
             const body = JSON.parse(init.body);
             imageRequests.push(body);
-            if (imageMode === 'error') return new Response('upstream failed', { status: 502 });
-            if (imageMode === 'html') {
+            const mode = imageMode;
+            if (isFailure?.()) return new Response('upstream failed', { status: 502 });
+            if (mode === 'error') return new Response('upstream failed', { status: 502 });
+            if (mode === 'html') {
                 const html = new TextEncoder().encode('<html><body>not an image</body></html>');
                 return new Response(JSON.stringify({ data: [{ b64_json: toBase64(html) }] }), {
                     status: 200,
                     headers: { 'Content-Type': 'application/json' },
                 });
             }
-            if (imageMode === 'url-only') {
+            if (mode === 'url-only') {
                 return new Response(JSON.stringify({ data: [{ url: 'https://storage.googleapis.com/agnes-aigc/temp.png' }] }), {
                     status: 200,
                     headers: { 'Content-Type': 'application/json' },
@@ -145,6 +147,7 @@ function installDailyFetch({ imageMode = 'valid', unit = null } = {}) {
     return {
         imageRequests,
         get imageCalls() { return imageCalls; },
+        setUnit(next) { knowledgeUnit = next; },
         restore() { globalThis.fetch = originalFetch; },
     };
 }
@@ -160,6 +163,21 @@ async function callDaily(env, background, { forceRefresh = true } = {}) {
         device: 'device-1',
     }, background);
     return { response, json: await response.json() };
+}
+
+/**
+ * 可控时钟：状态机里的租约/冷却都是分钟级窗口，直接睡真实时间既慢又不稳。
+ * 依赖 src/util/errors.ts 的 __setNowForTests（只影响 now()，Date.now() 仍是真实值）。
+ * base 默认取当前真实秒；调用方通常先快照 base，再把状态行的 updatedAt 钉在同一基准上。
+ */
+async function withStubbedNow(offsetSeconds, fn, base = Math.floor(Date.now() / 1000)) {
+    const { __setNowForTests } = await import('../src/util/errors.ts');
+    __setNowForTests(() => base + offsetSeconds);
+    try {
+        return await fn(base);
+    } finally {
+        __setNowForTests(null);
+    }
 }
 
 function illustrationStates(env) {
@@ -188,7 +206,7 @@ test('daily text returns immediately, then illustration becomes ready with a con
         assert.equal(state.height, 736);
         assert.equal(bucket.objects.size, 1);
         const objectKey = [...bucket.objects.keys()][0];
-        assert.match(objectKey, /^daily-illustration-v1\/[a-f0-9]{64}\.png$/);
+        assert.match(objectKey, /^daily-illustration-v2\/[a-f0-9]{64}\.png$/);
 
         const second = await callDaily(env, background, { forceRefresh: false });
         assert.equal(second.response.status, 200);
@@ -204,10 +222,15 @@ test('daily text returns immediately, then illustration becomes ready with a con
         assert.equal((await imageResponse.arrayBuffer()).byteLength, 1024);
 
         const prompt = fetchState.imageRequests[0].prompt;
-        assert.match(prompt, /no real actors/);
-        assert.match(prompt, /Do not include any text, letters, numbers/);
-        assert.match(prompt, /signatures, or watermarks/);
+        // 提示词按 v3 契约：人物/文字禁令在，且禁令里不再点名具体物件（点名会被画出来）。
+        assert.match(prompt, /no real actors/i);
+        assert.match(prompt, /Strictly no people/i);
+        assert.match(prompt, /Strictly no text or text-like marks anywhere/i);
         assert.match(prompt, /Do not imitate historical photographs/);
+        assert.match(prompt, /Any frame, pane or reflective surface in the composition must stay blank or purely abstract/);
+        assert.match(prompt, /Do not draw dials, gauges or calendars/);
+        assert.doesNotMatch(prompt, /film-strip edge codes/);
+        assert.doesNotMatch(prompt, /film strips, reels, frames, panels/);
     } finally {
         fetchState.restore();
     }
@@ -450,4 +473,126 @@ test('invalid illustration tokens are rejected', async () => {
         () => handleAiIllustration(env, 'not-a-token'),
         /Invalid or expired illustration token/,
     );
+});
+
+test('illustration prompt uses the visual brief and never the narrative text', async () => {
+    const fetchState = installDailyFetch();
+    try {
+        const env = createTestEnv({ AI_IMAGE_CACHE: createImageBucket() });
+        const { buildConceptIllustrationPrompt, deriveVisualBrief } = await import('../src/ai/daily-illustration.ts');
+
+        const withBrief = {
+            unitId: 'u_prompt_brief',
+            locale: 'zh-CN',
+            concept: '胶片如何保存记忆',
+            takeaway: '胶片把抽象记忆变成可触摸的实体，这一句绝不该出现在图片提示词里。',
+            explanation: '这段叙事解释同样不该出现，它会把模型推向复刻具体场景与人物。',
+            brief: 'a translucent film ribbon dissolving into soft light',
+        };
+        const prompt = buildConceptIllustrationPrompt(withBrief);
+        assert.match(prompt, /a translucent film ribbon dissolving into soft light/);
+        assert.ok(!prompt.includes(withBrief.takeaway), '结论文本不得进入图片提示词');
+        assert.ok(!prompt.includes(withBrief.explanation), '解释文本不得进入图片提示词');
+        assert.match(prompt, /no people/i);
+        assert.match(prompt, /no text/i);
+        // 实测：禁令里点名「胶片边缘编号」反而会让模型画出胶片并带上边缘标记，所以改成通用写法。
+        assert.doesNotMatch(prompt, /edge codes/i);
+
+        // 中文 brief 一律丢弃（CJK 提示词会被画成乱码文字），退回通用抽象构图。
+        const chineseBrief = deriveVisualBrief({ ...withBrief, concept: '能指与所指', brief: '一把伞与它的影子' });
+        assert.ok(!/[\u4e00-\u9fff]/u.test(chineseBrief), 'CJK brief 必须被丢弃');
+        assert.match(chineseBrief, /abstract/i);
+
+        // 抽象概念同样退回通用构图，而不是把概念原文塞进提示词。
+        const abstractBrief = deriveVisualBrief({ ...withBrief, concept: '记忆在电影中的视觉化呈现与叙事功能', brief: null });
+        assert.match(abstractBrief, /layered geometric shapes/i);
+
+        // 没有可用 brief 时退到通用抽象构图（刻意不带中文概念：混进英文提示词会被画成乱码文字）。
+        const genericBrief = deriveVisualBrief({ ...withBrief, concept: '胶片', brief: null });
+        assert.ok(!/[一-鿿]/u.test(genericBrief));
+    } finally {
+        fetchState.restore();
+    }
+});
+
+test('reused unitId with a new concept does not serve the stale illustration', async () => {
+    const first = installDailyFetch();
+    try {
+        const env = createTestEnv({ AI_IMAGE_CACHE: createImageBucket() });
+        const base = fallbackDailyKnowledgeUnit(today(), 'zh-CN');
+        const firstUnit = { ...base, unitId: 'u_reused_id', concept: '胶片与记忆', illustrationBrief: 'a film ribbon in soft light' };
+        first.setUnit(firstUnit);
+        // 首轮在真实时间下跑完，避免它落库时读到被推进过的时钟。
+        const background = createBackground();
+        const initial = await callDaily(env, background);
+        assert.equal(initial.json.data.illustration.status, 'generating');
+        await Promise.all(background.tasks);
+        assert.equal(first.imageCalls, 1);
+        const firstObjectKey = [...env.AI_IMAGE_CACHE.objects.keys()][0];
+
+        // 同一个 unitId 换概念（模型自造 id 的常见复用）：必须当作未生成，重新画一张。
+        // 断言分两段：①装配层把旧 ready 判为过期（响应回 generating）；②后台任务画的是新图
+        // （对象键不同）。直接跑后台会因为 ready 行带租约保护而被跳过，所以先走响应装配。
+        const secondUnit = { ...base, unitId: 'u_reused_id', concept: '媒体如何设置议题', illustrationBrief: 'concentric rings spreading across a still pond' };
+        first.setUnit(secondUnit);
+        const buildSecondResponse = async () => {
+            // 用空 KV 缓存直接调装配层：真实路径里 daily 文本缓存会命中旧响应，看不到重新装配。
+            const emptyCacheEnv = { ...env, AI_TEST_CACHE: new Map() };
+            const background = createBackground();
+            const payload = { unitId: 'u_reused_id', locale: 'zh-CN', concept: secondUnit.concept, illustrationBrief: secondUnit.illustrationBrief };
+            const illustration = await publicDailyIllustration(emptyCacheEnv, payload, 'friend-1', 'https://gateway.test', background);
+            return { illustration, background };
+        };
+        const { illustration, background: secondBackground } = await withStubbedNow(700, buildSecondResponse);
+        assert.equal(illustration.status, 'generating', '内容变了不得直接复用旧图');
+        await Promise.all(secondBackground.tasks);
+        assert.equal(first.imageCalls, 2, '内容变化应触发一次新的图片生成');
+        const objectKeys = [...env.AI_IMAGE_CACHE.objects.keys()];
+        assert.equal(objectKeys.length, 2);
+        assert.notEqual(objectKeys[1], firstObjectKey, '新内容必须落到不同的对象键');
+    } finally {
+        first.restore();
+    }
+});
+
+test('unavailable illustration retries once after the cooldown window', async () => {
+    // 第一次生成失败（上游 502）→ 状态落 unavailable；冷却到点后必须允许再来一轮，
+    // 否则生产里那 3/4 次 PROVIDER_FAILED 会让用户当天永远看不到图。
+    let failing = true;
+    const fetchState = installDailyFetch({ isFailure: () => failing });
+    try {
+        const { generateDailyIllustrationInBackground } = await import('../src/ai/daily-illustration.ts');
+        const env = createTestEnv({ AI_IMAGE_CACHE: createImageBucket() });
+        const unit = fallbackDailyKnowledgeUnit(today(), 'zh-CN');
+        const stateKey = JSON.stringify([unit.unitId, unit.locale, DAILY_ILLUSTRATION_STYLE_VERSION]);
+        const base = Math.floor(Date.now() / 1000);
+        const unitInput = { unitId: unit.unitId, locale: unit.locale, concept: unit.concept, takeaway: unit.takeaway, explanation: unit.explanation };
+
+        // 第一轮：两次尝试都失败 → unavailable
+        await generateDailyIllustrationInBackground(env, unit, 'friend-1');
+        assert.equal(fetchState.imageCalls, 2, '失败后应重试一次再放弃');
+        assert.equal(env.AI_TEST_ILLUSTRATION_STATE.get(stateKey).status, 'unavailable');
+
+        // 冷却期内：装配层不得重新调度
+        await withStubbedNow(60, async () => {
+            const background = createBackground();
+            const illustration = await publicDailyIllustration(env, unitInput, 'friend-1', 'https://gateway.test', background);
+            assert.equal(illustration.status, 'unavailable', '冷却期内保持不可用');
+            assert.equal(background.tasks.length, 0, '冷却期内不得重新调度');
+        }, base);
+
+        // 冷却到点 + 上游恢复：允许再试一轮并成功
+        failing = false;
+        const warm = await withStubbedNow(601, async () => {
+            const background = createBackground();
+            const illustration = await publicDailyIllustration(env, unitInput, 'friend-1', 'https://gateway.test', background);
+            return { illustration, background };
+        }, base);
+        assert.equal(warm.illustration.status, 'generating', '冷却结束后应重新调度');
+        await Promise.all(warm.background.tasks);
+        assert.equal(fetchState.imageCalls, 3, '冷却结束后应真的再调一次上游（累计 2 次失败 + 1 次成功）');
+        assert.equal(env.AI_TEST_ILLUSTRATION_STATE.get(stateKey).status, 'ready');
+    } finally {
+        fetchState.restore();
+    }
 });

@@ -471,6 +471,42 @@ test('daily reads the legacy v2 cache without regenerating or breaking old field
     }
 });
 
+test('cached daily responses never ship a placeholder source with a real link', async () => {
+    const env = createTestEnv();
+    // 旧缓存里已经写死「AI 综合解读 + britannica.com 首页」：回给用户前必须清掉链接。
+    env.AI_TEST_CACHE.set(`ai:v2:daily:friend-1:${today()}`, {
+        payload: {
+            id: today(),
+            date: today(),
+            title: '旧缓存占位来源',
+            fact: '旧事实字段。',
+            explanation: '旧解释字段。',
+            sourceName: 'AI 综合解读',
+            sourceUrl: 'https://www.britannica.com/',
+            publishedAt: 123,
+            characterLine: '旧台词',
+            relatedMediaTitle: null,
+            containsSpoiler: false,
+        },
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error('cached daily must not call AI'); };
+
+    try {
+        const { json } = await call('/api/ai/daily', {
+            body: { action: 'daily', sessionId: 'daily-cached-placeholder-source' },
+            env,
+        });
+        assert.equal(json.data.sourceName, 'AI 综合解读');
+        assert.equal(json.data.sourceUrl, null);
+        assert.equal(json.data.source.url, '');
+        assert.equal(json.data.source.evidence, '本节由 AI 综合公开通识整理，未引用具体来源。');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('checkQuestion option texts drop trailing sentence punctuation', async () => {
     const candidate = validKnowledgeUnit({
         unitId: 'option-punct-unit',
@@ -790,4 +826,117 @@ test('daily stream 前置参数非法时不开流，直接抛给外层按 JSON �
         () => callDailyStream({ action: 'daily', locale: 'fr-FR', watched: watchedMovies() }, env),
         (error) => error.code === 'INVALID_REQUEST' && error.statusCode === 400,
     );
+});
+
+// ── 2026-09 质量审计后的新增门槛 ─────────────────────────────────────────────
+
+test('daily rejects an explanation that invents a character or actor name', () => {
+    const movies = [{ title: 'Movie 1', mediaType: 'movie', evidence: ['上映年份：2020', '简介：影片包含群体讨论场景。'] }];
+    const invoked = validKnowledgeUnit({
+        explanation: '主角范电影（张译饰）在片中反复观察他人的选择，这一段没有出现在输入材料里。',
+    });
+    assert.throws(
+        () => normalizeDailyKnowledgeUnit(invoked, { day: '2026-09-12', locale: 'zh-CN', movies }),
+        /没有的人物名/,
+    );
+
+    // 演员署名式编造（XXX 饰）同样判废
+    const castCrew = validKnowledgeUnit({
+        explanation: '片中人物（李某某饰）在讨论中保持沉默，这一点输入材料并未提及。',
+    });
+    assert.throws(
+        () => normalizeDailyKnowledgeUnit(castCrew, { day: '2026-09-12', locale: 'zh-CN', movies }),
+        /没有的人物名/,
+    );
+
+    // 只写通称「主角」不触发门槛
+    const generic = validKnowledgeUnit({
+        explanation: '主角在讨论中保持沉默，这一现象可以用从众压力解释。',
+    });
+    assert.doesNotThrow(() => normalizeDailyKnowledgeUnit(generic, { day: '2026-09-12', locale: 'zh-CN', movies }));
+
+    // 输入材料里真实存在的名字不受影响
+    const real = validKnowledgeUnit({
+        explanation: '主角张译在讨论中保持沉默，输入材料确实给出了这个名字。',
+    });
+    assert.doesNotThrow(() => normalizeDailyKnowledgeUnit(real, {
+        day: '2026-09-12',
+        locale: 'zh-CN',
+        movies: [{ title: 'Movie 1', mediaType: 'movie', evidence: ['简介：由张译主演，影片包含群体讨论场景。'] }],
+    }));
+});
+
+test('illustrationBrief is optional, must be ASCII English, and survives normalization', () => {
+    const movies = [{ title: 'Movie 1', mediaType: 'movie', evidence: ['上映年份：2020', '简介：影片包含群体讨论场景。'] }];
+    const ok = normalizeDailyKnowledgeUnit(
+        validKnowledgeUnit({ illustrationBrief: 'a translucent film ribbon dissolving into soft light' }),
+        { day: '2026-09-12', locale: 'zh-CN', movies },
+    );
+    assert.equal(ok.illustrationBrief, 'a translucent film ribbon dissolving into soft light');
+
+    // 中文 brief 不判废，但会被丢弃（图片模型会把 CJK 画成乱码文字）
+    const chinese = normalizeDailyKnowledgeUnit(
+        validKnowledgeUnit({ illustrationBrief: '一把伞与它的影子' }),
+        { day: '2026-09-12', locale: 'zh-CN', movies },
+    );
+    assert.equal(chinese.illustrationBrief, null);
+
+    // 缺失时也是 null，不报错
+    const missing = normalizeDailyKnowledgeUnit(validKnowledgeUnit(), { day: '2026-09-12', locale: 'zh-CN', movies });
+    assert.equal(missing.illustrationBrief, null);
+
+    // 会诱导图片模型画人物/数字/场景的隐喻整条丢弃：真上游出图里出现过罗马数字表盘和插画人物
+    for (const risky of [
+        'a fragmented mirror reflecting disjointed scenes of a clock face',
+        'a calendar page falling apart',
+        'two people talking in an empty theatre',
+    ]) {
+        const dropped = normalizeDailyKnowledgeUnit(
+            validKnowledgeUnit({ illustrationBrief: risky }),
+            { day: '2026-09-12', locale: 'zh-CN', movies },
+        );
+        assert.equal(dropped.illustrationBrief, null, risky);
+    }
+
+    // 正常的物象隐喻仍保留（"surface" 里含 "face" 但不能被误杀）
+    const kept = normalizeDailyKnowledgeUnit(
+        validKnowledgeUnit({ illustrationBrief: 'a matte surface of film ribbon folding into soft waves' }),
+        { day: '2026-09-12', locale: 'zh-CN', movies },
+    );
+    assert.equal(kept.illustrationBrief, 'a matte surface of film ribbon folding into soft waves');
+});
+
+test('placeholder source keeps no link even when the model copies the example URL', () => {
+    const movies = [{ title: 'Movie 1', mediaType: 'movie', evidence: ['上映年份：2020', '简介：影片包含群体讨论场景。'] }];
+    // 真上游实测：模型会照抄形状示例，写出「AI 综合解读 + britannica.com 首页」。
+    const copied = normalizeDailyKnowledgeUnit(
+        validKnowledgeUnit({
+            source: {
+                name: 'AI 综合解读',
+                url: 'https://www.britannica.com/',
+                evidence: '本节由 AI 综合公开通识整理，未引用具体来源。',
+            },
+        }),
+        { day: '2026-09-12', locale: 'zh-CN', movies },
+    );
+    assert.equal(copied.source.name, 'AI 综合解读');
+    assert.equal(copied.source.url, '');
+    assert.equal(copied.source.evidence, '本节由 AI 综合公开通识整理，未引用具体来源。');
+});
+
+test('daily prompts carry the trusted source catalog and the recent-usage list', async () => {
+    const { dailyCandidateMessages } = await import('../src/ai/daily-knowledge.ts');
+    const messages = dailyCandidateMessages('2026-09-12', 'zh-CN', [], null, [
+        { day: '2026-09-11', concept: '胶片作为记忆载体', subject: '电影学', mediaTitle: '一秒钟' },
+    ]);
+    const system = String(messages[0].content);
+    const user = String(messages[1].content);
+    assert.match(system, /www\.britannica\.com/);
+    assert.match(system, /禁止编造机构域名/);
+    assert.match(system, /illustrationBrief/);
+    // 无来源占位必须是「空 url」，否则模型会照抄示例网址造出半真引用。
+    assert.match(system, /"name":"AI 综合解读","url":""/);
+    assert.doesNotMatch(system, /"url":"https:\/\/www\.britannica\.com\/"/);
+    assert.match(user, /最近已出，必须避开/);
+    assert.match(user, /一秒钟/);
 });

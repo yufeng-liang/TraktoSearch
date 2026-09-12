@@ -6,8 +6,10 @@ import { signAccessToken, verifyAccessToken } from '../util/jwt.ts';
 import { callAgnesImage } from './agnes.ts';
 import type { DailyLocale } from './daily-knowledge.ts';
 
-export const DAILY_ILLUSTRATION_STYLE_VERSION = 'editorial-low-saturation-v1';
-const DAILY_ILLUSTRATION_OBJECT_PREFIX = 'daily-illustration-v1';
+// v3：提示词里的禁令不再点名具体物件（点名会把物件画出来），并新增「框内保持空白」约束。
+// 版本进缓存键，老的 v2 图不会被当成本版结果继续下发。
+export const DAILY_ILLUSTRATION_STYLE_VERSION = 'editorial-abstract-v3';
+const DAILY_ILLUSTRATION_OBJECT_PREFIX = 'daily-illustration-v2';
 const DAILY_ILLUSTRATION_MAX_ATTEMPTS = 2;
 const DAILY_ILLUSTRATION_LEASE_SECONDS = 10 * 60;
 const DAILY_ILLUSTRATION_DEFAULT_DAILY_LIMIT = 10;
@@ -19,6 +21,14 @@ const DAILY_ILLUSTRATION_MAX_BYTES = 8 * 1024 * 1024;
 const DAILY_ILLUSTRATION_MIN_DIMENSION = 256;
 const DAILY_ILLUSTRATION_MAX_DIMENSION = 4096;
 const DAILY_ILLUSTRATION_MAX_ASPECT_RATIO = 3;
+/**
+ * unavailable 后的自动重试间隔。
+ * 为什么需要它：生产 4 次插图尝试里有 3 次 PROVIDER_FAILED（上游抖动），
+ * 而状态一旦落 unavailable 就再也没有第二次机会——用户当天永远看不到图。
+ */
+const DAILY_ILLUSTRATION_UNAVAILABLE_RETRY_SECONDS = 10 * 60;
+const DAILY_ILLUSTRATION_PROVIDER = 'agnes';
+const DAILY_ILLUSTRATION_MODEL = 'agnes-image-2.5-flash';
 
 export type DailyIllustrationStatus = 'generating' | 'unavailable' | 'ready';
 export type ConceptIllustrationMimeType = 'image/png' | 'image/jpeg' | 'image/webp';
@@ -29,6 +39,14 @@ export interface DailyIllustrationUnitInput {
     concept: string;
     takeaway: string;
     explanation: string;
+    /**
+     * 视觉隐喻（英文短句），由每日知识单元提供。图片模型不吃叙事文本：
+     * 实测把 takeaway/explanation 整段喂过去，它会照着画具体场景与人物肖像
+     * （且无视「禁止文字/人物」约束，出现乱码汉字标题、胶片边缘文字编号）。
+     * 缺失或不合格时由 deriveVisualBrief 本地兜底。
+     */
+    brief?: string | null;
+    requestId?: string;
 }
 
 export interface ConceptIllustrationProvider {
@@ -94,23 +112,51 @@ export class AgnesIllustrationProvider implements ConceptIllustrationProvider {
     async generate(unit: DailyIllustrationUnitInput): Promise<Uint8Array> {
         return callAgnesImage(
             this.env,
-            'agnes-image-2.5-flash',
+            DAILY_ILLUSTRATION_MODEL,
             buildConceptIllustrationPrompt(unit),
         );
     }
 }
 
+/**
+ * 视觉隐喻：优先用单元给出的英文 brief；缺失或不合格时退到一条通用抽象构图。
+ *
+ * 兜底刻意不带概念原文：概念是中文的，混进英文提示词里会被图片模型直接画成乱码汉字
+ * （生产首图就是这么来的）。宁可牺牲一点贴合度，也要保证「一定画得出东西且不含文字/人物」。
+ */
+export function deriveVisualBrief(unit: DailyIllustrationUnitInput): string {
+    const explicit = normalizeBriefText(unit.brief);
+    if (explicit !== null) return explicit;
+    return 'an abstract editorial composition of layered geometric shapes, soft light and empty space, '
+        + 'suggesting an idea rather than showing a scene';
+}
+
+/** brief 只接受纯 ASCII 英文短语：CJK 提示词会让图片模型直接画出乱码文字。 */
+function normalizeBriefText(value: string | null | undefined): string | null {
+    if (typeof value !== 'string') return null;
+    const normalized = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (normalized.length < 4 || normalized.length > 200) return null;
+    if (/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\u3000-\u303f\uff00-\uffef]/u.test(normalized)) return null;
+    if (!/[A-Za-z]{3}/.test(normalized)) return null;
+    return normalized;
+}
+
 export function buildConceptIllustrationPrompt(unit: DailyIllustrationUnitInput): string {
-    // 不传影片名、角色名、演员名或 filmEvidence，避免模型复刻具体影片场景。
+    // 只用视觉隐喻建提示词：概念/结论/解释的叙事文本会把模型推向「复刻具体场景与人物」。
+    const metaphor = deriveVisualBrief(unit);
     return [
-        'Create one low-saturation editorial concept illustration.',
-        `Concept: ${safePromptText(unit.concept, 120)}`,
-        `Core takeaway: ${safePromptText(unit.takeaway, 320)}`,
-        `Explanation: ${safePromptText(unit.explanation, 700)}`,
-        'Visual style: abstract, metaphorical, flat editorial illustration, muted colors, matte paper texture, soft light, generous negative space, single centered idea, 16:9 composition.',
-        'Strict safety constraints: no real actors, no identifiable real people, no celebrity likeness, no film characters, no costumes, no props, no composition copied from any movie scene, no posters or screenshots.',
-        'Do not imitate historical photographs, archival film, documentary footage, or news photos. Do not use photorealism.',
-        'Do not include any text, letters, numbers, labels, captions, subtitles, logos, symbols, signatures, or watermarks.',
+        'Create one abstract low-saturation editorial illustration. 16:9 composition, single centered idea, generous negative space.',
+        'Visual metaphor: ' + safePromptText(metaphor, 240) + '.',
+        'Render it only as still life objects, landscape forms, natural phenomena or simple geometric shapes.',
+        'Visual style: abstract, metaphorical, flat editorial illustration, muted colors, matte paper texture, soft light.',
+        'Strictly no people: no humans, no faces, no body parts, no silhouettes of a person, no portraits, no crowds.',
+        // 禁令里点名具体物件反而会把物件「画出来」（实测：列了胶片/镜面/表盘，兜底几何隐喻就画出了
+        // 带数字的表盘和胶片框）。所以这里只做通用约束，绝不罗列示例物件。
+        'Any frame, pane or reflective surface in the composition must stay blank or purely abstract — never fill it with depicted scenes, faces, places or miniature storytelling.',
+        'Do not draw dials, gauges or calendars: their marks read as numbers.',
+        'Strictly no text or text-like marks anywhere: no words, letters, numbers, tick marks, barcode-like lines, mock headline blocks, page-like or document-like layouts, captions, labels, logos, signatures or watermarks.',
+        'No real actors, no celebrity likeness, no film characters, no costumes, no props, no composition copied from any movie scene, no posters or screenshots.',
+        'Do not imitate historical photographs, archival film, documentary footage, or news photos. No photorealism, no 3D render, no semi-realistic portrait style.',
         'Do not depict dangerous chemicals, weapons, violence, self-harm, malware interfaces, intrusion steps, or operational technical instructions. Keep the image conceptual and non-operational.',
         'The image is only a learning aid, not factual evidence. Subject labels are added later by the app, not by the image model.',
     ].join('\n');
@@ -129,9 +175,17 @@ export async function publicDailyIllustration(
 ): Promise<DailyIllustrationPublic> {
     if (!isIllustrationEnabled(env)) return unavailableIllustration();
     try {
+        const brief = deriveVisualBrief(unit);
         const state = await readIllustrationState(env, unit);
-        if (state?.status === 'unavailable') return unavailableIllustration();
-        if (state?.status === 'ready') return await readyIllustration(env, state, origin);
+        if (state?.status === 'ready' && await readyStateMatchesCurrentBrief(unit, state, brief)) {
+            return await readyIllustration(env, state, origin);
+        }
+        // unavailable 只压制一段时间：上游抖动是插画失败的主要原因（生产 4 次尝试里 3 次
+        // PROVIDER_FAILED），落成永久不可用等于用户当天再也看不到图；冷却到点后允许重来一轮。
+        if (state?.status === 'unavailable'
+            && now() - state.updatedAt < DAILY_ILLUSTRATION_UNAVAILABLE_RETRY_SECONDS) {
+            return unavailableIllustration();
+        }
         scheduleDailyIllustration(env, unit, friendId, background);
         return {
             status: 'generating',
@@ -142,6 +196,20 @@ export async function publicDailyIllustration(
     } catch {
         return unavailableIllustration();
     }
+}
+
+/**
+ * 图与文必须同源：缓存键只认 unitId，而模型自造的 unitId 会跨概念复用
+ * （实测 u_film_memory 连续三天配三个不同概念）。这里用「内容 hash 是否对得上」
+ * 戳破这种复用——对不上就当作未生成，重新画一张。
+ */
+async function readyStateMatchesCurrentBrief(
+    unit: DailyIllustrationUnitInput,
+    state: IllustrationState,
+    brief: string,
+): Promise<boolean> {
+    if (!state.objectKey) return false;
+    return await isCurrentObjectKey(unit, brief, state.objectKey);
 }
 
 export function scheduleDailyIllustration(
@@ -162,26 +230,34 @@ export async function generateDailyIllustrationInBackground(
     friendId: string,
 ): Promise<void> {
     try {
-        const claim = await claimIllustration(env, unit);
+        const brief = deriveVisualBrief(unit);
+        const claim = await claimIllustration(env, unit, brief);
         if (!claim.claimed) return;
 
         if (!(await reserveDailyIllustrationRateLimit(env, friendId))) {
             await markIllustrationUnavailable(env, unit, claim.attemptCount, 'RATE_LIMITED');
+            recordIllustrationHealth(env, unit.requestId, 'upstream_error', 'RATE_LIMITED');
             return;
         }
 
         const provider = new AgnesIllustrationProvider(env);
         for (let attempt = claim.attemptCount; attempt <= DAILY_ILLUSTRATION_MAX_ATTEMPTS; attempt += 1) {
+            const startedAt = Date.now();
             try {
                 const raw = await provider.generate(unit);
                 const image = validateConceptIllustration(raw);
-                const objectKey = await illustrationObjectKey(unit, image.mimeType);
-                await uploadIllustrationToR2(env, unit, objectKey, image);
-                if (await markIllustrationReady(env, unit, attempt, objectKey, image)) return;
+                const objectKey = await illustrationObjectKey(unit, brief, image.mimeType);
+                await uploadIllustrationToR2(env, unit, objectKey, image, brief);
+                if (await markIllustrationReady(env, unit, attempt, objectKey, image)) {
+                    recordIllustrationHealth(env, unit.requestId, 'success', null, Date.now() - startedAt);
+                    return;
+                }
                 // 状态租约已被其他任务接管时立即停止，避免旧任务覆盖新状态。
                 return;
             } catch (error) {
                 const errorCode = classifyIllustrationError(error);
+                // 每次失败都留痕：插图失败此前完全不可观测（健康事件只覆盖文字链路）。
+                recordIllustrationHealth(env, unit.requestId, 'upstream_error', errorCode, Date.now() - startedAt, error);
                 if (attempt < DAILY_ILLUSTRATION_MAX_ATTEMPTS) {
                     await touchIllustrationGenerating(env, unit, attempt, errorCode);
                     continue;
@@ -193,6 +269,43 @@ export async function generateDailyIllustrationInBackground(
     } catch {
         // 后台插图失败不允许影响 waitUntil 或 daily 文字响应。
     }
+}
+
+/**
+ * 插图健康事件：与文字链路共用 ai_health_events，route 固定 'daily-illustration'。
+ * 只写稳定错误码与耗时，不落上游正文或密钥；写失败绝不影响主流程。
+ */
+function recordIllustrationHealth(
+    env: DailyIllustrationEnvironment,
+    requestId: string | undefined,
+    outcome: 'success' | 'upstream_error',
+    errorCode: string | null,
+    durationMs?: number,
+    error?: unknown,
+): void {
+    const db = env.DB;
+    if (!db) return;
+    const httpStatus = error instanceof AppError ? error.upstreamStatus : null;
+    void (async () => {
+        try {
+            await db.prepare(`
+                INSERT INTO ai_health_events
+                    (created_at, source, route, provider, model, outcome, error_code, http_status, duration_ms, request_id)
+                VALUES (?, 'traffic', 'daily-illustration', ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+                now(),
+                DAILY_ILLUSTRATION_PROVIDER,
+                DAILY_ILLUSTRATION_MODEL,
+                outcome,
+                errorCode,
+                httpStatus,
+                typeof durationMs === 'number' ? Math.round(durationMs) : null,
+                requestId ?? null,
+            ).run();
+        } catch {
+            // 健康记录失败绝不能影响插图主链路
+        }
+    })();
 }
 
 export async function handleAiIllustration(
@@ -309,11 +422,22 @@ function testRateMap(env: DailyIllustrationEnvironment): Map<string, unknown> {
     return env.AI_TEST_ILLUSTRATION_RATE_LIMIT;
 }
 
+/** 状态键只认 (unitId, locale, 风格版本)——与 D1 主键保持一致；内容摘要进对象键，不进状态键。 */
 function illustrationStateKey(unit: DailyIllustrationUnitInput): string {
     return JSON.stringify([
         unit.unitId,
         unit.locale,
         DAILY_ILLUSTRATION_STYLE_VERSION,
+    ]);
+}
+
+/** 缓存摘要：状态键 + 视觉隐喻。内容变了就换摘要，对象键随之改变、旧图自动失效。 */
+function illustrationContentDigestInput(unit: DailyIllustrationUnitInput, brief: string): string {
+    return JSON.stringify([
+        unit.unitId,
+        unit.locale,
+        DAILY_ILLUSTRATION_STYLE_VERSION,
+        brief,
     ]);
 }
 
@@ -389,6 +513,7 @@ function toIllustrationState(row: IllustrationRow): IllustrationState {
 async function claimIllustration(
     env: DailyIllustrationEnvironment,
     unit: DailyIllustrationUnitInput,
+    brief: string,
 ): Promise<{ claimed: boolean; attemptCount: number }> {
     const currentTime = now();
     const attemptCount = 1;
@@ -397,6 +522,22 @@ async function claimIllustration(
         const key = illustrationStateKey(unit);
         const current = readStateRecord(map.get(key));
         if (current) {
+            if (current.status === 'ready') {
+                // ready 只在「内容摘要对得上」时才算数：unitId 会跨概念复用，对不上就重画。
+                if (current.objectKey && await isCurrentObjectKey(unit, brief, current.objectKey)) {
+                    return { claimed: false, attemptCount: current.attemptCount };
+                }
+                map.set(key, generatingState(attemptCount, currentTime));
+                return { claimed: true, attemptCount };
+            }
+            if (current.status === 'unavailable') {
+                // 与 D1 分支同语义：冷却到点后允许重来一轮（attempt_count 归 1）。
+                if (currentTime - current.updatedAt < DAILY_ILLUSTRATION_UNAVAILABLE_RETRY_SECONDS) {
+                    return { claimed: false, attemptCount: current.attemptCount };
+                }
+                map.set(key, generatingState(attemptCount, currentTime));
+                return { claimed: true, attemptCount };
+            }
             if (current.status !== 'generating') return { claimed: false, attemptCount: current.attemptCount };
             if (currentTime - current.updatedAt < DAILY_ILLUSTRATION_LEASE_SECONDS) {
                 return { claimed: false, attemptCount: current.attemptCount };
@@ -417,6 +558,7 @@ async function claimIllustration(
 
     if (!env.DB) return { claimed: false, attemptCount };
     try {
+        const [pngKey, jpgKey, webpKey] = await currentObjectKeys(unit, brief);
         const result = await env.DB.prepare(`
             INSERT INTO ai_daily_illustrations (
                 knowledge_unit_id, locale, image_style_version, status, attempt_count,
@@ -425,7 +567,10 @@ async function claimIllustration(
             ) VALUES (?, ?, ?, 'generating', ?, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?)
             ON CONFLICT(knowledge_unit_id, locale, image_style_version) DO UPDATE SET
                 status = 'generating',
-                attempt_count = ai_daily_illustrations.attempt_count + 1,
+                attempt_count = CASE
+                    WHEN ai_daily_illustrations.status = 'ready' THEN 1
+                    ELSE ai_daily_illustrations.attempt_count + 1
+                END,
                 object_key = NULL,
                 mime_type = NULL,
                 width = NULL,
@@ -433,15 +578,32 @@ async function claimIllustration(
                 size_bytes = NULL,
                 last_error_code = NULL,
                 updated_at = excluded.updated_at
-            WHERE ai_daily_illustrations.status = 'generating'
-              AND ai_daily_illustrations.attempt_count < ?
-              AND ai_daily_illustrations.updated_at + ? <= ?
+            WHERE (
+                    -- 内容摘要对不上（unitId 被跨概念复用时）→ 无条件重画
+                    ai_daily_illustrations.status = 'ready'
+                    AND (ai_daily_illustrations.object_key IS NULL
+                         OR ai_daily_illustrations.object_key NOT IN (?, ?, ?))
+                ) OR (
+                    -- 上游抖动失败后的冷却重试：到点允许再来一轮（attempt_count 归 1）
+                    ai_daily_illustrations.status = 'unavailable'
+                    AND ai_daily_illustrations.updated_at + ? <= ?
+                ) OR (
+                    -- 正常租约恢复
+                    ai_daily_illustrations.status = 'generating'
+                    AND ai_daily_illustrations.attempt_count < ?
+                    AND ai_daily_illustrations.updated_at + ? <= ?
+                )
         `).bind(
             unit.unitId,
             unit.locale,
             DAILY_ILLUSTRATION_STYLE_VERSION,
             attemptCount,
             currentTime,
+            currentTime,
+            pngKey,
+            jpgKey,
+            webpKey,
+            DAILY_ILLUSTRATION_UNAVAILABLE_RETRY_SECONDS,
             currentTime,
             DAILY_ILLUSTRATION_MAX_ATTEMPTS,
             DAILY_ILLUSTRATION_LEASE_SECONDS,
@@ -451,7 +613,7 @@ async function claimIllustration(
             await closeExpiredExhaustedClaim(env, unit, currentTime);
             return { claimed: false, attemptCount };
         }
-        // 冲突分支会把旧 attempt_count + 1；重新读取，避免租约恢复时误按第 1 次尝试重复两次。
+        // 冲突分支会改写 attempt_count；重新读取，避免租约恢复时误按第 1 次尝试重复两次。
         const row = await env.DB.prepare(`
             SELECT attempt_count
             FROM ai_daily_illustrations
@@ -736,15 +898,48 @@ function readRateRecord(value: unknown): RateRecord | null {
 
 async function illustrationObjectKey(
     unit: DailyIllustrationUnitInput,
+    brief: string,
     mimeType: ConceptIllustrationMimeType,
 ): Promise<string> {
-    const digest = await sha256(illustrationStateKey(unit));
+    const digest = await sha256(illustrationContentDigestInput(unit, brief));
+    return objectKeyFor(brief, mimeType, digest);
+}
+
+/**
+ * 目标对象键：与 illustrationObjectKey 同源，但允许在只知道摘要时复用。
+ * 摘要由状态键 + 视觉隐喻一起算出来，因此「同 unitId 换了概念」会得到不同的键；
+ * 旧的 ready 行对不上新键时视为过期，重新生成覆盖。
+ */
+function objectKeyFor(
+    brief: string,
+    mimeType: ConceptIllustrationMimeType,
+    digest: string,
+): string {
     const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
     return `${DAILY_ILLUSTRATION_OBJECT_PREFIX}/${digest}.${extension}`;
 }
 
+/** 现有 ready 行的 objectKey 是否属于当前内容（三种扩展名都试一遍）。 */
+async function isCurrentObjectKey(
+    unit: DailyIllustrationUnitInput,
+    brief: string,
+    objectKey: string,
+): Promise<boolean> {
+    return (await currentObjectKeys(unit, brief)).includes(objectKey);
+}
+
+/** 当前内容对应的三种可能对象键（扩展名取决于上游返回的 MIME）。 */
+async function currentObjectKeys(unit: DailyIllustrationUnitInput, brief: string): Promise<string[]> {
+    const digest = await sha256(illustrationContentDigestInput(unit, brief));
+    return [
+        objectKeyFor(brief, 'image/png', digest),
+        objectKeyFor(brief, 'image/jpeg', digest),
+        objectKeyFor(brief, 'image/webp', digest),
+    ];
+}
+
 function isIllustrationObjectKey(key: string): boolean {
-    return /^daily-illustration-v1\/[a-f0-9]{64}\.(?:png|jpg|webp)$/.test(key);
+    return /^daily-illustration-v2\/[a-f0-9]{64}\.(?:png|jpg|webp)$/.test(key);
 }
 
 async function uploadIllustrationToR2(
@@ -752,6 +947,7 @@ async function uploadIllustrationToR2(
     unit: DailyIllustrationUnitInput,
     objectKey: string,
     image: ValidatedIllustration,
+    brief: string,
 ): Promise<void> {
     const bucket = illustrationBucket(env);
     if (!bucket) {
@@ -767,6 +963,7 @@ async function uploadIllustrationToR2(
                 knowledgeUnitId: unit.unitId,
                 locale: unit.locale,
                 imageStyleVersion: DAILY_ILLUSTRATION_STYLE_VERSION,
+                visualBrief: brief.slice(0, 200),
                 expiresAt: String(now() + DAILY_ILLUSTRATION_TTL_SECONDS),
             },
         });

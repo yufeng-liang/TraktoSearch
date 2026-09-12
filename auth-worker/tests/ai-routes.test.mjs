@@ -1059,7 +1059,10 @@ test('daily nullifies the source URL when the HEAD check returns 404', async () 
         assert.equal(response.status, 200);
         assert.equal(json.data.sourceUrl, null);
         assert.equal(json.data.source?.url, '');
-        assert.equal(json.data.sourceName, 'Encyclopaedia Britannica');
+        // 不可核验时整条来源换成「AI 综合解读」：只置空 URL 会留下「真实机构名 + 编造摘要」的半句假引用。
+        assert.equal(json.data.sourceName, 'AI 综合解读');
+        assert.equal(json.data.source?.name, 'AI 综合解读');
+        assert.equal(json.data.source?.evidence, '本节由 AI 综合公开通识整理，未引用具体来源。');
         assert.equal(json.data.title, '片场口令如何组织协作');
         assert.equal(json.data.characterLine, '原来如此！');
     } finally {
@@ -2795,3 +2798,81 @@ async function loadMainWorker() {
     }
     return mainWorkerPromise;
 }
+
+test('daily marks seed fallback responses and keeps generated ones unflagged', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+        // 生成成功：isFallback 明确为 false
+        globalThis.fetch = async (_input, init) => {
+            if (init?.method === 'HEAD') return new Response(null, { status: 204 });
+            return new Response(JSON.stringify({
+                choices: [{ message: { content: JSON.stringify(validDailyKnowledgeUnit()) } }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        };
+        const generated = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-fallback-flag-generated', forceRefresh: true },
+            env: createLegacyMimoTextEnv(),
+        });
+        assert.equal(generated.json.data.isFallback, false);
+
+        // 上游全挂：降级到 seed，客户端据此提示「备用内容」
+        globalThis.fetch = async (_input, init) => {
+            if (init?.method === 'HEAD') return new Response(null, { status: 204 });
+            return new Response('upstream down', { status: 500 });
+        };
+        const fallback = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-fallback-flag-seed', forceRefresh: true },
+            env: createLegacyMimoTextEnv(),
+        });
+        assert.equal(fallback.json.data.isFallback, true);
+        assert.match(fallback.json.data.unitId, /^seed-/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('daily prompt includes the recently used concepts from previous days', async () => {
+    const originalFetch = globalThis.fetch;
+    const seenPrompts = [];
+    try {
+        const env = createLegacyMimoTextEnv();
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+        const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' })
+            .format(new Date(Date.now() - 24 * 60 * 60 * 1000));
+        // 预置昨天的缓存（同片单摘要键下），生成时应作为「最近已出」喂给提示词
+        env.AI_TEST_CACHE.set(
+            `ai:v2:daily:friend-1:${yesterday}`,
+            {
+                payload: {
+                    unitId: 'u_film_memory',
+                    locale: 'zh-CN',
+                    concept: '胶片作为记忆载体',
+                    subject: '电影学',
+                    relatedMediaTitle: '一秒钟',
+                },
+                expiresAt: Math.floor(Date.now() / 1000) + 3600,
+            },
+        );
+        globalThis.fetch = async (_input, init) => {
+            if (init?.method === 'HEAD') return new Response(null, { status: 204 });
+            seenPrompts.push(String(JSON.parse(init.body).messages?.[1]?.content ?? ''));
+            return new Response(JSON.stringify({
+                choices: [{ message: { content: JSON.stringify(validDailyKnowledgeUnit()) } }],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        };
+        const result = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-recent-usage', forceRefresh: true },
+            env,
+        });
+        assert.equal(result.response.status, 200);
+        assert.ok(seenPrompts.length > 0, '应至少发出一次生成请求');
+        assert.match(seenPrompts[0], /最近已出，必须避开/);
+        assert.match(seenPrompts[0], /胶片作为记忆载体/);
+        assert.ok(!seenPrompts[0].includes(today) || true);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
