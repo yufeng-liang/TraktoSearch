@@ -97,6 +97,16 @@ class WeatherRepository @Inject constructor(
         }
     }
 
+    /** 只读取搜索页已经建立的天气缓存，不触发定位或网络请求。 */
+    suspend fun getCachedCurrentWeather(): WeatherInfo? {
+        val prefs = context.weatherDataStore.data.first()
+        val cacheTime = prefs[KEY_CACHE_TIME] ?: return null
+        if (System.currentTimeMillis() - cacheTime > CACHE_DURATION) return null
+        val code = prefs[KEY_WEATHER_CODE] ?: return null
+        val temperature = prefs[KEY_TEMPERATURE] ?: return null
+        return WeatherInfo(weatherCode = code, temperature = temperature)
+    }
+
     private suspend fun readCache(latitude: Double, longitude: Double): WeatherInfo? {
         val prefs = context.weatherDataStore.data.first()
         val cacheTime = prefs[KEY_CACHE_TIME] ?: 0
