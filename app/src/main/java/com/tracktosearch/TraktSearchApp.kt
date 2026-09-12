@@ -11,6 +11,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.tracktosearch.di.NetworkModule
+import com.tracktosearch.data.ai.AiProfileSyncScheduler
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.ImageTrafficStorage
@@ -45,6 +46,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var authCheckScheduler: AuthCheckScheduler
     @Inject lateinit var splashPosterScheduler: SplashPosterScheduler
+    @Inject lateinit var aiProfileSyncScheduler: AiProfileSyncScheduler
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     @Inject lateinit var themeStorage: ThemeStorage
@@ -127,6 +129,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             Thread { authCheckScheduler.schedulePeriodicCheck() }.start()
             // 开屏台词海报整池补齐：不计费网络下跑，池子齐了之后每次执行都是空转。
             Thread { splashPosterScheduler.schedulePeriodicPrefetch() }.start()
+            // 观影画像批次上传：outbox 有内容才真正发请求，未授权画像时 worker 直接空转。
+            Thread { aiProfileSyncScheduler.schedulePeriodic() }.start()
             // 上传未发送的崩溃日志到云端（走网关代理，worker 注入上报密钥）
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 crashLogUploader.uploadPendingLogs()

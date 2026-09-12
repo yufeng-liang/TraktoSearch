@@ -685,6 +685,7 @@ fun TraktSearchScreen(
                                     } else Modifier,
                                     onClick = {
                                         interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                        viewModel.recordMediaClick(item, uiState.selectedTab)
                                         onItemClick(uiState.selectedTab, item.traktId, item.tmdbId, item.displayTitle, item.imdbId, item.traktRating)
                                     }
                                 )

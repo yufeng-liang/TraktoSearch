@@ -32,7 +32,10 @@ enum class AiCacheFeature(val wireName: String) {
     QUIZ_RESULT("quiz_result"),
     // 已激活角色：不落盘的话杀进程后激活即失效，用户得再喊一次名字并再烧一次配额
     ACTIVATION("activation"),
-    TTS("tts")
+    TTS("tts"),
+    // 详情页 AI 分析：缓存后缀含 mediaKey/场景/环境键，换片或换时段自然不命中
+    DETAIL_ANALYSIS("detail_analysis"),
+    DETAIL_RECOMMENDATIONS("detail_recommendations")
 }
 
 object AiStorageKey {

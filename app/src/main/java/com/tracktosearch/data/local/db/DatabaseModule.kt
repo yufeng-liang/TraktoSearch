@@ -426,6 +426,133 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v17 -> v18：新增按 friendId 隔离的画像本地镜像和 outbox，不改写既有业务表。
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS ai_profile_settings (
+                    friendId TEXT NOT NULL PRIMARY KEY,
+                    profileConsent INTEGER NOT NULL DEFAULT 0,
+                    behaviorConsent INTEGER NOT NULL DEFAULT 0,
+                    personalizationEnabled INTEGER NOT NULL DEFAULT 0,
+                    syncEnabled INTEGER NOT NULL DEFAULT 1,
+                    shouldAutoImport INTEGER NOT NULL DEFAULT 0,
+                    updatedAt INTEGER NOT NULL,
+                    clearedAt INTEGER
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_settings_updatedAt ON ai_profile_settings(updatedAt)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS ai_profile_media (
+                    friendId TEXT NOT NULL,
+                    mediaKey TEXT NOT NULL,
+                    mediaType TEXT NOT NULL,
+                    tmdbId INTEGER,
+                    traktId INTEGER,
+                    imdbId TEXT,
+                    doubanId TEXT,
+                    title TEXT NOT NULL,
+                    year INTEGER,
+                    genresJson TEXT NOT NULL,
+                    publicRating REAL,
+                    userRating REAL,
+                    userComment TEXT,
+                    watchedAt INTEGER,
+                    isWatched INTEGER NOT NULL DEFAULT 0,
+                    isWatchlist INTEGER NOT NULL DEFAULT 0,
+                    updatedAt INTEGER NOT NULL,
+                    PRIMARY KEY(friendId, mediaKey)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_media_friendId ON ai_profile_media(friendId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_media_friendId_mediaType ON ai_profile_media(friendId, mediaType)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_media_friendId_updatedAt ON ai_profile_media(friendId, updatedAt)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS ai_profile_media_source (
+                    friendId TEXT NOT NULL,
+                    mediaKey TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    sourceId TEXT NOT NULL,
+                    isTombstone INTEGER NOT NULL DEFAULT 0,
+                    updatedAt INTEGER NOT NULL,
+                    PRIMARY KEY(friendId, mediaKey, source)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_media_source_friendId ON ai_profile_media_source(friendId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_media_source_friendId_mediaKey ON ai_profile_media_source(friendId, mediaKey)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_media_source_friendId_sourceId ON ai_profile_media_source(friendId, sourceId)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS ai_profile_behavior_daily (
+                    friendId TEXT NOT NULL,
+                    mediaKey TEXT NOT NULL,
+                    day TEXT NOT NULL,
+                    dwellIgnoredCount INTEGER NOT NULL DEFAULT 0,
+                    dwell10To30Count INTEGER NOT NULL DEFAULT 0,
+                    dwell30To120Count INTEGER NOT NULL DEFAULT 0,
+                    dwell120PlusCount INTEGER NOT NULL DEFAULT 0,
+                    searchClickCount INTEGER NOT NULL DEFAULT 0,
+                    episodeStartCount INTEGER NOT NULL DEFAULT 0,
+                    episodeCompleteCount INTEGER NOT NULL DEFAULT 0,
+                    progress25Count INTEGER NOT NULL DEFAULT 0,
+                    progress50Count INTEGER NOT NULL DEFAULT 0,
+                    progress75Count INTEGER NOT NULL DEFAULT 0,
+                    progress100Count INTEGER NOT NULL DEFAULT 0,
+                    updatedAt INTEGER NOT NULL,
+                    PRIMARY KEY(friendId, mediaKey, day)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_behavior_daily_friendId ON ai_profile_behavior_daily(friendId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_behavior_daily_friendId_day ON ai_profile_behavior_daily(friendId, day)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS ai_profile_outbox (
+                    friendId TEXT NOT NULL,
+                    batchId TEXT NOT NULL,
+                    schemaVersion INTEGER NOT NULL DEFAULT 1,
+                    payloadJson TEXT NOT NULL,
+                    payloadDigest TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    attemptCount INTEGER NOT NULL DEFAULT 0,
+                    nextAttemptAt INTEGER NOT NULL DEFAULT 0,
+                    lastError TEXT,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL,
+                    PRIMARY KEY(friendId, batchId)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_outbox_friendId ON ai_profile_outbox(friendId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_outbox_friendId_status ON ai_profile_outbox(friendId, status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_outbox_friendId_createdAt ON ai_profile_outbox(friendId, createdAt)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS ai_profile_snapshot (
+                    friendId TEXT NOT NULL PRIMARY KEY,
+                    profileVersion INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'EMPTY',
+                    summaryJson TEXT NOT NULL DEFAULT '{}',
+                    generatedAt INTEGER,
+                    updatedAt INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_profile_snapshot_updatedAt ON ai_profile_snapshot(updatedAt)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -447,7 +574,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
             .build()
     }
 
@@ -494,4 +621,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDailyStampDao(db: AppDatabase): DailyStampDao = db.dailyStampDao()
+
+    @Provides
+    @Singleton
+    fun provideAiProfileDao(db: AppDatabase): AiProfileDao = db.aiProfileDao()
 }

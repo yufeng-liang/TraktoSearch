@@ -90,6 +90,7 @@ class DetailViewModelSupplementTest {
     private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
+    private lateinit var aiProfileBehaviorRecorder: com.tracktosearch.data.ai.AiProfileBehaviorRecorder
 
     private lateinit var viewModel: DetailViewModel
 
@@ -120,6 +121,7 @@ class DetailViewModelSupplementTest {
         every { sessionModeManager.sessionMode } returns flowOf(SessionMode.TRAKT)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
+        aiProfileBehaviorRecorder = mockk(relaxed = true)
 
         every { tokenStorage.accessToken } returns flowOf(null)
         every { detailSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
@@ -138,7 +140,7 @@ class DetailViewModelSupplementTest {
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
-            posterColorExtractor, userReviewRepository
+            posterColorExtractor, userReviewRepository, aiProfileBehaviorRecorder
         )
     }
 

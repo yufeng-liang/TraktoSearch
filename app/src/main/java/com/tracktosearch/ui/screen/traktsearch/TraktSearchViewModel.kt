@@ -7,6 +7,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiProfileBehavior
+import com.tracktosearch.data.ai.AiProfileBehaviorRecorder
+import com.tracktosearch.data.ai.MediaSourceSnapshot
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.trakt.dto.TraktSearchResult
@@ -107,7 +110,9 @@ class TraktSearchViewModel @Inject constructor(
     private val resourceRepository: ResourceRepository,
     private val sessionModeManager: SessionModeManager,
     savedStateHandle: SavedStateHandle,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    // 观影画像行为记录：未授权时记录器自己静默返回，调用点不需要判授权
+    private val aiProfileBehaviorRecorder: AiProfileBehaviorRecorder
 ) : ViewModel() {
 
     // 限制 enrich 并发数，避免触发 API 限流
@@ -571,6 +576,32 @@ class TraktSearchViewModel @Inject constructor(
             }.onFailure {
                 val updatedState = _uiState.value.currentTabState
                 updateTabState(current.selectedTab, updatedState.copy(isLoadingMore = false, loadMoreError = true))
+            }
+        }
+    }
+
+    /** 只记录电影/剧集卡片点击；人物和网盘资源没有影视行为语义。 */
+    fun recordMediaClick(item: TraktSearchUiItem, type: MediaType) {
+        val mediaType = when (type) {
+            MediaType.MOVIE -> "movie"
+            MediaType.SHOW -> "show"
+            else -> return
+        }
+        viewModelScope.launch {
+            runCatching {
+                aiProfileBehaviorRecorder.recordNow(
+                    snapshot = MediaSourceSnapshot(
+                        mediaType = mediaType,
+                        tmdbId = item.tmdbId.takeIf { it > 0 },
+                        traktId = item.traktId.takeIf { it > 0 },
+                        imdbId = item.imdbId.takeIf { it.isNotBlank() },
+                        title = item.displayTitle.ifBlank { item.title },
+                        year = item.year,
+                        genres = item.genres.split(" · ").map(String::trim).filter(String::isNotBlank),
+                        publicRating = item.traktRating.takeIf { it > 0 }
+                    ),
+                    behavior = AiProfileBehavior.SearchClick
+                )
             }
         }
     }

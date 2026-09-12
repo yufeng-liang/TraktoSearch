@@ -5,12 +5,24 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Streaming
 
 /** AI 网关接口。相对路径由 NetworkModule 统一挂在 /api/ai/ 下。 */
 interface AiApiService {
     @GET("characters")
     suspend fun listCharacters(): Response<AiApiResponse<AiCharactersDto>>
+
+    /** 画像设置：读/改授权开关，服务端按 JWT 的 friend id 隔离。 */
+    @GET("profile/settings")
+    suspend fun getProfileSettings(): Response<AiApiResponse<AiProfileSettingsDto>>
+
+    @PUT("profile/settings")
+    suspend fun updateProfileSettings(@Body request: AiProfileSettingsRequest): Response<AiApiResponse<AiProfileSettingsDto>>
+
+    /** 画像批次上传：同一 batchId 幂等，重放不会重复计入。 */
+    @POST("profile/sync")
+    suspend fun syncProfile(@Body request: AiProfileSyncBatch): Response<AiApiResponse<AiProfileSyncResultDto>>
 
     @POST("activate")
     suspend fun activate(@Body request: AiActivateRequest): Response<AiApiResponse<AiActivationDto>>
@@ -52,4 +64,12 @@ interface AiApiService {
 
     @POST("tts")
     suspend fun playTts(@Body request: AiTtsRequest): Response<AiApiResponse<AiAudioDto>>
+
+    /** 详情页无剧透分析：按场景（未标记/已看未评/已看已评/已想看）返回结构化建议。 */
+    @POST("detail/analyze")
+    suspend fun analyzeDetail(@Body request: AiDetailAnalyzeRequest): Response<AiApiResponse<AiDetailAnalysisDto>>
+
+    /** 相关推荐排序：候选由客户端给出，服务端只做去重与排序，不新增片子。 */
+    @POST("recommendations/rank")
+    suspend fun rankRecommendations(@Body request: AiRecommendationsRankRequest): Response<AiApiResponse<AiRecommendationsRankDto>>
 }

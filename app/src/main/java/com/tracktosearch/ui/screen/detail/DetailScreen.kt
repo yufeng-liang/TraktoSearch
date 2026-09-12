@@ -63,6 +63,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -77,6 +78,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -89,12 +92,17 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiMediaIdsDto
+import com.tracktosearch.data.ai.mediaKeyFor
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
@@ -126,6 +134,7 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
+import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
 import com.tracktosearch.ui.screen.ai.automaticSpriteArt
@@ -145,6 +154,7 @@ import dev.chrisbanes.haze.HazeSourceSelection
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -172,9 +182,11 @@ fun DetailScreen(
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onTraktLogin: () -> Unit = {},
     onDoubanLogin: () -> Unit = {},
-    viewModel: DetailViewModel = hiltViewModel()
+    viewModel: DetailViewModel = hiltViewModel(),
+    detailAiViewModel: DetailAiViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val detailAiState by detailAiViewModel.uiState.collectAsStateWithLifecycle()
     val spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -183,8 +195,31 @@ fun DetailScreen(
     val haptics = rememberAppHaptics()
     var showRatingDialog by remember { mutableStateOf(false) }
     var detailHeaderBounds by remember { mutableStateOf<Rect?>(null) }
+    var detailTabBounds by remember { mutableStateOf<Rect?>(null) }
+    var detailAiPanelBounds by remember { mutableStateOf<Rect?>(null) }
     var showWatchlistScene by remember { mutableStateOf(false) }
-    var handledWatchlistRevision by remember(traktId, tmdbId) { mutableStateOf(0L) }
+    // 推荐 tab 下标只由「评论 tab 是否显示」决定；tab 行、精灵锚点、内容分支必须共用同一份，
+    // 而精灵挂在 hazeSource 之外，所以提到页面顶层而不是滚动内容那个作用域里。
+    val recommendationsTabIndex = if (uiState.sectionVisible.comments) 2 else 1
+    // 任何主动操作都先收起 AI 面板：面板压在内容上时用户已经在做别的决定
+    val interruptForUserInput = remember { { detailAiViewModel.dismissPanel() } }
+    // 评分入口先判断登录态，避免用户填完评分才被告知要登录；
+    // 由 ViewModel 根据当前条目选择 Trakt 或豆瓣，不能统一送回激活页。
+    val onShowRatingDialog = remember(uiState.isLoggedIn) {
+        {
+            interruptForUserInput()
+            if (uiState.isLoggedIn) {
+                showRatingDialog = true
+            } else {
+                viewModel.requestLoginForCurrentItem()
+            }
+        }
+    }
+    // 初值取当前 revision：详情页从子页返回或配置变更时组合会重建，而 revision 活在
+    // 会被保留的 ViewModel 里；从 0 起步会把上一次「加入看单」当成新事件重放一遍。
+    var handledWatchlistRevision by remember(traktId, tmdbId) {
+        mutableStateOf(uiState.watchlistAddedRevision)
+    }
 
     LaunchedEffect(uiState.watchlistAddedRevision, traktId, tmdbId) {
         if (shouldShowWatchlistAddedScene(handledWatchlistRevision, uiState.watchlistAddedRevision)) {
@@ -197,9 +232,31 @@ fun DetailScreen(
     // 不走 ensureLoaded()——那条路径会拉角色目录并播试听，详情页不该冒出语音。
     LaunchedEffect(Unit) { spriteViewModel.restoreActivation() }
 
-    // 拦截系统返回手势/返回键，统一走 onBack 回调以传递变更状态
+    // 精灵是否具备出场条件：已激活且有对应素材（没素材的角色不参与任何详情页动效）
+    val spriteArtAvailable = spriteState.activatedCharacterId
+        ?.let { automaticSpriteArt(it) != null } == true
+    LaunchedEffect(spriteArtAvailable, spriteState.isAuthorized) {
+        detailAiViewModel.setSpriteEnabled(spriteArtAvailable)
+    }
+
+    // 面板收起时释放面板锚点矩形，避免下一次面板打开前用旧位置摆精灵
+    LaunchedEffect(detailAiState.panelVisible) {
+        if (!detailAiState.panelVisible) detailAiPanelBounds = null
+    }
+
+    // 离开页面（返回、切 tab、进程退后台）都要收尾本次会话：取消揭示计时并把停留时长记进画像
+    DisposableEffect(Unit) {
+        onDispose { detailAiViewModel.onScreenStopped() }
+    }
+
+    // 拦截系统返回手势/返回键：面板打开时先收面板，再退出详情页
     BackHandler(enabled = true) {
-        onBack(uiState.watchlistChanged, uiState.watchedChanged)
+        if (detailAiState.panelVisible) {
+            detailAiViewModel.dismissPanel()
+        } else {
+            detailAiViewModel.onScreenStopped()
+            onBack(uiState.watchlistChanged, uiState.watchedChanged)
+        }
     }
 
     LaunchedEffect(traktId, tmdbId, title, doubanId) {
@@ -220,6 +277,69 @@ fun DetailScreen(
 
     // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）
     ToastEffect(viewModel.toastEvent)
+
+    // 详情页 AI 助手的输入：媒体身份 + 标记状态 + 画像用的元信息。
+    // 键里带上富化后的字段，评分/短评/标记一变就重算场景（未标记→已想看→已看过未评→已看过已评）。
+    LaunchedEffect(
+        traktId,
+        tmdbId,
+        imdbId,
+        doubanId,
+        mediaType,
+        uiState.displayTitle,
+        uiState.title,
+        uiState.year,
+        uiState.genres,
+        uiState.overview,
+        uiState.userRating,
+        uiState.userComment,
+        uiState.isMarkedWatched,
+        uiState.isMarkedWatchlist,
+        uiState.ratings,
+        uiState.cast,
+        uiState.crew
+    ) {
+        val normalizedType = if (mediaType == MediaType.SHOW) "show" else "movie"
+        val mediaKey = runCatching {
+            mediaKeyFor(
+                mediaType = normalizedType,
+                tmdbId = tmdbId.takeIf { it > 0 },
+                traktId = traktId.takeIf { it > 0 },
+                imdbId = imdbId.takeIf { it.isNotBlank() },
+                doubanId = doubanId
+            )
+        }.getOrNull() ?: return@LaunchedEffect
+        val genres = uiState.genres
+            .split(Regex("\\s*(?:/|、|,|，)\\s*"))
+            .map(String::trim)
+            .filter(String::isNotBlank)
+        detailAiViewModel.updateMedia(
+            DetailAiMediaInput(
+                mediaKey = mediaKey,
+                mediaType = normalizedType,
+                title = uiState.displayTitle.ifBlank { uiState.title.ifBlank { title } },
+                year = uiState.year ?: year,
+                genres = genres,
+                overview = uiState.overview.takeIf { it.isNotBlank() },
+                directors = uiState.crew.filter { it.job.equals("Director", ignoreCase = true) }
+                    .map { it.name }
+                    .distinct(),
+                cast = uiState.cast.take(12).map { it.name }.distinct(),
+                publicRating = uiState.ratings?.traktRating?.takeIf { it > 0 }
+                    ?: traktRating.takeIf { it > 0 },
+                mediaIds = AiMediaIdsDto(
+                    tmdbId = tmdbId.takeIf { it > 0 },
+                    traktId = traktId.takeIf { it > 0 }?.toString(),
+                    imdbId = imdbId.takeIf { it.isNotBlank() },
+                    doubanId = doubanId
+                ),
+                userRating = uiState.userRating,
+                userComment = uiState.userComment,
+                watched = uiState.isMarkedWatched,
+                watchlist = uiState.isMarkedWatchlist
+            )
+        )
+    }
 
     // 上面那些 toast、以及豆瓣乐观写失败时的重试按钮，配对的结果类触感都从这一行出
     HapticOutcomeEffect(viewModel.hapticOutcomes)
@@ -256,6 +376,16 @@ fun DetailScreen(
     }
 
     val listState = rememberLazyListState()
+    // 滚动即打断：庆祝插画收起（锚点跟着头部矩形走，滑出视口后会在屏幕外播完），
+    // 助手探头交给 ViewModel 走 RETREAT，下一次进入按新的停留计时重新揭示。
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                if (!scrolling) return@collect
+                if (showWatchlistScene) showWatchlistScene = false else detailAiViewModel.onScroll()
+            }
+    }
     // 下拉刷新：重拉评分/演职员/季/短评/推荐这几个分区（资源区代价太高，另有自己的重搜入口）
     var detailRefreshPending by remember { mutableStateOf(false) }
     val detailPullToRefreshState = rememberAppPullToRefreshState {
@@ -309,6 +439,29 @@ fun DetailScreen(
         if (contentReady) return@LaunchedEffect // 已就绪则不重复触发淡入(#26)
         delay(if (uiState.posterDominantColor != null) 80 else 400)
         contentReady = true
+    }
+
+    // 正文就绪是助手探头的前提（内容还在淡入时不该冒头），也是「进入前台」的另一半条件
+    LaunchedEffect(contentReady) {
+        detailAiViewModel.setForegroundReady(contentReady)
+    }
+    val latestContentReady by rememberUpdatedState(contentReady)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                // 回到前台重新计时，避免后台待了很久回来立刻冒头
+                Lifecycle.Event.ON_RESUME -> {
+                    detailAiViewModel.resumeSession()
+                    detailAiViewModel.setForegroundReady(latestContentReady)
+                }
+                // 退到后台按一次离屏收尾：停留时长记进画像，探头与揭示计时都取消
+                Lifecycle.Event.ON_STOP -> detailAiViewModel.onScreenStopped()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 头部下方内容淡入：animateFloatAsState 做真实渐显（0→1 约 220ms），
@@ -469,19 +622,8 @@ fun DetailScreen(
 
             // 回调 lambda remember 化:避免每次重组都新建实例(与 MovieCard 一致),
             // 减少分配并为后续按字段跳过重组打基础。置于 LazyColumn 之前(@Composable 上下文)。
-            val onToggleWatched = remember { { viewModel.toggleWatched() } }
-            val onToggleWatchlist = remember { { viewModel.toggleWatchlist() } }
-            // 评分入口先判断登录态，避免用户填完评分才被告知要登录；
-            // 由 ViewModel 根据当前条目选择 Trakt 或豆瓣，不能统一送回激活页。
-            val onShowRatingDialog = remember(uiState.isLoggedIn) {
-                {
-                    if (uiState.isLoggedIn) {
-                        showRatingDialog = true
-                    } else {
-                        viewModel.requestLoginForCurrentItem()
-                    }
-                }
-            }
+            val onToggleWatched = remember { { interruptForUserInput(); viewModel.toggleWatched() } }
+            val onToggleWatchlist = remember { { interruptForUserInput(); viewModel.toggleWatchlist() } }
             val onPosterClick = remember(uiState.posterUrl, activity) {
                 val url = uiState.posterUrl
                 {
@@ -503,10 +645,11 @@ fun DetailScreen(
             }
             val onToggleSeason = remember { { season: Int -> viewModel.toggleSeason(season) } }
             val onToggleEpisodeWatched = remember { { season: Int, episode: Int, traktId: Int -> viewModel.toggleEpisodeWatched(season, episode, traktId) } }
-            val onVideoClick = remember { { video: TmdbVideo -> playingVideoKey = video.key } }
+            val onVideoClick = remember { { video: TmdbVideo -> interruptForUserInput(); playingVideoKey = video.key } }
             val onBackdropClick = remember(uiState.backdrops, activity) {
                 val backdrops = uiState.backdrops
                 { index: Int ->
+                    interruptForUserInput()
                     if (activity != null && index in backdrops.indices) {
                         // 剧照横向栏：列表显示的是 w780，大图沿用原 original 段替换逻辑
                         openImageViewer(
@@ -523,14 +666,29 @@ fun DetailScreen(
                     }
                 }
             }
-            val onShowAllVideos = remember { { showAllVideos = true } }
-            val onCollectionMovieClick = remember(onMovieClick) { { movieTmdbId: Int, movieTitle: String -> onMovieClick(0, movieTmdbId, movieTitle, "", 0.0) } }
+            val onShowAllVideos = remember { { interruptForUserInput(); showAllVideos = true } }
+            val onCollectionMovieClick = remember(onMovieClick) { { movieTmdbId: Int, movieTitle: String -> interruptForUserInput(); onMovieClick(0, movieTmdbId, movieTitle, "", 0.0) } }
             // Tab 数量计算（置于 LazyColumn 之前的 @Composable 上下文，并用副作用修正 selectedTab 范围）
             val showCommentsTab = uiState.sectionVisible.comments
             val showRecommendationsTab = uiState.sectionVisible.recommendations
             val tabCount = 1 + (if (showCommentsTab) 1 else 0) + (if (showRecommendationsTab) 1 else 0)
             LaunchedEffect(tabCount) {
                 if (selectedTab > tabCount - 1) selectedTab = tabCount - 1
+            }
+            // 切到推荐 tab 才请求 AI 排序：不在别的 tab 上提前烧额度，也不与详情加载抢带宽
+            LaunchedEffect(
+                selectedTab,
+                recommendationsTabIndex,
+                showRecommendationsTab,
+                detailAiState.scene,
+                uiState.recommendations
+            ) {
+                if (showRecommendationsTab &&
+                    selectedTab == recommendationsTabIndex &&
+                    uiState.recommendations.isNotEmpty()
+                ) {
+                    detailAiViewModel.loadRecommendations(uiState.recommendations)
+                }
             }
             // 单 LazyColumn：头部(item) + 顶栏/TabRow(stickyHeader) + 内容(根据Tab切换)
             // 吸顶栏不再染沉浸色，内部搜索源/网盘类型/找到xx个资源等文字统一走主题色
@@ -618,26 +776,39 @@ fun DetailScreen(
                         PrimaryTabRow(
                             selectedTabIndex = selectedTab,
                             containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.onSurface
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            // 推荐 tab 上的助手精灵要以 Tab 行为锚点，这里记下吸顶后的真实位置
+                            modifier = Modifier.onGloballyPositioned { detailTabBounds = it.boundsInRoot() }
                         ) {
                             Tab(
                                 selected = selectedTab == 0,
-                                onClick = { haptics.segmentTick(); selectedTab = 0 },
+                                onClick = { haptics.segmentTick(); interruptForUserInput(); selectedTab = 0 },
                                 text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", maxLines = 1) }
                             )
                             if (showCommentsTab) {
                                 Tab(
                                     selected = selectedTab == 1,
-                                    onClick = { haptics.segmentTick(); selectedTab = 1 },
+                                    onClick = { haptics.segmentTick(); interruptForUserInput(); selectedTab = 1 },
                                     text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", maxLines = 1) }
                                 )
                             }
                             if (showRecommendationsTab) {
-                                val recTabIndex = if (showCommentsTab) 2 else 1
                                 Tab(
-                                    selected = selectedTab == recTabIndex,
-                                    onClick = { haptics.segmentTick(); selectedTab = recTabIndex },
-                                    text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", maxLines = 1) }
+                                    selected = selectedTab == recommendationsTabIndex,
+                                    onClick = { haptics.segmentTick(); interruptForUserInput(); selectedTab = recommendationsTabIndex },
+                                    text = {
+                                        // 计数跟内容一致：AI 排序结果已落地就用它的条数，否则沿用 TMDB 的
+                                        Text(
+                                            "${stringResource(R.string.detail_tab_recommendations)}(${
+                                                detailRecommendationCount(
+                                                    detailAiState.recommendationsLoaded,
+                                                    detailAiState.recommendations,
+                                                    uiState.recommendations
+                                                )
+                                            })",
+                                            maxLines = 1
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -901,10 +1072,15 @@ fun DetailScreen(
                 }
 
                 // ===== 推荐 Tab 内容 =====
-                if (uiState.sectionVisible.recommendations && selectedTab == (if (uiState.sectionVisible.comments) 2 else 1)) {
-                    val recommendations = uiState.recommendations
+                if (uiState.sectionVisible.recommendations && selectedTab == recommendationsTabIndex) {
+                    // AI 排序落地前先展示 TMDB 原序，落地后整列换成 AI 结果（不拼接，避免顺序反复跳）
+                    val recommendations = if (detailAiState.recommendationsLoaded) {
+                        detailAiState.recommendations
+                    } else {
+                        uiState.recommendations
+                    }
                     when {
-                        uiState.isLoadingRecommendations -> {
+                        uiState.isLoadingRecommendations && recommendations.isEmpty() -> {
                             // 骨架按真实 3 列网格铺，与下方 MovieCard 同宽同比例，
                             // 数据到达时列宽不变；三行共享一份 shimmer 动画。
                             item(key = "rec_loading") {
@@ -1000,19 +1176,72 @@ fun DetailScreen(
             // hazeSource（同一 HazeState），再只保留 zIndex 小于它的源；顶栏按钮/回顶按钮
             // 一旦落在采样源子树内，祖先源 zIndex=0 会把自己过滤掉（0 < 0 不成立），
             // 结果 blur/glass 两种模式下模糊都静默失效（源列表为空，不报错也不模糊）。
+            //
+            // 一个精灵两条来路：加入看单的庆祝插画（showWatchlistScene）与 AI 助手探头。
+            // 庆祝优先——用户刚做完标记动作，先放完完整插画再回到助手，两者同时可见会互相盖住。
+            val recommendationsTabVisible = uiState.sectionVisible.recommendations &&
+                selectedTab == recommendationsTabIndex
+            // 面板打开时精灵跟到面板边上；推荐 tab 上贴着 Tab 行探头；其余时间蹲在头部
+            val assistantAnchor = when {
+                detailAiState.panelVisible -> AiSpriteAnchor.DetailPanel
+                recommendationsTabVisible -> AiSpriteAnchor.RecommendationsTab
+                else -> AiSpriteAnchor.DetailHeader
+            }
+            val assistantBounds = when (assistantAnchor) {
+                AiSpriteAnchor.RecommendationsTab -> detailTabBounds
+                AiSpriteAnchor.DetailPanel -> detailAiPanelBounds
+                else -> detailHeaderBounds
+            }
+            val assistantWantsSprite = spriteArtAvailable &&
+                (detailAiState.spriteVisible || detailAiState.panelVisible)
             AiSpriteMotion(
                 characterId = spriteState.activatedCharacterId.orEmpty(),
-                anchor = AiSpriteAnchor.DetailHeader,
-                anchorBounds = detailHeaderBounds,
-                visible = showWatchlistScene &&
-                    detailHeaderBounds != null &&
-                    spriteState.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true,
-                onClick = {},
-                onFinished = { showWatchlistScene = false },
+                anchor = if (showWatchlistScene) AiSpriteAnchor.DetailHeader else assistantAnchor,
+                anchorBounds = if (showWatchlistScene) detailHeaderBounds else assistantBounds,
+                visible = if (showWatchlistScene) {
+                    spriteArtAvailable && detailHeaderBounds != null
+                } else {
+                    assistantWantsSprite && assistantBounds != null
+                },
+                onClick = {
+                    // 庆祝插画只是插画，点它不打开面板
+                    if (!showWatchlistScene) detailAiViewModel.onSpriteClick()
+                },
+                onFinished = {
+                    if (showWatchlistScene) showWatchlistScene = false
+                    else detailAiViewModel.onSpriteFinished()
+                },
                 modifier = Modifier.zIndex(5f),
-                sceneRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes,
+                sceneRes = if (showWatchlistScene) {
+                    sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes
+                } else {
+                    null
+                },
                 // 加入看单的庆祝插画，不该变成盖在详情页上的可点区域
-                interactive = false
+                interactive = !showWatchlistScene,
+                // 庆祝期间不受面板中断请求影响，否则刚标记完就被上一次会话的中断打回去
+                interruptRequest = if (showWatchlistScene) {
+                    null
+                } else {
+                    AiSpriteInterruptRequest(
+                        revision = detailAiState.interruptRevision,
+                        reason = detailAiState.interruptReason
+                    )
+                }
+            )
+
+            DetailAiPanel(
+                state = detailAiState,
+                onDismiss = detailAiViewModel::dismissPanel,
+                onGrantProfileConsent = detailAiViewModel::grantProfileConsent,
+                onNavigateToLogin = onTraktLogin,
+                onRetry = detailAiViewModel::retryAnalysis,
+                onOpenReview = {
+                    detailAiViewModel.dismissPanel()
+                    // 评分入口要先过登录态，这里复用同一个 lambda 而不是直接开弹窗
+                    onShowRatingDialog()
+                },
+                onBoundsChanged = { detailAiPanelBounds = it }
             )
 
             // 顶栏按钮与回顶按钮置于采样源之外(LocalBackdrop=null)：glass 模式下由
@@ -1250,6 +1479,10 @@ fun DetailScreen(
             // markAsWatched 的 onSuccess 里置的，网络回来才弹，与手势无关。
             // 本地那个 showRatingDialog 是点评分区域同一帧置的，那一下已经震过了
             PopupShowEffect(uiState.showRatingDialog)
+            // 自动弹出的那一路绕过了 interruptForUserInput，面板会残留在弹窗背后
+            LaunchedEffect(uiState.showRatingDialog) {
+                if (uiState.showRatingDialog) detailAiViewModel.dismissPanel()
+            }
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,

@@ -107,6 +107,24 @@ class AiRepository @Inject constructor(
         api.listCharacters().requirePayload().data.characters.map { it.toDomain() }
     }
 
+    suspend fun getProfileSettings(friendId: String): Result<AiProfileSettingsDto> = runForFriend(friendId) {
+        api.getProfileSettings().requirePayload().data
+    }
+
+    suspend fun updateProfileSettings(
+        friendId: String,
+        request: AiProfileSettingsRequest
+    ): Result<AiProfileSettingsDto> = runForFriend(friendId) {
+        api.updateProfileSettings(request).requirePayload().data
+    }
+
+    suspend fun syncProfile(
+        friendId: String,
+        batch: AiProfileSyncBatch
+    ): Result<AiProfileSyncResultDto> = runForFriend(friendId) {
+        api.syncProfile(batch).requirePayload().data
+    }
+
     suspend fun activate(
         friendId: String,
         characterId: String,
@@ -901,6 +919,54 @@ class AiRepository @Inject constructor(
     /** 访客角色试听：不读写 friendId、授权状态或本地 AI 缓存。 */
     suspend fun playGuestTts(request: AiTtsRequest): Result<AiAudio> = runApi {
         val payload = api.playTts(request).requirePayload()
+        payload.data.toDomain(payload.quota)
+    }
+
+    /**
+     * 详情页无剧透分析。
+     *
+     * 缓存后缀把 mediaKey、场景与环境键（日期/星期/时段/季节/天气）一起摘要：
+     * 同一部片在「已想看」和「已看过未评」下的分析结论不同，换时段问「值不值得看」也该重新算，
+     * 只按 mediaKey 缓存会把上一个场景的结论套到下一个场景。
+     */
+    suspend fun analyzeDetail(
+        friendId: String,
+        request: AiDetailAnalyzeRequest,
+        forceRefresh: Boolean = request.forceRefresh
+    ): Result<AiDetailAnalysis> {
+        val cacheSuffix = listOf(
+            request.media.mediaKey,
+            request.scene,
+            request.environment?.let {
+                listOf(it.localDate, it.weekday, it.timeOfDay, it.season, it.weatherTag.orEmpty())
+                    .joinToString("|")
+            }.orEmpty()
+        ).joinToString("|").sha256Hex()
+        return cachedRequest(
+            friendId = friendId,
+            feature = AiCacheFeature.DETAIL_ANALYSIS,
+            forceRefresh = forceRefresh,
+            suffix = cacheSuffix,
+            serializer = AiDetailAnalysisDto.serializer()
+        ) {
+            val payload = api.analyzeDetail(
+                request.copy(
+                    forceRefresh = forceRefresh,
+                    sessionId = sessionIdFor(friendId, request.sessionId)
+                )
+            ).requirePayload()
+            payload.data.copy(quota = payload.quota)
+        }.map { it.toDomain() }
+    }
+
+    /** 相关推荐排序：候选只来自客户端已加载的推荐列表，服务端不引入新片，因此不做缓存。 */
+    suspend fun rankDetailRecommendations(
+        friendId: String,
+        request: AiRecommendationsRankRequest
+    ): Result<List<AiDetailRecommendation>> = runForFriend(friendId) {
+        val payload = api.rankRecommendations(
+            request.copy(sessionId = sessionIdFor(friendId, request.sessionId))
+        ).requirePayload()
         payload.data.toDomain(payload.quota)
     }
 
