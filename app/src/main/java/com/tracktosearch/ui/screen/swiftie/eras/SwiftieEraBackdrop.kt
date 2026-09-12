@@ -127,19 +127,6 @@ private class BackdropShapes(lowRam: Boolean) {
     }
 
     /**
-     * folklore 松林：x, 树高（占屏高）, 树宽 三元组。
-     *
-     * 树高压到 0.10–0.26 屏高：林地线在 [HERO_BOTTOM]，再高的树顶会顶出屏幕。
-     */
-    val pines: FloatArray = buildTriples(if (lowRam) 9 else 17, 2020) { random ->
-        floatArrayOf(
-            random.nextFloat(),
-            0.10f + random.nextFloat() * 0.16f,
-            0.05f + random.nextFloat() * 0.05f
-        )
-    }
-
-    /**
      * 1989 宝丽来：x, y, 旋转（度）三元组。挂在上半屏，不压卡片。
      *
      * y 从 0.085h 起：麻线在 0.058h（状态栏以下），原来 0.04h 起的那一档会让
@@ -311,7 +298,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.PASTEL_RAINBOW_HOUSE ->
             drawPastelRainbowHouse(path, top, mid, deep, phase, alpha, eraMs, card)
         SwiftieEraBackdrop.PINE_MOSS_PIANO ->
-            drawPineMossPiano(path, top, mid, deep, phase, alpha, shapes)
+            drawPineMossPiano(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.BRANCH_LANTERNS ->
             drawBranchLanterns(path, top, mid, deep, phase, alpha, lowRam)
         SwiftieEraBackdrop.MIDNIGHT_CLOCK ->
@@ -546,6 +533,214 @@ private fun DrawScope.drawConifer(
         path.close()
         drawPath(path = path, color = color, alpha = alpha)
     }
+}
+
+/**
+ * 一根树干加进 [path]：底端按 [flare] 放宽（树根的喇叭口），往上按 [taper] 收细。
+ *
+ * 少了底端那个喇叭口，画面上就是一根等宽的灰条 ——「树」读不出来（第一版如此）。
+ */
+private fun trunkQuad(
+    path: Path,
+    w: Float,
+    h: Float,
+    x: Float,
+    halfWidth: Float,
+    yBottom: Float,
+    yTop: Float,
+    lean: Float,
+    taper: Float,
+    flare: Float,
+    leftStrip: Boolean = false
+) {
+    val cx = x * w
+    val hb = halfWidth * (1f + flare) * w
+    val ht = halfWidth * taper * w
+    if (leftStrip) {
+        // 左缘那条受光带：光从左上来，杆的左侧最亮。宽度取底端半宽的 0.5 倍（约整根的 20%）
+        val sb = halfWidth * 0.5f * w
+        path.moveTo(cx - hb, yBottom * h)
+        path.lineTo(cx - hb + sb, yBottom * h)
+        path.lineTo(cx + lean * w - ht + sb, yTop * h)
+        path.lineTo(cx + lean * w - ht, yTop * h)
+        path.close()
+        return
+    }
+    path.moveTo(cx - hb, yBottom * h)
+    path.lineTo(cx + hb, yBottom * h)
+    path.lineTo(cx + lean * w + ht, yTop * h)
+    path.lineTo(cx + lean * w - ht, yTop * h)
+    path.close()
+}
+
+/**
+ * 一组远景/中景的细树干，一次填完；给了 [rimColor] 再补一条左缘的受光带。
+ *
+ * [trunks] 是五元组 `x, 半宽w, 脚底y, 顶端y, 歪斜w`。同一层共用**一条 Path** ——
+ * 填充按非零环绕规则求并集，两根交叠的树干不会像两次 `drawPath` 那样叠出更深的色块。
+ *
+ * 受光带的颜色**不能**用 [mid]：杆本身已经压到 deep 一档，比它浅一点点的那档再乘个
+ * 0.15 只差 2/255，屏上什么都没有（离线复刻器量过）。用的是雾色 [top] 低透明度 ——
+ * 雾里透进来的光打在杆的左侧，这个说法和画面对得上。
+ */
+private fun DrawScope.drawTrunkLayer(
+    path: Path,
+    trunks: FloatArray,
+    color: Color,
+    alpha: Float,
+    taper: Float,
+    flare: Float,
+    rimColor: Color? = null,
+    rimAlpha: Float = 0f
+) {
+    if (alpha <= 0.01f) return
+    path.rewind()
+    for (i in 0 until trunks.size / 5) {
+        trunkQuad(
+            path = path,
+            w = size.width,
+            h = size.height,
+            x = trunks[i * 5],
+            halfWidth = trunks[i * 5 + 1],
+            yBottom = trunks[i * 5 + 2],
+            yTop = trunks[i * 5 + 3],
+            lean = trunks[i * 5 + 4],
+            taper = taper,
+            flare = flare
+        )
+    }
+    drawPath(path = path, color = color, alpha = alpha)
+    if (rimColor != null && rimAlpha > 0.01f) {
+        path.rewind()
+        for (i in 0 until trunks.size / 5) {
+            trunkQuad(
+                path = path,
+                w = size.width,
+                h = size.height,
+                x = trunks[i * 5],
+                halfWidth = trunks[i * 5 + 1],
+                yBottom = trunks[i * 5 + 2],
+                yTop = trunks[i * 5 + 3],
+                lean = trunks[i * 5 + 4],
+                taper = taper,
+                flare = flare,
+                leftStrip = true
+            )
+        }
+        drawPath(path = path, color = rimColor, alpha = alpha * rimAlpha)
+    }
+}
+
+/**
+ * 一个叶团：`bumps` 段小弧接成的一条**闭合**路径，由调用方一次填完。
+ *
+ * 这一层的形状全靠 [bumps] 这个高频项（波长约 40–60px）：**云与树冠的分别不在轮廓、
+ * 在边缘频率**。半径 190px 的大圆弧是低频、光滑的，那是云；叶簇的边界必须是
+ * 「一波小凸起接一波小凸起」。第二版顶棚用 9 个 0.115–0.145w 的大椭圆互相压着，
+ * 屏幕上就是一排云（需求方原话「顶部像云朵一样」）。
+ *
+ * [taper] 让团的下半收窄（挂在枝上的叶团上宽下尖）。θ=0 在正上方，轮廓按
+ * 「上宽下尖」的参数式取点，[lean] 把整团往一侧推。
+ */
+private fun leafBlob(
+    path: Path,
+    cx: Float,
+    cy: Float,
+    rx: Float,
+    ry: Float,
+    bumps: Int,
+    lean: Float,
+    seed: Float
+) {
+    val steps = bumps * 5
+    for (i in 0..steps) {
+        val th = TAU * i / steps
+        val taper = 1f - 0.42f * (1f - cos(th)) / 2f
+        val bump = 1f + 0.070f * sin(bumps * th + seed) +
+            0.035f * sin(bumps * 2.3f * th + seed * 1.7f)
+        val px = cx + (rx * taper * sin(th) + lean * rx * (1f - cos(th)) / 2f) * bump
+        val py = cy - ry * bump * cos(th)
+        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+    }
+    path.close()
+}
+
+/**
+ * 顶上那六挂叶（[FOLK_SPRAYS]）：一挂 = 一个主叶团 + 贴着它下缘的三个小卫星团。
+ *
+ * 三条要点，都是前两版在真机上翻车换来的：
+ * ① **叶团从画面顶上挂下来**（主团中心算下来在 y < 0，只有下半个露出来），
+ *    不是天上浮着一个完整的椭圆 —— 后者无论边缘多碎都还是云；
+ * ② 六挂**挂点不匀、垂的深浅不一、之间露着天**，连成一条就是云带；
+ * ③ 卫星团与主团只搭一点边：叶簇边缘要有几片**离群**的，叶团才不是一团面。
+ *
+ * 远一档的三挂用 [mid] 低透明度、还缩了 0.82/0.86 —— 原来远近一个档，
+ * 顶上那排叶子没有厚度。**同一批的子路径并进一条 Path 一次填完**（NonZero 取并集）：
+ * 一挂 4 团 × 6 挂要是各发一次 `drawPath`，光这一层每帧就 24 次填充。
+ */
+private fun DrawScope.drawFolkloreSprays(path: Path, deep: Color, mid: Color, alpha: Float) {
+    if (alpha <= 0.01f) return
+    val w = size.width
+    val h = size.height
+    for (pass in 0..1) {
+        val far = pass == 0
+        path.rewind()
+        for (i in 0 until FOLK_SPRAYS.size / 4) {
+            if ((i % 2 == 1) != far) continue
+            val x0 = FOLK_SPRAYS[i * 4] * w
+            val lean = FOLK_SPRAYS[i * 4 + 3]
+            val dep = FOLK_SPRAYS[i * 4 + 1] * (if (far) SPR_FAR_DEPTH else 1f)
+            val span = FOLK_SPRAYS[i * 4 + 2] * (if (far) SPR_FAR_SPAN else 1f) * w
+            val seed = FOLK_SPRAYS[i * 4] * 11.3f
+            val ry = dep * 0.70f * h
+            val cy = dep * 0.42f * h
+            leafBlob(path, x0, cy, span, ry, 30, lean, seed)
+            leafBlob(path, x0 + 0.62f * span + lean * span * 0.4f, cy + 0.86f * ry,
+                span * 0.30f, ry * 0.23f, 13, 0f, seed + 1.3f)
+            leafBlob(path, x0 - 0.72f * span + lean * span * 0.4f, cy + 0.78f * ry,
+                span * 0.26f, ry * 0.20f, 13, 0f, seed + 2.6f)
+            leafBlob(path, x0 + 0.10f * span + lean * span * 0.4f, cy + 1.04f * ry,
+                span * 0.22f, ry * 0.17f, 13, 0f, seed + 3.9f)
+        }
+        drawPath(
+            path = path,
+            color = if (far) mid else deep,
+            alpha = alpha * (if (far) SPR_ALPHA_FAR else SPR_ALPHA_NEAR)
+        )
+    }
+}
+
+/**
+ * 一根细梢：从 `(x0, y0)` 到 `(x1, y1)` 的楔形（根粗梢细）。
+ *
+ * 梢要**细**（根半宽 0.0017–0.0026w，即 2.4–3.7px，和参考照片里那些斜斜的细梢一个量级），
+ * 但根必须长在杆上 —— 第一版给了 0.13w 长、根半宽 0.01w 的粗杆，屏幕上是一堆悬在空里的斜棍。
+ */
+private fun branchWedge(
+    path: Path,
+    w: Float,
+    h: Float,
+    x0: Float,
+    y0: Float,
+    x1: Float,
+    y1: Float,
+    w0: Float,
+    w1: Float
+) {
+    val ax = x0 * w
+    val ay = y0 * h
+    val bx = x1 * w
+    val by = y1 * h
+    val dx = bx - ax
+    val dy = by - ay
+    val ln = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+    val nx = -dy / ln
+    val ny = dx / ln
+    path.moveTo(ax + nx * w0 * w, ay + ny * w0 * w)
+    path.lineTo(ax - nx * w0 * w, ay - ny * w0 * w)
+    path.lineTo(bx - nx * w1 * w, by - ny * w1 * w)
+    path.lineTo(bx + nx * w1 * w, by + ny * w1 * w)
+    path.close()
 }
 
 /**
@@ -3402,17 +3597,33 @@ private const val PIANO_SINK = 0.045f
 private const val LID_DEPTH_OF_HEIGHT = 0.5f * 0.78f
 
 /**
- * 一大片松林 + 灰雾 + 一台长满苔藓的**立式**钢琴，琴顶架起一块斜板。
+ * 一片雾里的松林 + 一台长满苔藓的**立式**钢琴，琴顶架起一块斜板。
  *
  * folklore 的封面就是霉霉一个人置身松林之中 —— 所以这一张**没有房子**。
  * 上一版右边那栋亮着窗的木屋被删了：它把视线全吸过去，而且 Lover 那张已经有一栋屋，
  * 同一件道具两张背景各一次，正是「重复」。腾出来的右半屏全部还给松林。
  *
+ * ## 松林
+ *
+ * 参考 folklore 专辑封面那张雾林（Beth Garrabrant 拍的）与 cardigan MV 的林子 ——
+ * 那张照片的语法就三条：**竖直的细树干**排成节奏；深度全靠**雾**（远处的树干洗完就没了、
+ * 树脚在雾里断掉，不是淡着拖到地上）；树冠是上方的**软叶顶棚**，糊成一片、不勾边。
+ *
+ * 所以这一版把「三角松」整个换掉了。上一版 27 棵山毛榉式三角松（17 棵随机分三层 +
+ * 6 棵塞缝 + 4 棵近景），全是同一个 [drawConifer] 换个尺寸 —— 乱不在多，在**同一个形状
+ * 反复出现**：随机只挪位置与大小，形状一模一样，屏幕上是一片锯齿。现在 16 根，全部手放：
+ * 8 根远景细杆（[FOLK_FAR_TRUNKS]，脚停在雾里）、2 棵雾里的杉（[FOLK_MIST_FIRS]，
+ * 「这是松林」靠它们说但只到 0.17–0.20 档）、4 根中景（[FOLK_MID_TRUNKS]）、
+ * 2 根近景粗杆（[FOLK_NEAR_TRUNKS]，底端的喇叭口是「树」的关键）与
+ * 画框边上的两个杉木楔子（[FOLK_NEAR_PINES]）。
+ *
+ * 顺序：顶棚 → 远层 → 雾 → 雾里的杉 → 中层 → 雾 → 近层。顶棚**最先**画：
+ * 树干要从叶子里穿出来，反过来树干顶在叶子上就成贴纸。
+ *
  * ## 钢琴为什么改成立式、为什么要斜着摆
  *
  * 上一版是**正视的三角钢琴**：一个圆头的琴身加一块平铺的大琴盖，屏幕上读作一只浴缸
- * 加一块板（宽 0.45w、高只有 0.085h，2.4:1）。这一版按**近正面的四分之三视角**重画，
- * 三个面都露出来：正脸（背光，最暗）、右侧面（更暗，往后收）、顶面（朝上受光，最亮）。
+ * 加一块板（宽 0.45w、高只有 0.085h，2.4:1）。这一版按**近正面的四分之三视角**重画， * 三个面都露出来：正脸（背光，最暗）、右侧面（更暗，往后收）、顶面（朝上受光，最亮）。
  * 深度向量 [PIANO_DX_FRACTION] / [PIANO_DY_FRACTION] 只有一份，琴身、顶面、琴盖、键盘托
  * 全按它推 —— 换角度只动这两个数。
  *
@@ -3449,8 +3660,7 @@ private fun DrawScope.drawPineMossPiano(
     mid: Color,
     deep: Color,
     phase: Float,
-    alpha: Float,
-    shapes: BackdropShapes
+    alpha: Float
 ) {
     val w = size.width
     val h = size.height
@@ -3467,47 +3677,50 @@ private fun DrawScope.drawPineMossPiano(
         alpha = alpha * 0.30f
     )
 
-    // ── 松林三层 ──
-    // 远层淡且矮、中层实、近层高到出画。三层之间各压一条雾，前后才分得开。
-    // 「一大片」靠的是**密**：17 棵按 i % 2 分两层是上一版的做法，屏幕上数得出棵数；
-    // 这一版三层都铺满全宽，远层再往左右各挪半个间距错开
-    val pines = shapes.pines
-    val count = pines.size / 3
-    for (layer in 0..1) {
-        for (i in 0 until count) {
-            if (i % 2 != layer) continue
-            val cx = pines[i * 3] * w
-            val ph = pines[i * 3 + 1] * h * (if (layer == 0) 0.66f else 1.05f)
-            val pw = pines[i * 3 + 2] * w * (if (layer == 0) 0.74f else 1.02f)
-            drawConifer(
-                path = path,
-                cx = cx,
-                baseY = groundY - (if (layer == 0) h * 0.030f else 0f),
-                height = ph,
-                halfWidth = pw,
-                color = if (layer == 0) mid else deep,
-                alpha = alpha * (if (layer == 0) DISTANT_ALPHA * 1.5f else SILHOUETTE_ALPHA)
-            )
-        }
-        // 远层画完压一条雾，中层的树自然站到它前面
-        if (layer == 0) drawFogBand(0.26f + 0.012f * sin(phase * TAU), 0.11f, top, alpha * DISTANT_ALPHA * 2.2f)
-    }
-    // 远层之间再插一排更小的树：树尖错开半个间距，林子读起来才是连成一片的
-    for (i in 0 until count) {
-        if (i % 3 != 0) continue
-        val cx = (pines[i * 3] + 0.055f) * w
+    // ── 松林 ──
+    // 参考 folklore 专辑封面那张雾林（Beth Garrabrant 拍的）+ cardigan MV 的林子，语法三条：
+    // ①**树干是主体**：十几到二十几根竖直的杆、粗细差三档、一直长出画面顶 ——
+    //    林子不是「一层层的树形」，是一排**杆**；树形（三角松）只在雾里点两下；
+    // ②**深度全靠雾**：远处的杆洗完就没了，脚都落进同一条地平雾里（0.40–0.412h），
+    //    不在半空里齐齐断掉；
+    // ③顶上**不是一条树冠带**（那是云的读法）：顶上是亮雾 + 六挂**疏叶**，
+    //    挂与挂之间露着天，叶子由 40–60px 波长的小弧接成。
+    //
+    // 上一版是 17 棵随机三角松分三层 + 6 棵更小的塞缝 + 4 棵近景大三角，一共 27 棵，
+    // 全是同一个 `drawConifer` 换个尺寸 —— 乱不在多，在**同一个形状反复出现**：
+    // 随机只挪位置和大小，形状一模一样，屏幕上是一片锯齿（需求方原话「松林画的有点乱」）。
+    // 第二版把树形换成了杆 + 软椭圆顶棚，顶棚读成了云、杆淡到看不见（「树看不清，顶部像云朵一样」）。
+    //
+    // 顺序：叶 → 远层 → 雾 → 雾里的杉 → 中层 → 雾 → 近层 → 细梢。
+    // 叶必须**最先**画：树干从叶子里穿出来，反过来树干顶在叶子上就成贴纸
+    drawFolkloreSprays(path, deep, mid, alpha)
+    // 远层的透明度是「树看不清」的主因：原来 0.20 的白杆落在 195 的天空上只差 18/255，
+    // 屏幕上就是没有。0.55 之后远处那排才数得出来，同时仍比中层浅一档
+    drawTrunkLayer(path, FOLK_FAR_TRUNKS, mid, alpha * 0.55f, taper = 0.72f, flare = 0.18f)
+    // 雾做得**宽而软**：窄条带会在屏幕上留下两道水平的白边 ——
+    // 一条 0.24h 高的带子在浅色天空里比树还显眼（离线复刻器第一版就栽在这）
+    drawFogBand(0.24f + 0.006f * sin(phase * TAU), 0.36f, top, alpha * 0.16f)
+    // 雾里的两棵杉：只留剪影的形、不压暗。「这是松林」这句话靠它们说，
+    // 但它们是远景（0.17–0.20 档），不是原来那几棵挡在琴前面的深色大三角
+    for (i in 0 until FOLK_MIST_FIRS.size / 4) {
         drawConifer(
             path = path,
-            cx = if (cx > w) cx - w else cx,
-            baseY = groundY - h * 0.048f,
-            height = pines[i * 3 + 1] * h * 0.48f,
-            halfWidth = pines[i * 3 + 2] * w * 0.60f,
+            cx = FOLK_MIST_FIRS[i * 4] * w,
+            baseY = groundY + h * 0.010f,
+            height = FOLK_MIST_FIRS[i * 4 + 1] * h,
+            halfWidth = FOLK_MIST_FIRS[i * 4 + 2] * w,
             color = mid,
-            alpha = alpha * DISTANT_ALPHA * 1.1f
+            alpha = alpha * FOLK_MIST_FIRS[i * 4 + 3]
         )
     }
-    // 近景那几棵：高到出画、压得最实，填住钢琴右边那一片空（原来是木屋的位置）。
-    // **在钢琴之前画** —— 钢琴是全图最靠前的东西，与它重叠的树该被它挡住
+    drawTrunkLayer(
+        path, FOLK_MID_TRUNKS, deep, alpha * 0.40f, taper = 0.62f, flare = 0.34f,
+        rimColor = top, rimAlpha = 0.09f
+    )
+    drawFogBand(0.33f, 0.22f, top, alpha * 0.13f)
+    // 近景两棵杉木剪影：只露出画框边上的一个楔子（x = -0.062w / 1.062w），
+    // 满了就是原来那三棵挤在右边一团的样子。**在钢琴之前画** ——
+    // 钢琴是全图最靠前的东西，与它重叠的树该被它挡住
     for (i in 0 until FOLK_NEAR_PINES.size / 3) {
         drawConifer(
             path = path,
@@ -3518,6 +3731,34 @@ private fun DrawScope.drawPineMossPiano(
             color = deep,
             alpha = alpha * SILHOUETTE_ALPHA * 1.24f
         )
+    }
+    drawTrunkLayer(
+        path, FOLK_NEAR_TRUNKS, deep, alpha * 0.58f, taper = 0.58f, flare = 0.50f,
+        rimColor = top, rimAlpha = 0.11f
+    )
+    // 细梢：**在树干之后**画（梢是从杆上长出来的），长在近景杆上那几根压深一档
+    for (pass in 0..1) {
+        val nearPass = pass == 0
+        path.rewind()
+        for (i in 0 until FOLK_BRANCHES.size / 6) {
+            var near = false
+            for (t in 0 until FOLK_NEAR_TRUNKS.size / 5) {
+                if (abs(FOLK_BRANCHES[i * 6] - FOLK_NEAR_TRUNKS[t * 5]) < 0.02f) near = true
+            }
+            if (near != nearPass) continue
+            branchWedge(
+                path = path,
+                w = w,
+                h = h,
+                x0 = FOLK_BRANCHES[i * 6],
+                y0 = FOLK_BRANCHES[i * 6 + 1],
+                x1 = FOLK_BRANCHES[i * 6 + 2],
+                y1 = FOLK_BRANCHES[i * 6 + 3],
+                w0 = FOLK_BRANCHES[i * 6 + 4],
+                w1 = FOLK_BRANCHES[i * 6 + 5]
+            )
+        }
+        drawPath(path = path, color = deep, alpha = alpha * (if (nearPass) 0.44f else 0.24f))
     }
 
     // ── 立式钢琴（斜四分之三视角）──
@@ -3992,11 +4233,95 @@ private fun DrawScope.drawPineMossPiano(
  * 又不能站到钢琴前面去。树高 0.34–0.44h 而林地线在 0.38h —— 树尖顶出屏幕，
  * 「近」就是这么来的。
  */
+/**
+ * folklore 松林：**手放**的树干，不用随机。
+ *
+ * 随机只挪位置和大小、形状一模一样，屏幕上就是一片锯齿（上一版 27 棵三角松，需求方
+ * 原话「画的有点乱」）。这里全部手放，间距刻意不等 —— 有两根挨着成丛，也有一大段空。
+ *
+ * 远层 12 根（[FOLK_FAR_TRUNKS]），脚底一律落进地平雾里（0.40–0.412h），不到地面 ——
+ * 第一版让它们停在 0.29–0.32h，屏幕上就是十几根顶着天的淡竖线、脚在半空里齐齐断掉，
+ * 「树看不清」有一半是这么来的。中层 6 根（[FOLK_MID_TRUNKS]）、近景粗杆 2 根
+ * （[FOLK_NEAR_TRUNKS]）、雾里的杉 2 棵（[FOLK_MIST_FIRS]）、画框边上的两个杉木楔子
+ * （[FOLK_NEAR_PINES]）、细梢 8 根（[FOLK_BRANCHES]）。
+ */
+private val FOLK_FAR_TRUNKS = floatArrayOf(
+    0.028f, 0.0022f, 0.406f, -0.05f, 0.010f,
+    0.072f, 0.0034f, 0.402f, -0.04f, -0.008f,
+    0.128f, 0.0026f, 0.410f, -0.06f, 0.014f,
+    0.196f, 0.0040f, 0.404f, -0.03f, -0.011f,
+    0.252f, 0.0024f, 0.408f, -0.05f, 0.008f,
+    0.318f, 0.0038f, 0.400f, -0.04f, -0.013f,
+    0.396f, 0.0028f, 0.412f, -0.05f, 0.011f,
+    0.468f, 0.0044f, 0.402f, -0.03f, -0.009f,
+    0.560f, 0.0026f, 0.408f, -0.06f, 0.013f,
+    0.660f, 0.0036f, 0.404f, -0.04f, -0.010f,
+    0.858f, 0.0024f, 0.410f, -0.05f, 0.009f,
+    0.928f, 0.0042f, 0.402f, -0.03f, -0.012f
+)
+
+private val FOLK_MID_TRUNKS = floatArrayOf(
+    0.158f, 0.0062f, 0.408f, -0.04f, 0.014f,
+    0.352f, 0.0084f, 0.404f, -0.04f, -0.011f,
+    0.512f, 0.0056f, 0.410f, -0.04f, 0.016f,
+    0.700f, 0.0090f, 0.402f, -0.04f, -0.012f,
+    0.824f, 0.0068f, 0.406f, -0.04f, 0.010f,
+    0.612f, 0.0048f, 0.412f, -0.04f, -0.009f
+)
+
+private val FOLK_NEAR_TRUNKS = floatArrayOf(
+    0.104f, 0.0192f, 0.412f, -0.06f, 0.020f,
+    0.736f, 0.0140f, 0.408f, -0.06f, -0.015f
+)
+
+/**
+ * 雾里那两棵杉：`(x, 树高, 半宽, 强度)`。**只留剪影的形、不压暗** ——
+ * 「这是松林」这句话靠它们说，但它们是远景，不是原来那几棵挡在琴前面的深色大三角。
+ */
+private val FOLK_MIST_FIRS = floatArrayOf(
+    0.285f, 0.30f, 0.070f, 0.20f,
+    0.868f, 0.28f, 0.065f, 0.17f
+)
+
+/**
+ * 顶上挂下来的六挂叶：`(挂点x, 垂到y, 枝展w, 茎的倾向)`。
+ *
+ * 挂点**不匀**（0.03 / 0.226 / 0.418 / 0.612 / 0.792 / 0.958）、垂的深浅**差近一倍**
+ * （0.080–0.148h）—— 匀了、齐了就是一条云带。
+ */
+private val FOLK_SPRAYS = floatArrayOf(
+    0.030f, 0.148f, 0.108f, -0.35f,
+    0.226f, 0.092f, 0.082f, 0.22f,
+    0.418f, 0.132f, 0.098f, 0.16f,
+    0.612f, 0.080f, 0.074f, -0.26f,
+    0.792f, 0.138f, 0.102f, 0.30f,
+    0.958f, 0.100f, 0.080f, -0.20f
+)
+
+/** 近一档那三挂（0/2/4 号）的叶团不透明度 */
+private const val SPR_ALPHA_NEAR = 0.30f
+
+/** 远一档那三挂（1/3/5 号）的叶团不透明度与缩放：顶上那排叶子要有厚度 */
+private const val SPR_ALPHA_FAR = 0.185f
+private const val SPR_FAR_DEPTH = 0.82f
+private const val SPR_FAR_SPAN = 0.86f
+
+/** 细梢：`(x, 根y, 末端x, 末端y, 根半宽w, 梢半宽w)`。根都长在杆上 */
+private val FOLK_BRANCHES = floatArrayOf(
+    0.104f, 0.130f, 0.196f, 0.096f, 0.0026f, 0.0011f,
+    0.104f, 0.176f, 0.038f, 0.140f, 0.0022f, 0.0010f,
+    0.104f, 0.232f, 0.182f, 0.198f, 0.0018f, 0.0008f,
+    0.736f, 0.150f, 0.820f, 0.116f, 0.0020f, 0.0009f,
+    0.736f, 0.196f, 0.662f, 0.164f, 0.0017f, 0.0008f,
+    0.352f, 0.156f, 0.284f, 0.128f, 0.0019f, 0.0008f,
+    0.700f, 0.118f, 0.770f, 0.090f, 0.0022f, 0.0009f,
+    0.512f, 0.140f, 0.578f, 0.114f, 0.0018f, 0.0008f
+)
+
+/** 近景杉木剪影：`(x, 树高, 半宽w)`。x 落在画框外 —— 只露出两个楔子当画框 */
 private val FOLK_NEAR_PINES = floatArrayOf(
-    0.018f, 0.40f, 0.112f,
-    0.700f, 0.34f, 0.092f,
-    0.848f, 0.44f, 0.128f,
-    0.978f, 0.37f, 0.104f
+    -0.062f, 0.44f, 0.108f,
+    1.062f, 0.46f, 0.112f
 )
 
 // ─────────────────────── 9 · evermore ───────────────────────
