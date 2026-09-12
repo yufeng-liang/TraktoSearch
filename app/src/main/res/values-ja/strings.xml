@@ -2133,8 +2133,9 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">データとプライバシー</string>
-    <string name="privacy_entry_subtitle">データ設定 · プライバシー · 利用と権利</string>
+    <string name="privacy_entry_subtitle">データ設定 · AI プロフィール · プライバシー · 利用と権利</string>
     <string name="privacy_section_switches">データ設定</string>
+    <string name="privacy_section_ai_profile">AI プロフィール</string>
     <string name="privacy_location_title">位置情報の許可（雲の天気）</string>
     <string name="privacy_location_granted">許可済み。雲のアニメーションが地域の天気や季節に合わせて変わります。システム設定で取り消せます</string>
     <string name="privacy_location_denied">未許可。雲は静止したままですが、他の機能には影響しません</string>
@@ -2224,7 +2225,6 @@
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>
     <string name="swiftie_audio_hint_volume">音量をオンにすると最高の体験に</string>
     <string name="swiftie_audio_hint_headphones">イヤホン着用で最高の体験に</string>
-    <string name="settings_ai_profile">AI とプライバシー</string>
     <string name="settings_ai_profile_consent">AI プロフィール</string>
     <string name="settings_ai_profile_consent_desc">マーク、評価、短評を使ってローカルな好みのプロフィールを作り、詳細ページの分析に利用します。</string>
     <string name="settings_ai_profile_unavailable">アカウント認証が復元されると利用できます</string>
@@ -2246,7 +2246,7 @@
     <string name="help_ai_profile_b1">視聴済み、観たい作品、評価、短評、ジャンルなどの情報を使って好みを把握します。</string>
     <string name="help_ai_profile_b2">任意の行動データは日次集計されます。詳細ページの滞在、検索クリック、エピソード開始/完了、再生進捗が含まれます。</string>
     <string name="help_ai_profile_b3">詳細ページの分析には粗い天気ラベルだけを使い、座標、都市名、位置識別子は AI に送りません。</string>
-    <string name="help_ai_profile_b4">プロフィール、パーソナライズ、行動データ、クラウド同期は個別に制御できます。行動データは初期状態でオフです。</string>
+    <string name="help_ai_profile_b4">プロフィール、パーソナライズ、行動データ、クラウド同期は個別に制御できます。行動データは初期状態でオフです。スイッチは「設定 → データとプライバシー」にあります。</string>
     <string name="help_ai_profile_b5">プロフィールを消去すると、ローカルの好み、作品、行動、未同期データを削除し、許可をオフにします。サーバー上の既存データは削除しません。</string>
     <string name="detail_ai_title">AI アシスタント</string>
     <string name="detail_ai_close">AI アシスタントを閉じる</string>

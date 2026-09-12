@@ -2133,8 +2133,9 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">데이터 &amp; 개인정보</string>
-    <string name="privacy_entry_subtitle">데이터 설정 · 개인정보 · 이용과 권리</string>
+    <string name="privacy_entry_subtitle">데이터 설정 · AI 프로필 · 개인정보 · 이용과 권리</string>
     <string name="privacy_section_switches">데이터 설정</string>
+    <string name="privacy_section_ai_profile">AI 프로필</string>
     <string name="privacy_location_title">위치 권한(구름 날씨)</string>
     <string name="privacy_location_granted">허용됨. 구름 애니메이션이 지역 날씨와 계절에 맞춰 변합니다. 시스템 설정에서 철회할 수 있습니다</string>
     <string name="privacy_location_denied">허용되지 않음. 구름은 정적으로 유지되며 다른 기능에는 영향이 없습니다</string>
@@ -2224,7 +2225,6 @@
     <string name="swiftie_audio_hint_all">소리를 켜고 이어폰을 착용하면 가장 좋습니다</string>
     <string name="swiftie_audio_hint_volume">소리를 켜면 가장 좋습니다</string>
     <string name="swiftie_audio_hint_headphones">이어폰을 착용하면 가장 좋습니다</string>
-    <string name="settings_ai_profile">AI 및 개인정보</string>
     <string name="settings_ai_profile_consent">AI 프로필</string>
     <string name="settings_ai_profile_consent_desc">표시한 작품, 평점과 짧은 리뷰로 로컬 취향 프로필을 만들어 상세 페이지 분석에 사용합니다.</string>
     <string name="settings_ai_profile_unavailable">계정 인증이 복원되면 사용할 수 있습니다</string>
@@ -2246,7 +2246,7 @@
     <string name="help_ai_profile_b1">시청 완료, 보고 싶은 작품, 평점, 짧은 리뷰, 장르 등의 정보로 취향을 파악합니다.</string>
     <string name="help_ai_profile_b2">선택적 행동 데이터는 일별 집계됩니다. 상세 페이지 체류, 검색 클릭, 에피소드 시작/완료와 재생 진행이 포함됩니다.</string>
     <string name="help_ai_profile_b3">상세 페이지 분석에는 거친 날씨 라벨만 사용하며 좌표, 도시명 또는 위치 식별자를 AI에 보내지 않습니다.</string>
-    <string name="help_ai_profile_b4">프로필, 개인화, 행동 수집과 클라우드 동기화를 각각 제어할 수 있습니다. 행동 수집은 기본적으로 꺼져 있습니다.</string>
+    <string name="help_ai_profile_b4">프로필, 개인화, 행동 수집과 클라우드 동기화를 각각 제어할 수 있습니다. 행동 수집은 기본적으로 꺼져 있습니다. 스위치는 [설정 → 데이터 및 개인정보]에 있습니다.</string>
     <string name="help_ai_profile_b5">프로필을 삭제하면 로컬 취향, 작품, 행동 및 대기 중인 동기화 데이터를 삭제하고 권한을 끕니다. 서버의 기존 데이터는 삭제하지 않습니다.</string>
     <string name="detail_ai_title">AI 어시스턴트</string>
     <string name="detail_ai_close">AI 어시스턴트 닫기</string>

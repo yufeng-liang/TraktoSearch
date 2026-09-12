@@ -2121,8 +2121,9 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">数据与隐私</string>
-    <string name="privacy_entry_subtitle">数据开关 · 隐私说明 · 使用与权利</string>
+    <string name="privacy_entry_subtitle">数据开关 · AI 画像 · 隐私说明 · 使用与权利</string>
     <string name="privacy_section_switches">数据开关</string>
+    <string name="privacy_section_ai_profile">AI 画像</string>
     <string name="privacy_location_title">位置授权（云朵天气）</string>
     <string name="privacy_location_granted">已授权。云朵会随你所在城市的天气与节日变化；可在系统设置中撤销</string>
     <string name="privacy_location_denied">未授权。云朵保持静态，不影响其他功能</string>
@@ -2212,7 +2213,6 @@
     <string name="swiftie_audio_hint_all">打开声音并戴上耳机，体验最佳</string>
     <string name="swiftie_audio_hint_volume">打开声音，体验最佳</string>
     <string name="swiftie_audio_hint_headphones">戴上耳机，体验最佳</string>
-    <string name="settings_ai_profile">AI 与隐私</string>
     <string name="settings_ai_profile_consent">AI 个性化画像</string>
     <string name="settings_ai_profile_consent_desc">使用你的标记、评分和短评建立本地口味画像，用于详情页分析。</string>
     <string name="settings_ai_profile_unavailable">账号授权恢复后即可使用</string>
@@ -2234,7 +2234,7 @@
     <string name="help_ai_profile_b1">画像可使用已看、想看、评分、短评、类型等影视信息，帮助理解你的口味。</string>
     <string name="help_ai_profile_b2">可选行为数据按日聚合，包括详情停留桶、搜索点击、单集开始/完成次数和播放进度桶。</string>
     <string name="help_ai_profile_b3">详情页分析只使用粗粒度天气标签，不会向 AI 发送坐标、城市名称或位置标识。</string>
-    <string name="help_ai_profile_b4">画像、个性化、行为采集和云端同步可以分别控制；行为采集默认关闭。</string>
+    <string name="help_ai_profile_b4">画像、个性化、行为采集和云端同步可以分别控制；行为采集默认关闭。开关在「设置 → 数据与隐私」里。</string>
     <string name="help_ai_profile_b5">清除画像会删除本地口味、影视、行为和待同步数据，并关闭本地授权；不会删除服务器已有数据。</string>
     <string name="detail_ai_title">AI 助手</string>
     <string name="detail_ai_close">关闭 AI 助手</string>

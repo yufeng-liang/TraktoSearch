@@ -2128,8 +2128,9 @@ Config:
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">Data &amp; Privacy</string>
-    <string name="privacy_entry_subtitle">Data controls · privacy · terms &amp; rights</string>
+    <string name="privacy_entry_subtitle">Data controls · AI profile · privacy · terms &amp; rights</string>
     <string name="privacy_section_switches">Data controls</string>
+    <string name="privacy_section_ai_profile">AI profile</string>
     <string name="privacy_location_title">Location permission (cloud weather)</string>
     <string name="privacy_location_granted">Granted. Cloud animations follow your local weather and holidays; revoke in system settings</string>
     <string name="privacy_location_denied">Not granted. Cloud animations stay static; other features are unaffected</string>
@@ -2219,7 +2220,6 @@ Config:
     <string name="swiftie_audio_hint_all">Sound on and headphones for the best experience</string>
     <string name="swiftie_audio_hint_volume">Turn the sound on for the best experience</string>
     <string name="swiftie_audio_hint_headphones">Headphones for the best experience</string>
-    <string name="settings_ai_profile">AI &amp; Privacy</string>
     <string name="settings_ai_profile_consent">AI profile</string>
     <string name="settings_ai_profile_consent_desc">Use your marked titles, ratings and reviews to build a local taste profile for detail-page analysis.</string>
     <string name="settings_ai_profile_unavailable">Available after account authorization is restored</string>
@@ -2241,7 +2241,7 @@ Config:
     <string name="help_ai_profile_b1">The profile can use watched and watchlist titles, ratings, short reviews, genres and other media details to understand your taste.</string>
     <string name="help_ai_profile_b2">Optional behavior data is aggregated by day: detail dwell buckets, search clicks, episode starts/completions and playback progress buckets.</string>
     <string name="help_ai_profile_b3">Detail-page analysis uses only a coarse weather label. Coordinates, city names and location identifiers are not sent to AI.</string>
-    <string name="help_ai_profile_b4">Profile, personalization, behavior collection and cloud sync are separate controls. Behavior collection is off by default.</string>
+    <string name="help_ai_profile_b4">Profile, personalization, behavior collection and cloud sync are separate controls. Behavior collection is off by default. The switches live under Settings → Data &amp; privacy.</string>
     <string name="help_ai_profile_b5">Clearing the profile deletes local taste, media, behavior and pending sync data, then turns off local permissions. It does not delete existing server data.</string>
     <string name="detail_ai_title">AI Assistant</string>
     <string name="detail_ai_close">Close AI assistant</string>
