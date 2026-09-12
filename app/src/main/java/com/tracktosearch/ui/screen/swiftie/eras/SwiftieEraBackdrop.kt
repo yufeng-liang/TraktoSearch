@@ -33,6 +33,7 @@ import com.tracktosearch.ui.screen.swiftie.unitHeartPath
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.sin
@@ -632,15 +633,19 @@ private fun DrawScope.drawTrunkLayer(
 }
 
 /**
- * 一个叶团：`bumps` 段小弧接成的一条**闭合**路径，由调用方一次填完。
+ * 一坨叶：**一条闭合路径**，由调用方一次填完。
  *
- * 这一层的形状全靠 [bumps] 这个高频项（波长约 40–60px）：**云与树冠的分别不在轮廓、
- * 在边缘频率**。半径 190px 的大圆弧是低频、光滑的，那是云；叶簇的边界必须是
- * 「一波小凸起接一波小凸起」。第二版顶棚用 9 个 0.115–0.145w 的大椭圆互相压着，
- * 屏幕上就是一排云（需求方原话「顶部像云朵一样」）。
+ * 两件事决定它读作「叶」还是读作「花」，都是前两版在真机上翻车换来的：
+ * ① **不能是一圈等幅等距的圆凸**。花簇（绣球、丁香）的轮廓正是「半径相同、间距相同的
+ *    一圈小圆」—— 第二版给了 30 段等幅小弧，屏幕上就是一束垂下来的花（需求方这轮原话）。
+ *    这里把振幅**调制**起来（`0.030 + 0.060·|sin(1.7θ)|`：有的地方几乎光滑、有的地方一道
+ *    深缺口），相位也抖（`15θ + 0.6·sin(2.7θ)`，凸起间距不再均匀），底形再加 2 次/3 次
+ *    谐波把它拉歪 —— 整圈没有一处是正圆。
+ * ② **下缘不能收成一个尖**。上宽下尖、尖端再挂一小坨，那就是一串垂下来的花。
+ *    叶团是**横着铺开**的（[ry] 只给 0.61 倍垂深、[rx] 放到 1.20 倍枝展）。
+ * 另外留 4 个**尖叶**（窄高斯凸起）挑出轮廓，叶子才有尖角。
  *
- * [taper] 让团的下半收窄（挂在枝上的叶团上宽下尖）。θ=0 在正上方，轮廓按
- * 「上宽下尖」的参数式取点，[lean] 把整团往一侧推。
+ * [seed] 决定两件事的相位，同一挂里的两坨要传不同的 seed，否则两坨一模一样。
  */
 private fun leafBlob(
     path: Path,
@@ -648,35 +653,48 @@ private fun leafBlob(
     cy: Float,
     rx: Float,
     ry: Float,
-    bumps: Int,
-    lean: Float,
-    seed: Float
+    seed: Int,
+    tips: Int = 4
 ) {
-    val steps = bumps * 5
-    for (i in 0..steps) {
+    val rnd = Random(seed * 1000 + 7)
+    val ph0 = rnd.nextFloat() * TAU
+    val ph1 = rnd.nextFloat() * TAU
+    val ph2 = rnd.nextFloat() * TAU
+    val tipTh = FloatArray(tips) { rnd.nextFloat() * TAU }
+    val tipAmp = FloatArray(tips) { 0.09f + rnd.nextFloat() * 0.10f }
+    val steps = 300
+    for (i in 0 until steps) {
         val th = TAU * i / steps
-        val taper = 1f - 0.42f * (1f - cos(th)) / 2f
-        val bump = 1f + 0.070f * sin(bumps * th + seed) +
-            0.035f * sin(bumps * 2.3f * th + seed * 1.7f)
-        val px = cx + (rx * taper * sin(th) + lean * rx * (1f - cos(th)) / 2f) * bump
-        val py = cy - ry * bump * cos(th)
+        val base = 1f + 0.16f * cos(2f * th + ph0) + 0.11f * cos(3f * th + ph1)
+        val taper = 1f - 0.15f * (1f - cos(th)) / 2f
+        val amp = 0.030f + 0.060f * abs(sin(1.7f * th + ph2))
+        val rip = 1f + amp * sin(15f * th + 0.6f * sin(2.7f * th + ph2))
+        var r = base * taper * rip
+        for (k in 0 until tips) {
+            val d0 = (th - tipTh[k]) % TAU
+            val d1 = (th - tipTh[k] + TAU) % TAU
+            r += tipAmp[k] * exp(-(d0 * d0) / 0.01125f)
+            r += tipAmp[k] * exp(-(d1 * d1) / 0.01125f)
+        }
+        val px = cx + rx * r * sin(th)
+        val py = cy - ry * r * cos(th)
         if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
     }
     path.close()
 }
 
 /**
- * 顶上那六挂叶（[FOLK_SPRAYS]）：一挂 = 一个主叶团 + 贴着它下缘的三个小卫星团。
+ * 顶上那几丛叶（[FOLK_SPRAYS]）：一丛 = 两坨叶 + 一条把叶连回枝上的细梢。
  *
- * 三条要点，都是前两版在真机上翻车换来的：
- * ① **叶团从画面顶上挂下来**（主团中心算下来在 y < 0，只有下半个露出来），
- *    不是天上浮着一个完整的椭圆 —— 后者无论边缘多碎都还是云；
- * ② 六挂**挂点不匀、垂的深浅不一、之间露着天**，连成一条就是云带；
- * ③ 卫星团与主团只搭一点边：叶簇边缘要有几片**离群**的，叶团才不是一团面。
+ * 三条要点：
+ * ① **挂点全部钉在树干上**（见 [FOLK_SPRAYS] 的注释）：叶子长在树上。上一版挂点差不多
+ *    等距地排开，屏幕上就是一排从天花板垂下来的花簇；
+ * ② 叶坨**从画面顶上挂下来**（中心算在 y < 0，只有下半个露出来），不是天上浮着个椭圆；
+ * ③ 第二坨要往**侧后方**错（横向 ±0.55 枝展、纵向不齐），**不在正下方再挂一小坨** ——
+ *    正下方挂小坨加上下缘收尖，那就是「一簇垂下来的花」。
  *
- * 远一档的三挂用 [mid] 低透明度、还缩了 0.82/0.86 —— 原来远近一个档，
- * 顶上那排叶子没有厚度。**同一批的子路径并进一条 Path 一次填完**（NonZero 取并集）：
- * 一挂 4 团 × 6 挂要是各发一次 `drawPath`，光这一层每帧就 24 次填充。
+ * 远一档的三丛用 [mid] 低透明度、还缩了 0.82/0.86 —— 顶上那排叶子要有厚度。
+ * 同一批的叶坨并进一条 Path 一次填完（NonZero 取并集），细梢再合并成一条路径一次描边。
  */
 private fun DrawScope.drawFolkloreSprays(path: Path, deep: Color, mid: Color, alpha: Float) {
     if (alpha <= 0.01f) return
@@ -685,22 +703,27 @@ private fun DrawScope.drawFolkloreSprays(path: Path, deep: Color, mid: Color, al
     for (pass in 0..1) {
         val far = pass == 0
         path.rewind()
-        for (i in 0 until FOLK_SPRAYS.size / 4) {
+        for (i in 0 until FOLK_SPRAYS.size / 5) {
             if ((i % 2 == 1) != far) continue
-            val x0 = FOLK_SPRAYS[i * 4] * w
-            val lean = FOLK_SPRAYS[i * 4 + 3]
-            val dep = FOLK_SPRAYS[i * 4 + 1] * (if (far) SPR_FAR_DEPTH else 1f)
-            val span = FOLK_SPRAYS[i * 4 + 2] * (if (far) SPR_FAR_SPAN else 1f) * w
-            val seed = FOLK_SPRAYS[i * 4] * 11.3f
-            val ry = dep * 0.70f * h
-            val cy = dep * 0.42f * h
-            leafBlob(path, x0, cy, span, ry, 30, lean, seed)
-            leafBlob(path, x0 + 0.62f * span + lean * span * 0.4f, cy + 0.86f * ry,
-                span * 0.30f, ry * 0.23f, 13, 0f, seed + 1.3f)
-            leafBlob(path, x0 - 0.72f * span + lean * span * 0.4f, cy + 0.78f * ry,
-                span * 0.26f, ry * 0.20f, 13, 0f, seed + 2.6f)
-            leafBlob(path, x0 + 0.10f * span + lean * span * 0.4f, cy + 1.04f * ry,
-                span * 0.22f, ry * 0.17f, 13, 0f, seed + 3.9f)
+            val x0 = FOLK_SPRAYS[i * 5] * w
+            val lean = FOLK_SPRAYS[i * 5 + 3]
+            val dep = FOLK_SPRAYS[i * 5 + 1] * (if (far) SPR_FAR_DEPTH else 1f)
+            val span = FOLK_SPRAYS[i * 5 + 2] * (if (far) SPR_FAR_SPAN else 1f) * w
+            val rnd = Random((x0.toInt() % 9973) * 977 + 31)
+            for (k in 0 until 2) {
+                val ox = rnd.nextInt(-550, 551) / 1000f * span
+                val oy = (0.15f + rnd.nextFloat() * 0.47f) * dep * (if (k == 0) 1f else 1.35f)
+                val rr = if (k == 0) span else span * (0.42f + rnd.nextFloat() * 0.20f)
+                val dd = if (k == 0) dep else dep * (0.55f + rnd.nextFloat() * 0.25f)
+                leafBlob(
+                    path = path,
+                    cx = x0 + ox + lean * span * 0.4f,
+                    cy = dd * 0.45f * h + oy * h,
+                    rx = rr * 1.20f,
+                    ry = dd * 0.61f * h,
+                    seed = (x0 * 11.3f).toInt() + k * 17 + i * 101
+                )
+            }
         }
         drawPath(
             path = path,
@@ -708,6 +731,23 @@ private fun DrawScope.drawFolkloreSprays(path: Path, deep: Color, mid: Color, al
             alpha = alpha * (if (far) SPR_ALPHA_FAR else SPR_ALPHA_NEAR)
         )
     }
+    // 细梢：从画面顶边斜斜地伸进叶坨里。少了它，叶是「挂在空中」的
+    path.rewind()
+    for (i in 0 until FOLK_SPRAYS.size / 5) {
+        val x0 = FOLK_SPRAYS[i * 5] * size.width
+        val lean = FOLK_SPRAYS[i * 5 + 3]
+        val dep = FOLK_SPRAYS[i * 5 + 1] * size.height
+        val span = FOLK_SPRAYS[i * 5 + 2] * size.width
+        path.moveTo(x0, -size.height * 0.01f)
+        path.lineTo(x0 + lean * span * 0.5f, dep * 0.55f)
+        path.lineTo(x0 + lean * span * 0.6f + span * 0.35f, dep * 1.05f)
+    }
+    drawPath(
+        path = path,
+        color = deep,
+        alpha = alpha * 0.85f,
+        style = Stroke(width = size.width * 0.0022f, cap = StrokeCap.Round)
+    )
 }
 
 /**
@@ -3780,20 +3820,30 @@ private fun DrawScope.drawPineMossPiano(
     val dx = w * PIANO_DX_FRACTION
     val dy = h * PIANO_DY_FRACTION
 
-    // 落地影：**三档往外摊**（贴着琴脚最深、往外两档越淡），阳光从左上来，影子往右下走。
-    // 上一版是**一块等深的平行四边形**，压出来的那点差比苔原自身还浅，屏幕上读作
-    // 琴底下垫了一张纸 —— 琴就是「贴」在画面上（需求方原话「像悬浮在画面上一样」）。
-    // 影子的尽头落在琴身右下的 `2.3dx` 处，正好接住右侧板那一片暗
-    for (step in 0 until 3) {
-        val reach = 1.05f + step * 0.62f
-        val drop = h * (0.007f + step * 0.0115f)
+    // 落地影：顺着**整个可见底轮廓**（前棱 + 右侧棱）往**右后**摊。
+    //
+    // 方向是要害。等距投影里「往后」就是深度向量 (dx, dy) 本身，光从左前上来 ⇒ 影子往右后走，
+    // 于是影子两条边与箱体两条底边**平行**，接得严丝合缝。上一版只从**前棱**往**右下**摊
+    // （`(dx*reach, +drop)`）：右侧棱底下那一块地反倒是**亮**的，那块平行四边形就浮在亮地上
+    // —— 需求方两轮都点这一处「平行四边形像悬浮一样」。
+    //
+    // 长度要按「地平线以下还剩多少地」砍：箱高 506px、光 45° 时物理上该拖 500px 长，
+    // 但每 1 个深度单位只往上 105px（|dy|），拖满就爬到地平线**以上的天**里去了。
+    // 只摊到 0.95 个深度单位（≈100px，末端停在地平线下 49px），五档嵌套、越远越淡：
+    // 贴着底轮廓那四档叠出 ≈0.38 的暗，往右后散开
+    for (step in 0 until 5) {
+        val reach = floatArrayOf(0.18f, 0.36f, 0.55f, 0.75f, 0.95f)[step]
         path.rewind()
         path.moveTo(bodyL, bodyB)
-        path.lineTo(bodyR, bodyB)
-        path.lineTo(bodyR + dx * reach, bodyB + drop)
-        path.lineTo(bodyL + dx * (reach * 0.83f), bodyB + drop)
+        path.lineTo(bodyR + dx * reach, bodyB + dy * reach)
+        path.lineTo(bodyR + dx * (reach + 1f), bodyB + dy * (reach + 1f))
+        path.lineTo(bodyL + dx * (reach + 1f), bodyB + dy * (reach + 1f))
         path.close()
-        drawPath(path = path, color = Color.Black, alpha = alpha * (0.26f - step * 0.065f))
+        drawPath(
+            path = path,
+            color = Color.Black,
+            alpha = alpha * floatArrayOf(0.16f, 0.12f, 0.10f, 0.08f, 0.06f)[step]
+        )
     }
 
     // 右侧板：往后收的那个面，背光又侧对着光，全琴最暗。
@@ -4222,6 +4272,59 @@ private fun DrawScope.drawPineMossPiano(
                 alpha = alpha * 0.55f
             )
         }
+        // 苔岸只埋住**前棱**。可见的底轮廓有**两条**棱，右侧棱那条底下（|dy| = 0.033h ≈ 105px）
+        // 还是光的 —— 那块平行四边形就悬在这一条光带上（需求方这轮的原话）。
+        // 沿侧棱再走一条**苔领**：苔要**跨在棱上**长（圆心落在棱上或往外一点，一半在琴身上、
+        // 一半在外面），齐着棱码一排绿球会读成「一串贴在边上的珠子」；宽度往后收成零
+        // （`1 - t^1.6`），到后下角自然没了，不留一道直切口
+        run {
+            val sideLen = hypot(dx, dy).coerceAtLeast(1f)
+            val nx = abs(dy) / sideLen
+            val ny = abs(dx) / sideLen
+            val n = 26
+            path.rewind()
+            // **第一条必须是 moveTo**：空路径上直接 lineTo，这条子路径从 (0,0) 起头 ——
+            // 屏幕上就是一条从屏幕左上角斜穿到琴脚的绿线（MOSS × 0.62，斜率 0.5）。
+            // 真机截图上量到的线正好过 (0,0) 与 (bodyR, bodyB)，就是这一处
+            path.moveTo(bodyR, bodyB)
+            for (i in 1..n) {
+                val t = i / n.toFloat()
+                path.lineTo(bodyR + dx * t, bodyB + dy * t)
+            }
+            for (i in n downTo 0) {
+                val t = i / n.toFloat()
+                val width = w * (0.013f + 0.014f * abs(sin(t * 5.3f + 0.9f))) *
+                    (1f - t.pow(1.6f)).coerceAtLeast(0f)
+                path.lineTo(bodyR + dx * t + nx * width, bodyB + dy * t + ny * width)
+            }
+            path.close()
+            drawPath(path = path, color = MOSS, alpha = alpha * 0.62f)
+            for (i in 0 until 11) {
+                val t = (i + 0.5f) / 11f
+                val r = w * (0.007f + 0.017f * abs(sin(t * 6.3f + 2.1f))) * (1f - 0.55f * t)
+                val off = r * (0.25f + 0.85f * abs(sin(t * 9.7f + 0.4f)))
+                val cx = bodyR + dx * t + nx * off
+                val cy = bodyB + dy * t + ny * off
+                drawOval(
+                    color = if (i % 3 == 1) MOSS_LIGHT else MOSS,
+                    topLeft = Offset(cx - r, cy - r * 0.62f),
+                    size = Size(r * 2f, r * 1.32f),
+                    alpha = alpha * 0.58f
+                )
+            }
+            // 接触线：整条可见底轮廓（前棱 → 右侧棱）压一道极窄的暗线。
+            // 有这条线，箱体才是**坐在**地上；没有，苔只是散在脚边
+            path.rewind()
+            path.moveTo(bodyL, bodyB)
+            path.lineTo(bodyR, bodyB)
+            path.lineTo(bodyR + dx, bodyB + dy)
+            drawPath(
+                path = path,
+                color = Color.Black,
+                alpha = alpha * 0.30f,
+                style = Stroke(width = w * 0.0040f)
+            )
+        }
     }
     drawFogBand(HERO_BOTTOM + 0.09f, 0.13f, top, alpha * DISTANT_ALPHA * 1.6f)
 }
@@ -4284,18 +4387,20 @@ private val FOLK_MIST_FIRS = floatArrayOf(
 )
 
 /**
- * 顶上挂下来的六挂叶：`(挂点x, 垂到y, 枝展w, 茎的倾向)`。
+ * 顶上的叶丛：`(挂点x, 垂到y, 枝展w, 茎的倾向, 强度)`。
  *
- * 挂点**不匀**（0.03 / 0.226 / 0.418 / 0.612 / 0.792 / 0.958）、垂的深浅**差近一倍**
- * （0.080–0.148h）—— 匀了、齐了就是一条云带。
+ * **挂点全部钉在树干上**（0.104 / 0.252 / 0.318 / 0.468 / 0.700 / 0.858 都在
+ * [FOLK_FAR_TRUNKS] / [FOLK_MID_TRUNKS] / [FOLK_NEAR_TRUNKS] 里）—— 叶子长在树上。
+ * 上一版挂点按 0.03 / 0.23 / 0.42… 差不多等距地排开，屏幕上就是一排从天花板垂下来的
+ * 花簇（需求方这轮原话「树冠画的像垂下来的花簇一样」）。
  */
 private val FOLK_SPRAYS = floatArrayOf(
-    0.030f, 0.148f, 0.108f, -0.35f,
-    0.226f, 0.092f, 0.082f, 0.22f,
-    0.418f, 0.132f, 0.098f, 0.16f,
-    0.612f, 0.080f, 0.074f, -0.26f,
-    0.792f, 0.138f, 0.102f, 0.30f,
-    0.958f, 0.100f, 0.080f, -0.20f
+    0.104f, 0.152f, 0.112f, -0.30f, 0.30f,
+    0.252f, 0.086f, 0.076f, 0.24f, 0.23f,
+    0.318f, 0.112f, 0.086f, -0.18f, 0.25f,
+    0.468f, 0.130f, 0.096f, 0.18f, 0.26f,
+    0.700f, 0.146f, 0.106f, 0.28f, 0.28f,
+    0.858f, 0.090f, 0.078f, -0.22f, 0.22f
 )
 
 /** 近一档那三挂（0/2/4 号）的叶团不透明度 */
