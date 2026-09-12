@@ -634,6 +634,8 @@ data class AiDailyKnowledgeDto(
     val quota: AiQuotaDto? = null,
     val relatedMediaTitle: String? = null,
     val containsSpoiler: Boolean = false,
+    // Worker 走到本地种子兜底时为 true；旧 Worker 不返回该字段，默认按正常内容展示。
+    val isFallback: Boolean = false,
     // 共享学习单元结构化字段。全部可选，旧 Worker / 旧缓存缺失时仍按旧字段展示。
     val unitId: String? = null,
     val version: Int? = null,
@@ -702,6 +704,8 @@ data class AiDailyKnowledge(
     val quota: AiQuota? = null,
     val relatedMediaTitle: String? = null,
     val containsSpoiler: Boolean = false,
+    // 本条是否来自 Worker 的本地种子兜底（AI 上游不可用时），用于在界面上明确标注。
+    val isFallback: Boolean = false,
     // 以下结构化字段默认空值，保证旧 domain 缓存可继续反序列化。
     val version: Int? = null,
     val locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE,
@@ -961,6 +965,7 @@ fun AiDailyKnowledgeDto.toDomain(outerQuota: AiQuotaDto? = null): AiDailyKnowled
         relatedMediaTitle = relatedMediaTitle
             ?: relatedMediaDomain?.title?.takeIf { it.isNotBlank() },
         containsSpoiler = containsSpoiler,
+        isFallback = isFallback,
         version = version,
         locale = locale?.takeIf { it.isNotBlank() } ?: AiDailyKnowledgeContract.DEFAULT_LOCALE,
         relationType = relationType,

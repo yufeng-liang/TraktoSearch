@@ -223,6 +223,7 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
             R.string.help_ai_sprite_b4,
             R.string.help_ai_sprite_b5,
             R.string.help_ai_sprite_b7,
+            R.string.help_ai_sprite_b8,
         ),
     ),
     HelpSectionSpec(

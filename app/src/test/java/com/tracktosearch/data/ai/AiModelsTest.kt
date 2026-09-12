@@ -291,6 +291,39 @@ class AiModelsTest {
     }
 
     @Test
+    fun dailyKnowledge_isFallbackMapsFromPayloadAndDefaultsFalse() {
+        val json = Json { ignoreUnknownKeys = true }
+        val generated = json.decodeFromString<AiDailyKnowledgeDto>(
+            """{"id":"unit-1","unitId":"unit-1","isFallback":false}"""
+        )
+        val fallback = json.decodeFromString<AiDailyKnowledgeDto>(
+            """{"id":"seed-2026-09-12","unitId":"seed-2026-09-12","isFallback":true}"""
+        )
+        val legacyDto = json.decodeFromString<AiDailyKnowledgeDto>("""{"id":"legacy-dto"}""")
+        val legacyCached = json.decodeFromString<AiDailyKnowledge>(
+            """
+            {
+              "id":"legacy-cache",
+              "title":"旧标题",
+              "fact":"旧事实",
+              "explanation":"旧解释",
+              "sourceName":"旧来源",
+              "sourceUrl":"https://legacy.example/source",
+              "publishedAt":null,
+              "characterLine":null
+            }
+            """.trimIndent()
+        )
+
+        assertThat(generated.toDomain().isFallback).isFalse()
+        assertThat(fallback.toDomain().isFallback).isTrue()
+        // 旧 Worker 不带该字段、旧 domain 缓存没有该字段，都必须默认按正常内容展示。
+        assertThat(legacyDto.isFallback).isFalse()
+        assertThat(legacyDto.toDomain().isFallback).isFalse()
+        assertThat(legacyCached.isFallback).isFalse()
+    }
+
+    @Test
     fun dailyIllustration_readyStateRequiresUrl() {
         val ready = AiDailyIllustration(status = "ready", url = "https://img.example/a.png", urlExpiresAt = 1L)
         val readyNoUrl = AiDailyIllustration(status = "ready", url = null)

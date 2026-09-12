@@ -1953,6 +1953,7 @@
     <string name="ai_daily_related_media_format">关联：%1$s</string>
     <string name="ai_daily_published_at_format">发布时间：%1$s</string>
     <string name="ai_daily_spoiler_warning">剧透提示：这条知识可能会透露剧情细节。</string>
+    <string name="ai_daily_fallback_notice">AI 生成暂时不可用，本条为备用内容。</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">最近学过</string>
     <string name="ai_daily_history_open_description">打开最近学过列表</string>
@@ -1968,6 +1969,7 @@
     <string name="help_ai_sprite_b4">功能包括昵称欢迎、看单锐评、影视闯关和今日影视知识；闯关会从已看影视里挑 7 部、并按天提前备好题目，因此需至少 7 部已看影视。</string>
     <string name="help_ai_sprite_b5">AI 请求有每日配额，刷新功能会再消耗一次；离线时不能发起新请求，但仍可查看缓存内容。</string>
     <string name="help_ai_sprite_b7">离开闯关会保留答案；放弃本轮和未答完提交前会确认，难度反馈会用于调整后续题目。</string>
+    <string name="help_ai_sprite_b8">今日影视知识只引用公开通识与可核验的来源链接；插图仅辅助理解，不含真人或剧照；AI 生成暂时不可用时会标注为备用内容。</string>
 
     <!-- 主页面背景光晕 -->
     <string name="bg_glow_title">背景动效</string>

@@ -1966,6 +1966,7 @@
     <string name="ai_daily_related_media_format">関連作品：%1$s</string>
     <string name="ai_daily_published_at_format">公開日：%1$s</string>
     <string name="ai_daily_spoiler_warning">ネタバレ注意：物語の細部に触れる可能性があります。</string>
+    <string name="ai_daily_fallback_notice">AI 生成を一時的に利用できないため、これは予備の内容です。</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">最近学んだこと</string>
     <string name="ai_daily_history_open_description">最近学んだ一覧を開く</string>
@@ -1981,6 +1982,7 @@
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、今日の映像知識を利用できます。クイズは視聴済みから 7 本を選び、その日の問題を事前に用意するため、視聴済み 7 本以上が必要です。</string>
     <string name="help_ai_sprite_b5">AI リクエストには日次上限があり、機能の更新でも 1 回消費します。オフラインでは新規リクエスト不可ですが、キャッシュは読めます。</string>
     <string name="help_ai_sprite_b7">クイズを離れても回答は保持されます。ラウンドの中断と未回答のままの提出は確認され、難易度の感想は次回以降の調整に使われます。</string>
+    <string name="help_ai_sprite_b8">今日の映像知識は公開の一般知識と確認できる出典リンクのみを引用します。イラストは理解の補助で、実在の人物や劇中カットは含みません。AI 生成が使えないときは予備の内容として表示します。</string>
 <!-- メイン画面の背景グロー -->
     <string name="bg_glow_title">背景エフェクト</string>
     <string name="bg_glow_off">オフ</string>

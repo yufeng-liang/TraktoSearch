@@ -1961,6 +1961,7 @@ Config:
     <string name="ai_daily_related_media_format">Connected to: %1$s</string>
     <string name="ai_daily_published_at_format">Published %1$s</string>
     <string name="ai_daily_spoiler_warning">Spoiler note: this fact may reveal a story detail.</string>
+    <string name="ai_daily_fallback_notice">AI is unavailable right now, so this is a backup entry.</string>
     <string name="ai_daily_metadata_separator">  ·  </string>
     <string name="ai_daily_recent_learned">Recently learned</string>
     <string name="ai_daily_history_open_description">Open recently learned list</string>
@@ -1976,6 +1977,7 @@ Config:
     <string name="help_ai_sprite_b4">Features include nickname welcome, watchlist roast, film quiz, and today’s film knowledge. The quiz picks 7 titles from your watched list and prepares the day’s questions ahead of time, so it needs at least 7 watched titles.</string>
     <string name="help_ai_sprite_b5">AI requests use a daily quota, and refreshing a feature spends one more. Offline, new requests are unavailable but cached content remains readable.</string>
     <string name="help_ai_sprite_b7">Quiz answers survive leaving the round. Discarding the round and incomplete submission ask for confirmation; difficulty feedback helps tune later rounds.</string>
+    <string name="help_ai_sprite_b8">Today’s film knowledge cites only public general knowledge and verifiable source links. Illustrations are learning aids without real people or film stills, and a backup entry is labelled when AI is unavailable.</string>
     <!-- Main screen background glow -->
     <string name="bg_glow_title">Background Effect</string>
     <string name="bg_glow_off">Off</string>
