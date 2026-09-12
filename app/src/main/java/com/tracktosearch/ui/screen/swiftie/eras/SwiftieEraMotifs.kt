@@ -2158,16 +2158,40 @@ private fun DrawScope.drawCardiganChair(color: Color, phase: Float, alpha: Float
             CornerRadius(u * 0.036f), alpha = alpha * 0.9f
         )
         drawRect(color, Offset(w * 0.14f, h * 0.86f), Size(w * 0.70f, u * 0.040f), alpha = alpha * 0.6f)
-        drawCardigan(color, alpha, w, h, u)
+        // 松枝在**开衫之前**：枝梢探到衣摆底下就停住了（见 [drawPineSprig]），
+        // 露出来的那一截正好停在衣摆边缘上，读作「塞在衣服背后」。上一版画在最后，
+        // 枝子从衣摆前面横着穿过去 —— 需求方原话「松针挡在衣服前面很突兀」。
         drawPineSprig(color, alpha, w, h, u)
+        drawCardigan(color, alpha, w, h, u)
     }
 }
+
+/**
+ * 开衫上身这两遍色的倍率（相对 [PROP_ALPHA]），衣身与袖子同一套。
+ *
+ * 一遍 `0.35` 只能把垫白后的 248 拉回 222 —— 与纸同色；两遍到 `0.49` 才是 195。
+ * 数字是离线复刻器（`build/egg-shots/fo_card.py`）按真机纸色算出来的，不是拍脑袋。
+ */
+private const val CARDIGAN_FIRST_LAYER = 1.00f
+private const val CARDIGAN_SECOND_LAYER = 0.63f
 
 /**
  * 一件开衫：两片前襟 + V 领 + 一排扣子 + 两只垂下的袖子 + 针织罗纹。
  *
  * 罗纹靠 `clipPath` 卡在衣身里 —— 不裁的话那几十条竖线会糊到椅子和卡片上，
  * 一眼就露出是「画上去的纹理」而不是毛线。
+ *
+ * ## 衣身为什么要**上两遍色**
+ *
+ * 垫白（[PROP_MASK]）把衣身顶到 248，而卡片纸只有 222 上下 —— 一遍色最多把 248 拉回
+ * 222，**与纸逐像素同色**。真机量出来的正是这个：衣身 Δ0、椅子 Δ-20，于是整件衣服
+ * 只剩领口那道折线、一排扣子和几十条罗纹浮在纸上，衣身本身是块空洞（需求方原话
+ * 「衣服和卡片融为一体了」）。第二遍把衣身压到 195（Δ-27），比椅子这个背景结构更实，
+ * 衣服才成了主体。
+ *
+ * 两遍合起来的遮盖力 `(1-0.78)(1-0.49) ≈ 0.11`，与原来一遍垫白 `0.22` 同一档，
+ * 立柱与顶横档仍旧透不出来；把垫白调薄换成一遍厚色（`0.72×白 + 1.65×色`）也能压到
+ * 同样的深，但遮盖力掉到 0.16，椅背会变成一道幽灵线横在衣服上。
  */
 private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
     val top = h * 0.20f
@@ -2182,7 +2206,8 @@ private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Floa
     // 垫白：椅子先画（注释见 [drawCardiganChair]），但两者都是半透明的 ——
     // 不垫这一层，两根立柱与顶横档会整条穿过衣身，「挂在椅背上」变成「印在椅子上」
     drawPath(body, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(body, color, alpha = alpha * 0.7f)
+    drawPath(body, color, alpha = alpha * CARDIGAN_FIRST_LAYER)
+    drawPath(body, color, alpha = alpha * CARDIGAN_SECOND_LAYER)
     clipPath(body) {
         val ribs = Path()
         var x = w * 0.18f
@@ -2193,6 +2218,23 @@ private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Floa
         }
         drawPath(ribs, color, alpha = alpha * 0.5f, style = Stroke(width = u * 0.011f))
     }
+    // 袖子排在**领口之前**：袖山（`w 0.38 → 0.31` 那一段肩）压在 V 领两条臂的上半截上，
+    // 袖子后画就把领口切掉一段，V 读成「左右各一段斜线」而不是一件开衫的领子
+    // （需求方原话「v领被左右两只袖子盖住了」）。真衣服上领贴边本来也在袖山之上。
+    val sleeve = Path()
+    sleeve.moveTo(w * 0.31f, h * 0.22f)
+    sleeve.cubicTo(w * 0.18f, h * 0.36f, w * 0.11f, h * 0.54f, w * 0.12f, h * 0.70f)
+    sleeve.lineTo(w * 0.23f, h * 0.71f)
+    sleeve.cubicTo(w * 0.23f, h * 0.54f, w * 0.27f, h * 0.38f, w * 0.38f, h * 0.26f)
+    sleeve.close()
+    val cuff = Path()
+    repeat(3) { index ->
+        val y = h * (0.655f + index * 0.019f)
+        cuff.moveTo(w * 0.12f, y)
+        cuff.lineTo(w * 0.23f, y)
+    }
+    cardiganSleeve(sleeve, cuff, color, alpha, u)
+    scale(-1f, 1f, pivot = Offset(w * 0.49f, 0f)) { cardiganSleeve(sleeve, cuff, color, alpha, u) }
     // V 领：加粗描一条折线就够，领子本来就是双层布，本该比衣身深
     val collar = Path()
     collar.moveTo(w * 0.30f, top)
@@ -2208,26 +2250,13 @@ private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Floa
         drawCircle(color, u * 0.024f, Offset(w * 0.49f, cy), alpha = alpha * 1.9f)
         drawCircle(Color.White, u * 0.009f, Offset(w * 0.49f, cy), alpha = alpha * 1.8f)
     }
-    val sleeve = Path()
-    sleeve.moveTo(w * 0.31f, h * 0.22f)
-    sleeve.cubicTo(w * 0.18f, h * 0.36f, w * 0.11f, h * 0.54f, w * 0.12f, h * 0.70f)
-    sleeve.lineTo(w * 0.23f, h * 0.71f)
-    sleeve.cubicTo(w * 0.23f, h * 0.54f, w * 0.27f, h * 0.38f, w * 0.38f, h * 0.26f)
-    sleeve.close()
-    val cuff = Path()
-    repeat(3) { index ->
-        val y = h * (0.655f + index * 0.019f)
-        cuff.moveTo(w * 0.12f, y)
-        cuff.lineTo(w * 0.23f, y)
-    }
-    cardiganSleeve(sleeve, cuff, color, alpha, u)
-    scale(-1f, 1f, pivot = Offset(w * 0.49f, 0f)) { cardiganSleeve(sleeve, cuff, color, alpha, u) }
 }
 
 /** 一只袖子 + 袖口罗纹。右袖是左袖的镜像，几何只写一遍。 */
 private fun DrawScope.cardiganSleeve(sleeve: Path, cuff: Path, color: Color, alpha: Float, u: Float) {
     drawPath(sleeve, Color.White, alpha = alpha * PROP_MASK)
     drawPath(sleeve, color, alpha = alpha * 0.85f)
+    drawPath(sleeve, color, alpha = alpha * CARDIGAN_SECOND_LAYER)
     drawPath(cuff, color, alpha = alpha * 1.3f, style = Stroke(width = u * 0.008f))
 }
 
@@ -2236,12 +2265,17 @@ private fun DrawScope.cardiganSleeve(sleeve: Path, cuff: Path, color: Color, alp
  *
  * 针叶全部合进一条 Path 一次描完，而且**越靠枝梢越短** ——
  * 等长的针叶排出来是一把梳子。
+ *
+ * 枝梢停在 `(0.30w, 0.76h)` —— 再往上就伸进开衫的衣摆里了。它画在开衫**之前**
+ * （见 [drawCardiganChair]），所以探进衣摆的那一小截被衣服盖掉，露出来的枝子正好
+ * 收在衣摆边缘上，读作「塞在衣服背后」。上一版梢头到 `(0.34w, 0.70h)` 又画在最后，
+ * 整枝从衣摆前面横穿过去，需求方原话「松针挡在衣服前面很突兀」。
  */
 private fun DrawScope.drawPineSprig(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
     val fromX = w * 0.04f
     val fromY = h * 0.98f
-    val toX = w * 0.34f
-    val toY = h * 0.70f
+    val toX = w * 0.30f
+    val toY = h * 0.76f
     drawLine(color, Offset(fromX, fromY), Offset(toX, toY), u * 0.014f, alpha = alpha * 1.3f)
     val needles = Path()
     repeat(8) { index ->
