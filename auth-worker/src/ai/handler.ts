@@ -51,6 +51,7 @@ import {
 } from './zhipu.ts';
 import {
     dailyCandidateMessages,
+    dailyRepairHintFor,
     dailyReviewMessages,
     DAILY_LOCALES,
     DAILY_NO_SOURCE_EVIDENCE,
@@ -1323,7 +1324,8 @@ async function generateQuizBySlots(
             } catch (error) {
                 if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
                 lastError = error;
-                hint = error instanceof Error ? error.message.slice(0, 200) : '未知原因';
+                // 判废理由要翻译成中文指令再回灌：门槛内部是英文错误串，模型读不出要改什么。
+                hint = error instanceof Error ? dailyRepairHintFor(error.message.slice(0, 200)) : '未知原因';
                 logSlotFailure('unit_slot_rejected', slot.index, round, error);
             }
         }
@@ -1403,7 +1405,7 @@ async function generateQuizBySlots(
             } catch (error) {
                 if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
                 lastError = error;
-                hint = error instanceof Error ? error.message.slice(0, 200) : '未知原因';
+                hint = error instanceof Error ? dailyRepairHintFor(error.message.slice(0, 200)) : '未知原因';
                 logSlotFailure('question_slot_rejected', slot.index, round, error);
             }
         }
@@ -2117,7 +2119,8 @@ async function generateDailyKnowledgeUnit(
                 // 上游 200 但单元判废：补记 invalid_output（上游 success 已单独落库），并把原因带回下一轮
                 recordHealthEvent(env, { ...healthCtx, route: stage === 'candidate' ? 'daily-candidate' : 'daily-review' }, 'traffic', upstream.provider, upstream.model, 'invalid_output', error);
                 logDailyFallback(`${stage}_rejected`, requestId, upstream, error, round);
-                hint = error instanceof Error ? error.message.slice(0, 200) : '未知原因';
+                // 判废理由要翻译成中文指令再回灌：门槛内部是英文错误串，模型读不出要改什么。
+                hint = error instanceof Error ? dailyRepairHintFor(error.message.slice(0, 200)) : '未知原因';
             }
         }
         return null;

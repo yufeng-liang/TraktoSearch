@@ -844,6 +844,81 @@ const DAILY_CONTENT_RULES = '内容规则：标题、结论和影视依据必须
     + '剧透硬规则：title、takeaway、filmEvidence、characterLine、checkQuestion 的题干/选项/解析里只要出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」'
     + '（或对应语言的同义实词），spoilerLevel 就必须标成 heavy；能改写规避（如用「消逝」「代价」「从故事后段讲起」）就优先改写。';
 
+/**
+ * 本地门槛的判废理由要回灌给模型重写。门槛内部用英文错误串（日志与健康事件按它聚合），
+ * 但提示词是中文语境：真上游实测把 "spoilerLevel understates plot disclosure" 原样回灌，
+ * 同一原因连续两轮被判废、最终退到种子兜底（用户看到的就是「备用内容」）。
+ * 所以这里翻译成「改哪个字段、改成什么」的中文指令；未收录的理由按原文回灌。
+ */
+const DAILY_REPAIR_HINTS: Record<string, string> = {
+    'spoilerLevel understates plot disclosure':
+        'spoilerLevel 写成了 none，但正文已经透露剧情：把 spoilerLevel 改成 light 或 heavy，或者把透露剧情的那句改写成不涉及具体情节的表述',
+    'heavy plot disclosure requires heavy spoilerLevel':
+        '正文透露了结局级别的剧情，spoilerLevel 必须写成 heavy',
+    'theme_extension requires theme_extension evidence mode':
+        'relationType 写成 theme_extension 时，evidenceMode 也必须是 theme_extension',
+    'general_knowledge cannot use theme_extension evidence mode':
+        'relationType 是 general_knowledge 时不能配 theme_extension 证据模式，改成 film_fact、viewing_interpretation 或 external_fact',
+    'direct_watch cannot use theme_extension evidence mode':
+        'relationType 是 direct_watch 时不能配 theme_extension 证据模式',
+    'direct_watch media must come from watched input':
+        'relatedMedia 的片名必须逐字来自输入材料里的已看影片',
+    'only direct_watch may declare relatedMedia':
+        '只有 relationType=direct_watch 才写 relatedMedia；其它类型整条省略该字段',
+    'theme_extension requires watched input':
+        '主题延伸必须落在输入材料里的已看影片上，换一部输入里的影片',
+    'theme_extension must use specific watched input':
+        '主题延伸的正文必须引用输入材料里某部影片的具体内容，不能只写片名',
+    'filmEvidence must use specific watched input besides the title':
+        'filmEvidence 必须原样照抄输入材料简介里 4 字以上的连续片段，不能只写片名',
+    'evidence-enhanced subject requires external source evidence':
+        '这个学科必须有可核验来源：evidenceMode 改成 external_fact 并写清 source.evidence，或换一个不需要外部来源的学科',
+    'explanation或realWorldExample出现了输入材料里没有的人物名（禁编造演职员/角色名）':
+        '出现了输入材料里没有的人物名：演员名、角色名一律删掉，改用「主角」「主人公」这类通称',
+    'checkQuestion explanation must return to the same concept':
+        'checkQuestion.explanation 必须原样出现 concept 全文，最省事的写法是第一句写「本题考查的概念是“{concept 原文}”」',
+    'checkQuestion must have exactly one best answer':
+        'checkQuestion 必须恰好一个正确答案，选项之间不能语义重复',
+    'checkQuestion option id/text must be unique':
+        'checkQuestion 的选项 id 与选项文本都不能重复',
+    'checkQuestion.options must contain 2 to 4 items':
+        'checkQuestion.options 必须是 2-4 个对象的数组',
+    'correctOptionId is not in options':
+        'correctOptionIds 里的取值必须是 options 里已存在的 id',
+    'option.id has invalid characters':
+        'option.id 只能是字母、数字、下划线或中划线',
+    'content is a generic template':
+        '正文被判定为空泛套话：请写具体到这部影片、这个学科概念的表述',
+    'subject does not match generic methodology content':
+        '学科与「通用方法类内容」不匹配：要么换成真正的学科内容，要么把学科改成学习/记忆/元认知类',
+    'subject is outside the controlled catalog':
+        'subject 必须逐字等于受控学科目录里的某一项，不能自造或改写',
+    'locale does not match request':
+        'locale 必须与请求语言一致',
+    'unitVersion must be 1':
+        'version 必须是 1',
+    'unitId has invalid characters':
+        'unitId 只能用英文小写字母、数字、下划线或中划线',
+    'characterLine must be a string':
+        'characterLine 必须是字符串（可以写空字符串）',
+    'source.url must be http(s)':
+        'source.url 必须是 https:// 开头的完整网址，且落在给出的可信域内；没有具体来源就把 name 写成「AI 综合解读」且 url 留空',
+    'boundary does not match evidence mode':
+        'boundary 的表述必须与 evidenceMode 一致（外部事实与影片解读不能混用口径）',
+    'high-risk action guidance is not allowed':
+        '正文涉及了高风险操作指引：请改成只讲原理、不写可执行步骤',
+    'quiz slot units must stay on watched media':
+        '题位单元只能挂输入材料里的已看影片，relatedMedia 的片名必须逐字来自输入',
+};
+
+export function dailyRepairHintFor(message: string): string {
+    const raw = message.trim();
+    for (const [reason, hint] of Object.entries(DAILY_REPAIR_HINTS)) {
+        if (raw.includes(reason)) return hint;
+    }
+    return raw;
+}
+
 /** 修复提示：校验失败后重新生成时追加在 user 消息末尾，必须显著且不与其他内容混淆。 */
 function dailyRepairSection(repairHint?: string | null): string {
     const reason = (repairHint ?? '').trim();

@@ -924,6 +924,28 @@ test('placeholder source keeps no link even when the model copies the example UR
     assert.equal(copied.source.evidence, '本节由 AI 综合公开通识整理，未引用具体来源。');
 });
 
+test('本地判废理由被翻译成中文修复指令再回灌给模型', async () => {
+    const { dailyRepairHintFor, dailyCandidateMessages } = await import('../src/ai/daily-knowledge.ts');
+
+    // 门槛抛的是英文错误串（日志/健康事件按它聚合），回灌给中文提示词时必须变成可执行指令
+    const spoiler = dailyRepairHintFor('AI daily knowledge unit is invalid: spoilerLevel understates plot disclosure');
+    assert.match(spoiler, /spoilerLevel/);
+    assert.match(spoiler, /spoilerLevel 写成了 none/);
+    assert.ok(!spoiler.includes('understates plot disclosure'), '不该把英文原话当指令回灌');
+
+    const names = dailyRepairHintFor('AI daily knowledge unit is invalid: explanation或realWorldExample出现了输入材料里没有的人物名（禁编造演职员/角色名）');
+    assert.match(names, /改用「主角」/);
+
+    // 未收录的理由按原文回灌，不能吞掉（否则模型完全不知道发生了什么）
+    assert.equal(dailyRepairHintFor('AI daily knowledge unit is invalid: some brand new gate'), 'AI daily knowledge unit is invalid: some brand new gate');
+
+    // 端到端：修复轮里确实带着中文指令
+    const messages = dailyCandidateMessages('2026-09-12', 'zh-CN', [], spoiler, []);
+    const user = String(messages[1].content);
+    assert.match(user, /修复要求｜优先级最高/);
+    assert.match(user, /spoilerLevel 写成了 none/);
+});
+
 test('daily prompts carry the trusted source catalog and the recent-usage list', async () => {
     const { dailyCandidateMessages } = await import('../src/ai/daily-knowledge.ts');
     const messages = dailyCandidateMessages('2026-09-12', 'zh-CN', [], null, [
