@@ -796,11 +796,35 @@ function behaviorUpsert(
     );
 }
 
+// 下面四个包装函数把任何 D1 异常统一折成 AI_STORAGE_ERROR，客户端只看到 503。
+// 不留原始报错就无从定位（sync 曾出现 23 次里 6 次 503 的悬案）。
+// 绑定参数含用户数据（片名、短评、评分、观看时间），一律不进日志，只记语句形态。
+function logStorageFailure(op: string, detail: string, error: unknown): void {
+    console.warn('[PROFILE_STORE]', JSON.stringify({
+        stage: 'storage_failure',
+        op,
+        detail: detail.slice(0, 140),
+        error: describeStorageError(error),
+    }));
+}
+
+function describeStorageError(error: unknown): string {
+    if (!(error instanceof Error)) return String(error).slice(0, 240);
+    const cause = (error as { cause?: unknown }).cause;
+    const causeText = cause instanceof Error ? `; cause=${cause.message}` : '';
+    return `${error.name}: ${error.message}${causeText}`.slice(0, 240);
+}
+
+function sqlShape(sql: string): string {
+    return sql.replace(/\s+/g, ' ').trim();
+}
+
 async function first<T>(env: ProfileStoreEnvironment, sql: string, ...bindings: unknown[]): Promise<T | null> {
     if (!env.DB) throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     try {
         return await env.DB.prepare(sql).bind(...bindings).first<T>();
-    } catch {
+    } catch (error) {
+        logStorageFailure('first', sqlShape(sql), error);
         throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     }
 }
@@ -810,7 +834,8 @@ async function all<T>(env: ProfileStoreEnvironment, sql: string, ...bindings: un
     try {
         const result = await env.DB.prepare(sql).bind(...bindings).all<T>();
         return result.results ?? [];
-    } catch {
+    } catch (error) {
+        logStorageFailure('all', sqlShape(sql), error);
         throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     }
 }
@@ -819,7 +844,8 @@ async function run(env: ProfileStoreEnvironment, sql: string, ...bindings: unkno
     if (!env.DB) throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     try {
         await env.DB.prepare(sql).bind(...bindings).run();
-    } catch {
+    } catch (error) {
+        logStorageFailure('run', sqlShape(sql), error);
         throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     }
 }
@@ -828,7 +854,9 @@ async function batch(env: ProfileStoreEnvironment, statements: D1PreparedStateme
     if (!env.DB) throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     try {
         await env.DB.batch(statements);
-    } catch {
+    } catch (error) {
+        // 批内失败整批回滚，语句条数是判断「是否撞上批大小上限」的第一线索
+        logStorageFailure('batch', `statements=${statements.length}`, error);
         throw new AppError('AI_STORAGE_ERROR', 'AI profile storage is unavailable', 503);
     }
 }

@@ -316,3 +316,38 @@ test('D1 profile sync keeps null event time and omits zero progress buckets', as
         env.close();
     }
 });
+
+test('D1 write failures log the raw error but never the bound user data', async () => {
+    const env = createD1Env();
+    const consoleWarns = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => consoleWarns.push(args.join(' '));
+    try {
+        await call('/api/ai/profile/settings', {
+            method: 'PUT',
+            body: { consentVersion: '1', profileConsent: true, behaviorConsent: true },
+            env,
+        });
+        env.DB.batch = () => {
+            throw new Error('D1_ERROR: UNIQUE constraint failed: ai_profile_sync_batches.friend_id');
+        };
+        const result = await call('/api/ai/profile/sync', {
+            method: 'POST',
+            body: syncBatch('batch-d1-error'),
+            env,
+        });
+        assert.equal(result.response.status, 503);
+        assert.equal(result.json.code, 'AI_STORAGE_ERROR');
+    } finally {
+        console.warn = originalWarn;
+        env.close();
+    }
+
+    const logged = consoleWarns.join('\n');
+    assert.match(logged, /PROFILE_STORE/);
+    assert.match(logged, /UNIQUE constraint failed/, '原始 D1 报错必须落日志，否则 503 无从定位');
+    assert.match(logged, /statements=/, '批内失败要带上语句条数');
+    // 绑定参数含片名/短评/评分/观看时间，日志只记语句形态
+    assert.doesNotMatch(logged, /示例电影/);
+    assert.doesNotMatch(logged, /节奏很好/);
+});
