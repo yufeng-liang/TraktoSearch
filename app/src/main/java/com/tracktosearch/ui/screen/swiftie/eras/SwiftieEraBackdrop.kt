@@ -3369,6 +3369,17 @@ private val MOSS_PATCHES = floatArrayOf(
 )
 
 /**
+ * 琴盖撑起后与水平面的夹角。
+ *
+ * 拿离线复刻器（`build/egg-shots/fo_piano.py`）比过 35° / 50° / 65° / 78° 四档：
+ * 再小那块板像没掀开，再大它就高过树线、把整个上半屏压住。
+ */
+private const val LID_OPEN_DEGREES = 50f
+
+/** 立式琴深约是琴高的 0.6/1.2 —— 抬起量要按它把“琴深”折成真机像素。 */
+private const val LID_DEPTH_OF_HEIGHT = 0.5f
+
+/**
  * 一大片松林 + 灰雾 + 一台长满苔藓的**立式**钢琴，琴顶架起一块斜板。
  *
  * folklore 的封面就是霉霉一个人置身松林之中 —— 所以这一张**没有房子**。
@@ -3494,15 +3505,21 @@ private fun DrawScope.drawPineMossPiano(
     val dx = w * 0.100f
     val dy = -h * 0.042f
 
-    // 落地影：往右下摊出去（台灯…这张没有灯，光从左上的天空来）。
-    // 少了它整台琴是贴在苔原上的一张剪纸
-    path.rewind()
-    path.moveTo(bodyL, bodyB)
-    path.lineTo(bodyR, bodyB)
-    path.lineTo(bodyR + dx * 1.20f, bodyB + h * 0.019f)
-    path.lineTo(bodyL + dx * 1.20f, bodyB + h * 0.019f)
-    path.close()
-    drawPath(path = path, color = Color.Black, alpha = alpha * 0.20f)
+    // 落地影：**三档往外摊**（贴着琴脚最深、往外两档越淡），阳光从左上来，影子往右下走。
+    // 上一版是**一块等深的平行四边形**，压出来的那点差比苔原自身还浅，屏幕上读作
+    // 琴底下垫了一张纸 —— 琴就是「贴」在画面上（需求方原话「像悬浮在画面上一样」）。
+    // 影子的尽头落在琴身右下的 `2.3dx` 处，正好接住右侧板那一片暗
+    for (step in 0 until 3) {
+        val reach = 1.05f + step * 0.62f
+        val drop = h * (0.007f + step * 0.0115f)
+        path.rewind()
+        path.moveTo(bodyL, bodyB)
+        path.lineTo(bodyR, bodyB)
+        path.lineTo(bodyR + dx * reach, bodyB + drop)
+        path.lineTo(bodyL + dx * (reach * 0.83f), bodyB + drop)
+        path.close()
+        drawPath(path = path, color = Color.Black, alpha = alpha * (0.26f - step * 0.065f))
+    }
 
     // 右侧板：往后收的那个面，全琴最暗（背光又侧对着光）
     path.rewind()
@@ -3570,7 +3587,7 @@ private fun DrawScope.drawPineMossPiano(
     // ── 掀开撑住的琴盖 ──
     // 铰在顶面后沿，往后上方倾。一块硬板绕一根铰转过去，自由边在投影里
     // **仍然平行于铰线**，两端抬一样高 —— 所以这是一个干净的**平行四边形**，
-    // “3D” 全靠位移同时带 x 与 y 分量（往右上，和其余所有面用的是同一份深度向量）。
+    // “3D” 全靠位移同时带 x 与 y 分量（和其余所有面用的是同一份深度向量）。
     //
     // 上一版故意让右端比左端多抬一截、右端又往右多伸出 0.046w，想要“不平行的立体感”，
     // 结果那正是一块**坡顶**：下沿水平、上沿斜着、右侧还撑出一截检口。
@@ -3578,12 +3595,18 @@ private fun DrawScope.drawPineMossPiano(
     val hingeLX = bodyL + dx
     val hingeRX = bodyR + dx
     val hingeY = bodyT + dy
-    // 位移改成「多往右、少往上」：0.030w / -0.056h 那一版几乎是竖直立起来的一大片，
-    // 加上顶沿一排苔藓，屏幕上是一面带脊的坡屋面 —— 又把删掉的房子读回来。
-    // 一块**明显斜向右**的平行四边形才读作板；抬起的高度同时砍掉三分之一，
-    // 让它不再是全图最大的一块面
-    val lidShiftX = w * 0.062f
-    val lidShiftY = -h * 0.037f
+    // 自由边往**左上**抬，不是右上。铰线在顶面**后沿**，掀开就是「把前边抬起来」——
+    // 而“往前”在投影里是 `(-dx, -dy)` 的反向（左下）：抬起量叠上去之后，自由边必然
+    // 落在铰线的左上方。上一版写的是 `+0.062w`（往右上）＝ 把自由边摆到铰线**后面**去了，
+    // 那块板在几何上是在琴背后悬着的一块板 —— 需求方原话「撑起的琴盖角度画错了」，
+    // 而且它跟琴身只共一条线，整台琴也就跟着「像悬浮在画面上一样」。
+    //
+    // 抬起量用**琴深**折算：立式琴深约是琴高的 0.6/1.2 = 一半，`bodyH × 0.5` 像素。
+    // 角度 50° 是拿离线复刻器（`build/egg-shots/fo_piano.py`）比 35/50/65/78 四档定的：
+    // 再小像没掀开，再大那块板就高过树线、把整个上半屏压住
+    val lidRad = LID_OPEN_DEGREES * PI.toFloat() / 180f
+    val lidShiftX = -cos(lidRad) * dx
+    val lidShiftY = cos(lidRad) * abs(dy) - sin(lidRad) * (bodyH * LID_DEPTH_OF_HEIGHT)
     val lidLX = hingeLX + lidShiftX
     val lidLY = hingeY + lidShiftY
     val lidRX = hingeRX + lidShiftX
@@ -3863,19 +3886,29 @@ private fun DrawScope.drawPineMossPiano(
         }
         drawPath(path = path, color = if (pass == 1) MOSS_LIGHT else MOSS, alpha = alpha * (if (pass == 1) 0.34f else 0.44f))
     }
-    // 琴脚下那一圈：苔藓从地上爬上来，琴与地才是长在一起的。
-    // 半径收到 0.010–0.024w、再压扁到 0.34：上一版 0.034w 的正圆排成一列，读作一排绿硬币
-    for (i in 0 until 9) {
-        val f = (i + 0.5f) / 9f
-        val bx = bodyL + (bodyW + dx) * f
-        val r = w * (0.010f + 0.014f * abs(sin(f * 7.1f + 1.7f)))
+    // 琴脚下那一圈：苔藓从地上爬上来，**跨在底边那根棱上**（一半在琴身、一半在地上），
+    // 琴与苔原才是长在一起的。半径收到 0.010–0.022w、压扁到 0.34：上一版 0.034w 的正圆
+    // 排成一列，读作一排绿硬币；而整排只落在 `bodyB` 这一条线上、不出琴身范围 ——
+    // 上一版按 `bodyW + dx` 铺到琴身右缘之外，右边几粒苔是悬在空地上的
+    for (i in 0 until 13) {
+        val f = (i + 0.5f) / 13f
+        val bx = bodyL + bodyW * f
+        val r = w * (0.010f + 0.012f * abs(sin(f * 5.7f + 0.3f)))
+        val cy = bodyB - r * 0.30f
         drawOval(
-            color = if (i % 3 == 0) MOSS_LIGHT else MOSS,
-            topLeft = Offset(bx - r, bodyB - r * 0.34f),
-            size = Size(r * 2f, r * 0.68f),
-            alpha = alpha * 0.55f
+            color = MOSS,
+            topLeft = Offset(bx - r, cy - r * 0.62f),
+            size = Size(r * 2f, r * 1.34f),
+            alpha = alpha * 0.60f
         )
     }
+    // 底边正下方一条很窄的接触暗带：琴脚与地之间那道缝不交代，琴就是浮着的
+    drawRect(
+        color = Color.Black,
+        topLeft = Offset(bodyL, bodyB - h * 0.0015f),
+        size = Size(bodyW, h * 0.0043f),
+        alpha = alpha * 0.30f
+    )
     drawFogBand(HERO_BOTTOM + 0.09f, 0.13f, top, alpha * DISTANT_ALPHA * 1.6f)
 }
 
