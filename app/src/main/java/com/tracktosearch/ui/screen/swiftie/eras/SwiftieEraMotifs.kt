@@ -2300,13 +2300,17 @@ private fun DrawScope.drawBraidPlaid(
 }
 
 /**
- * 照片的显影强度。
+ * 照片的显影强度：有效 alpha = 0.35 × 2.2 ≈ 0.77。
  *
  * [PROP_ALPHA]（0.35）是给线画道具定的 —— 线画道具在纸上本来就是「淡彩」，
- * 而照片整块有色，同样的 0.35 读作「褪色到快没了」。乘 1.5 是左看右看定的：
- * 再亮就压过右侧那几行曲目名、违反 [SwiftieEraContrast] 的结论。
+ * 而照片整块有色，同值读作「褪色到快没了」。1.5（= 0.525）需求方看过仍嫌淡，
+ * 定在 2.2：照片的细节（发丝、格纹）都在，纸还透气；再往上就是一张实心贴纸，
+ * 12 个母题里只有它一个实色，整体会跳。
+ *
+ * 这张卡**不存在压文字的问题**：evermore 的歌名最长 19 字（`LONG_TITLE_CHARS` 是 28），
+ * `columnFade` 恒为 1，右列本来也没有文字横穿。
  */
-private const val EVERMORE_PHOTO_GAIN = 1.5f
+private const val EVERMORE_PHOTO_GAIN = 2.2f
 
 /** 10 · Midnights：一只打火机（风罩栅格 + 拨轮 + 呼吸的火苗）+ 几颗四芒星。 */
 private fun DrawScope.drawLighterStars(color: Color, phase: Float, alpha: Float) {
