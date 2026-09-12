@@ -2133,9 +2133,10 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">데이터 &amp; 개인정보</string>
-    <string name="privacy_entry_subtitle">데이터 설정 · AI 프로필 · 개인정보 · 이용과 권리</string>
-    <string name="privacy_section_switches">데이터 설정</string>
-    <string name="privacy_section_ai_profile">AI 프로필</string>
+    <string name="privacy_entry_subtitle">AI 데이터 · 진단 및 권한 · 기기 내 데이터 · 개인정보 · 이용과 권리</string>
+    <string name="privacy_section_ai_data">AI 데이터 및 프로필</string>
+    <string name="privacy_section_diagnostics">진단 및 권한</string>
+    <string name="privacy_section_local_data">기기 내 데이터</string>
     <string name="privacy_location_title">위치 권한(구름 날씨)</string>
     <string name="privacy_location_granted">허용됨. 구름 애니메이션이 지역 날씨와 계절에 맞춰 변합니다. 시스템 설정에서 철회할 수 있습니다</string>
     <string name="privacy_location_denied">허용되지 않음. 구름은 정적으로 유지되며 다른 기능에는 영향이 없습니다</string>
@@ -2229,6 +2230,7 @@
     <string name="settings_ai_profile_consent_desc">표시한 작품, 평점과 짧은 리뷰로 로컬 취향 프로필을 만들어 상세 페이지 분석에 사용합니다.</string>
     <string name="settings_ai_profile_unavailable">계정 인증이 복원되면 사용할 수 있습니다</string>
     <string name="settings_ai_personalization">개인화 분석</string>
+    <string name="settings_ai_personalization_locked">AI 프로필을 켜면 사용할 수 있습니다</string>
     <string name="settings_ai_personalization_desc">취향 프로필을 바탕으로 작품이 나에게 맞을지 분석합니다.</string>
     <string name="settings_ai_behavior_consent">행동 데이터 동의</string>
     <string name="settings_ai_behavior_consent_desc">체류 시간, 검색 클릭, 에피소드와 재생 진행을 일별 집계합니다. 기본값은 꺼짐입니다.</string>

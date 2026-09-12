@@ -2133,9 +2133,10 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">データとプライバシー</string>
-    <string name="privacy_entry_subtitle">データ設定 · AI プロフィール · プライバシー · 利用と権利</string>
-    <string name="privacy_section_switches">データ設定</string>
-    <string name="privacy_section_ai_profile">AI プロフィール</string>
+    <string name="privacy_entry_subtitle">AI データ · 診断と権限 · 端末内データ · プライバシー · 利用と権利</string>
+    <string name="privacy_section_ai_data">AI データとプロフィール</string>
+    <string name="privacy_section_diagnostics">診断と権限</string>
+    <string name="privacy_section_local_data">端末内データ</string>
     <string name="privacy_location_title">位置情報の許可（雲の天気）</string>
     <string name="privacy_location_granted">許可済み。雲のアニメーションが地域の天気や季節に合わせて変わります。システム設定で取り消せます</string>
     <string name="privacy_location_denied">未許可。雲は静止したままですが、他の機能には影響しません</string>
@@ -2229,6 +2230,7 @@
     <string name="settings_ai_profile_consent_desc">マーク、評価、短評を使ってローカルな好みのプロフィールを作り、詳細ページの分析に利用します。</string>
     <string name="settings_ai_profile_unavailable">アカウント認証が復元されると利用できます</string>
     <string name="settings_ai_personalization">パーソナライズ分析</string>
+    <string name="settings_ai_personalization_locked">「AI プロフィール」を有効にすると使えます</string>
     <string name="settings_ai_personalization_desc">好みのプロフィールから、その作品があなたに合いそうかを分析します。</string>
     <string name="settings_ai_behavior_consent">行動データの許可</string>
     <string name="settings_ai_behavior_consent_desc">滞在時間、検索クリック、エピソード、再生進捗を日次集計します。初期状態はオフです。</string>

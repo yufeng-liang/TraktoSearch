@@ -2121,9 +2121,10 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">数据与隐私</string>
-    <string name="privacy_entry_subtitle">数据开关 · AI 画像 · 隐私说明 · 使用与权利</string>
-    <string name="privacy_section_switches">数据开关</string>
-    <string name="privacy_section_ai_profile">AI 画像</string>
+    <string name="privacy_entry_subtitle">AI 数据 · 诊断与权限 · 本地数据 · 隐私说明 · 使用与权利</string>
+    <string name="privacy_section_ai_data">AI 数据与画像</string>
+    <string name="privacy_section_diagnostics">诊断与权限</string>
+    <string name="privacy_section_local_data">本地数据</string>
     <string name="privacy_location_title">位置授权（云朵天气）</string>
     <string name="privacy_location_granted">已授权。云朵会随你所在城市的天气与节日变化；可在系统设置中撤销</string>
     <string name="privacy_location_denied">未授权。云朵保持静态，不影响其他功能</string>
@@ -2217,6 +2218,7 @@
     <string name="settings_ai_profile_consent_desc">使用你的标记、评分和短评建立本地口味画像，用于详情页分析。</string>
     <string name="settings_ai_profile_unavailable">账号授权恢复后即可使用</string>
     <string name="settings_ai_personalization">个性化分析</string>
+    <string name="settings_ai_personalization_locked">开启「AI 个性化画像」后可用</string>
     <string name="settings_ai_personalization_desc">使用你的口味画像分析一部影视是否可能适合你。</string>
     <string name="settings_ai_behavior_consent">行为数据授权</string>
     <string name="settings_ai_behavior_consent_desc">可选的按日聚合数据，包括停留时长、搜索点击、单集和播放进度。默认关闭。</string>

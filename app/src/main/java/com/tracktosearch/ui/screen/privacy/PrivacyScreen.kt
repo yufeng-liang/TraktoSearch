@@ -192,21 +192,30 @@ fun PrivacyScreen(
                     PrivacySummaryCard()
                 }
 
-                // 区块 A：数据开关（AI taste / 崩溃上报 / 位置授权）
+                // 区块 A：AI 数据与画像（授权 → 派生功能 → 采集 → 传输 → 独立 AI 功能）
                 item {
                     PrivacySectionCard(
-                        title = stringResource(R.string.privacy_section_switches),
+                        title = stringResource(R.string.privacy_section_ai_data),
                         hazeState = hazeState
                     ) {
-                        PrivacySwitchRow(
-                            icon = Icons.Rounded.AutoAwesome,
-                            iconTint = MaterialTheme.colorScheme.primary,
-                            title = stringResource(R.string.ai_feature_taste),
-                            subtitle = stringResource(R.string.settings_ai_taste_subtitle),
-                            checked = aiTasteEnabled,
-                            onToggle = { viewModel.setAiTasteEnabled(it) }
+                        AiDataSwitchGroup(
+                            settings = aiProfileSettings,
+                            aiTasteEnabled = aiTasteEnabled,
+                            onAiTasteChanged = viewModel::setAiTasteEnabled,
+                            onProfileConsentChanged = viewModel::setAiProfileConsent,
+                            onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
+                            onBehaviorConsentChanged = viewModel::setAiBehaviorConsent,
+                            onSyncChanged = viewModel::setAiSyncEnabled
                         )
-                        GroupDivider()
+                    }
+                }
+
+                // 区块 B：诊断与权限（非 AI 的上报与系统权限，位置授权不是应用内布尔）
+                item {
+                    PrivacySectionCard(
+                        title = stringResource(R.string.privacy_section_diagnostics),
+                        hazeState = hazeState
+                    ) {
                         PrivacySwitchRow(
                             icon = Icons.Rounded.BugReport,
                             iconTint = MaterialTheme.colorScheme.error,
@@ -220,24 +229,26 @@ fun PrivacyScreen(
                     }
                 }
 
-                // 区块 A2：AI 画像开关组（原设置页「AI 与隐私」分组迁入）
+                // 区块 C：本地数据（不可逆动作单独成卡，与可逆开关分开）
                 item {
                     PrivacySectionCard(
-                        title = stringResource(R.string.privacy_section_ai_profile),
+                        title = stringResource(R.string.privacy_section_local_data),
                         hazeState = hazeState
                     ) {
-                        AiProfileSwitchGroup(
-                            settings = aiProfileSettings,
-                            onProfileConsentChanged = viewModel::setAiProfileConsent,
-                            onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
-                            onBehaviorConsentChanged = viewModel::setAiBehaviorConsent,
-                            onSyncChanged = viewModel::setAiSyncEnabled,
-                            onClearProfile = { showClearAiProfileDialog = true }
+                        PrivacyActionRow(
+                            icon = Icons.Rounded.DeleteForever,
+                            iconTint = MaterialTheme.colorScheme.error,
+                            title = stringResource(R.string.settings_ai_profile_clear),
+                            subtitle = stringResource(R.string.settings_ai_profile_clear_desc),
+                            onClick = { showClearAiProfileDialog = true },
+                            enabled = aiProfileSettings.isAvailable &&
+                                !aiProfileSettings.isLoading &&
+                                !aiProfileSettings.isUpdating
                         )
                     }
                 }
 
-                // 区块 B：隐私说明（本地/网络/技术细节折叠）
+                // 区块 D：隐私说明（本地/网络/技术细节折叠）
                 item {
                     PrivacySectionCard(
                         title = stringResource(R.string.privacy_section_statement),
@@ -247,7 +258,7 @@ fun PrivacyScreen(
                     }
                 }
 
-                // 区块 C：使用与权利（5 节说明 + 权利请求卡片）
+                // 区块 E：使用与权利（5 节说明 + 权利请求卡片）
                 item {
                     PrivacySectionCard(
                         title = stringResource(R.string.privacy_section_legal),
@@ -442,6 +453,9 @@ private fun PrivacySectionCard(
  *
  * [enabled] = false 时整行降透明度且不响应点击：画像开关组在未登录、总开关关闭
  * 或云端写入进行中都会落到这个状态，此时要「看得见但拨不动」，而不是消失。
+ *
+ * [indent] = true 表示这一行从属于上一行（如「个性化分析」挂在画像授权下）：
+ * 左内边距加深、图标容器与字号各缩一档，让从属关系不靠文字说明也看得出来。
  */
 @Composable
 private fun PrivacySwitchRow(
@@ -451,10 +465,14 @@ private fun PrivacySwitchRow(
     subtitle: String,
     checked: Boolean,
     onToggle: (Boolean) -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    indent: Boolean = false
 ) {
     val isDark = isAppDarkTheme()
     val haptics = rememberAppHaptics()
+    val iconBoxSize = if (indent) 34.dp else 40.dp
+    val iconSize = if (indent) 19.dp else 22.dp
+    val titleSize = if (indent) 14.sp else 15.sp
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -463,15 +481,20 @@ private fun PrivacySwitchRow(
                 enabled = enabled,
                 semantic = if (checked) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
             ) { onToggle(!checked) }
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(
+                start = if (indent) 38.dp else 20.dp,
+                end = 20.dp,
+                top = 10.dp,
+                bottom = 10.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(iconBoxSize)
                 .background(
                     color = settingsIconContainerColor(isDark),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(if (indent) 10.dp else 12.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -479,17 +502,17 @@ private fun PrivacySwitchRow(
                 icon,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(if (indent) 14.dp else 16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 15.sp
+                fontSize = titleSize
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -907,7 +930,7 @@ private fun PrivacyFlowOption(
     }
 }
 
-/** 区块 B「隐私说明」内容：本地/联网边界与技术实现动画示意。 */
+/** 区块 D「隐私说明」内容：本地/联网边界与技术实现动画示意。 */
 @Composable
 private fun PrivacyStatementContent() {
     var techExpanded by rememberSaveable { mutableStateOf(false) }
@@ -1000,7 +1023,7 @@ private fun PrivacyStatementContent() {
     }
 }
 
-/** 区块 C「使用与权利」内容：导语 + 5 节说明 + 权利请求卡片。 */
+/** 区块 E「使用与权利」内容：导语 + 5 节说明 + 权利请求卡片。 */
 @Composable
 private fun PrivacyLegalContent() {
     val context = LocalContext.current
@@ -1234,19 +1257,22 @@ private fun PrivacyActionRow(
 }
 
 /**
- * AI 画像开关组：总开关（画像授权）门控其余三项，任何一次云端写入期间整组只读。
+ * AI 数据与画像开关组：画像授权是总开关，「个性化分析」缩进挂在它下面；
+ * 「行为数据授权」「云端同步」与总开关平级；末行是独立的 AI 功能「锐评看单」
+ * 自己的上传开关（同一张卡里代表「哪些数据会交给 AI 服务」）。
  *
- * 这组开关原本长在设置页的「AI 与隐私」分组里，现由隐私页承载：它们的作用是
- * 划定数据边界，和本页的崩溃上报/位置授权是同一类决定。
+ * 顺序按「授权 → 派生功能 → 额外采集 → 传输 → 独立功能」排，任何一次云端写入
+ * 期间整组只读。这组开关原本长在设置页的「AI 与隐私」分组里，现由隐私页承载。
  */
 @Composable
-private fun ColumnScope.AiProfileSwitchGroup(
+private fun ColumnScope.AiDataSwitchGroup(
     settings: AiProfileSettingsState,
+    aiTasteEnabled: Boolean,
+    onAiTasteChanged: (Boolean) -> Unit,
     onProfileConsentChanged: (Boolean) -> Unit,
     onPersonalizationChanged: (Boolean) -> Unit,
     onBehaviorConsentChanged: (Boolean) -> Unit,
-    onSyncChanged: (Boolean) -> Unit,
-    onClearProfile: () -> Unit
+    onSyncChanged: (Boolean) -> Unit
 ) {
     val isBusy = settings.isLoading || settings.isUpdating
     PrivacySwitchRow(
@@ -1266,11 +1292,18 @@ private fun ColumnScope.AiProfileSwitchGroup(
         icon = Icons.Rounded.Insights,
         iconTint = MaterialTheme.colorScheme.primary,
         title = stringResource(R.string.settings_ai_personalization),
-        subtitle = stringResource(R.string.settings_ai_personalization_desc),
+        subtitle = stringResource(
+            when {
+                !settings.isAvailable -> R.string.settings_ai_profile_unavailable
+                // 靠画像吃饭的派生开关：总开关关着时要说清「为什么拨不动」
+                !settings.profileConsent -> R.string.settings_ai_personalization_locked
+                else -> R.string.settings_ai_personalization_desc
+            }
+        ),
         checked = settings.personalizationEnabled,
         onToggle = onPersonalizationChanged,
-        // 个性化分析靠画像吃饭：总开关关着就没有可分析的口味
-        enabled = settings.isAvailable && settings.profileConsent && !isBusy
+        enabled = settings.isAvailable && settings.profileConsent && !isBusy,
+        indent = true
     )
     GroupDivider()
     PrivacySwitchRow(
@@ -1293,12 +1326,12 @@ private fun ColumnScope.AiProfileSwitchGroup(
         enabled = settings.isAvailable && !isBusy
     )
     GroupDivider()
-    PrivacyActionRow(
-        icon = Icons.Rounded.DeleteForever,
-        iconTint = MaterialTheme.colorScheme.error,
-        title = stringResource(R.string.settings_ai_profile_clear),
-        subtitle = stringResource(R.string.settings_ai_profile_clear_desc),
-        onClick = onClearProfile,
-        enabled = settings.isAvailable && !isBusy
+    PrivacySwitchRow(
+        icon = Icons.Rounded.AutoAwesome,
+        iconTint = MaterialTheme.colorScheme.primary,
+        title = stringResource(R.string.ai_feature_taste),
+        subtitle = stringResource(R.string.settings_ai_taste_subtitle),
+        checked = aiTasteEnabled,
+        onToggle = onAiTasteChanged
     )
 }

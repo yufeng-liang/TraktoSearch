@@ -2128,9 +2128,10 @@ Config:
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">Data &amp; Privacy</string>
-    <string name="privacy_entry_subtitle">Data controls · AI profile · privacy · terms &amp; rights</string>
-    <string name="privacy_section_switches">Data controls</string>
-    <string name="privacy_section_ai_profile">AI profile</string>
+    <string name="privacy_entry_subtitle">AI data · diagnostics &amp; permissions · on-device data · privacy · terms &amp; rights</string>
+    <string name="privacy_section_ai_data">AI data &amp; profile</string>
+    <string name="privacy_section_diagnostics">Diagnostics &amp; permissions</string>
+    <string name="privacy_section_local_data">On-device data</string>
     <string name="privacy_location_title">Location permission (cloud weather)</string>
     <string name="privacy_location_granted">Granted. Cloud animations follow your local weather and holidays; revoke in system settings</string>
     <string name="privacy_location_denied">Not granted. Cloud animations stay static; other features are unaffected</string>
@@ -2224,6 +2225,7 @@ Config:
     <string name="settings_ai_profile_consent_desc">Use your marked titles, ratings and reviews to build a local taste profile for detail-page analysis.</string>
     <string name="settings_ai_profile_unavailable">Available after account authorization is restored</string>
     <string name="settings_ai_personalization">Personalized analysis</string>
+    <string name="settings_ai_personalization_locked">Available once AI profile is on</string>
     <string name="settings_ai_personalization_desc">Use your taste profile to explain whether a title may suit you.</string>
     <string name="settings_ai_behavior_consent">Behavior data</string>
     <string name="settings_ai_behavior_consent_desc">Optional daily aggregates for dwell time, search clicks, episodes and playback progress. Off by default.</string>
