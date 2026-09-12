@@ -226,6 +226,18 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
         ),
     ),
     HelpSectionSpec(
+        key = HelpSections.AI_PROFILE,
+        group = HelpGroup.ADVANCED,
+        title = R.string.help_ai_profile,
+        bullets = listOf(
+            R.string.help_ai_profile_b1,
+            R.string.help_ai_profile_b2,
+            R.string.help_ai_profile_b3,
+            R.string.help_ai_profile_b4,
+            R.string.help_ai_profile_b5,
+        ),
+    ),
+    HelpSectionSpec(
         key = HelpSections.NOTIFICATION,
         group = HelpGroup.EXTRAS,
         title = R.string.help_notification,
@@ -269,6 +281,7 @@ object HelpSections {
     const val DOUBAN_WRITEBACK = "doubanWriteback"
     const val CONSISTENCY_CHECK = "consistencyCheck"
     const val AI_SPRITE = "aiSprite"
+    const val AI_PROFILE = "aiProfile"
 }
 
 /** 一个分组和它名下的段落。[IndexedValue.index] 是段落在 [HelpCatalog] 里的下标，也就是它的编号。 */

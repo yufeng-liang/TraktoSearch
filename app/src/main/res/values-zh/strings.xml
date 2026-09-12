@@ -2236,7 +2236,6 @@
     <string name="help_ai_profile_b3">详情页分析只使用粗粒度天气标签，不会向 AI 发送坐标、城市名称或位置标识。</string>
     <string name="help_ai_profile_b4">画像、个性化、行为采集和云端同步可以分别控制；行为采集默认关闭。</string>
     <string name="help_ai_profile_b5">清除画像会删除本地口味、影视、行为和待同步数据，并关闭本地授权；不会删除服务器已有数据。</string>
-    <string name="help_weather_data_b4">详情页 AI 只使用粗粒度天气标签，不会发送坐标、城市名称或位置标识。</string>
     <string name="detail_ai_title">AI 助手</string>
     <string name="detail_ai_close">关闭 AI 助手</string>
     <string name="detail_ai_login_message">登录后，AI 助手才能使用你的画像分析这部影视是否适合你。</string>

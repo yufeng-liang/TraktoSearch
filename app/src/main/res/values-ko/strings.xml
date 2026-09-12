@@ -2248,7 +2248,6 @@
     <string name="help_ai_profile_b3">상세 페이지 분석에는 거친 날씨 라벨만 사용하며 좌표, 도시명 또는 위치 식별자를 AI에 보내지 않습니다.</string>
     <string name="help_ai_profile_b4">프로필, 개인화, 행동 수집과 클라우드 동기화를 각각 제어할 수 있습니다. 행동 수집은 기본적으로 꺼져 있습니다.</string>
     <string name="help_ai_profile_b5">프로필을 삭제하면 로컬 취향, 작품, 행동 및 대기 중인 동기화 데이터를 삭제하고 권한을 끕니다. 서버의 기존 데이터는 삭제하지 않습니다.</string>
-    <string name="help_weather_data_b4">상세 페이지 AI에는 거친 날씨 라벨만 사용하며 좌표, 도시명 또는 위치 식별자는 전송하지 않습니다.</string>
     <string name="detail_ai_title">AI 어시스턴트</string>
     <string name="detail_ai_close">AI 어시스턴트 닫기</string>
     <string name="detail_ai_login_message">로그인하면 AI 어시스턴트가 내 프로필을 사용해 이 작품을 분석할 수 있습니다.</string>

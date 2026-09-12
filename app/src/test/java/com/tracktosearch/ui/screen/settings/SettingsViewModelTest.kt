@@ -3,6 +3,9 @@ package com.tracktosearch.ui.screen.settings
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.CrashLogStorage
+import com.tracktosearch.data.ai.AiProfileRepository
+import com.tracktosearch.data.ai.AiRepository
+import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DiscoverSectionStorage
@@ -103,6 +106,9 @@ class SettingsViewModelTest {
     private lateinit var doubanBatchRemovalManager: DoubanBatchRemovalManager
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
     private lateinit var sessionModeManager: SessionModeManager
+    private lateinit var aiProfileRepository: AiProfileRepository
+    private lateinit var aiRepository: AiRepository
+    private lateinit var authManager: AuthManager
     private lateinit var aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage
     private lateinit var context: Context
 
@@ -139,6 +145,9 @@ class SettingsViewModelTest {
         doubanBatchRemovalManager = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
+        aiProfileRepository = mockk(relaxed = true)
+        aiRepository = mockk(relaxed = true)
+        authManager = mockk(relaxed = true)
         aiTasteStorage = mockk(relaxed = true)
         context = RuntimeEnvironment.getApplication()
 
@@ -207,6 +216,12 @@ class SettingsViewModelTest {
             doubanSyncedItemDao = doubanSyncedItemDao,
             sessionModeManager = sessionModeManager,
             imageTrafficStorage = mockk(relaxed = true),
+            // 构造期 init 块就订阅 friendId 决定画像开关可用性，必须给真 Flow
+            aiProfileRepository = aiProfileRepository,
+            aiRepository = aiRepository,
+            authManager = mockk(relaxed = true) {
+                every { friendId } returns MutableStateFlow(null)
+            },
             aiTasteStorage = aiTasteStorage,
             statisticsSnapshotStore = mockk(relaxed = true),
             swiftieEggStorage = mockk(relaxed = true),

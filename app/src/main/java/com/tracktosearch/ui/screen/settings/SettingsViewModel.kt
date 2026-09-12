@@ -8,6 +8,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiProfileRepository
+import com.tracktosearch.data.ai.AiProfileSettings
+import com.tracktosearch.data.ai.AiProfileSettingsDto
+import com.tracktosearch.data.ai.AiProfileSettingsRequest
+import com.tracktosearch.data.ai.AiRepository
+import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.CloudFailureSyncMetaStorage
@@ -70,6 +76,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -129,6 +136,20 @@ data class ExportImportState(
     val syncFailed: Int = 0
 )
 
+@Immutable
+data class AiProfileSettingsState(
+    val friendId: String? = null,
+    val profileConsent: Boolean = false,
+    val behaviorConsent: Boolean = false,
+    val personalizationEnabled: Boolean = false,
+    val syncEnabled: Boolean = true,
+    val isLoading: Boolean = false,
+    val isUpdating: Boolean = false
+) {
+    /** 画像按 friendId 隔离，未登录/未授权身份时整组开关只读 */
+    val isAvailable: Boolean get() = !friendId.isNullOrBlank()
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val themeStorage: ThemeStorage,
@@ -165,6 +186,9 @@ class SettingsViewModel @Inject constructor(
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
     private val statisticsSnapshotStore: com.tracktosearch.data.local.StatisticsSnapshotStore,
     private val swiftieEggStorage: SwiftieEggStorage,
+    private val aiProfileRepository: AiProfileRepository,
+    private val aiRepository: AiRepository,
+    private val authManager: AuthManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -230,6 +254,229 @@ class SettingsViewModel @Inject constructor(
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()
+
+    private val _aiProfileSettings = MutableStateFlow(AiProfileSettingsState(isLoading = true))
+    val aiProfileSettings: StateFlow<AiProfileSettingsState> = _aiProfileSettings.asStateFlow()
+
+    init {
+        // 画像按 friendId 隔离：换账号就整组重载，登出则清回默认（开关全不可用）
+        viewModelScope.launch {
+            authManager.friendId.collectLatest { rawFriendId ->
+                val friendId = rawFriendId?.trim()?.takeIf { it.isNotEmpty() }
+                if (friendId == null) {
+                    _aiProfileSettings.value = AiProfileSettingsState()
+                } else {
+                    loadAiProfileSettings(friendId)
+                }
+            }
+        }
+    }
+
+    fun setAiProfileConsent(enabled: Boolean) {
+        val current = _aiProfileSettings.value
+        val friendId = requireAiFriendId() ?: return
+        val request = AiProfileSettingsRequest(
+            profileConsent = enabled,
+            behaviorConsent = if (enabled) current.behaviorConsent else false,
+            personalizationEnabled = enabled,
+            syncEnabled = current.syncEnabled
+        )
+        updateAiProfileSettings(
+            friendId = friendId,
+            previous = current,
+            request = request,
+            successMessageRes = R.string.settings_ai_profile_saved,
+            localCommit = { id, settings ->
+                if (settings.profileConsent) {
+                    aiProfileRepository.grantProfileConsent(
+                        friendId = id,
+                        behaviorConsent = settings.behaviorConsent,
+                        personalizationEnabled = settings.personalizationEnabled,
+                        syncEnabled = settings.syncEnabled,
+                        shouldAutoImport = false
+                    )
+                } else {
+                    // 撤回授权等同清画像：本地镜像与行为计数一起作废
+                    aiProfileRepository.clear(id)
+                }
+            }
+        )
+    }
+
+    fun setAiPersonalizationEnabled(enabled: Boolean) {
+        val current = _aiProfileSettings.value
+        val friendId = requireAiFriendId() ?: return
+        if (!current.profileConsent) return
+        val request = AiProfileSettingsRequest(personalizationEnabled = enabled)
+        updateAiProfileSettings(
+            friendId = friendId,
+            previous = current,
+            request = request,
+            successMessageRes = R.string.settings_ai_profile_saved,
+            localCommit = { id, settings ->
+                aiProfileRepository.grantProfileConsent(
+                    friendId = id,
+                    behaviorConsent = settings.behaviorConsent,
+                    personalizationEnabled = settings.personalizationEnabled,
+                    syncEnabled = settings.syncEnabled,
+                    shouldAutoImport = false
+                )
+            }
+        )
+    }
+
+    fun setAiBehaviorConsent(enabled: Boolean) {
+        val current = _aiProfileSettings.value
+        val friendId = requireAiFriendId() ?: return
+        val request = AiProfileSettingsRequest(behaviorConsent = enabled)
+        updateAiProfileSettings(
+            friendId = friendId,
+            previous = current,
+            request = request,
+            successMessageRes = R.string.settings_ai_profile_saved,
+            localCommit = { id, settings ->
+                aiProfileRepository.setBehaviorConsent(id, settings.behaviorConsent)
+            }
+        )
+    }
+
+    fun setAiSyncEnabled(enabled: Boolean) {
+        val current = _aiProfileSettings.value
+        val friendId = requireAiFriendId() ?: return
+        val request = AiProfileSettingsRequest(syncEnabled = enabled)
+        updateAiProfileSettings(
+            friendId = friendId,
+            previous = current,
+            request = request,
+            successMessageRes = R.string.settings_ai_profile_saved,
+            localCommit = { id, settings ->
+                if (settings.profileConsent) {
+                    aiProfileRepository.grantProfileConsent(
+                        friendId = id,
+                        behaviorConsent = settings.behaviorConsent,
+                        personalizationEnabled = settings.personalizationEnabled,
+                        syncEnabled = settings.syncEnabled,
+                        shouldAutoImport = false
+                    )
+                }
+            }
+        )
+    }
+
+    fun clearAiProfile() {
+        val current = _aiProfileSettings.value
+        val friendId = requireAiFriendId() ?: return
+        updateAiProfileSettings(
+            friendId = friendId,
+            previous = current,
+            request = AiProfileSettingsRequest(
+                profileConsent = false,
+                behaviorConsent = false,
+                personalizationEnabled = false,
+                syncEnabled = current.syncEnabled
+            ),
+            successMessageRes = R.string.settings_ai_profile_clear_success,
+            localCommit = { id, _ -> aiProfileRepository.clear(id) }
+        )
+    }
+
+    private suspend fun loadAiProfileSettings(friendId: String) {
+        // 先用本地镜像撑住界面（避免开关闪一下默认值），再用云端结果覆盖
+        val local = runCatching { aiProfileRepository.settings(friendId) }.getOrNull()
+        _aiProfileSettings.value = local?.toUiState()?.copy(
+            friendId = friendId,
+            isLoading = true,
+            isUpdating = false
+        ) ?: AiProfileSettingsState(friendId = friendId, isLoading = true)
+
+        aiRepository.getProfileSettings(friendId).fold(
+            onSuccess = { settings ->
+                _aiProfileSettings.value = settings.toUiState(friendId)
+            },
+            onFailure = {
+                // 拉不到就停在本地镜像上：至少反映最后一次已知授权状态
+                _aiProfileSettings.value = local?.toUiState()?.copy(
+                    friendId = friendId,
+                    isLoading = false,
+                    isUpdating = false
+                ) ?: AiProfileSettingsState(friendId = friendId)
+            }
+        )
+    }
+
+    private fun requireAiFriendId(): String? {
+        val friendId = authManager.friendId.value?.trim()?.takeIf { it.isNotEmpty() }
+        if (friendId == null) {
+            _exportImportState.value = _exportImportState.value.copy(
+                message = ExportMessage.Plain(
+                    R.string.settings_ai_profile_unavailable,
+                    outcome = HapticOutcome.FAILURE
+                )
+            )
+        }
+        return friendId
+    }
+
+    private fun updateAiProfileSettings(
+        friendId: String,
+        previous: AiProfileSettingsState,
+        request: AiProfileSettingsRequest,
+        successMessageRes: Int,
+        localCommit: suspend (String, AiProfileSettingsDto) -> Unit
+    ) {
+        if (previous.isUpdating) return
+        _aiProfileSettings.value = previous.copy(isUpdating = true)
+        viewModelScope.launch {
+            aiRepository.updateProfileSettings(friendId, request).fold(
+                onSuccess = { settings ->
+                    try {
+                        localCommit(friendId, settings)
+                        _aiProfileSettings.value = settings.toUiState(friendId)
+                        _exportImportState.value = _exportImportState.value.copy(
+                            message = ExportMessage.Plain(successMessageRes, HapticOutcome.SUCCESS)
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // 云端已保存时保留云端结果，避免本地失败造成 UI 显示与授权状态相反。
+                        _aiProfileSettings.value = settings.toUiState(friendId)
+                        _exportImportState.value = _exportImportState.value.copy(
+                            message = ExportMessage.Plain(
+                                R.string.settings_ai_profile_update_failed,
+                                outcome = HapticOutcome.FAILURE
+                            )
+                        )
+                    }
+                },
+                onFailure = {
+                    // 网络失败时不写本地状态，StateFlow 仍保持切换前的值，形成失败回滚。
+                    _aiProfileSettings.value = previous.copy(isUpdating = false)
+                    _exportImportState.value = _exportImportState.value.copy(
+                        message = ExportMessage.Plain(
+                            R.string.settings_ai_profile_update_failed,
+                            outcome = HapticOutcome.FAILURE
+                        )
+                    )
+                }
+            )
+        }
+    }
+
+    private fun AiProfileSettings.toUiState(): AiProfileSettingsState = AiProfileSettingsState(
+        friendId = friendId,
+        profileConsent = profileConsent,
+        behaviorConsent = behaviorConsent,
+        personalizationEnabled = personalizationEnabled,
+        syncEnabled = syncEnabled
+    )
+
+    private fun AiProfileSettingsDto.toUiState(friendId: String): AiProfileSettingsState = AiProfileSettingsState(
+        friendId = friendId,
+        profileConsent = profileConsent,
+        behaviorConsent = behaviorConsent,
+        personalizationEnabled = personalizationEnabled,
+        syncEnabled = syncEnabled
+    )
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch { themeStorage.setThemeMode(mode) }

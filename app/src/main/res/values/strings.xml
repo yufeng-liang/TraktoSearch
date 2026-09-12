@@ -2243,7 +2243,6 @@ Config:
     <string name="help_ai_profile_b3">Detail-page analysis uses only a coarse weather label. Coordinates, city names and location identifiers are not sent to AI.</string>
     <string name="help_ai_profile_b4">Profile, personalization, behavior collection and cloud sync are separate controls. Behavior collection is off by default.</string>
     <string name="help_ai_profile_b5">Clearing the profile deletes local taste, media, behavior and pending sync data, then turns off local permissions. It does not delete existing server data.</string>
-    <string name="help_weather_data_b4">For detail-page AI, only a coarse weather label is used; coordinates, city names and location identifiers are not sent.</string>
     <string name="detail_ai_title">AI Assistant</string>
     <string name="detail_ai_close">Close AI assistant</string>
     <string name="detail_ai_login_message">Sign in to let the AI assistant use your profile for personalized detail analysis.</string>

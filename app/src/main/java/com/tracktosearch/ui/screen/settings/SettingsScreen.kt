@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Feedback
@@ -66,6 +67,7 @@ import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -256,6 +258,7 @@ fun SettingsScreen(
     val currentGlassVariant by viewModel.glassVariant.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
+    val aiProfileSettings by viewModel.aiProfileSettings.collectAsStateWithLifecycle()
     val isLoadingChangelog by viewModel.isLoadingChangelog.collectAsStateWithLifecycle()
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -385,6 +388,7 @@ fun SettingsScreen(
     // 退出豆瓣二次确认弹窗展示的本地标记条数（点击退出按钮时预查）
     var doubanLogoutCount by remember { mutableIntStateOf(0) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showClearAiProfileDialog by remember { mutableStateOf(false) }
     var showClearCategoryDialog by remember { mutableStateOf(false) }
     var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
     var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
@@ -770,6 +774,24 @@ fun SettingsScreen(
                 }
             }
 
+            // AI 与隐私：画像授权独立于 Trakt/豆瓣数据同步，状态按 friendId 隔离。
+            item(key = "group_ai_privacy") {
+                SettingsGroupCard(
+                    title = stringResource(R.string.settings_ai_profile),
+                    hazeState = settingsHazeState
+                ) {
+                    AiProfileSettingsItem(
+                        settings = aiProfileSettings,
+                        onProfileConsentChanged = viewModel::setAiProfileConsent,
+                        onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
+                        onBehaviorConsentChanged = viewModel::setAiBehaviorConsent,
+                        onSyncChanged = viewModel::setAiSyncEnabled,
+                        onClearProfile = { showClearAiProfileDialog = true },
+                        containerColor = Color.Transparent
+                    )
+                }
+            }
+
             // 账户：已登录用户显示 Trakt+豆瓣账号信息；访客显示"登录 Trakt"入口
             item(key = "group_account") {
                 SettingsGroupCard(
@@ -1080,6 +1102,28 @@ fun SettingsScreen(
             dismissButton = {
                 val dismissHaptics = rememberAppHaptics()
                 TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLogoutDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showClearAiProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearAiProfileDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.settings_ai_profile_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_ai_profile_clear_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearAiProfileDialog = false
+                    viewModel.clearAiProfile()
+                }) {
+                    Text(stringResource(R.string.settings_ai_profile_clear_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAiProfileDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -2470,6 +2514,114 @@ private fun ImageTrafficSectionItem(
  * 抽取为独立函数：3 个状态收集局部化，避免账户信息变化引起整个 LazyColumn 重组。
  * 注意：loadUserProfile/loadDoubanProfile 副作用已上提到 SettingsScreen 顶层，不在本函数内触发。
  */
+@Composable
+private fun AiProfileSettingsItem(
+    settings: AiProfileSettingsState,
+    onProfileConsentChanged: (Boolean) -> Unit,
+    onPersonalizationChanged: (Boolean) -> Unit,
+    onBehaviorConsentChanged: (Boolean) -> Unit,
+    onSyncChanged: (Boolean) -> Unit,
+    onClearProfile: () -> Unit,
+    containerColor: Color
+) {
+    val haptics = rememberAppHaptics()
+    val isBusy = settings.isLoading || settings.isUpdating
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingsItemCard(
+            icon = Icons.Rounded.AutoAwesome,
+            title = stringResource(R.string.settings_ai_profile_consent),
+            subtitle = stringResource(
+                if (!settings.isAvailable) R.string.settings_ai_profile_unavailable
+                else R.string.settings_ai_profile_consent_desc
+            ),
+            onClick = { if (!isBusy) onProfileConsentChanged(!settings.profileConsent) },
+            trailing = {
+                if (settings.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Switch(
+                        checked = settings.profileConsent,
+                        enabled = settings.isAvailable && !settings.isUpdating,
+                        onCheckedChange = {
+                            haptics.toggle(it)
+                            onProfileConsentChanged(it)
+                        },
+                        colors = appSwitchColors()
+                    )
+                }
+            },
+            containerColor = containerColor
+        )
+        GroupDivider()
+        SettingsItemCard(
+            icon = Icons.Rounded.AutoAwesome,
+            title = stringResource(R.string.settings_ai_personalization),
+            subtitle = stringResource(R.string.settings_ai_personalization_desc),
+            onClick = { if (!isBusy && settings.profileConsent) onPersonalizationChanged(!settings.personalizationEnabled) },
+            trailing = {
+                Switch(
+                    checked = settings.personalizationEnabled,
+                    enabled = settings.isAvailable && settings.profileConsent && !isBusy,
+                    onCheckedChange = {
+                        haptics.toggle(it)
+                        onPersonalizationChanged(it)
+                    },
+                    colors = appSwitchColors()
+                )
+            },
+            containerColor = containerColor
+        )
+        GroupDivider()
+        SettingsItemCard(
+            icon = Icons.Rounded.History,
+            title = stringResource(R.string.settings_ai_behavior_consent),
+            subtitle = stringResource(R.string.settings_ai_behavior_consent_desc),
+            onClick = { if (!isBusy) onBehaviorConsentChanged(!settings.behaviorConsent) },
+            trailing = {
+                Switch(
+                    checked = settings.behaviorConsent,
+                    enabled = settings.isAvailable && !isBusy,
+                    onCheckedChange = {
+                        haptics.toggle(it)
+                        onBehaviorConsentChanged(it)
+                    },
+                    colors = appSwitchColors()
+                )
+            },
+            containerColor = containerColor
+        )
+        GroupDivider()
+        SettingsItemCard(
+            icon = Icons.Rounded.Sync,
+            title = stringResource(R.string.settings_ai_cloud_sync),
+            subtitle = stringResource(R.string.settings_ai_cloud_sync_desc),
+            onClick = { if (!isBusy) onSyncChanged(!settings.syncEnabled) },
+            trailing = {
+                Switch(
+                    checked = settings.syncEnabled,
+                    enabled = settings.isAvailable && !isBusy,
+                    onCheckedChange = {
+                        haptics.toggle(it)
+                        onSyncChanged(it)
+                    },
+                    colors = appSwitchColors()
+                )
+            },
+            containerColor = containerColor
+        )
+        GroupDivider()
+        SettingsItemCard(
+            icon = Icons.Rounded.Delete,
+            title = stringResource(R.string.settings_ai_profile_clear),
+            subtitle = stringResource(R.string.settings_ai_profile_clear_desc),
+            onClick = { if (settings.isAvailable && !isBusy) onClearProfile() },
+            containerColor = containerColor,
+            iconTint = MaterialTheme.colorScheme.error
+        )
+    }
+}
+
 @Composable
 private fun AccountItem(
     viewModel: SettingsViewModel,

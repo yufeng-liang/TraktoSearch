@@ -2248,7 +2248,6 @@
     <string name="help_ai_profile_b3">詳細ページの分析には粗い天気ラベルだけを使い、座標、都市名、位置識別子は AI に送りません。</string>
     <string name="help_ai_profile_b4">プロフィール、パーソナライズ、行動データ、クラウド同期は個別に制御できます。行動データは初期状態でオフです。</string>
     <string name="help_ai_profile_b5">プロフィールを消去すると、ローカルの好み、作品、行動、未同期データを削除し、許可をオフにします。サーバー上の既存データは削除しません。</string>
-    <string name="help_weather_data_b4">詳細ページの AI には粗い天気ラベルだけを使い、座標、都市名、位置識別子は送信しません。</string>
     <string name="detail_ai_title">AI アシスタント</string>
     <string name="detail_ai_close">AI アシスタントを閉じる</string>
     <string name="detail_ai_login_message">ログインすると、AI アシスタントがあなたのプロフィールを使って作品を分析できます。</string>
