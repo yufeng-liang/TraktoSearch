@@ -99,7 +99,7 @@ era_start() {
 # 前两拍落在 TTPD 段头那 TTPD_PREROLL_MS 独奏里（era_start 就是独奏起点，还没有卡片）。
 # 节拍按**字符**均分（见 SwiftieEraBackdrop 的 drawTypewriterStub / stubUnits）：
 # 打的是 Fortnight 那句，第一行 `I love you,`（11 字）、第二行 `it's ruining my life`（20 字），
-# 中间的回车占两个字符单位，共 35 个 —— 回车落在 12/35 ≈ 34%。
+# 中间的回车占两个字符单位，共 33 个 —— 回车跨 11 到 13，正中是 12/33 ≈ 36%。
 # 所以前两拍写成**前摇的百分比**：前摇一改，两拍跟着走（字符数不变时）。
 # 后两拍是出纸：起点 + 前摇 + 出纸时长的一半 / 走完再停半秒。
 type_ms() {
