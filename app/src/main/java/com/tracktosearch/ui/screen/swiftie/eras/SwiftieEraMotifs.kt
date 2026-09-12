@@ -2212,7 +2212,18 @@ private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Floa
         val ribs = Path()
         var x = w * 0.18f
         while (x < w * 0.78f) {
-            ribs.moveTo(x, top - h * 0.02f)
+            // V 领那个三角形里是**衣服里面**，不该有罗纹：竖纹只长在两片前襟上。
+            // 每条竖线改从领口斜边上起头 —— 起头点正好落在领子描边的中线上，
+            // 而领子是后画的、又比衣身深，于是竖纹看上去是从领子底下钻出来的。
+            // 不这么裁的话，那几十条竖线会一路顶到肩线，领口里糊成一片（需求方
+            // 原话「v领所在三角形区域去掉衣服的竖纹，表示竖纹只在衣服外面有」）。
+            val lean = abs(x - w * 0.49f)
+            val from = if (lean < w * 0.19f) {
+                h * 0.40f - h * 0.20f * (lean / (w * 0.19f))
+            } else {
+                top - h * 0.02f
+            }
+            ribs.moveTo(x, from)
             ribs.lineTo(x + u * 0.022f, bottom + h * 0.08f)
             x += u * 0.044f
         }
