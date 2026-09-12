@@ -919,12 +919,15 @@ export function dailyRepairHintFor(message: string): string {
     return raw;
 }
 
-/** 修复提示：校验失败后重新生成时追加在 user 消息末尾，必须显著且不与其他内容混淆。 */
+/** 修复提示：校验失败后重新生成时追加在 user 消息末尾，必须显著且不与其他内容混淆。
+ *  理由可能有多条（后面几轮会带上前几次的判废原因）：真上游实测只回灌最新一条时，
+ *  模型修好 A 又踩坏 B，逐个击破永远差一轮。 */
 function dailyRepairSection(repairHint?: string | null): string {
     const reason = (repairHint ?? '').trim();
     if (reason === '') return '';
+    const fixInstruction = reason.includes('；') ? '请逐条修正以上问题' : '请只修正这一点';
     return '\n\n【修复要求｜优先级最高】上一次这份输出被校验拒绝，原因：' + reason
-        + '。请只修正这一点，其余部分保持合规，重新输出完整 JSON。';
+        + '。' + fixInstruction + '，其余部分保持合规，重新输出完整 JSON。';
 }
 
 /** 最近几天已出过的今日知识：作为「避免重复」的输入，避免连续多天锁定同一部片/同一概念。 */

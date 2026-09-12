@@ -260,6 +260,104 @@ test('免费额度耗尽的模型会被记住，后续请求不再白试它', as
     __resetModelQuotaMemo();
 });
 
+test('连续两轮判废时，第三轮重写会带上全部历史原因而不是只带最新一条', async () => {
+    const dailyEnv = {
+        DB: {
+            prepare(sql) {
+                const statement = {
+                    bind() { return statement; },
+                    async run() { return { meta: { changes: 1 } }; },
+                    async all() { return { results: [] }; },
+                    async first() {
+                        if (String(sql).includes('FROM friends')) return { nickname: '小明' };
+                        return null;
+                    },
+                };
+                return statement;
+            },
+        },
+        AI_TEST_MODE: true,
+        AI_TEST_CACHE: new Map(),
+        AI_TEST_QUOTA: new Map(),
+        AI_DEFAULT_PROVIDER: 'bailian',
+        BAILIAN_API_KEY: 'test-bailian-key',
+        AI_DAILY_ILLUSTRATION_ENABLED: 'false',
+    };
+    const baseUnit = {
+        unitId: 'u_repair_probe',
+        version: 1,
+        locale: 'zh-CN',
+        relationType: 'general_knowledge',
+        evidenceMode: 'film_fact',
+        subjectGroup: 'film_expression',
+        subject: '电影学',
+        concept: '片场口令',
+        title: '片场口令如何组织协作',
+        takeaway: '统一口令把多部门准备压缩成同一瞬间，降低拍摄现场的不确定性。',
+        relatedMedia: null,
+        filmEvidence: '开机前的部门准备和统一信号，是影片制作资料中可确认的协作方式。',
+        explanation: '片场口令是统一信号：片场时间成本高，它让摄影、灯光、表演和声音在同一时刻进入执行状态。',
+        realWorldExample: '复杂项目也需要明确职责边界和统一启动信号。',
+        boundary: '这是制作历史的来源说明，不同剧组流程会存在差异。',
+        difficulty: 'easy',
+        spoilerLevel: 'none',
+        source: { name: 'AI 综合解读', url: '', evidence: '本节由 AI 综合公开通识整理，未引用具体来源。' },
+        checkQuestion: {
+            prompt: '统一口令的主要作用是什么？',
+            options: [{ id: 'a', text: '让所有人立刻改变立场' }, { id: 'b', text: '让多部门在同一瞬间进入执行状态' }],
+            correctOptionIds: ['b'],
+            explanation: '片场口令作为协作信号，能让多部门同时进入执行状态。',
+        },
+        characterLine: '',
+    };
+    // 真上游观察到的连续踩坑形态：先 spoilerLevel 标低被判废，改完又编造了演员名。
+    const spoilerFault = {
+        ...baseUnit,
+        title: '片场口令如何组织大结局拍摄',
+    };
+    const nameFault = {
+        ...baseUnit,
+        explanation: baseUnit.explanation + '在张译主演的影片里也能看到类似的协作节奏。',
+    };
+    const prompts = [];
+    const reply = (body, payload) => {
+        const content = JSON.stringify(payload);
+        // 百炼主路径是流式：非流式形状会被读成「空内容」，这里必须照真实协议走 SSE。
+        return body.stream === true
+            ? sseResponse([chunkOf(content)])
+            : new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    };
+    await withFetch(async (_url, init) => {
+        const body = JSON.parse(init.body);
+        prompts.push(String(body.messages.at(-1).content));
+        if (prompts.length === 1) return reply(body, spoilerFault);
+        if (prompts.length === 2) return reply(body, nameFault);
+        return reply(body, baseUnit);
+    }, async () => {
+        const response = await handleAiApi(
+            new Request('https://gateway.test/api/ai/daily', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'daily', sessionId: 'repair-1', forceRefresh: true, locale: 'zh-CN' }),
+            }),
+            dailyEnv,
+            'request-repair-1',
+            '/api/ai/daily',
+            { sub: 'friend-1', device: 'device-1' },
+        );
+        const json = await response.json();
+        assert.equal(json.data.isFallback, false, '第三轮重写通过后不得再降级到种子内容');
+        assert.equal(json.data.unitId, 'u_repair_probe');
+    });
+    assert.equal(prompts.length, 4, '候选三轮 + 复核一轮');
+    assert.equal(prompts[0].includes('修复要求'), false);
+    assert.match(prompts[1], /spoilerLevel 写成了 none/);
+    // 关键：第三次调用要同时带着前两次的原因，模型才能一次把两个坑都填上
+    assert.match(prompts[2], /1\. spoilerLevel 写成了 none/);
+    assert.match(prompts[2], /2\. 出现了输入材料里没有的人物名/);
+    assert.match(prompts[2], /请逐条修正以上问题/);
+});
+
 test('AI_DEFAULT_PROVIDER=bailian 时出题走百炼，且请求带关思考与 json_object', async () => {
     const original = globalThis.fetch;
     const calls = [];

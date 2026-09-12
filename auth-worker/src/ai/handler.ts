@@ -900,8 +900,11 @@ export type DailyStreamEvent =
  *  供客户端换算进度百分比；上游长度会浮动，客户端应封顶到 100%。 */
 const DAILY_STAGE_EXPECTED_CHARS: Record<'candidate' | 'review', number> = { candidate: 1800, review: 1800 };
 
-/** 每日知识的修复轮上限：本地门槛判废时带原因重写一次，仍不合格才降级到种子内容。 */
-const DAILY_REPAIR_ROUNDS = 1;
+/** 每日知识的修复轮上限：本地门槛判废时带原因重写，仍不合格才降级到种子内容。
+ *  真上游 18 次抽样里判废几乎都是「两条不同的硬规则各踩一次」（先 spoilerLevel 标低、
+ *  修完又编造人名）：只给一轮就正好卡在第二个错的当口降级。给到两轮 + 回灌全部历史原因，
+ *  实测把这类连续踩坑拉回来；代价只在确实被判废时付出（多等一次生成，约 15-20 秒）。 */
+const DAILY_REPAIR_ROUNDS = 2;
 
 type DailyStreamEmitter = (event: DailyStreamEvent) => void;
 
@@ -2086,6 +2089,8 @@ async function generateDailyKnowledgeUnit(
         maxTokens: number,
     ): Promise<KnowledgeUnit | null> => {
         let hint: string | null = null;
+        // 每一轮的判废原因都留着：模型常见的是修好 A 又踩坏 B，只回灌最新一条就会无限接近。
+        const rejectionReasons: string[] = [];
         for (let round = 0; round <= DAILY_REPAIR_ROUNDS; round += 1) {
             onEvent?.({ type: 'stage', stage, status: 'start', provider, expectedChars: DAILY_STAGE_EXPECTED_CHARS[stage] });
             let upstream: LlmJsonResult | null;
@@ -2120,7 +2125,11 @@ async function generateDailyKnowledgeUnit(
                 recordHealthEvent(env, { ...healthCtx, route: stage === 'candidate' ? 'daily-candidate' : 'daily-review' }, 'traffic', upstream.provider, upstream.model, 'invalid_output', error);
                 logDailyFallback(`${stage}_rejected`, requestId, upstream, error, round);
                 // 判废理由要翻译成中文指令再回灌：门槛内部是英文错误串，模型读不出要改什么。
-                hint = error instanceof Error ? dailyRepairHintFor(error.message.slice(0, 200)) : '未知原因';
+                const reason = error instanceof Error ? dailyRepairHintFor(error.message.slice(0, 200)) : '未知原因';
+                if (!rejectionReasons.includes(reason)) rejectionReasons.push(reason);
+                hint = rejectionReasons
+                    .map((item, index) => `${index + 1}. ${item}`)
+                    .join('；');
             }
         }
         return null;
