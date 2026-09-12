@@ -598,8 +598,9 @@ private fun SwiftieEggContent(
     }
 
     /**
-     * 本段已过多少毫秒。**三处读它**：TTPD 那台打字机（敲字 / 滑架步进 / 出纸要与卡片
-     * 对上拍）、reputation 那条蛇，以及 Lover 彩虹上那颗心（命中之后才带箭）。
+     * 本段已过多少毫秒。**四处读它**：TTPD 那台打字机（敲字 / 滑架步进 / 出纸要与卡片
+     * 对上拍）、reputation 那条蛇、Lover 彩虹上那颗心（命中之后才带箭），以及 Midnights
+     * 面钟上弦的两根指针。
      * [backdropPhase] 是一条 3.6s 的循环锯齿，问不出「第几拍」。
      *
      * intro 期间返回 -1：背景那时是第 1 张，没人读它。换张交叉淡变那 500ms 里 incoming

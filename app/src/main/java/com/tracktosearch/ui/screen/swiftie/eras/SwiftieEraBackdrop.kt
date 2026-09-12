@@ -225,8 +225,9 @@ private inline fun buildTriples(count: Int, seed: Int, item: (Random) -> FloatAr
  * 飘落物走的是另一份 12s 的相位，不在本文件里。
  *
  * @param eraElapsedMs 本段已过的毫秒，`-1` 或负数 = 待机态（本段还没开始）。
- *   **两张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）与 reputation
- *   那条蛇（整段走完「进场 → 绕王座 → 立起头 → 出画」一趟）。其余 10 张只看 [phase]
+ *   **三张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）、reputation
+ *   那条蛇（整段走完「进场 → 绕王座 → 立起头 → 出画」一趟），以及 Midnights 面钟上弦的
+ *   两根指针（一次性动作，`phase` 那个 3.6s 锯齿问不出「走到第几拍」）。其余 9 张只看 [phase]
  * @param cardBounds TTPD 卡片在根坐标里的边框（px），[Rect.Zero] = 还没量到。
  *   打字机按它把出纸口坐到纸的下缘、把滚筒对齐纸宽 —— 机器在屏幕底下，纸从滚筒
  *   后头升上来，先打的行升得最高
@@ -313,7 +314,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.BRANCH_LANTERNS ->
             drawBranchLanterns(path, top, mid, deep, phase, alpha, lowRam)
         SwiftieEraBackdrop.MIDNIGHT_CLOCK ->
-            drawMidnightClock(path, top, mid, deep, phase, alpha, shapes, numerals)
+            drawMidnightClock(path, top, mid, deep, phase, alpha, eraMs, shapes, numerals)
         SwiftieEraBackdrop.TYPEWRITER_DESK ->
             drawTypewriterDesk(path, top, mid, deep, phase, alpha, eraMs, card)
         SwiftieEraBackdrop.THEATRE_STAGE -> drawTheatreStage(path, top, mid, deep, phase, alpha)
@@ -4202,6 +4203,118 @@ private fun starInto(path: Path, cx: Float, cy: Float, outer: Float, rotationDeg
 /** 罗马数字预排的参考字号（px）。真实大小在 draw 阶段按表盘半径缩放。 */
 private const val NUMERAL_REFERENCE_PX = 100f
 
+/**
+ * 表盘角度基准：**0° = 12 点，顺时针为正**。
+ *
+ * 与整点刻度同一套（刻度那两处的 `i / 12f * TAU - PI/2` 就是这条基准）——
+ * 换成「3 点方向为 0°」会让刻度、罗马数字与指针各自算一套，早晚错位。
+ */
+internal const val MIDNIGHT_CLOCK_ANGLE_BASE_DEG: Float = 0f
+
+/** 卡出现后多久起转。卡片前 400ms 在长出来，眼神还在入场动画上。 */
+internal const val MIDNIGHT_WIND_START_MS: Long = 800L
+
+/** 主程时长：分针走两整圈、时针从 2 点推到 3 点。 */
+internal const val MIDNIGHT_WIND_MS: Float = 1_800f
+
+/**
+ * 落位后的回吸时长。
+ *
+ * 和主程分开画两段：主程是一次**单调**的走针，过冲只是末尾那一小下。
+ * 揉进同一条曲线里（比如 `easeOutBack`）会让分针在最后小半圈里明显倒着走 ——
+ * 钟的指针没有倒转的道理，读出来是素材卡帧。
+ */
+internal const val MIDNIGHT_SETTLE_MS: Float = 260f
+
+/**
+ * 回吸的峰值角度（度）。**负** = 往回转。
+ *
+ * 3.6° 是掐着表盘刻度定的：分针 60 格、每格 6°，回吸约占 0.6 格 ——
+ * 看得见「顿了一下」，但不足以让分针明显离开 12 点那一格。
+ */
+internal const val MIDNIGHT_SETTLE_DEG: Float = 3.6f
+
+/** 满盘的度数。 */
+private const val MIDNIGHT_FULL_TURN_DEG: Float = 360f
+
+/**
+ * 时针与分针的角速度比：分针一圈 = 时针一格，1:12。
+ *
+ * **这不是配上去的，是一条约束**：两根针由同一组齿轮驱动，各自走多少只能差这个倍数。
+ * 起手 2:00、落位 3:00 时两针各差 30°，分针因此**恰好走一整圈** ——
+ * 想让它多转几圈就得把落位改成别的时刻，见 [midnightHandAngles]。
+ */
+private const val MIDNIGHT_HAND_GEAR_RATIO: Float = 12f
+
+/** 起手姿态（时针在 2 点）。落位是 3:00，分针两整圈回到 12 —— 两个都是整点。 */
+private const val MIDNIGHT_HOUR_START_DEG: Float = 60f
+
+/** 落位姿态：严格的 3:00:00。 */
+private const val MIDNIGHT_HOUR_END_DEG: Float = 90f
+
+/** 0° 在 12 点、顺时针为正的表盘上，这根指针此时指向几点（单位：度，0..360）。 */
+internal fun midnightClockAngleOf(angleDeg: Float): Float =
+    (angleDeg - MIDNIGHT_CLOCK_ANGLE_BASE_DEG).mod(MIDNIGHT_FULL_TURN_DEG)
+
+/**
+ * 这一毫秒两根指针各自的角度（0° = 12 点，顺时针为正）。
+ *
+ * ## 为什么分针只走一圈（以及为什么不能是三圈）
+ *
+ * 两根针是一组齿轮上的刚性件：**分针走多少，时针只能按 1:12 跟多少**
+ * （[MIDNIGHT_HAND_GEAR_RATIO]）。落位钉死 3:00、起手又必须是个整点，两个端点就此
+ * 反推出唯一的解 —— 两针各差 30°（2:00 → 3:00），分针**恰好一整圈**。
+ *
+ * 曾经按「分针转两圈更热闹」写过一版：两圈意味着时针要走 60°，落位就变成 4:00。
+ * 想保留 3:00 的落位又想多转几圈，只能让两针脱开、各转各的 —— 屏幕上立刻读成
+ * 一根被单独拧过的针。**要改圈数就改落位时刻，两者只能一起动**。
+ *
+ * ## 过冲为什么是加在「回吸窗口里的一记负冲量」
+ *
+ * 主程用 `1 - cos` 收在零速上，过冲是在那之后再叠一个负向的 `sin` 包络
+ * （[MIDNIGHT_SETTLE_DEG]）：t=0 与 t=1 都严格为 0，所以「落位严格 3:00」
+ * 不受它影响，而中段那 3.6° 的往回一顿就是真钟走到整点的那一下。
+ *
+ * 两根针用的是**同一个角度冲量**而不是同一个比例：分针在它自己的位置上多转 3.6°、
+ * 时针在原处多退 3.6°，读起来是「各自顿了一下」。按比例给（时针 0.3°）时针就完全看不出来。
+ *
+ * @param eraMs 本段已过的毫秒。负数或超出主程 = 停在对应的端点姿态
+ * @return 时针角度 to 分针角度（分针可超过 360°，那表示它已经转过整圈）
+ */
+internal fun midnightHandAngles(eraMs: Long): Pair<Float, Float> {
+    val hourStart = MIDNIGHT_HOUR_START_DEG
+    // 分针的行程**从时针的行程推出来**，不是另写一个常量：写两个独立常量就会允许
+    // 「两针各走各的」这种组合存在，而那是这面钟物理上做不到的事
+    val hourSpan = MIDNIGHT_HOUR_END_DEG - MIDNIGHT_HOUR_START_DEG
+    val minuteSpan = hourSpan * MIDNIGHT_HAND_GEAR_RATIO
+
+    val since = eraMs - MIDNIGHT_WIND_START_MS
+    // 主程之前（含换张淡变期传来的 -1）：停在起手姿态。
+    // 起手是个真姿态而不是「还没开始画」—— 换张那 500ms 里这张舞台以 0.5 的 alpha 露着，
+    // 指针不能凭空长出来
+    if (since <= 0L) return hourStart to 0f
+    if (since >= MIDNIGHT_WIND_MS) {
+        if (since >= MIDNIGHT_WIND_MS + MIDNIGHT_SETTLE_MS) {
+            return MIDNIGHT_HOUR_END_DEG to minuteSpan
+        }
+        val t = (since - MIDNIGHT_WIND_MS) / MIDNIGHT_SETTLE_MS
+        val back = sin(PI.toFloat() * t) * MIDNIGHT_SETTLE_DEG
+        return (MIDNIGHT_HOUR_END_DEG - back) to (minuteSpan - back)
+    }
+
+    // 分针倒着算时针：`minute / 12` 就是时针这一程走过的角度，传动比只有这一个来源
+    val minute = minuteSpan * easeOutWind(since / MIDNIGHT_WIND_MS)
+    return (hourStart + minute / MIDNIGHT_HAND_GEAR_RATIO) to minute
+}
+
+/**
+ * 走针的缓动：起手立刻就有速度、落到终点时速度为零。
+ *
+ * `1 - cos` 而不是三次 ease-out：后者的起步速度是 0，指针从完全静止里「想」一下才走 ——
+ * 上弦是被人推了一把，`sin` 在 t=0 处的非零斜率才对。
+ */
+private fun easeOutWind(t: Float): Float = 1f - cos(PI.toFloat() / 2f * t.coerceIn(0f, 1f))
+
 /** XII 在 12 点位，顺时针排到 XI —— 与 drawMidnightClock 的整点刻度同序。 */
 private val ROMAN_NUMERALS =
     listOf("XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI")
@@ -4231,8 +4344,12 @@ private fun rememberClockNumeralLayouts(): List<TextLayoutResult> {
  * 午夜星空 + 一面星形指针的钟 + 薰衣草雾。
  *
  * Midnights 的封面是那只手举着的打火机与深蓝，而「午夜」这个词本身需要一面钟才落得实。
- * 两根指针都指向 3 —— 凌晨三点。星星的明灭是 [phase] 的**二倍频**，
- * 相位按序号错开，所以不会整片一起闪。
+ * 指针**落位在 3:00**（凌晨三点），但它是从上弦的位置转过去的：卡出现 800ms 后
+ * 分针走一整圈、时针按 1:12 跟着从 2 点推到 3 点，末尾带一下回吸
+ * （行程为什么是一圈、不是几圈，见 [midnightHandAngles]）。
+ * 星星的明灭是 [phase] 的**二倍频**，相位按序号错开，所以不会整片一起闪。
+ *
+ * @param eraMs 本段已过的毫秒，指针只吃这一个量（负数 = 停在起手姿态，见 [midnightHandAngles]）
  */
 private fun DrawScope.drawMidnightClock(
     path: Path,
@@ -4241,6 +4358,7 @@ private fun DrawScope.drawMidnightClock(
     deep: Color,
     phase: Float,
     alpha: Float,
+    eraMs: Long,
     shapes: BackdropShapes,
     numerals: List<TextLayoutResult>
 ) {
@@ -4366,16 +4484,18 @@ private fun DrawScope.drawMidnightClock(
             )
         )
     }
-    // 3 点：时针短而粗、指向 3，分针长而细、指向 12。星尖收在指针末端
+    // 指针：时针短而粗、分针长而细，角度从上弦进度来（落位 3:00）。星尖收在指针末端
+    val (hourAngle, minuteAngle) = midnightHandAngles(eraMs)
     for (i in 0..1) {
         val len = if (i == 0) 0.46f else 0.78f
         val thick = if (i == 0) 0.016f else 0.010f
-        // i = 0 时针横向朝 3，i = 1 分针竖直朝 12
-        val end = if (i == 0) {
-            Offset(clockCenter.x + clockR * len, clockCenter.y)
-        } else {
-            Offset(clockCenter.x, clockCenter.y - clockR * len)
-        }
+        // i = 0 时针短而粗，i = 1 分针长而细。角度约定见 midnightHandAngles：
+        // 0° 在 12 点、顺时针为正，所以终点要先把角度扳 -90° 才是屏幕坐标里的正弦余弦
+        val a = ((if (i == 0) hourAngle else minuteAngle) - 90f) / 180f * PI.toFloat()
+        val end = Offset(
+            clockCenter.x + cos(a) * clockR * len,
+            clockCenter.y + sin(a) * clockR * len
+        )
         drawLine(
             color = SwiftiePalette.Lavender,
             start = clockCenter,
