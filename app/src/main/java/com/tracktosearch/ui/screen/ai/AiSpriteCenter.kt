@@ -1429,13 +1429,8 @@ private fun BentoFeatureCard(
         AiFeature.QUIZ -> Icons.Rounded.Quiz
         AiFeature.DAILY -> Icons.Rounded.Lightbulb
     }
-    // 四张卡片使用独立的主题色角色，避免两个小卡片的图标撞色，也让功能更容易扫读。
-    val tint = when (feature) {
-        AiFeature.GREETING -> MaterialTheme.colorScheme.secondary
-        AiFeature.TASTE -> MaterialTheme.colorScheme.tertiary
-        AiFeature.QUIZ -> MaterialTheme.colorScheme.inversePrimary
-        AiFeature.DAILY -> MaterialTheme.colorScheme.primary
-    }
+    // 图标底色统一跟随主题色，不再按功能分配不同色相。
+    val tint = MaterialTheme.colorScheme.primary
     val title = when (feature) {
         AiFeature.GREETING -> stringResource(R.string.ai_feature_greeting)
         AiFeature.TASTE -> stringResource(R.string.ai_feature_taste)
@@ -1467,17 +1462,6 @@ private fun BentoFeatureCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (primary) 3 else 4
             )
-            // 整张卡片都可点击，只保留一个轻量箭头作为可点击暗示，不再用状态词和“打开”抢占信息层级。
-            Box(Modifier.fillMaxWidth()) {
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .size(20.dp),
-                    tint = tint
-                )
-            }
         }
     }
 }
