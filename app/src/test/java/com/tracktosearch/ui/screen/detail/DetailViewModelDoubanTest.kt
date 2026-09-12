@@ -74,6 +74,7 @@ class DetailViewModelDoubanTest {
     private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
+    private lateinit var aiProfileBehaviorRecorder: com.tracktosearch.data.ai.AiProfileBehaviorRecorder
     private lateinit var viewModel: DetailViewModel
 
     @Before
@@ -102,6 +103,7 @@ class DetailViewModelDoubanTest {
         traktConnected = MutableStateFlow(false)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
+        aiProfileBehaviorRecorder = mockk(relaxed = true)
 
         every { tokenStorage.accessToken } returns flowOf(null)
         every { detailSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
@@ -135,7 +137,7 @@ class DetailViewModelDoubanTest {
             doubanSyncedItemDao,
             sessionModeManager,
             posterColorExtractor,
-            userReviewRepository
+            userReviewRepository, aiProfileBehaviorRecorder
         )
     }
 

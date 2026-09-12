@@ -7,6 +7,9 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.AiProfileBehavior
+import com.tracktosearch.data.ai.AiProfileBehaviorRecorder
+import com.tracktosearch.data.ai.MediaSourceSnapshot
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.LanguageStorage
@@ -323,7 +326,9 @@ class DetailViewModel @Inject constructor(
     // 海报主色调提取器(对 DetailHeaderContent 暴露,用于在海报加载成功后提取主色)
     val posterColorExtractor: PosterColorExtractor,
     // 本地评分+短评缓存(优先读取 Trakt 之外的本地值,提交/更新时写回)
-    private val userReviewRepository: UserReviewRepository
+    private val userReviewRepository: UserReviewRepository,
+    // 观影画像行为记录：只记用户主动完成的剧集，未授权时记录器自己静默返回
+    private val aiProfileBehaviorRecorder: AiProfileBehaviorRecorder
 ) : ViewModel() {
 
     companion object {
@@ -2399,8 +2404,44 @@ class DetailViewModel @Inject constructor(
                     watchedEpisodeNumbers = newWatched,
                     togglingEpisode = null
                 )
+                // 只有「从未看标记为看过」才算完成一集，取消标记不记行为
+                if (!isWatched) recordEpisodeCompleted(seasonNumber, episodeNumber)
             }.onFailure {
                 _uiState.value = _uiState.value.copy(togglingEpisode = null)
+            }
+        }
+    }
+
+    private fun recordEpisodeCompleted(seasonNumber: Int, episodeNumber: Int) {
+        val mediaType = if (currentMediaType == MediaType.SHOW) "show" else "movie"
+        viewModelScope.launch {
+            runCatching {
+                aiProfileBehaviorRecorder.recordNow(
+                    snapshot = MediaSourceSnapshot(
+                        mediaType = mediaType,
+                        tmdbId = currentTmdbId.takeIf { it > 0 },
+                        traktId = currentTraktId.takeIf { it > 0 },
+                        imdbId = currentImdbId.takeIf { it.isNotBlank() },
+                        doubanId = currentDoubanId,
+                        title = _uiState.value.displayTitle.ifBlank { currentTitle },
+                        year = _uiState.value.year,
+                        genres = _uiState.value.genres
+                            .split(Regex("\\s*(?:/|、|,|，)\\s*"))
+                            .map(String::trim)
+                            .filter(String::isNotBlank),
+                        publicRating = _uiState.value.ratings?.traktRating
+                            ?.takeIf { it > 0 }
+                            ?: currentTraktRating.takeIf { it > 0 },
+                        isWatched = true
+                    ),
+                    behavior = AiProfileBehavior.EpisodeCompleted
+                )
+            }.onFailure { error ->
+                Log.d(
+                    "DetailViewModel",
+                    "AI episode behavior recording failed for S${seasonNumber}E${episodeNumber}",
+                    error
+                )
             }
         }
     }

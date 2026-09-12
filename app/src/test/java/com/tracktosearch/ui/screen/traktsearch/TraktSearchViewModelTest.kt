@@ -2,6 +2,8 @@ package com.tracktosearch.ui.screen.traktsearch
 
 import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.ai.AiProfileBehavior
+import com.tracktosearch.data.ai.AiProfileBehaviorRecorder
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktSearchResult
@@ -64,6 +66,7 @@ class TraktSearchViewModelTest {
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
     private val resourceRepository = mockk<ResourceRepository>(relaxed = true)
     private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
+    private val aiProfileBehaviorRecorder = mockk<AiProfileBehaviorRecorder>(relaxed = true)
     private lateinit var viewModel: TraktSearchViewModel
 
     @Test
@@ -135,8 +138,38 @@ class TraktSearchViewModelTest {
             resourceRepository = resourceRepository,
             sessionModeManager = sessionModeManager,
             savedStateHandle = savedStateHandle,
-            context = RuntimeEnvironment.getApplication()
+            context = RuntimeEnvironment.getApplication(),
+            aiProfileBehaviorRecorder = aiProfileBehaviorRecorder
         )
+    }
+
+    @Test
+    fun `点击电影搜索结果_记录搜索点击行为`() = runTest {
+        viewModel = createViewModel()
+
+        viewModel.recordMediaClick(
+            TraktSearchUiItem(
+                traktId = 101,
+                tmdbId = 0,
+                title = "盗梦空间",
+                displayTitle = "盗梦空间",
+                year = 2010,
+                genres = "科幻 · 动作",
+                imdbId = "tt101",
+                traktRating = 8.8
+            ),
+            MediaType.MOVIE
+        )
+        advanceUntilIdle()
+
+        coVerify {
+            aiProfileBehaviorRecorder.recordNow(
+                match { it.mediaType == "movie" && it.tmdbId == null && it.traktId == 101 },
+                AiProfileBehavior.SearchClick,
+                any(),
+                any()
+            )
+        }
     }
 
     // ==================== 测试 ====================

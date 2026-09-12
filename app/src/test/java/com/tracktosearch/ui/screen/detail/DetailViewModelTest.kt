@@ -2,6 +2,8 @@ package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.ui.graphics.Color
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.ai.AiProfileBehavior
+import com.tracktosearch.data.ai.AiProfileBehaviorRecorder
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.LanguageStorage
@@ -81,6 +83,7 @@ class DetailViewModelTest {
     private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
+    private lateinit var aiProfileBehaviorRecorder: AiProfileBehaviorRecorder
 
     private lateinit var viewModel: DetailViewModel
 
@@ -112,6 +115,7 @@ class DetailViewModelTest {
         every { sessionModeManager.sessionMode } returns flowOf(SessionMode.TRAKT)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
+        aiProfileBehaviorRecorder = mockk(relaxed = true)
 
         // 3. init 块副作用 stub
         every { tokenStorage.accessToken } returns flowOf(null)
@@ -135,7 +139,7 @@ class DetailViewModelTest {
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
-            posterColorExtractor, userReviewRepository
+            posterColorExtractor, userReviewRepository, aiProfileBehaviorRecorder
         )
     }
 
@@ -657,6 +661,14 @@ class DetailViewModelTest {
 
         assertThat(viewModel.uiState.value.watchedEpisodeNumbers[1]).contains(1)
         assertThat(viewModel.uiState.value.togglingEpisode).isNull()
+        coVerify {
+            aiProfileBehaviorRecorder.recordNow(
+                match { it.mediaType == "show" && it.traktId == 100 && it.tmdbId == 200 && it.isWatched },
+                AiProfileBehavior.EpisodeCompleted,
+                any(),
+                any()
+            )
+        }
     }
 
     /**
