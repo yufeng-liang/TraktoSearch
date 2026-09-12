@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
@@ -174,6 +175,15 @@ fun SwiftieEraCard(
     } else {
         null
     }
+    // TTPD 那张信纸要写出 `All’s fair in love / and poetry.`：字形轮廓与中线表同样只能
+    // 在组合阶段建（draw 阶段拿不到 resources，也不该每帧再排一次字）。
+    // 别的时代这里是 null，一点不额外算
+    val letterContext = LocalContext.current
+    val letterArt = if (era.motif == SwiftieEraMotif.LETTER_QUILL) {
+        remember(letterContext) { buildSwiftieLetterArt(letterContext) }
+    } else {
+        null
+    }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -299,7 +309,8 @@ fun SwiftieEraCard(
                         // 读一下真时钟就把整块定格的意义抹掉了
                         eraElapsedMs = -1L,
                         loverAimAngle = loverAimAngle(),
-                        evermoreBack = evermoreBack
+                        evermoreBack = evermoreBack,
+                        letterArt = letterArt
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -312,7 +323,8 @@ fun SwiftieEraCard(
                         columnFade = columnFadeAt(elapsed, longTitles, stagger),
                         eraElapsedMs = elapsed,
                         loverAimAngle = loverAimAngle(),
-                        evermoreBack = evermoreBack
+                        evermoreBack = evermoreBack,
+                        letterArt = letterArt
                     )
                 }
             }

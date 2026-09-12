@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Canvas
@@ -112,16 +113,32 @@ private const val SIGNATURE_STILL_PHASE = 0.35f
 /**
  * 一笔的笔心中线，已经按字号缩放、按笔位平移到画布坐标。
  *
+ * **签名与信纸（`SwiftieLetterInk`）共用这一个类**：两者都是「沿中线铺圆头圆接的变宽粗线」，
+ * 差别只在签名铺完要被字形 mask 裁、信纸的墨就是字形本身。
+ *
  * @param halfWidth 每个点上的半宽
  * @param t 每个点的累计时间比例，离线烤好（曲率大处慢、回描段快）
  */
-private class SignatureStroke(
+internal class SignatureStroke(
     val x: FloatArray,
     val y: FloatArray,
     val halfWidth: FloatArray,
     val t: FloatArray,
     val window: SignatureWindow
 ) {
+
+    /** 沿线走到 [progress]（0f..1f）时笔尖在哪。信纸那边用它把羽毛笔钉在笔迹的前沿上。 */
+    fun pointAt(progress: Float): Offset {
+        var head = 0
+        while (head + 1 < t.size && t[head + 1] <= progress) head++
+        if (head + 1 >= t.size) return Offset(x[head], y[head])
+        val span = t[head + 1] - t[head]
+        val fraction = if (span > 1e-6f) ((progress - t[head]) / span).coerceIn(0f, 1f) else 0f
+        return Offset(
+            x[head] + (x[head + 1] - x[head]) * fraction,
+            y[head] + (y[head + 1] - y[head]) * fraction
+        )
+    }
 
     /**
      * 把「写到 [progress] 为止」的墨迹追加到 [into]。
@@ -158,8 +175,11 @@ private class SignatureStroke(
  * 一段变宽的矩形。
  *
  * 法向量取这一段自己的方向 —— 用相邻两段的平均法向在急转处会退化。拐角由 [disc] 补。
+ *
+ * **internal 是为了信纸（`SwiftieLetterInk`）：那一句 `All’s fair in love / and poetry.`
+ * 的墨用的是同一套铺法**，两处的笔性必须逐像素一致。
  */
-private fun quad(
+internal fun quad(
     into: Path,
     fromX: Float, fromY: Float, fromWidth: Float,
     toX: Float, toY: Float, toWidth: Float
@@ -183,7 +203,7 @@ private fun quad(
  * 用两段正角弧拼，绕向（顺时针）与 [quad] 一致：默认的 NonZero 填充下，反绕向的形状会把
  * 重叠处抵消成空洞，而这条带子处处重叠 —— `addOval` 是逆时针的，不能用。
  */
-private fun disc(into: Path, centerX: Float, centerY: Float, radius: Float) {
+internal fun disc(into: Path, centerX: Float, centerY: Float, radius: Float) {
     if (radius <= 0f) return
     val box = Rect(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
     into.arcTo(box, 0f, 180f, forceMoveTo = true)
