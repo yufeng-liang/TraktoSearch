@@ -242,6 +242,10 @@ fun SwiftieEraBackdropLayer(
     // 循环里反复 rewind 的那一条 Path，与 SwiftieEraMotifs / SwiftieEraParticles 同一条铁律
     val scratch = remember { Path() }
     val numerals = rememberClockNumeralLayouts()
+    // 参考图取墨的枫叶（只有 Red 那张的五片大叶用得上）。两张小 PNG 无条件解码 ——
+    // 这一层拿到的号同 `SwiftieEraParticleLayer`：每帧变的时钟派生 lambda，
+    // 在组合阶段读一次就把整层拖成逐帧重组
+    val maple = rememberMapleBentArt()
     Spacer(
         modifier = modifier.fillMaxSize().drawBehind {
             val from = outgoing().coerceIn(0, skies.lastIndex)
@@ -251,12 +255,12 @@ fun SwiftieEraBackdropLayer(
             val eraMs = eraElapsedMs()
             val card = cardBounds()
             if (mix <= 0f || from == to) {
-                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, maple)
             } else {
-                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, maple)
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
-                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam, maple)
             }
         }
     )
@@ -278,7 +282,8 @@ private fun DrawScope.drawStage(
     path: Path,
     shapes: BackdropShapes,
     numerals: List<TextLayoutResult>,
-    lowRam: Boolean
+    lowRam: Boolean,
+    maple: MapleArt
 ) {
     if (alpha <= 0.01f) return
     val stage = SwiftieErasData.STAGE[index]
@@ -291,7 +296,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.FIREFLY_PORCH -> drawFireflyPorch(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.GOLDEN_CASTLE -> drawGoldenCastle(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, alpha)
-        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(path, top, mid, deep, phase, alpha, lowRam)
+        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(path, top, mid, deep, phase, alpha, lowRam, maple)
         SwiftieEraBackdrop.SKYLINE_POLAROIDS ->
             drawSkylinePolaroids(path, top, mid, deep, phase, alpha, shapes)
         SwiftieEraBackdrop.HALFTONE_THRONE ->
@@ -1701,7 +1706,8 @@ private fun DrawScope.drawKnitAutumn(
     deep: Color,
     phase: Float,
     alpha: Float,
-    lowRam: Boolean
+    lowRam: Boolean,
+    maple: MapleArt
 ) {
     val w = size.width
     val h = size.height
@@ -1864,7 +1870,7 @@ private fun DrawScope.drawKnitAutumn(
         )
     }
 
-    drawKnitMaples(path, mid, deep, alpha)
+    drawKnitMaples(maple, mid, deep, alpha)
 }
 
 /** 织物上缘的基准高度。波浪在它上下各 0.027 屏高内摆。 */
@@ -1897,7 +1903,7 @@ private fun knitBoughY(t: Float): Float =
  *
  * x（占屏宽）, y（占屏高）, 半径（占最小边）, 旋转（度）四元组。
  *
- * 旋转都落在 180° 附近（150–214）：[mapleInto] 建的叶子是**尖瓣朝上、叶柄在下**的，
+ * 旋转都落在 180° 附近（150–214）：位图那片叶子是**尖瓣朝上、叶柄在下**的，
  * 转过来叶柄才朝着枝。五片的角度各差二三十度 —— 同一个角度摆五片是贴图。
  *
  * 尺寸拉开到 0.062–0.150（2.4 倍差）：这是唯一能在一层平面上做出景深的手段，
@@ -1915,15 +1921,17 @@ private val KNIT_MAPLES = floatArrayOf(
 )
 
 /**
- * 五片大枫叶：轮廓 + 描边 + 叶柄 + 主脉与四条支脉。
+ * 五片大枫叶：实心填色 + 墨线（叶缘、叶脉、叶柄全在墨线里）。
  *
- * 叶形直接借 `SwiftieEraParticles` 的 [mapleInto]，**不在这里另画一套** ——
- * L2 层飘落的秋叶用的就是它，同一屏上出现两种枫叶比画得糙更糟。
+ * 叶形来自参考图取墨的两张位图（[MapleArt]）—— 与 L2 层飘落的秋叶、杯套上那片刻线
+ * 是**同一片真叶**（同一份 PNG），这里只是换填色（[mid]）与墨线（[deep]）两个颜色，
+ * 不再是为这一处另画一套叶子。换图前这里是「填色 + 描边 + 掌状脉」三笔，
+ * 现在是「实心图 + 墨线图」两笔：轮廓与叶脉在一张图里，天然重合。
  *
  * 近乎不透明（0.92）：它们是这一张的主体，压在淡粉的上半屏上，
- * 半透明会稀释成几团粉影。叶脉只给 0.42 —— 叶脉是压出来的暗痕，画实了像铁丝。
+ * 半透明会稀释成几团粉影。墨线只给 0.45 —— 叶脉是压出来的暗痕，画实了像铁丝。
  */
-private fun DrawScope.drawKnitMaples(path: Path, mid: Color, deep: Color, alpha: Float) {
+private fun DrawScope.drawKnitMaples(maple: MapleArt, mid: Color, deep: Color, alpha: Float) {
     val w = size.width
     val h = size.height
     val u = size.minDimension
@@ -1933,27 +1941,14 @@ private fun DrawScope.drawKnitMaples(path: Path, mid: Color, deep: Color, alpha:
             translate(KNIT_MAPLES[i * 4] * w, KNIT_MAPLES[i * 4 + 1] * h)
             rotate(KNIT_MAPLES[i * 4 + 3], Offset.Zero)
         }) {
-            // seed 固定、round 走序号：五片的瓣长抖动各不相同，但每帧都是同一片
-            mapleInto(path, half, 2012, i)
-            drawPath(path = path, color = mid, alpha = alpha * 0.92f)
-            drawPath(
-                path = path,
-                color = deep,
-                alpha = alpha * 0.50f,
-                style = Stroke(width = u * 0.003f, join = StrokeJoin.Round)
-            )
-            // 叶脉与叶柄走**共用**的掌状脉（`drawMapleVeins`）：与杯套那片刻线、
-            // 飘落的秋叶是同一套（弯曲的支脉 + 收细 + 细羽）。这几片是这一张的主体，
-            // 尺寸也最大，细羽给足才不读成一块红纸
-            drawMapleVeins(
-                ink = deep,
-                half = half,
-                alpha = alpha * 0.40f,
-                strokeWidth = half * 0.024f,
-                feathers = true,
-                // 细羽裁在叶形里，不然下侧瓣的朝下羽会在叶底拖出一圈须
-                clip = path
-            )
+            // 叶柄末端钉在局部原点下方 `MAPLE_STEM_END_R` half（换图前的落点口径）、
+            // 总高 `MAPLE_SPAN` half —— 五片的落点、角度、大小一处都不用重调。
+            // stemEndFrac：这几片用的是**弯柄**那套（参考图的叶柄本来就往左弯），
+            // 锚点跟着叶柄末端走，五片才不会整体横移
+            val height = MAPLE_SPAN * half
+            val stemEnd = Offset(0f, MAPLE_STEM_END_R * half)
+            drawMapleSolid(maple.solid, height, stemEnd, mid, alpha * 0.92f, maple.stemEndFrac)
+            drawMapleInk(maple.ink, height, stemEnd, deep, alpha * 0.45f, maple.stemEndFrac)
         }
     }
 }

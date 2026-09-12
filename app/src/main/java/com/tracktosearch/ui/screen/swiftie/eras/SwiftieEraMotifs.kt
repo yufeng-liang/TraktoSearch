@@ -145,14 +145,20 @@ fun DrawScope.drawEraMotif(
      *
      * 和 [propPhoto] 同一个原因由卡片传进来：文字只能在组合阶段量。
      */
-    textMeasurer: TextMeasurer? = null
+    textMeasurer: TextMeasurer? = null,
+    /**
+     * Red 杯套上那片刻线枫叶的**墨线图**（参考图取墨，见 [MapleArt]）。
+     * 只有 Red 传、且只读墨线那一张 —— 压印不填色，实心图没必要解码。
+     * 为 null 时（没传或还没解码完）只跳过这片叶，杯与字照画。
+     */
+    propMapleInk: ImageBitmap? = null
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
         SwiftieEraMotif.PORCH_GUITAR -> drawPorchGuitar(color, phase, alpha)
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
         SwiftieEraMotif.STAGE_CURTAIN -> drawStageCurtain(color, phase, alpha)
-        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer)
+        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer, propMapleInk)
         SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
         SwiftieEraMotif.LOVER_ARCHER ->
@@ -1142,14 +1148,15 @@ private fun DrawScope.drawRedScarf(
     phase: Float,
     alpha: Float,
     scarf: ImageBitmap?,
-    textMeasurer: TextMeasurer?
+    textMeasurer: TextMeasurer?,
+    mapleInk: ImageBitmap?
 ) {
     knitStripeTexture(color, phase)
     // 位图读不到时（低配机预解压失败之类）就只剩底纹与那杯拿铁，不画半个围巾
     if (scarf != null) drawRedScarfPhoto(scarf, phase, alpha)
     val box = propBox()
     translate(left = box.left, top = box.top) {
-        drawMapleLatte(color, alpha, box.width, box.height, textMeasurer)
+        drawMapleLatte(color, alpha, box.width, box.height, textMeasurer, mapleInk)
     }
 }
 
@@ -1288,9 +1295,10 @@ private const val LATTE_WHITE_GAIN = 1.65f
  *
  * 结构对着实拍照片量过（口径 1.0）：盖是**穹顶圆唇 + 收进去的裙边**（不是三段等宽硬板），
  * 纸套高 0.90 口径并紧贴裙边下沿，套上那片刻线枫叶高 0.855 口径、**不居中**（左偏 0.06）。
- * 叶形借 [drawMapleEmblem]（与背景那五片、飘落的秋叶同一套 [mapleInto]）——
- * 同一屏上出现两种枫叶比画得糙更糟。叶形本身是对着参考图那片刻线真叶复刻的，
- * 细节与三个坑都写在 [mapleInto] 上。
+ * 叶形与叶脉来自**参考图取墨**的墨线位图（[MapleArt]，与背景那五片、飘落的秋叶同一片真叶）——
+ * 同一屏上出现两种枫叶比画得糙更糟。压印只有线、不填色，所以只读 [rememberMapleInkArt] 那一张；
+ * 而且杯套上这片刻线用的是**直柄**那版（背景那套的叶柄按参考图是往左弯的，
+ * 杯套垂直空间窄、柄歪着不好看 —— 用户 2026-09-12 定：杯子的柄保持竖直）。
  *
  * 纸套上还有一行 **MAPLE LATTE**（见 [LATTE_TEXT]），字号按纸套宽度反推。
  * 它要一个 [TextMeasurer]：位图与文字都只能在组合阶段取，所以由 `SwiftieEraCard` 传进来；
@@ -1304,7 +1312,8 @@ private fun DrawScope.drawMapleLatte(
     alpha: Float,
     w: Float,
     h: Float,
-    textMeasurer: TextMeasurer?
+    textMeasurer: TextMeasurer?,
+    mapleInk: ImageBitmap?
 ) {
     val wt = w * LATTE_WT
     val axis = w * LATTE_CX
@@ -1361,7 +1370,6 @@ private fun DrawScope.drawMapleLatte(
     }
 
     val path = Path()
-    val leaf = Path()
 
     // 圆环的前缘：视线在环上方，前缘一律往下鼓 k·半宽（k 由参考图 55px 的平底弧反推）
     fun Path.ringFront(u: Float, width: Float, backwards: Boolean = false) {
@@ -1524,25 +1532,19 @@ private fun DrawScope.drawMapleLatte(
         style = Stroke(width = wt * 0.007f)
     )
 
-    // ── 套上的刻线枫叶（压印，不填色）+ 那行 liner note 密语。序号接在背景那五片之后 ──
-    // 定位要放的是**局部原点**，它在叶柄末端下方之上 MAPLE_ORIGIN_R 个 half ——
-    // 不是 MAPLE_STEM_R（少算 0.55 half，整片叶子连叶柄一起吊到纸套外、穿字而过，真机量过）。
-    // 两个 half 也要分开：算落点用**单位**版、画叶用**像素**版 —— 混着传过一次，
-    // 0.30 × 92.7px 被当成 0.30 口径加到 0.80 上，叶子整体落到 y = -4917（画布外 4900px，
-    // 真机上一个像素都看不见，查了两轮）
-    val leafHalfUnits = LEAF_H / (1f + MAPLE_STEM_R)
-    drawMapleEmblem(
-        path = leaf,
-        half = leafHalfUnits * wt,
-        seed = 2012,
-        round = 5,
-        // 咖啡色刻线（不是时代主色）：这是纸套上的印刷，见 [PROP_ENGRAVE]
-        ink = PROP_ENGRAVE,
-        alpha = alpha * 1.85f,
-        strokeWidth = wt * 0.016f,
-        // 参考图那一片是**刻线**（凹版）：线压在纸里、瓣内满是细羽
-        engraved = true,
-        anchor = Offset(ax(LEAF_DX), ay(LEAF_BASE + MAPLE_ORIGIN_R * leafHalfUnits))
+    // ── 套上的刻线枫叶（压印，不填色）+ 那行 liner note 密语 ──
+    // 取墨位图的锚点就是**叶柄末端**（资产的底边中点），落位直接给 `ay(LEAF_BASE)`。
+    // 换图前这里要算两个 half（先按 1.30 反推叶身半高、再乘 0.85 才落到叶柄末端），
+    // 那一步正是当年「整片叶子连叶柄吊到纸套外、穿字而过」与「落到 y = -4917」两次事故所在；
+    // 「叶柄末端在资产的哪个位置」现在烘在 PNG 里，这一层算术没有了
+    drawMapleInk(
+        line = mapleInk,
+        height = LEAF_H * wt,
+        stemEnd = Offset(ax(LEAF_DX), ay(LEAF_BASE)),
+        // 咖啡色刻线（不是时代主色）：这是纸套上的印刷，见 [PROP_ENGRAVE]。
+        // 线宽烘在墨线图里（照片那条刻线折到设备尺度约 1.8px），不再给 strokeWidth
+        color = PROP_ENGRAVE,
+        alpha = alpha * 1.85f
     )
     if (textMeasurer != null) {
         val inkAlpha = (alpha * 1.85f).coerceAtMost(1f)

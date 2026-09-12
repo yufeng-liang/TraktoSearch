@@ -177,6 +177,9 @@ fun SwiftieEraCard(
         else -> null
     }
     val propPhoto = photoRes?.let { ImageBitmap.imageResource(it) }
+    // 杯套上那片刻线枫叶（参考图取墨，见 [MapleArt]）。与 propPhoto 同一条门控：
+    // 只有 Red 解这一张 14.6KB 的墨线图，另外 11 张卡片连这次解码都不做
+    val propMapleInk = if (era.motif == SwiftieEraMotif.RED_SCARF) rememberMapleInkArt() else null
     // 画布上排字用的测量器：只有 Red 的纸套要印一行 MAPLE LATTE。与照片同理，
     // 文字只能在组合阶段量；其余 11 张卡拿到这个对象也不会去量
     val textMeasurer = rememberTextMeasurer()
@@ -303,7 +306,8 @@ fun SwiftieEraCard(
                         eraElapsedMs = -1L,
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
-                        textMeasurer = textMeasurer
+                        textMeasurer = textMeasurer,
+                        propMapleInk = propMapleInk
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -317,7 +321,8 @@ fun SwiftieEraCard(
                         eraElapsedMs = elapsed,
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
-                        textMeasurer = textMeasurer
+                        textMeasurer = textMeasurer,
+                        propMapleInk = propMapleInk
                     )
                 }
             }
