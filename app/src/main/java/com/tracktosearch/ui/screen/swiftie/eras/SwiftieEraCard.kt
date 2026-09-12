@@ -22,10 +22,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -165,6 +167,13 @@ fun SwiftieEraCard(
     val longTitles = remember(era) {
         BooleanArray(era.tracks.size) { era.tracks[it].length > LONG_TITLE_CHARS }
     }
+    // evermore 的母题是照片抠图（其余母题仍是线画）：位图只能在组合阶段读，
+    // draw 阶段（drawBehind）拿不到 resources。别的时代这里就是 null，不额外解码
+    val evermoreBack = if (era.motif == SwiftieEraMotif.BRAID_PLAID) {
+        ImageBitmap.imageResource(R.drawable.era_evermore_back)
+    } else {
+        null
+    }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -286,7 +295,8 @@ fun SwiftieEraCard(
                         // -1 = 定格档。Lover 那把弓因此永远停在松弦上着箭的静态，
                         // 读一下真时钟就把整块定格的意义抹掉了
                         eraElapsedMs = -1L,
-                        loverAimAngle = loverAimAngle()
+                        loverAimAngle = loverAimAngle(),
+                        evermoreBack = evermoreBack
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -298,7 +308,8 @@ fun SwiftieEraCard(
                         // 长歌名会横穿右侧那一列，那几行点亮时道具让位（见 columnFadeAt）
                         columnFade = columnFadeAt(elapsed, longTitles, stagger),
                         eraElapsedMs = elapsed,
-                        loverAimAngle = loverAimAngle()
+                        loverAimAngle = loverAimAngle(),
+                        evermoreBack = evermoreBack
                     )
                 }
             }
