@@ -12,18 +12,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.R
+import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -78,10 +84,12 @@ private val NO_COLLAPSE: () -> Float = { 0f }
 /**
  * 一张专辑的完整曲目列：逐行点亮（Spec §6.2），序列末尾自下而上卷收。
  *
- * 曲目名**不用**时代字体 —— 那些字体按专辑名逐个子集化，拿来画曲目全是豆腐块。
- * 只借该时代的主色。
+ * 曲目名**不借时代字体** —— 那 12 个字库是按专辑名逐个子集化的，只含那几个字，
+ * 拿来画曲目全是豆腐块；TTPD 那张用打字机字体（`era_typewriter`，按 31 首的曲名与
+ * 数字做的子集），是因为页面上真的有一台打字机把这一列打出来（见 [typingRow]）。
  *
- * @param eraIndex 这是第几张，只用来判「哪一行要描金」（见 [gildedRowIndex]）
+ * @param eraIndex 这是第几张。判「哪一行要描金」（见 [gildedRowIndex]）与
+ *   「这一列是不是打出来的」（TTPD）
  * @param elapsedInCard 这张卡片自己的已用毫秒
  * @param textColors 压暗到 AA 的一组文字色，由卡片算好传进来（见 `SwiftieEraContrast`）
  * @param rowHeight 单行行高，由卡片按可用高度与曲目数算好（见 `trackRowHeight`）。
@@ -101,6 +109,14 @@ internal fun SwiftieEraTracklist(
     val lowRam = rememberIsLowRamDevice()
     val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
     val gildedRow = gildedRowIndex(eraIndex)
+    // TTPD 那一张的曲目列是**打字机打的**：字号换 Special Elite（子集化的打字机字体），
+    // 逐行点亮换成「打字头从左往右走过一行」。其余 11 张与压缩前逐像素一致
+    val typed = eraIndex == SwiftieTimeline.TTPD_INDEX
+    val titleFont = if (typed) {
+        FontFamily(Font(R.font.era_typewriter))
+    } else {
+        FontFamily.Default
+    }
 
     // 字号用 Dp.toSp() 折算，**不跟系统字号走**。
     //
@@ -114,14 +130,19 @@ internal fun SwiftieEraTracklist(
     // 16dp 行高换算出 12sp / 11sp，与压缩前逐像素一致；压到 12dp 就是 9sp / 8.25sp
     val density = LocalDensity.current
     val numberWidth = rowHeight * 1.375f
-    val numberStyle = remember(textColors, rowHeight, density) {
+    val numberStyle = remember(textColors, rowHeight, density, titleFont) {
         TextStyle(
+            fontFamily = titleFont,
             fontSize = with(density) { (rowHeight * 0.6875f).toSp() },
             color = textColors.number.copy(alpha = SwiftieEraContrast.NUMBER_ALPHA)
         )
     }
-    val titleStyle = remember(textColors, rowHeight, density) {
-        TextStyle(fontSize = with(density) { (rowHeight * 0.75f).toSp() }, color = textColors.body)
+    val titleStyle = remember(textColors, rowHeight, density, titleFont) {
+        TextStyle(
+            fontFamily = titleFont,
+            fontSize = with(density) { (rowHeight * 0.75f).toSp() },
+            color = textColors.body
+        )
     }
     // derivedStateOf：布尔量不变就不通知读者，所以卷收之前这一列的**布局**一帧都不失效。
     // 直接在 layout 里读 collapseProgress() 会让整段 96 秒每帧重测一遍所有行
@@ -153,16 +174,37 @@ internal fun SwiftieEraTracklist(
                 modifier = Modifier
                     .fillMaxWidth()
                     .collapsingRow(rowHeight, collapsing, rowCollapse)
-                    // 在 graphicsLayer 里读时钟：每帧只失效 draw，不重组
-                    .graphicsLayer {
-                        val reveal = ((elapsedInCard() - appearAt) / TRACK_FADE_MS)
-                            .coerceIn(0f, 1f)
-                        // alpha 在收起走到 70% 时就归零：高度还在收，字已经看不见了，
-                        // 于是永远看不到「字被行高横切一半」那一帧
-                        val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
-                        alpha = reveal * (1f - shrink)
-                        translationY = (1f - reveal) * 10.dp.toPx()
-                    }
+                    .then(
+                        if (typed) {
+                            // 打字那一张：**没有淡入也没有位移**，整行靠打字头揭示 ——
+                            // alpha 只留给卷收（见下）
+                            Modifier
+                                .graphicsLayer {
+                                    val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
+                                    alpha = 1f - shrink
+                                }
+                                .typingRow(
+                                    progress = {
+                                        ((elapsedInCard() - appearAt).toFloat() / stagger)
+                                            .coerceIn(0f, 1f)
+                                    },
+                                    rowHeight = rowHeight,
+                                    cursor = textColors.number,
+                                    elapsedInCard = elapsedInCard
+                                )
+                        } else {
+                            // 在 graphicsLayer 里读时钟：每帧只失效 draw，不重组
+                            Modifier.graphicsLayer {
+                                val reveal = ((elapsedInCard() - appearAt) / TRACK_FADE_MS)
+                                    .coerceIn(0f, 1f)
+                                // alpha 在收起走到 70% 时就归零：高度还在收，字已经看不见了，
+                                // 于是永远看不到「字被行高横切一半」那一帧
+                                val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
+                                alpha = reveal * (1f - shrink)
+                                translationY = (1f - reveal) * 10.dp.toPx()
+                            }
+                        }
+                    )
                     .then(
                         if (gilded) {
                             Modifier.gildedRow(
@@ -222,6 +264,53 @@ private fun Modifier.collapsingRow(
         full
     }
     layout(placeable.width, height) { placeable.place(0, 0) }
+}
+
+/** 打字头眨眼的周期。与方块游标（`SwiftieEraMotifs` 信纸上那个）同一档速度。 */
+private const val TYPING_HEAD_BLINK_MS = 420L
+
+/**
+ * 打字头走过一行。
+ *
+ * ## 为什么不是淡入
+ *
+ * TTPD 这一列是那台打字机打出来的：字从左往右**一个字一个字落上去**，落下的地方压着
+ * 一块方块游标（就是机器上的印字点）。淡入读作「点亮」，与屏幕上正在发生的事对不上。
+ *
+ * 行距 [stagger]（130ms）正好是打字头走到下一行的时间，所以任何一帧**只有一行**
+ * 正在被打 —— 真机也只有一根字锤。揭示就是裁一刀，字形被拦腰截断的那半个字由游标
+ * 压着，看不见切口。
+ *
+ * clip 而不是 `graphicsLayer`：`graphicsLayer` 只能整体设 alpha 或做仿射变换，
+ * 而揭示边要停在行里任意位置，只能在绘制时裁。
+ *
+ * @param progress 0f..1f 的打字进度。**在绘制阶段读**（读的是时钟），不引起重组
+ * @param cursor 游标色。取序号那一档 —— 比正文浅，压在前沿上不抢字
+ */
+private fun Modifier.typingRow(
+    progress: () -> Float,
+    rowHeight: Dp,
+    cursor: Color,
+    elapsedInCard: () -> Long
+): Modifier = drawWithContent {
+    // clipRect 的 block 换过接收者（DrawScope），`drawContent()` 要用显式接收者才调得到
+    val content = this
+    val p = progress()
+    if (p <= 0f) return@drawWithContent
+    if (p >= 1f) {
+        content.drawContent()
+        return@drawWithContent
+    }
+    clipRect(right = size.width * p) { content.drawContent() }
+    // 游标：只占行高的一半多一点。齐行高的竖条读起来是「文本插入符」而不是字锤，
+    // 而这台机器上落下来的是一小块方形印字头
+    if ((elapsedInCard() / TYPING_HEAD_BLINK_MS) % 2L != 0L) return@drawWithContent
+    val headW = (rowHeight.toPx() * 0.17f).coerceAtLeast(1f)
+    drawRect(
+        color = cursor,
+        topLeft = Offset(size.width * p - headW * 0.5f, size.height * 0.22f),
+        size = Size(headW, size.height * 0.56f)
+    )
 }
 
 /**
