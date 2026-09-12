@@ -43,7 +43,7 @@ private const val TAG = "SwiftieEggPreview"
  * 互相覆盖安装。
  *
  * 正式包里那条路走不通 —— 彩蛋压在一道算术题（`X + 87 = 100`）之后，且只能从头顺序播，
- * TTPD 那张卡片（索引 10）要等 80 多秒才到；而那台打字机的独奏前摇只有 1400ms，
+ * TTPD 那张卡片（索引 10）要等 80 多秒才到；而那台打字机的独奏前摇只有 2600ms，
  * 改一处机械细节要按分钟计才能看到一次。预览宿主挂 `@AndroidEntryPoint`：
  * 彩蛋页会通过 `hiltViewModel()` 获取昵称 ViewModel，如果宿主不接入 Hilt，
  * 页面在首次组合时会直接崩溃，连视觉预览都进不去。
@@ -113,7 +113,7 @@ class SwiftieEggPreviewActivity : ComponentActivity() {
         }
         val era = intent.longExtraOrNull(EXTRA_ERA)?.toInt() ?: return null
         val index = era.coerceIn(0, SwiftieTimeline.ERA_TRACK_COUNTS.lastIndex)
-        // TTPD 段头那 1400ms 是打字机独奏（卡片还没出纸），落点要把它加回去，
+        // TTPD 段头那 2600ms 是打字机独奏（卡片还没出纸），落点要把它加回去，
         // 不然这一张截出来是「机器 + 半张纸」，和其余 11 张不是同一个时刻
         val preroll = if (index == SwiftieTimeline.TTPD_INDEX) SwiftieTimeline.TTPD_PREROLL_MS else 0L
         return (SwiftieTimeline.eraStartMs(index) + preroll + ERA_SETTLE_MS)

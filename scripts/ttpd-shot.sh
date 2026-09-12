@@ -23,10 +23,9 @@
 #     type4  出纸落位 —— 整张纸坐定、机器在屏幕底下（与 era11 的时刻不同：
 #           这一拍只等纸，不等 31 行曲目点完）
 #
-# typeN 的毫秒**从源码现算**，绝不抄一份常量表进 shell：独奏那 1400ms 由
-# SwiftieTimeline.TTPD_PREROLL_MS 定、行节拍由 SwiftieEraBackdrop 的
-# TYPE_LINE_MS / TYPE_LINE_SPAN 定、出纸时长由 SwiftieEraCard 的 CARD_FEED_MS 定，
-# 三处任何一处被调，这里跟着走（egg-shot.sh 对 eraN 就是这么处理的）。
+# typeN 的毫秒**从源码现算**，绝不抄一份常量表进 shell：独奏时长由
+# SwiftieTimeline.TTPD_PREROLL_MS 定、出纸时长由 SwiftieEraCard 的 CARD_FEED_MS 定，
+# 两处任何一处被调，这里跟着走（egg-shot.sh 对 eraN 就是这么处理的）。
 #
 # 环境变量：
 #   ANDROID_SERIAL   多设备时指定目标（adb 自己认这个变量）
@@ -97,25 +96,27 @@ era_start() {
 
 # ── 打字机的四个瞬间，全部现算 ────────────────────────────────────
 #
-# 前两拍落在 TTPD 段头那 1400ms 独奏里（era_start 就是独奏起点，还没有卡片），
+# 前两拍落在 TTPD 段头那 TTPD_PREROLL_MS 独奏里（era_start 就是独奏起点，还没有卡片）。
+# 节拍按**字符**均分（见 SwiftieEraBackdrop 的 drawTypewriterStub / stubUnits）：
+# 打的是 Fortnight 那句，第一行 `I love you,`（11 字）、第二行 `it's ruining my life`（20 字），
+# 中间的回车占两个字符单位，共 35 个 —— 回车落在 12/35 ≈ 34%。
+# 所以前两拍写成**前摇的百分比**：前摇一改，两拍跟着走（字符数不变时）。
 # 后两拍是出纸：起点 + 前摇 + 出纸时长的一半 / 走完再停半秒。
 type_ms() {
-  local start strike line span_pct feed preroll
+  local start feed preroll
   start="$(era_start "$(num "$TIMELINE" 'const val TTPD_INDEX')")"
-  strike="$(num "$BACKDROP" 'const val TYPE_STRIKE_MS')"
-  line="$(num "$BACKDROP" 'const val TYPE_LINE_MS')"
-  # TYPE_LINE_SPAN 是 Float（写成 0.88f），num() 的整数正则取不到，单独转成百分比：
-  # 一行里前 88% 在打字，余下的 12%（150ms）是回车横扫
-  span_pct="$(grep -m1 'const val TYPE_LINE_SPAN' "$BACKDROP" \
-    | grep -oE '= *[0-9.]+' | grep -oE '[0-9.]+' | awk '{printf "%d", $1 * 100}')"
   feed="$(num "$CARD" 'const val CARD_FEED_MS')"
   preroll="$(num "$TIMELINE" 'const val TTPD_PREROLL_MS')"
   case "$1" in
-    # 第 8 次锤击的峰值时刻（lift 抬到顶）：打字点在行内约六成处，行画了一半多
-    1) echo $(( start + strike * 7 + strike * 35 / 100 )) ;;
-    # 横扫中点：line × (88% + 12%/2)
-    2) echo $(( start + line * (span_pct + (100 - span_pct) / 2) / 100 )) ;;
+    # 第一行打到中间：打字头停在字当中（11 字的第一行走到 5~6 个），
+    # 一半的字符已经落上去
+    1) echo $(( start + preroll * 16 / 100 )) ;;
+    # 回车：第一行刚打完，纸正往上走一行（两行都在，第二行还没开始）
+    2) echo $(( start + preroll * 36 / 100 )) ;;
+    # 出纸半程：卡片升到一半、滚筒暗影压在纸上（feedProgress ≈ 0.5）
     3) echo $(( start + preroll + feed / 2 )) ;;
+    # 出纸落位：整张纸坐定、机器在屏幕底下（与 era11 的时刻不同：
+    # 这一拍只等纸，不等 31 行曲目点完）
     4) echo $(( start + preroll + feed + 500 )) ;;
     *) die "typeN 的 N 只能是 1..4：type$1" ;;
   esac

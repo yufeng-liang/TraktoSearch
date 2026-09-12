@@ -53,15 +53,17 @@ object SwiftieTimeline {
     /**
      * TTPD 段开头留给打字机独奏的前摇。
      *
-     * 这 1400ms 里屏幕上**没有卡片**：背景那台打字机自己敲字、滑架逐格右移，
-     * 1250ms 一次回车横扫，然后纸才从滚筒出来 —— 卡片就是那张纸（见 `SwiftieEraCard`
-     * 的 `feedProgress`）。没有这一拍，纸是「凭空长出来的」，打字机白画。
+     * 这 2600ms 里屏幕上**没有卡片**：背景那台打字机自己敲两行字（专辑名断开的那两行，
+     * 见 `SwiftieEraBackdrop` 的 `rememberTypewriterStubLines`），然后纸才从滚筒出来
+     * —— 卡片就是那张纸（见 `SwiftieEraCard` 的 `feedProgress`）。没有这一拍，
+     * 纸是「凭空长出来的」，打字机白画。
      *
-     * 加在账本上而不是从 TTPD 自己的 5000ms 静置里挪：静置那段是 31 行读完之后
-     * 留给眼睛的，挪走就变成「行刚点完就收卡」。代价是唯一的弹性段
-     * [FINAL_HOLD_MS] 从 6090ms 缩到 4690ms（需求方已确认）。
+     * 从 1400ms 拉到 2600ms 正好是**两整行**：一行打完要有时间读出来，「打一行就出纸」
+     * 读不出打字机的样子。加在账本上而不是从 TTPD 自己的 5000ms 静置里挪：静置那段是
+     * 31 行读完之后留给眼睛的，挪走就变成「行刚点完就收卡」。代价是唯一的弹性段
+     * [FINAL_HOLD_MS] 从 4690ms 缩到 3490ms（需求方已确认）。
      */
-    const val TTPD_PREROLL_MS: Long = 1_400L
+    const val TTPD_PREROLL_MS: Long = 2_600L
 
     /**
      * 12 张专辑曲目数，顺序与 Eras 一致。

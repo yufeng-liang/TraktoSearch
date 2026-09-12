@@ -277,8 +277,11 @@ fun SwiftieEraCard(
             .then(feedModifier)
             .shadow(elevation = 10.dp, shape = CARD_SHAPE, clip = false)
             .clip(CARD_SHAPE)
-            // 半透明白纸压在水彩天空上；主色只染一层薄底
-            .background(Color.White.copy(alpha = 0.86f))
+            // 半透明白纸压在水彩天空上；主色只染一层薄底。
+            // **出纸那一张（TTPD）是不透明的**：它正下方就是那台打字机与滚筒上打好的两行字，
+            // 0.86 的白会把机身的滚轮、压纸杆和那两行字一起透上来，读作「印花了」——
+            // 其余 11 张底下只有天空，透一点反而好看，这一张不行
+            .background(if (feedProgress == null) Color.White.copy(alpha = 0.86f) else Color.White)
             .drawBehind {
                 drawRect(color = era.mainColor, alpha = 0.10f)
                 // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
