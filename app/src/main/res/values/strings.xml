@@ -2158,7 +2158,6 @@ Config:
     <string name="privacy_tech_b1">On device: credentials and tokens use EncryptedSharedPreferences backed by Android Keystore; lists, sync records, ratings and progress use a SQLCipher-encrypted database</string>
     <string name="privacy_tech_b2">Network requests: HTTPS and gateway JWT authentication relay upstream requests; the client never carries Worker Secrets</string>
     <string name="privacy_tech_b3">Server: protected cloud sync data and credentials are encrypted by the Worker with server-side secrets; those keys are never shipped in the APK</string>
-    <string name="privacy_hero_title">Your data, your choice</string>
     <string name="privacy_hero_desc">Your records stay on the device first. When a feature needs the network, this page explains what leaves the device and why.</string>
     <string name="privacy_flow_title">Live data flow</string>
     <string name="privacy_flow_live">Animated example</string>

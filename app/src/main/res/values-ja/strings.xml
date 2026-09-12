@@ -2163,7 +2163,6 @@
     <string name="privacy_tech_b1">端末内：資格情報とトークンは Android Keystore に保護された EncryptedSharedPreferences を使用。リスト、同期記録、評価、進捗は SQLCipher 暗号化データベースに保存します</string>
     <string name="privacy_tech_b2">通信：HTTPS とゲートウェイ JWT 認証で上流リクエストを中継し、クライアントは Worker Secret を保持しません</string>
     <string name="privacy_tech_b3">サーバー：保護対象のクラウド同期データと資格情報は Worker がサーバー側の Secret で暗号化します。鍵は APK に含まれません</string>
-    <string name="privacy_hero_title">データはあなたが決める</string>
     <string name="privacy_hero_desc">視聴記録はまず端末に保存されます。通信が必要な機能では、送信する内容と理由をここで説明します。</string>
     <string name="privacy_flow_title">データフローの実演</string>
     <string name="privacy_flow_live">アニメーション例</string>

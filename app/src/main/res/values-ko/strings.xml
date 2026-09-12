@@ -2163,7 +2163,6 @@
     <string name="privacy_tech_b1">기기 내: 자격 증명과 토큰은 Android Keystore가 보호하는 EncryptedSharedPreferences를 사용합니다. 리스트, 동기화 기록, 평점과 진행도는 SQLCipher 암호화 데이터베이스에 저장합니다</string>
     <string name="privacy_tech_b2">네트워크 요청: HTTPS와 게이트웨이 JWT 인증으로 상위 요청을 중계하며 클라이언트는 Worker Secret을 보유하지 않습니다</string>
     <string name="privacy_tech_b3">서버: 보호되는 클라우드 동기화 데이터와 자격 증명은 Worker가 서버 측 Secret으로 암호화합니다. 키는 APK에 포함되지 않습니다</string>
-    <string name="privacy_hero_title">데이터는 내가 결정합니다</string>
     <string name="privacy_hero_desc">시청 기록은 먼저 기기에 남습니다. 네트워크가 필요한 기능은 무엇을 왜 보내는지 이곳에서 설명합니다.</string>
     <string name="privacy_flow_title">데이터 흐름 실시간 예시</string>
     <string name="privacy_flow_live">애니메이션 예시</string>

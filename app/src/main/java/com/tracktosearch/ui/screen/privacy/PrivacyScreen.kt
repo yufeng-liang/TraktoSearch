@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Insights
@@ -364,15 +365,6 @@ private fun PrivacySummaryCard() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = stringResource(R.string.privacy_hero_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
                 text = stringResource(R.string.privacy_hero_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -387,7 +379,7 @@ private fun PrivacySummaryCard() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 PrivacyBadgePill(
-                    icon = Icons.Rounded.Shield,
+                    icon = Icons.Rounded.Code,
                     text = stringResource(R.string.privacy_badge_b1)
                 )
                 Spacer(modifier = Modifier.width(8.dp))

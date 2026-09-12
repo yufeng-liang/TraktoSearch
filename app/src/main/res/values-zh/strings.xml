@@ -2151,7 +2151,6 @@
     <string name="privacy_tech_b1">手机本地：凭据与令牌使用由 Android Keystore 保护的 EncryptedSharedPreferences；片单、同步记录、评分与进度使用 SQLCipher 加密数据库</string>
     <string name="privacy_tech_b2">联网请求：经 HTTPS 与网关 JWT 鉴权转发上游请求，客户端不携带 Worker Secret</string>
     <string name="privacy_tech_b3">服务端：云端同步数据与凭据等受保护数据由 Worker 使用服务端密钥透明加密，密钥不随 APK 分发</string>
-    <string name="privacy_hero_title">数据，由你决定</string>
     <string name="privacy_hero_desc">观影记录先留在手机上；功能确实需要联网时，这里会说明发送什么、为什么发送。</string>
     <string name="privacy_flow_title">数据流转实况</string>
     <string name="privacy_flow_live">动画示意</string>
