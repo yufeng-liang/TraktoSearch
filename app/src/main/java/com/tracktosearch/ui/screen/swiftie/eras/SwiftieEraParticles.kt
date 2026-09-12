@@ -12,8 +12,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
@@ -22,6 +24,8 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -50,8 +54,11 @@ private val NEEDLE_MOSS = Color(0xFF67705C)
  * `SwiftieGlitterHearts` 那套 `travel % 1f` 会让同一个个体每一趟都从**同一个 x、
  * 同一个尺寸**再来一遍。灯箱只闪几秒看不出来，背景层一段要待十秒以上，
  * 第二趟落回第一趟的轨迹上就被看穿了。
+ *
+ * `SwiftieEraMotifs` 也用它铺纸套的软木颗粒（salt 当「第几种属性」用、round 恒 0），
+ * 所以是 internal。
  */
-private fun hash01(seed: Int, round: Int, salt: Int): Float {
+internal fun hash01(seed: Int, round: Int, salt: Int): Float {
     var h = (seed * 0x1b873593) xor (round * 0x27d4eb2d) xor (salt * 0x165667b1)
     h = h xor (h ushr 15)
     h *= 0x2545f491
@@ -454,46 +461,410 @@ private fun DrawScope.drawGoldFlakes(
 }
 
 /**
- * 枫叶第 `lobe` 瓣（0..4）的方向，弧度，y 向下。相邻两瓣差 35°。
+ * 枫叶第 `lobe` 瓣（0..4）的方向，弧度，y 向下。
  *
- * 与 [mapleInto]、[mapleTipRadius] 一起给 `SwiftieEraBackdrop` 的 Red 背景共用 ——
- * 那一张的主体是搭在枯枝上的几片大枫叶，**必须与飘落的这些是同一片叶子**，
- * 各画一套的话同一屏上会出现两种枫叶。
+ * **角距是不均匀的**：[MAPLE_ANGLE] 那五个角对着参考图 `cup-sleeve-leaf.jpg` 逐瓣量的 ——
+ * 顶瓣与两侧那两瓣挤在一起（各差 30°），下侧两瓣被甩开（各差 67°）并且**略低于水平**
+ * （角为正 ⇒ 瓣尖落在叶柄根之下）。原来按 37.5° 等分，五瓣摊成一把匀称的扇子，
+ * 读起来就是「宽、短、不像枫叶」（用户 2026-09-12 的第二轮返工）。
+ *
+ * 与 [mapleInto]、[mapleTipRadius]、[drawMapleEmblem] 一起给三处共用：
+ * `SwiftieEraBackdrop` 的 Red 背景（填色的大叶）、L2 层飘落的秋叶、
+ * 以及 Red 卡片上枫糖拿铁纸套的刻线徽记。**同一屏上出现两种枫叶比画得糙更糟**，
+ * 所以叶形只有这一套式子，要改就三处一起改。
  */
-internal fun mapleTipAngle(lobe: Int): Float = (-160f + lobe * 35f) * PI.toFloat() / 180f
+internal fun mapleTipAngle(lobe: Int): Float = MAPLE_ANGLE[lobe] * DEG_TO_RAD
 
-/** 中间那瓣最长、两侧渐短。五瓣等长就成了海星。 */
-internal fun mapleTipRadius(half: Float, lobe: Int): Float =
-    half * (0.62f + 0.38f * sin(lobe / 4f * PI.toFloat()))
+/** 五瓣的方向（度，y 向下 ⇒ 上 = 负）。下左 / 上左 / 顶 / 上右 / 下右。 */
+private val MAPLE_ANGLE = floatArrayOf(-187f, -120f, -90f, -60f, 7f)
 
 /**
- * 叶柄根在 `(0, half * 0.55f)`，五个尖瓣从这里散开，瓣间四个凹口。
+ * 中间那瓣最长、两侧渐短、下侧那两瓣最短。
+ *
+ * 对着参考图那片真叶量的「瓣尖到叶柄根」：顶瓣 1.00、上侧两瓣 0.80、下侧两瓣 0.62。
+ * 五瓣等长就成了海星；而按 0.75/0.95/1.0 那种「扇面」分配，整片会**宽而短**
+ * （宽/高 ≈ 2.0，真叶只有 ≈ 1.2）。
+ */
+internal fun mapleTipRadius(half: Float, lobe: Int): Float =
+    half * MAPLE_TIP_R[lobe]
+
+/** 五瓣长度（/ 顶瓣半径）：下左 / 上左 / 顶 / 上右 / 下右。 */
+private val MAPLE_TIP_R = floatArrayOf(0.62f, 0.795f, 1.00f, 0.795f, 0.62f)
+
+/**
+ * 四道凹口的深度，占相邻两瓣中较短那一瓣的比例。
+ *
+ * 参考图里四道凹口都是**很深的 V**（底到叶柄根只有瓣长的 0.38~0.53）——
+ * 深凹口是「五个瓣」而不是「一块叶子」的唯一证据。紧挨顶瓣那两道 0.53、
+ * 外侧那两道 0.38（外侧那两道夹在同样长的两瓣之间，切太深会把瓣削成针）。
+ */
+private val MAPLE_NOTCH = floatArrayOf(0.38f, 0.53f, 0.53f, 0.38f)
+
+/** 圆齿的高度 / 齿间内收（占该瓣瓣尖半径）：参考图的齿很浅，齿间几乎不回凹。 */
+private const val MAPLE_SCALLOP_OUT = 0.024f
+private const val MAPLE_SCALLOP_IN = 0.003f
+
+/** 齿数按边长自适应：每 [MAPLE_SCALLOP_PER] × half 边长一颗（长边多、短边少）。 */
+private const val MAPLE_SCALLOP_PER = 0.165f
+
+/** 齿只铺在边的这一段比例内，两端留直段 —— **瓣尖必须干净**（参考图如此）。 */
+private const val MAPLE_SCALLOP_T0 = 0.10f
+private const val MAPLE_SCALLOP_T1 = 0.90f
+
+/** 短于这个（× half）的边不铺齿：齿挤在短边上比不放更糟。 */
+private const val MAPLE_SCALLOP_MIN_LEN = 0.10f
+
+/**
+ * 圆齿朝哪一侧凸：边方向转 ±90° 的那个符号，**全条路径共用**。
+ *
+ * 由绕行方向定（本叶形自叶柄根出发、逆时针绕一圈），-1 是离线探针逐边验过的
+ * （`build/egg-shots/maple_shape_v5.py`：6 组抖动全部 0 段自交、填充无空洞）。
+ */
+private const val MAPLE_EDGE_SIDE = -1f
+
+/** 叶柄根上方那道「基部楔尖」的高度（/ half）。参考图的叶底就是**贴叶柄根的浅 V**。 */
+private const val MAPLE_BASE_R = 0.08f
+
+/** 叶柄长（/ half）。参考图里叶柄 ≈ 0.30 × 叶身高（叶身高 = 1.0 half）。 */
+internal const val MAPLE_STEM_R = 0.30f
+
+/** 叶柄根在叶片局部坐标里的 y（/ half）：局部原点在叶柄根上方这么远。 */
+internal const val MAPLE_BASE_Y = 0.55f
+
+/**
+ * 局部原点 → **叶柄末端** 的距离（/ half）= [MAPLE_BASE_Y] + [MAPLE_STEM_R]。
+ *
+ * 调用方反推完 half、要定 `anchor` 时必须乘这个数（整叶总高仍是 `1.0 + MAPLE_STEM_R`）：
+ * 只乘 [MAPLE_STEM_R] 会把整片叶子多往下放 0.55 half —— 杯套那回叶柄就是这么穿过
+ * "MAPLE LATTE" 吊到纸套外面的（真机量到叶柄末端在 0.57 口径处，本该是 0.82）
+ */
+internal const val MAPLE_ORIGIN_R = MAPLE_BASE_Y + MAPLE_STEM_R
+
+/** 叶脉锥度：从叶柄根到瓣尖分三段，每段各乘一档线宽。 */
+private val MAPLE_VEIN_TAPER = floatArrayOf(1.00f, 0.70f, 0.45f)
+
+/** 支脉的弯：控制点从中点往「朝叶尖那侧」推的距离 = 瓣尖半径 × 该值。主脉只推 1/3。 */
+private const val MAPLE_VEIN_BOW = 0.14f
+
+/** 细羽：每侧笔数、与支脉的夹角（度）、长度（占瓣尖半径）。 */
+private const val MAPLE_FEATHER_COUNT = 6
+private const val MAPLE_FEATHER_DEG = 38f
+private const val MAPLE_FEATHER_LEN = 0.24f
+
+/** 度 → 弧度。这个文件里的角度常量按「度」写（读得懂），只有进 cos/sin 时才换。 */
+private const val DEG_TO_RAD = PI.toFloat() / 180f
+
+/**
+ * 叶柄根在 `(0, half * MAPLE_BASE_Y)`，五个尖瓣从这里散开，瓣间四道凹口，每瓣两侧各带小锯齿。
+ *
+ * 这一版是照着参考图 `ref-red/cup-sleeve-leaf.jpg`（杯套上那片压印的糖枫）**复刻**的：
+ * 五瓣长三角形、瓣的边是直线、两边各有 3 颗越靠瓣尖越大的齿、底部收成一个楔子、
+ * 叶柄细长。三个坑记在这儿：
+ * 1. 叶缘的圆齿外凸方向 = **边方向转 [MAPLE_EDGE_SIDE]×90° 的外法线**（整条路径同一个符号）。
+ *    两条都栽过：逐边自己判「哪侧朝外」会有一半的瓣把齿长成钩子；后来改用
+ *    「从叶柄根往外的径向」又栽在**基部** —— 那两条边几乎与径向平行，齿横切出去
+ *    与邻边交叉，NonZero 填充抵消掉交叉小环，**叶根被挖空**（背景那几片真机上两块空白）。
+ * 2. 凹口不能做成「同一角线上前后两点」那种细缝：缝口虽细，但两瓣的边要在缝里
+ *    几乎拐直角，瓣就成了一根根刺（像海星）。现在凹口就是**一个点**，两条直边在
+ *    那里相交成一个 V —— 瓣自然成三角形。
+ * 3. 五瓣**不能等长**、角距也不能一样大：等长等距 = 海星。
  *
  * 每一瓣的长度**各自**抖一次（不是整片一起缩放）：完全对称的枫叶一看就是画出来的，
  * 而且这样每一趟的轮廓都不一样。
+ *
+ * 宽/高 ≈ 1.2 —— 对着参考图量的，三处（背景、飘落、杯套）共用同一比例：背景那几片
+ * 原先靠调用点的画布 `scale` 额外拉过，形一改准就不用拉了（拉了反而比真叶瘦）。
  */
 internal fun mapleInto(path: Path, half: Float, seed: Int, round: Int) {
-    val baseY = half * 0.55f
-    path.rewind()
-    path.moveTo(0f, baseY)
-    for (lobe in 0..4) {
-        val tipR = mapleTipRadius(half, lobe) * (0.90f + hash01(seed, round, 20 + lobe) * 0.20f)
-        val tipA = mapleTipAngle(lobe)
-        path.lineTo(cos(tipA) * tipR, baseY + sin(tipA) * tipR)
-        if (lobe == 4) continue
-        // 凹口落在两瓣正中间，半径压到 0.34，尖瓣才分得开
-        val notchA = (mapleTipAngle(lobe) + mapleTipAngle(lobe + 1)) * 0.5f
-        path.lineTo(cos(notchA) * half * 0.34f, baseY + sin(notchA) * half * 0.34f)
+    val baseY = half * MAPLE_BASE_Y
+    val radii = FloatArray(5) { lobe ->
+        mapleTipRadius(half, lobe) * (0.90f + hash01(seed, round, 20 + lobe) * 0.20f)
     }
+    val baseTipY = baseY - half * MAPLE_BASE_R
+    path.rewind()
+    // 起点：叶柄根 → 基部楔尖（左右两条边都从这里出去/回来；参考图里这个 V 很浅）
+    path.moveTo(0f, baseY)
+    path.lineTo(0f, baseTipY)
+    var fromX = 0f
+    var fromY = baseTipY
+    for (lobe in 0..4) {
+        val tipA = mapleTipAngle(lobe)
+        val tipR = radii[lobe]
+        val tipX = cos(tipA) * tipR
+        val tipY = baseY + sin(tipA) * tipR
+        // 左（下）边：从上一道凹口 / 基部楔尖 到瓣尖
+        mapleEdgeInto(path, fromX, fromY, tipX, tipY, tipR, half)
+        path.lineTo(tipX, tipY)
+        if (lobe == 4) {
+            // 最后一瓣的下边直接回到基部楔尖
+            mapleEdgeInto(path, tipX, tipY, 0f, baseTipY, tipR, half)
+            path.lineTo(0f, baseTipY)
+            continue
+        }
+        // 凹口落在**两瓣方向的正中间**那条射线上（不是「自己再转半格」——
+        // 角距不等了，自己转半格会偏到其中一瓣里去）
+        val notchA = (MAPLE_ANGLE[lobe] + MAPLE_ANGLE[lobe + 1]) * 0.5f * DEG_TO_RAD
+        val notchR = minOf(radii[lobe], radii[lobe + 1]) * MAPLE_NOTCH[lobe]
+        val notchX = cos(notchA) * notchR
+        val notchY = baseY + sin(notchA) * notchR
+        // 右（上）边：瓣尖 → 下一道凹口
+        mapleEdgeInto(path, tipX, tipY, notchX, notchY, tipR, half)
+        path.lineTo(notchX, notchY)
+        fromX = notchX
+        fromY = notchY
+    }
+    path.lineTo(0f, baseY)
     path.close()
 }
 
 /**
- * 3 · 秋叶 —— mover：**斜落带三轴翻转**，翻转频率压到金箔的 1/3。
+ * 一条边 `(x0, y0) → (x1, y1)` 的**叶缘**：中段一串圆齿，两端留直段进瓣尖。
  *
- * 大片枫叶轮廓 + 主叶脉与四条支脉，正反两面异色（正面主色红、背面 [LEAF_BACK] 橙黄），
- * 翻面时换色。叶脉是这片叶子唯一的「结构」，少了它放大看就是个红色多边形。
+ * 参考图那片真叶的边**不是锯条**：是一道平滑的边线上鼓出一串**圆头小齿**，
+ * 齿高极小（叶高的 2% 上下），齿间几乎不回凹；瓣尖附近反而是干净的直边。
+ * 早先那版按「三角形尖齿」画（`lineTo` 折来折去），真机上整片读作**一圈毛刺** ——
+ * 用户 2026-09-12 的原话就是「像加了毛刺」。圆齿只能用二次曲线，一个齿一段。
+ *
+ * **外凸方向 = 边方向转 [MAPLE_EDGE_SIDE]×90°**（外法线），全条路径共用一个符号：
+ * 整片叶子的轮廓是**一个绕行方向**走下来的，「外侧」在每条边上都是同一侧。
+ * 别改用「从叶柄根出去的径向」：基部那两条边几乎与径向**平行**，齿会横切过边线
+ * 自己跟自己交叉，NonZero 填充抵消掉交叉小环，**叶根被挖出两块空白**。
+ *
+ * 齿数按边长自适应（[MAPLE_SCALLOP_PER]）：长边多几颗、下侧那两瓣的短边少几颗，
+ * 免得短边上挤出一排密齿。
  */
+private fun mapleEdgeInto(
+    path: Path,
+    x0: Float,
+    y0: Float,
+    x1: Float,
+    y1: Float,
+    tipR: Float,
+    half: Float
+) {
+    val dx = x1 - x0
+    val dy = y1 - y0
+    val len = hypot(dx, dy)
+    if (len < MAPLE_SCALLOP_MIN_LEN * half) {
+        path.lineTo(x1, y1)
+        return
+    }
+    val nx = -dy / len * MAPLE_EDGE_SIDE
+    val ny = dx / len * MAPLE_EDGE_SIDE
+    // 沿边走到 t 处、再往法线方向偏 off（正 = 外）
+    fun at(t: Float, off: Float): Pair<Float, Float> =
+        (x0 + dx * t + nx * off) to (y0 + dy * t + ny * off)
+    val start = at(MAPLE_SCALLOP_T0, 0f)
+    path.lineTo(start.first, start.second)
+    val span = MAPLE_SCALLOP_T1 - MAPLE_SCALLOP_T0
+    val count = maxOf(2, (len * span / (MAPLE_SCALLOP_PER * half)).roundToInt())
+    val inn = MAPLE_SCALLOP_IN * tipR
+    for (k in 0 until count) {
+        val t0 = MAPLE_SCALLOP_T0 + span * k / count
+        val tm = MAPLE_SCALLOP_T0 + span * (k + 0.5f) / count
+        val t1 = MAPLE_SCALLOP_T0 + span * (k + 1) / count
+        val out = MAPLE_SCALLOP_OUT * tipR * (1.15f - 0.35f * tm)
+        val c = at(tm, out * 1.6f)   // 二次曲线只走控制点偏移的一半，所以要推 1.6×
+        val e = at(t1, -inn)
+        path.quadraticTo(c.first, c.second, e.first, e.second)
+    }
+    path.lineTo(x1, y1)
+}
+
+/**
+ * 掌状叶脉：叶柄 + 主脉 + 四条支脉（+ 可选细羽）。
+ *
+ * 参考图 `cup-sleeve-leaf.jpg` 那片真叶的脉有三条硬特征，缺一条就不像：
+ * 1. 五条脉**从叶柄根散开**（掌状脉），不是从叶心 —— 所以基准点是叶柄根；
+ * 2. 每条支脉**朝叶尖那一侧弯**，不是直线。往哪边弯不靠人判：取法线里 y 朝上的那一侧；
+ * 3. 从根到尖**一路收细**，瓣内还布满**细羽**（沿支脉两侧斜挑出去的小脉）——
+ *    刻版/印花的浓淡层次全靠这些羽，少了它整片只剩个轮廓。
+ *
+ * 收细按「根→尖」三段画、每段降一档线宽（[MAPLE_VEIN_TAPER]）；同宽也能读成收细，
+ * 而按线宽把主脉/支脉分开合 Path，一共只出 6 次绘制调用。
+ *
+ * `half` 是**像素**：叶柄根在 `(anchor.x, anchor.y + half * MAPLE_BASE_Y)`，
+ * 这与 [mapleInto] 的局部坐标一致（那边原点就是叶柄根）。
+ *
+ * @param clip 细羽的裁剪路径（叶形轮廓）。**必须传**：细羽是从支脉两侧斜挑出去的直笔，
+ *   下侧两瓣的叶面窄，朝下的羽几乎一定出界（真机上在叶底拖出一圈须）。
+ *   叶柄**不裁** —— 它本来就在轮廓外。传 null = 不裁
+ */
+internal fun DrawScope.drawMapleVeins(
+    ink: Color,
+    half: Float,
+    alpha: Float,
+    strokeWidth: Float,
+    anchor: Offset = Offset.Zero,
+    feathers: Boolean = false,
+    clip: Path? = null
+) {
+    val root = Offset(anchor.x, anchor.y + half * MAPLE_BASE_Y)
+    // 叶柄：微微弯，不是一根直棍
+    val stem = Path().apply {
+        moveTo(root.x, root.y)
+        quadraticTo(
+            root.x - half * 0.028f, root.y + half * MAPLE_STEM_R * 0.62f,
+            root.x - half * 0.05f, root.y + half * MAPLE_STEM_R
+        )
+    }
+    drawPath(
+        path = stem,
+        color = ink,
+        alpha = alpha * 0.95f,
+        style = Stroke(width = strokeWidth * 2.0f, cap = StrokeCap.Round)
+    )
+
+    // 主脉三段 + 支脉三段（分两组，宽度才拉得开）
+    val veinPaths = Array(6) { Path() }
+    val featherPath = Path()
+    for (lobe in 0..4) {
+        val tipA = mapleTipAngle(lobe)
+        val tipR = mapleTipRadius(half, lobe) * 0.86f
+        val tx = root.x + cos(tipA) * tipR
+        val ty = root.y + sin(tipA) * tipR
+        val vx = tx - root.x
+        val vy = ty - root.y
+        val vl = hypot(vx, vy).coerceAtLeast(1e-3f)
+        var nx = -vy / vl
+        var ny = vx / vl
+        if (ny > 0f) {
+            nx = -nx
+            ny = -ny
+        }
+        val isMid = lobe == 2
+        val bow = tipR * MAPLE_VEIN_BOW * (if (isMid) 0.34f else 1f)
+        val cx = root.x + vx * 0.5f + nx * bow
+        val cy = root.y + vy * 0.5f + ny * bow
+        for (seg in 0..2) {
+            val p = veinPaths[seg + if (isMid) 0 else 3]
+            for (i in 0..3) {
+                val t = (seg + i / 3f) / 3f
+                val mt = 1f - t
+                val x = mt * mt * root.x + 2f * mt * t * cx + t * t * tx
+                val y = mt * mt * root.y + 2f * mt * t * cy + t * t * ty
+                if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+            }
+        }
+        if (!feathers) continue
+        // 细羽的调子靠「密而短」，不是「少而长」：长羽会在下侧两瓣的窄叶面上戳出轮廓，
+        // 变成一圈须（参考图那片**满叶面的短羽**，一根都不出界）
+        for (k in 1..MAPLE_FEATHER_COUNT) {
+            val t = 0.20f + 0.12f * k
+            if (t > 0.86f) break
+            val mt = 1f - t
+            val bx = mt * mt * root.x + 2f * mt * t * cx + t * t * tx
+            val by = mt * mt * root.y + 2f * mt * t * cy + t * t * ty
+            val fl = tipR * MAPLE_FEATHER_LEN * (1.15f - 0.06f * k) * (if (isMid) 1.15f else 1f)
+            for (side in -1..1 step 2) {
+                val fa = tipA + side * MAPLE_FEATHER_DEG * DEG_TO_RAD
+                featherPath.moveTo(bx, by)
+                featherPath.lineTo(bx + cos(fa) * fl, by + sin(fa) * fl)
+            }
+        }
+    }
+    for (seg in 0..5) {
+        val isMid = seg < 3
+        drawPath(
+            path = veinPaths[seg],
+            color = ink,
+            alpha = alpha * (if (isMid) 0.95f else 0.85f),
+            style = Stroke(
+                width = strokeWidth * MAPLE_VEIN_TAPER[seg % 3] * (if (isMid) 1.8f else 1f),
+                cap = StrokeCap.Round
+            )
+        )
+    }
+    if (feathers) {
+        // 细羽**裁在叶形里**：它们是直笔，下侧瓣的叶面窄、朝下的那几笔一定出界
+        // （不裁的话真机上是叶底一圈须）。叶柄不在裁剪里 —— 它本来就在轮廓外
+        val stroke = Stroke(width = strokeWidth * 0.6f, cap = StrokeCap.Round)
+        if (clip != null) {
+            clipPath(clip) {
+                drawPath(featherPath, ink, alpha = alpha * 0.55f, style = stroke)
+            }
+        } else {
+            drawPath(featherPath, ink, alpha = alpha * 0.55f, style = stroke)
+        }
+    }
+}
+
+/**
+ * 线画枫叶徽记：叶形 + 叶柄 + 主脉与四条支脉，**只描线不填色**。
+ *
+ * 杯套上那一片是压印的刻线（参考图 `cup-sleeve-leaf.jpg`），不是印花，所以不填。
+ * 叶形仍走 [mapleInto] —— 同一屏上飘落的大叶、背景里的五片、这一片必须是同一片叶子。
+ *
+ * 叶脉与叶柄都从**叶柄根** `(0, half * MAPLE_BASE_Y)` 出发，不是从叶心：那是掌状脉的起点，
+ * 也是参考图里四条支脉真实的交点。主脉要比支脉粗一倍。
+ *
+ * 整片叶子（含叶柄）的总高 = `1.0 + MAPLE_STEM_R` = 1.30 × half ——
+ * 调用方按目标高度反推 half 时用的是这个数；定位锚点则要用 [MAPLE_ORIGIN_R]（见该常量）。
+ *
+ * @param strokeWidth 轮廓线宽；叶脉按它的倍率走（主脉 1.8×，支脉 1.0×）
+ * @param engraved true = 按**刻线**画（凹版）：墨线下方垫一道亮线（沟槽下壁受光），
+ *   瓣内加一层细羽（叶脉两侧各挑几笔短斜线 —— 真刻版就是靠这个出调的）。
+ *   杯套那一片要 true，别处的线画不要
+ * @param anchor **叶片局部原点**（= 叶柄根上方 [MAPLE_BASE_Y] half，**像素**，画布的当前坐标系）。
+ *   不是叶柄根、更不是叶柄末端 —— 要叶柄末端落在某个高度，锚点得再往上 [MAPLE_ORIGIN_R] half。
+ *   走路径级偏移而非 canvas 变换：调用方基本都已经在 `translate(道具框)` 里，
+ *   少套一层变换就少一次坐标系心算 —— 真机上那轮「叶子一个像素都不见」就是坐标算错
+ *   （把像素当单位加），不是变换的问题
+ */
+internal fun DrawScope.drawMapleEmblem(
+    path: Path,
+    half: Float,
+    seed: Int,
+    round: Int,
+    ink: Color,
+    alpha: Float,
+    strokeWidth: Float,
+    engraved: Boolean = false,
+    anchor: Offset = Offset.Zero
+) {
+    mapleInto(path, half, seed, round)
+    // 叶形轮廓整条路径一次平移（[mapleInto] 出来的点都是「叶柄根在原点」）
+    if (anchor != Offset.Zero) path.translate(anchor)
+    // 叶柄根（画布坐标）。下面每一笔都以它为基准 —— **anchor 只加在基准点上，
+    // 局部量（cos/sin × 半径）永远不含它**：混进去过一次（x 加了、y 没加，
+    // 长度又把 anchor 算进 hypot），叶脉和细羽被拉成几百像素的长线甩得满卡都是
+    val root = Offset(anchor.x, anchor.y + half * MAPLE_BASE_Y)
+    if (engraved) {
+        // 沟槽的下壁受光：同一条轮廓微微**下移**、加宽、垫白，再压 ink ——
+        // 从墨线底下露出的那半像素，就是「线是刻进去的」唯一的证据。
+        // 方向搞反（上移）或垫在墨线上层，都只会变成一圈发虚的描边。
+        // 偏移走路径级（`Path.translate`），不开 canvas 变换
+        val lit = Path().apply {
+            addPath(path)
+            translate(Offset(0f, strokeWidth * 0.9f))
+        }
+        drawPath(
+            path = lit,
+            color = Color.White,
+            alpha = alpha * 0.34f,
+            style = Stroke(width = strokeWidth, join = StrokeJoin.Round)
+        )
+    }
+    drawPath(
+        path = path,
+        color = ink,
+        alpha = alpha,
+        style = Stroke(width = strokeWidth, join = StrokeJoin.Round)
+    )
+    // 叶脉与叶柄：与背景那几片红枫叶**同一套**（[drawMapleVeins]）。
+    // 刻线版要细羽（参考图那片的内刻全是羽），别处线画不要
+    drawMapleVeins(
+        ink = ink,
+        half = half,
+        alpha = alpha,
+        strokeWidth = strokeWidth,
+        anchor = anchor,
+        feathers = engraved,
+        // 细羽要裁在叶形里；锚点已经加进 path 了，两者同一坐标系
+        clip = path
+    )
+}
+
 private fun DrawScope.drawAutumnLeaves(
     motes: List<Mote>,
     phase: Float,
@@ -525,29 +896,14 @@ private fun DrawScope.drawAutumnLeaves(
         }) {
             mapleInto(path, half, mote.seed, round)
             drawPath(path = path, color = if (faceUp) front else back, alpha = a)
-            // 叶柄
-            drawLine(
-                vein,
-                Offset(0f, half * 0.55f),
-                Offset(-half * 0.04f, half * 0.98f),
-                half * 0.055f,
-                StrokeCap.Round,
-                alpha = a * 0.9f
+            // 叶脉与叶柄：与背景那五片、杯套那片刻线同一套掌状脉。
+            // 这几片只有几十像素、还在翻面，不要细羽（会糊成噪点）
+            drawMapleVeins(
+                ink = vein,
+                half = half,
+                alpha = a * (if (faceUp) 0.55f else 0.34f),
+                strokeWidth = half * 0.026f
             )
-            for (lobe in 0..4) {
-                val tipA = mapleTipAngle(lobe)
-                val tipR = mapleTipRadius(half, lobe) * 0.86f
-                drawLine(
-                    vein,
-                    Offset(0f, half * 0.55f),
-                    Offset(cos(tipA) * tipR, half * 0.55f + sin(tipA) * tipR),
-                    // 正中那条是主脉，比支脉粗一倍
-                    if (lobe == 2) half * 0.045f else half * 0.026f,
-                    StrokeCap.Round,
-                    // 背面看到的是叶脉凸起，比正面淡
-                    alpha = a * (if (faceUp) 0.55f else 0.34f)
-                )
-            }
         }
     }
 }

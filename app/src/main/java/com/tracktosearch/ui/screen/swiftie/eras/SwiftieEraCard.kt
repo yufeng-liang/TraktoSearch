@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -176,6 +177,9 @@ fun SwiftieEraCard(
         else -> null
     }
     val propPhoto = photoRes?.let { ImageBitmap.imageResource(it) }
+    // 画布上排字用的测量器：只有 Red 的纸套要印一行 MAPLE LATTE。与照片同理，
+    // 文字只能在组合阶段量；其余 11 张卡拿到这个对象也不会去量
+    val textMeasurer = rememberTextMeasurer()
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -298,7 +302,8 @@ fun SwiftieEraCard(
                         // 读一下真时钟就把整块定格的意义抹掉了
                         eraElapsedMs = -1L,
                         loverAimAngle = loverAimAngle(),
-                        propPhoto = propPhoto
+                        propPhoto = propPhoto,
+                        textMeasurer = textMeasurer
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -311,7 +316,8 @@ fun SwiftieEraCard(
                         columnFade = columnFadeAt(elapsed, longTitles, stagger),
                         eraElapsedMs = elapsed,
                         loverAimAngle = loverAimAngle(),
-                        propPhoto = propPhoto
+                        propPhoto = propPhoto,
+                        textMeasurer = textMeasurer
                     )
                 }
             }

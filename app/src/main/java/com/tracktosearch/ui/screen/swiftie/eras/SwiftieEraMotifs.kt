@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -21,7 +22,14 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -130,14 +138,21 @@ fun DrawScope.drawEraMotif(
      *
      * 位图只能在组合阶段读（draw 阶段拿不到 resources），所以由 `SwiftieEraCard` 传进来。
      */
-    propPhoto: ImageBitmap? = null
+    propPhoto: ImageBitmap? = null,
+    /**
+     * 画布上排字用的测量器。**只有 Red 那杯拿铁用得上**（纸套上那行 MAPLE LATTE），
+     * 其余母题一律传 null，那些函数根本不读它。
+     *
+     * 和 [propPhoto] 同一个原因由卡片传进来：文字只能在组合阶段量。
+     */
+    textMeasurer: TextMeasurer? = null
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
         SwiftieEraMotif.PORCH_GUITAR -> drawPorchGuitar(color, phase, alpha)
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
         SwiftieEraMotif.STAGE_CURTAIN -> drawStageCurtain(color, phase, alpha)
-        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto)
+        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer)
         SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
         SwiftieEraMotif.LOVER_ARCHER ->
@@ -1098,7 +1113,7 @@ private fun DrawScope.drawDressSilhouette(
 }
 
 /**
- * 4 · Red：一条红围巾（卡片右上角）+ 一顶 fedora（共用的右侧列里）。
+ * 4 · Red：一条红围巾（卡片右上角）+ 一杯枫糖拿铁（共用的右侧列里）。
  *
  * 围巾是 *All Too Well* 的核心意象，所以它在卡片上不是「垂下来的一条」而是
  * **绕起来挂着**的样子；直挂的一条与页面背景那根枯枝、以及别张卡片上的垂布
@@ -1116,22 +1131,25 @@ private fun DrawScope.drawDressSilhouette(
  * 照片本身也画在曲目文字**底下**（母题在卡片 `drawBehind` 那一层），
  * 让位系数仍然乘着，纯粹是与其他 11 张共用同一条通路。
  *
- * 手画稿留在仓库外（`build/egg-shots/red_scarf_handdrawn.kt.txt`），要再改结构时从那儿起。
+ * 那杯拿铁替掉的是一顶 fedora。理由不在「咖啡」，而在**这首歌自己的线索**：
+ * 详见 [drawMapleLatte]。
+ *
+ * 手画稿留在仓库外（`build/egg-shots/red_scarf_handdrawn.kt.txt`，围巾与那顶 fedora
+ * 都在里面），要再改结构时从那儿起。
  */
 private fun DrawScope.drawRedScarf(
     color: Color,
     phase: Float,
     alpha: Float,
-    scarf: ImageBitmap?
+    scarf: ImageBitmap?,
+    textMeasurer: TextMeasurer?
 ) {
     knitStripeTexture(color, phase)
-    // 位图读不到时（低配机预解压失败之类）就只剩底纹与那顶 fedora，不画半个围巾
+    // 位图读不到时（低配机预解压失败之类）就只剩底纹与那杯拿铁，不画半个围巾
     if (scarf != null) drawRedScarfPhoto(scarf, phase, alpha)
     val box = propBox()
-    val w = box.width
-    val h = box.height
     translate(left = box.left, top = box.top) {
-        drawFedora(color, alpha, w, h, min(w, h))
+        drawMapleLatte(color, alpha, box.width, box.height, textMeasurer)
     }
 }
 
@@ -1175,64 +1193,436 @@ private fun DrawScope.drawRedScarfPhoto(photo: ImageBitmap, phase: Float, alpha:
     // （evermore 那版真机踩过）。照片自己的红本来就与这张卡的主色同源。
 }
 
+/** 杯身口径占道具框宽的比例（道具框 0.32 卡片宽 × 0.47 ≈ 0.15 卡片宽，真机约 194px）。 */
+private const val LATTE_WT = 0.47f
+
+/** 杯轴在道具框里的横向位置。 */
+private const val LATTE_CX = 0.52f
+
+/** 杯底落在道具框下缘 —— 道具框底 = 0.94 卡片高，往下还留着 0.06h 的纸。 */
+private const val LATTE_BASE = 1.00f
+
+// ── 杯体几何。单位一律是「杯身口径」，数值来自参考图逐行测量 ──
+// 参考图 `build/egg-shots/ref-red/cup-sleeve-leaf.jpg`（侧视白杯 + 牛皮纸套 + 刻线枫叶），
+// 复刻器 `build/egg-shots/red_cup.py`。量出来的关键几条：
+//   锥度 底/口 0.74；总高（含盖）/口径 2.09；盖 = 穹顶圆唇 + 收进去的裙边；
+//   纸套高 0.90 口径（占杯高 43%）且紧贴裙边下沿；套上枫叶高 0.855 口径、左偏 0.06。
+private const val CUP_BOTTOM_RATIO = 0.74f
+private const val CUP_TOTAL_RATIO = 2.09f
+private const val LID_SKIRT = 0.24f
+private const val LID_BEVEL = 0.09f
+private const val LID_FLANGE = 0.19f
+private const val LID_H = LID_SKIRT + LID_BEVEL + LID_FLANGE
+
+/** 圆唇最宽处（在唇的下缘）—— 比杯身宽 16%，这一跳是「这是个杯盖」的唯一证据。 */
+private const val FLANGE_W = 1.16f
+private const val FLANGE_TOP_W = 0.94f
+private const val SLEEVE_H = 0.90f
+private const val SLEEVE_GAP = 0.02f
+private const val SLEEVE_PROUD = 0.018f
+/** 杯套上那片刻线枫叶的高度（占杯身口径）。参考图里它几乎占满整条纸套（0.855），
+ *  这里压到 0.55 —— 底下要给那行字腾出半格。 */
+private const val LEAF_H = 0.55f
+
+/** 叶柄末端落在哪个标高（自杯底往上，口径为单位）。纸套是 0.65..1.55，
+ *  叶占上半、字占下半：叶柄止于 0.825，字的字帽顶在 0.77，中间留 0.055 的空。 */
+private const val LEAF_BASE = 0.825f
+
+/** 叶柄根相对杯轴的横向偏移。参考图那片是**正**在套中央的，所以是 0。 */
+private const val LEAF_DX = 0f
+
 /**
- * 一顶 fedora：帽檐（椭圆）+ 帽冠 + 帽带 + 冠顶折痕。
+ * 纸套上印的那行字。
  *
- * 折痕是 fedora 与圆顶帽的唯一区别，省掉它画出来就是一顶礼帽。
+ * **Maple Latte 就是 *All Too Well* 的 liner notes 隐藏信息**（专辑内页里那句大写的
+ * 密语之一，当年她被拍到和 Jake 在 Fido Café 喝的就是这个）。所以这行字不是装饰，
+ * 它和卡片右上角那条围巾是**同一首歌的两条线索**：围巾是歌里的实物，拿铁是liner note。
+ * 字母全大写、字距拉开，是外带杯套印刷那一路的写法。
  */
-private fun DrawScope.drawFedora(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
-    val cx = w * 0.62f
-    val brimY = h * 0.86f
-    val brimW = w * 0.62f
-    val brimH = h * 0.095f
+private const val LATTE_TEXT = "MAPLE LATTE"
+
+/** 字宽目标（占杯身口径）。定死宽度、字号反推 —— 杯身尺寸随卡片走，字号不能写死。 */
+private const val LATTE_TEXT_WIDTH = 0.80f
+
+/** 字的中心标高（自杯底往上，口径为单位）：纸套下半段、枫叶叶柄之下。 */
+private const val LATTE_TEXT_CENTER = 0.725f
+
+/** 量宽度用的探针字号（sp）。只用来取比例，量完按比例再量一次。 */
+private const val LATTE_TEXT_PROBE_SP = 16f
+
+/** 字距（em）。 */
+private const val LATTE_TEXT_SPACING = 0.12f
+
+private const val PANEL_W = 0.86f
+private const val HOLE_DX = 0.20f
+private const val HOLE_W = 0.11f
+
+/**
+ * 椭圆压扁系数（视角约 5.4°）。
+ *
+ * 判据是参考图杯底前缘那道可见的平段只有 55px 宽：2·√(2·R·ry) = 55、R = 63.5
+ * 推出 ry ≈ 6px，即 k = 2·ry/口径 ≈ 0.095。第一版按 0.16 画，杯口那道椭圆弧深得
+ * 像俯视图。
+ */
+private const val CUP_ELLIPSE_K = 0.095f
+
+/**
+ * 白纸杯的显影倍率：有效 alpha = 0.35 × 1.65 ≈ 0.58。
+ *
+ * [PROP_MASK]（0.78）是「垫白」用的 —— 它的活是把后续的颜色顶到接近纸色以上，
+ * 不是拿来当可见的白色。真机上量过 1989 那张的宝丽来白框（同样是白物件）：
+ * 比卡片纸亮 Δ30，反解出白色这一层要 ~0.58。
+ */
+private const val LATTE_WHITE_GAIN = 1.65f
+
+/**
+ * 一杯枫糖拿铁：白纸杯 + 牛皮纸套（套上一片刻线枫叶）+ 白盖 + 一缕热气。
+ *
+ * 选它的理由不在「咖啡」而在**这张卡自己的线索**：*All Too Well* 的 liner notes
+ * 隐藏信息就是 **Maple Latte**（当年被拍到与 Jake 在 Fido Café 喝枫糖拿铁）。围巾是那首歌
+ * 里的实物、杯套上这片枫叶接的是同一首歌的另一条密语；而 Red 这个时代的三个公认符号
+ * 正是「枫叶 / 围巾 / 枫糖拿铁」—— 前两个已经分别在背景与卡上，这是缺的那一个。
+ *
+ * 它替掉的是一顶 fedora。那顶帽子并非随手画的：2012 原版封面就是她低头、脸被一顶
+ * **宽檐帽**的阴影遮住（TV 版才换成酒红丝绒渔夫帽 + 1932 敞篷车）。
+ *
+ * 结构对着实拍照片量过（口径 1.0）：盖是**穹顶圆唇 + 收进去的裙边**（不是三段等宽硬板），
+ * 纸套高 0.90 口径并紧贴裙边下沿，套上那片刻线枫叶高 0.855 口径、**不居中**（左偏 0.06）。
+ * 叶形借 [drawMapleEmblem]（与背景那五片、飘落的秋叶同一套 [mapleInto]）——
+ * 同一屏上出现两种枫叶比画得糙更糟。叶形本身是对着参考图那片刻线真叶复刻的，
+ * 细节与三个坑都写在 [mapleInto] 上。
+ *
+ * 纸套上还有一行 **MAPLE LATTE**（见 [LATTE_TEXT]），字号按纸套宽度反推。
+ * 它要一个 [TextMeasurer]：位图与文字都只能在组合阶段取，所以由 `SwiftieEraCard` 传进来；
+ * 为 null 时（没有测量器）只跳过这行字，杯与叶照画。
+ *
+ * 明暗：白纸杯的立体感全靠**右侧三段压暗 + 左缘一条高光**，都 `clipPath` 在剪影内。
+ * 杯子每帧重画，所以只建一次 Path 反复 rewind，不给 GC 添抖动（同本文件其余母题）。
+ */
+private fun DrawScope.drawMapleLatte(
+    color: Color,
+    alpha: Float,
+    w: Float,
+    h: Float,
+    textMeasurer: TextMeasurer?
+) {
+    val wt = w * LATTE_WT
+    val axis = w * LATTE_CX
+    val baseY = h * LATTE_BASE
+    // 尺寸一律以「口径」为单位，画的时候才乘 wt：横向 ax() 自杯轴、纵向 ay() 自杯底往上。
+    // 单位与像素混着传是这套图最容易栽的坑 —— 复刻器上就栽过一次（每个横向尺寸被 wt 再乘一遍，
+    // 纸套横贯整张卡）。传进来的数只有两种写法：裸小数 = 单位，带 wt = 像素。
+    fun ax(u: Float) = axis + u * wt
+    fun ay(u: Float) = baseY - u * wt
+
+    val bodyTop = CUP_TOTAL_RATIO - LID_H
+    val skirtTop = bodyTop + LID_SKIRT
+    val flangeBot = skirtTop + LID_BEVEL
+    // 顶面那道前弧本身要占掉 flangeTopHalf * k 的高度，所以把它从总高里扣掉：
+    // CUP_TOTAL_RATIO 量的是「含盖最高那一点」，不是盖沿的圆心
+    val flangeTopHalf = FLANGE_TOP_W * 0.5f
+    val flangeTop = CUP_TOTAL_RATIO - flangeTopHalf * CUP_ELLIPSE_K
+    val sleeveTop = bodyTop - SLEEVE_GAP
+    val sleeveBot = sleeveTop - SLEEVE_H
+    // 杯身在标高 u 处的宽度（单位）
+    fun widthAt(u: Float): Float =
+        CUP_BOTTOM_RATIO + (1f - CUP_BOTTOM_RATIO) * (u / bodyTop).coerceIn(0f, 1f)
+
+    /**
+     * 纸套的软木颗粒。参考图那条套子是**颗粒面**（软木/再生纸），不是平色牛皮纸。
+     *
+     * 颗粒位置全部由序号哈希出来（**不是每帧 Random**）：逐帧变的话静帧纹理就是一片
+     * 噪点在跳。颗粒沿「该标高处的半宽」铺开，跟着杯身的锥度收；按深浅分三批合进
+     * 三条 Path，一共只出三次绘制调用（同本文件成排小件的写法）。
+     */
+    fun sleeveGrain(a: Float, uTop: Float, uBot: Float) {
+        val dark = Path()
+        val light = Path()
+        val fine = Path()
+        for (i in 0 until SLEEVE_GRAIN) {
+            val gu = hash01(SLEEVE_GRAIN_SEED, 0, i)
+            val gv = hash01(SLEEVE_GRAIN_SEED, 1, i)
+            val gt = hash01(SLEEVE_GRAIN_SEED, 2, i)
+            val v = uBot + (uTop - uBot) * gv
+            val halfW = (widthAt(v) + SLEEVE_PROUD * 2f) * 0.5f * wt
+            val x = axis + (gu - 0.5f) * 2f * halfW * 0.96f
+            val y = ay(v)
+            val r = wt * (0.0026f + gt * 0.0085f)
+            val target = when {
+                gt < 0.34f -> dark
+                gt < 0.72f -> light
+                else -> fine
+            }
+            target.addOval(Rect(x - r, y - r * 0.75f, x + r, y + r * 0.75f))
+        }
+        drawPath(dark, PROP_KRAFT_DARK, alpha = a * 0.48f)
+        drawPath(light, PROP_KRAFT_LIGHT, alpha = a * 0.58f)
+        drawPath(fine, PROP_KRAFT_DARK, alpha = a * 0.30f)
+    }
+
+    val path = Path()
+    val leaf = Path()
+
+    // 圆环的前缘：视线在环上方，前缘一律往下鼓 k·半宽（k 由参考图 55px 的平底弧反推）
+    fun Path.ringFront(u: Float, width: Float, backwards: Boolean = false) {
+        val endX = if (backwards) -width * 0.5f else width * 0.5f
+        quadraticTo(ax(0f), ay(u - width * 0.5f * CUP_ELLIPSE_K), ax(endX), ay(u))
+    }
+
+    // 一条「圆环带」：上下两条前弧 + 两条侧边（唇下投影、纸套都用它）
+    fun Path.ringBand(uTop: Float, wTop: Float, uBot: Float, wBot: Float) {
+        rewind()
+        moveTo(ax(-wTop * 0.5f), ay(uTop))
+        ringFront(uTop, wTop)
+        lineTo(ax(wBot * 0.5f), ay(uBot))
+        ringFront(uBot, wBot, backwards = true)
+        close()
+    }
+
+    // ── 剪影：底前弧 → 右侧锥度 → 裙边 → 圆唇（从最宽处收到顶面）→ 顶面弧 → 左侧下来 ──
+    val flangeHalf = FLANGE_W * 0.5f
+    path.rewind()
+    path.moveTo(ax(-CUP_BOTTOM_RATIO * 0.5f), ay(0f))
+    path.ringFront(0f, CUP_BOTTOM_RATIO)
+    path.lineTo(ax(0.5f), ay(bodyTop))
+    path.lineTo(ax(0.5f), ay(skirtTop))
+    // 圆唇：**蘑菇形**，三段都是曲线。上一版从裙边到最宽处画直线、顶面又是一段直坡，
+    // 整只盖读成一个尖角六边形（真机 2026-09-12 一眼就看出来了）—— 圆唇之所以叫圆唇，
+    // 就是这条侧面是个外凸的肚子：裙边 → 最宽处（切线竖直）→ 收进顶沿
+    path.cubicTo(
+        ax(flangeHalf * 0.92f), ay(flangeBot + 0.02f),
+        ax(flangeHalf), ay(flangeBot + 0.06f),
+        ax(flangeHalf), ay(flangeBot + (flangeTop - flangeBot) * 0.45f)
+    )
+    path.cubicTo(
+        ax(flangeHalf), ay(flangeTop - 0.05f),
+        ax(flangeTopHalf + 0.055f), ay(flangeTop - 0.012f),
+        ax(flangeTopHalf), ay(flangeTop)
+    )
+    // 顶面：一道**上凸**的弧。省掉它杯盖读成一段管子；凸向搞反则盖顶凹成一个碗
+    path.quadraticTo(
+        ax(0f), ay(CUP_TOTAL_RATIO),
+        ax(-flangeTopHalf), ay(flangeTop)
+    )
+    path.cubicTo(
+        ax(-(flangeTopHalf + 0.055f)), ay(flangeTop - 0.012f),
+        ax(-flangeHalf), ay(flangeTop - 0.05f),
+        ax(-flangeHalf), ay(flangeBot + (flangeTop - flangeBot) * 0.45f)
+    )
+    path.cubicTo(
+        ax(-flangeHalf), ay(flangeBot + 0.06f),
+        ax(-flangeHalf * 0.92f), ay(flangeBot + 0.02f),
+        ax(-flangeHalf), ay(flangeBot)
+    )
+    path.lineTo(ax(-0.5f), ay(skirtTop))
+    path.lineTo(ax(-0.5f), ay(bodyTop))
+    path.lineTo(ax(-CUP_BOTTOM_RATIO * 0.5f), ay(0f))
+    path.close()
+
+    val silhouette = Path().apply { addPath(path) }
+    drawPath(silhouette, Color.White, alpha = alpha * LATTE_WHITE_GAIN)
+
+    // ── 圆柱的明暗：右侧三段压暗 + 左缘一条高光。参考图右缘暗约 40/255 ──
+    clipPath(silhouette) {
+        val bandLeft = floatArrayOf(0.04f, 0.30f, 0.52f)
+        val bandAlpha = floatArrayOf(0.26f, 0.22f, 0.20f)
+        for (i in 0..2) {
+            path.rewind()
+            path.moveTo(ax(bandLeft[i]), ay(0f))
+            path.lineTo(ax(0.72f), ay(0f))
+            path.lineTo(ax(0.72f), ay(CUP_TOTAL_RATIO))
+            path.lineTo(ax(bandLeft[i]), ay(CUP_TOTAL_RATIO))
+            path.close()
+            drawPath(path, color, alpha = alpha * bandAlpha[i])
+        }
+        path.rewind()
+        path.moveTo(ax(-0.44f), ay(0f))
+        path.lineTo(ax(-0.28f), ay(0f))
+        path.lineTo(ax(-0.30f), ay(bodyTop))
+        path.lineTo(ax(-0.46f), ay(bodyTop))
+        path.close()
+        drawPath(path, Color.White, alpha = alpha * 1.30f)
+    }
+
+    // ── 唇下的投影：外翻 16% 的唇压在杯身上必然留一道暗带。没有它这个盖是「贴」上去的 ──
+    for (i in 0..2) {
+        path.ringBand(
+            flangeBot - 0.055f * i, 1f - 0.02f * i,
+            flangeBot - 0.055f * (i + 1), 1f - 0.02f * (i + 1)
+        )
+        drawPath(path, color, alpha = alpha * (0.30f - i * 0.08f))
+    }
+    // 凹面内圈（参考图盖顶那一圈看得见的台阶）
+    val panelW = FLANGE_TOP_W * PANEL_W * wt
     drawOval(
-        color, Offset(cx - brimW / 2f, brimY - brimH / 2f), Size(brimW, brimH),
-        alpha = alpha * 0.85f
+        color = PROP_KRAFT_EDGE,
+        topLeft = Offset(ax(-PANEL_W * 0.5f), ay(flangeTop - 0.006f) - panelW * 0.5f * CUP_ELLIPSE_K),
+        size = Size(panelW, panelW * CUP_ELLIPSE_K * 2f),
+        alpha = alpha * 0.80f,
+        style = Stroke(width = wt * 0.005f)
     )
-    // 前檐上翻：沿椭圆下半描一条深弧
-    drawArc(
-        color = color,
-        startAngle = 20f,
-        sweepAngle = 140f,
-        useCenter = false,
-        topLeft = Offset(cx - brimW / 2f, brimY - brimH / 2f),
-        size = Size(brimW, brimH),
-        alpha = alpha * 1.4f,
-        style = Stroke(width = u * 0.008f)
+
+    // ── 轮廓：剪影一圈 ──
+    drawPath(
+        path = silhouette, color = color, alpha = alpha * 1.55f,
+        style = Stroke(width = wt * 0.0085f, join = StrokeJoin.Round)
     )
-    val crownHalf = brimW * 0.30f
-    val crownTop = brimY - h * 0.185f
-    val crown = Path()
-    crown.moveTo(cx - crownHalf, brimY)
-    crown.cubicTo(
-        cx - crownHalf * 1.04f, crownTop + h * 0.05f,
-        cx - crownHalf * 0.88f, crownTop,
-        cx - crownHalf * 0.34f, crownTop
+    // 唇的下缘：盖与杯身的分界
+    path.rewind()
+    path.moveTo(ax(-flangeHalf), ay(flangeBot))
+    path.ringFront(flangeBot, FLANGE_W)
+    drawPath(
+        path, color, alpha = alpha * 0.90f,
+        style = Stroke(width = wt * 0.005f)
     )
-    crown.lineTo(cx + crownHalf * 0.34f, crownTop)
-    crown.cubicTo(
-        cx + crownHalf * 0.88f, crownTop,
-        cx + crownHalf * 1.04f, crownTop + h * 0.05f,
-        cx + crownHalf, brimY
+
+    // 吸口 + 从口里透出来的一点咖啡（参考图那只是能看见的）。画在轮廓之后、盖的台阶之内
+    val holeW = HOLE_W * wt
+    val holeX = ax(HOLE_DX)
+    val holeY = ay(flangeTop - 0.010f)
+    drawOval(
+        color = Color.White,
+        topLeft = Offset(holeX - holeW * 0.5f, holeY - holeW * 0.5f * CUP_ELLIPSE_K),
+        size = Size(holeW, holeW * CUP_ELLIPSE_K * 1.4f),
+        alpha = alpha * 1.10f
     )
-    crown.close()
-    // 垫白：帽檐是整只椭圆，帽冠压在它中段上。不垫这一层，檐的后缘会横穿冠面 ——
-    // 一顶能看透的帽子
-    drawPath(crown, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(crown, color, alpha = alpha)
-    drawRect(
-        color, Offset(cx - crownHalf * 0.99f, brimY - h * 0.058f),
-        Size(crownHalf * 1.98f, h * 0.030f), alpha = alpha * 1.7f
+    drawOval(
+        color = PROP_COFFEE,
+        topLeft = Offset(holeX - holeW * 0.40f, holeY - holeW * 0.40f * CUP_ELLIPSE_K * 1.1f),
+        size = Size(holeW * 0.80f, holeW * 0.80f * CUP_ELLIPSE_K * 1.1f),
+        alpha = alpha * 2.00f
     )
-    val crease = Path()
-    crease.moveTo(cx - crownHalf * 0.30f, crownTop + h * 0.004f)
-    crease.quadraticTo(cx, crownTop + h * 0.045f, cx + crownHalf * 0.30f, crownTop + h * 0.004f)
-    crease.moveTo(cx - crownHalf * 0.72f, crownTop + h * 0.030f)
-    crease.lineTo(cx - crownHalf * 0.60f, crownTop + h * 0.075f)
-    crease.moveTo(cx + crownHalf * 0.72f, crownTop + h * 0.030f)
-    crease.lineTo(cx + crownHalf * 0.60f, crownTop + h * 0.075f)
-    drawPath(crease, Color.White, alpha = alpha * 1.5f, style = Stroke(width = u * 0.009f))
+
+    // ── 牛皮纸套：比杯身外凸 1.8%（实测），所以画在轮廓之后 —— 它自己的边就是这一段的杯沿 ──
+    val sleeveBulge = SLEEVE_PROUD * 2f
+    val sleeveWTop = widthAt(sleeveTop) + sleeveBulge
+    val sleeveWBot = widthAt(sleeveBot) + sleeveBulge
+    path.ringBand(sleeveTop, sleeveWTop, sleeveBot, sleeveWBot)
+    // 两遍：一遍 0.51 的覆盖率太透，杯身那三段压暗会从套子底下透出来（真机上一道竖带）
+    drawPath(path, PROP_KRAFT, alpha = alpha * 1.45f)
+    drawPath(path, PROP_KRAFT, alpha = alpha * 1.10f)
+    // 软木颗粒（参考图那条套子是颗粒面，不是平色牛皮纸）。**必须剪进套子**：
+    // 颗粒是按矩形撒的，不剪就会洒到杯身上去
+    clipPath(path) { sleeveGrain(alpha, sleeveTop, sleeveBot) }
+    // 上缘受光、下缘积暗：参考图套子上沿一道亮线、下沿一段发暗
+    drawPath(
+        path, PROP_KRAFT_LIGHT, alpha = alpha * 0.75f,
+        style = Stroke(width = wt * 0.010f)
+    )
+    val shade = Path()
+    shade.addRect(
+        Rect(
+            ax(-sleeveWBot * 0.5f), ay(sleeveBot),
+            ax(sleeveWBot * 0.5f), ay(sleeveBot + SLEEVE_H * 0.16f)
+        )
+    )
+    drawPath(shade, PROP_KRAFT_DARK, alpha = alpha * 0.55f)
+    // 套子自己的边线（上下两道厚度 + 两侧立边）
+    path.ringBand(sleeveTop, sleeveWTop, sleeveBot, sleeveWBot)
+    drawPath(
+        path, PROP_KRAFT_EDGE, alpha = alpha * 0.95f,
+        style = Stroke(width = wt * 0.007f)
+    )
+
+    // ── 套上的刻线枫叶（压印，不填色）+ 那行 liner note 密语。序号接在背景那五片之后 ──
+    // 定位要放的是**局部原点**，它在叶柄末端下方之上 MAPLE_ORIGIN_R 个 half ——
+    // 不是 MAPLE_STEM_R（少算 0.55 half，整片叶子连叶柄一起吊到纸套外、穿字而过，真机量过）。
+    // 两个 half 也要分开：算落点用**单位**版、画叶用**像素**版 —— 混着传过一次，
+    // 0.30 × 92.7px 被当成 0.30 口径加到 0.80 上，叶子整体落到 y = -4917（画布外 4900px，
+    // 真机上一个像素都看不见，查了两轮）
+    val leafHalfUnits = LEAF_H / (1f + MAPLE_STEM_R)
+    drawMapleEmblem(
+        path = leaf,
+        half = leafHalfUnits * wt,
+        seed = 2012,
+        round = 5,
+        // 咖啡色刻线（不是时代主色）：这是纸套上的印刷，见 [PROP_ENGRAVE]
+        ink = PROP_ENGRAVE,
+        alpha = alpha * 1.85f,
+        strokeWidth = wt * 0.016f,
+        // 参考图那一片是**刻线**（凹版）：线压在纸里、瓣内满是细羽
+        engraved = true,
+        anchor = Offset(ax(LEAF_DX), ay(LEAF_BASE + MAPLE_ORIGIN_R * leafHalfUnits))
+    )
+    if (textMeasurer != null) {
+        val inkAlpha = (alpha * 1.85f).coerceAtMost(1f)
+        fun styleOf(sizeSp: Float) = TextStyle(
+            color = PROP_ENGRAVE.copy(alpha = inkAlpha),
+            fontSize = sizeSp.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = LATTE_TEXT_SPACING.em
+        )
+        // 先按探针字号量一遍，按目标宽度求出字号再量 —— 纸套宽度随卡片走，
+        // 字号只能反推。两次 measure 都吃 TextMeasurer 的缓存，每帧不重排
+        val probe = textMeasurer.measure(AnnotatedString(LATTE_TEXT), styleOf(LATTE_TEXT_PROBE_SP))
+        val fitted = if (probe.size.width > 0) {
+            LATTE_TEXT_PROBE_SP * (LATTE_TEXT_WIDTH * wt) / probe.size.width
+        } else {
+            LATTE_TEXT_PROBE_SP
+        }
+        val layout = textMeasurer.measure(AnnotatedString(LATTE_TEXT), styleOf(fitted))
+        drawText(
+            textLayoutResult = layout,
+            topLeft = Offset(
+                axis - layout.size.width * 0.5f,
+                ay(LATTE_TEXT_CENTER) - layout.size.height * 0.5f
+            )
+        )
+    }
+
+    // ── 热气：吸口升起的两缕，各三段、越往上越淡（热饮在静帧里全靠它）──
+    for (s in 0..1) {
+        val sx = ax(HOLE_DX + (if (s == 0) 0.02f else -0.07f))
+        for (seg in 0..2) {
+            val t0 = seg / 3f
+            path.rewind()
+            for (i in 0..6) {
+                val t = t0 + i / 18f
+                val px = sx + sin(t * 2.6f + s * 2.1f) * wt * 0.075f * (0.4f + t)
+                val py = holeY - t * wt * 0.30f
+                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            // 白热气在粉色纸面上极跳：线要细、要短、要淡。第一版 0.46 口径高、0.020 宽、
+            // 不透明度还乘了 1.15，真机上就是杯口窜起一团白火
+            drawPath(
+                path = path,
+                color = Color.White,
+                alpha = alpha * 0.62f * (1f - t0) * (if (s == 0) 0.85f else 0.55f),
+                style = Stroke(width = wt * 0.011f, cap = StrokeCap.Round)
+            )
+        }
+    }
 }
+
+/** 牛皮纸（杯套）。道具材质色，不吃时代主色 —— Red 是红、Showgirl 是橙，纸套不该跟着变。 */
+private val PROP_KRAFT = Color(0xFFC08850)
+
+/** 牛皮纸的暗色：刻线、下缘积暗、套子上下缘那道厚度线。 */
+private val PROP_KRAFT_EDGE = Color(0xFF9C6034)
+
+/** 颗粒的深粒。比 [PROP_KRAFT_EDGE] 浅一档 —— 硬边线要比颗粒重，否则整条套子糊成一团。 */
+private val PROP_KRAFT_DARK = Color(0xFFAA6E3C)
+
+/** 牛皮纸的亮色：颗粒的亮粒、上缘受光。 */
+private val PROP_KRAFT_LIGHT = Color(0xFFD8A46C)
+
+/** 软木颗粒的颗数。参考图那条套子上百来颗可见的深浅粒。 */
+private const val SLEEVE_GRAIN = 380
+
+/** 颗粒的哈希种子。**换这个数每次装机看到的颗粒都不同**，定一个就别再动。 */
+private const val SLEEVE_GRAIN_SEED = 7717
+
+/** 杯里的咖啡：吸口那一点棕色。 */
+private val PROP_COFFEE = Color(0xFF6C4226)
+
+/**
+ * 纸套上那片刻线枫叶与那行字的墨色：**咖啡色**，不吃时代主色。
+ *
+ * 参考图上那片叶子就是压印的深棕刻线（实测 (79,49,32)），用户要的也是这个 ——
+ * 它不是「Red 时代的一张红色线画」，而是**一杯枫糖拿铁纸套上的印刷**：
+ * 套子是牛皮纸色、字与叶是咖啡色的刻痕，整件东西才读成实物。
+ */
+private val PROP_ENGRAVE = Color(0xFF5C3A21)
 
 /** 5 · 1989：宝丽来白框 + 一只海鸥。轻微倾斜，像随手摆上去的。 */
 private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float) {

@@ -1942,27 +1942,18 @@ private fun DrawScope.drawKnitMaples(path: Path, mid: Color, deep: Color, alpha:
                 alpha = alpha * 0.50f,
                 style = Stroke(width = u * 0.003f, join = StrokeJoin.Round)
             )
-            drawLine(
-                deep,
-                Offset(0f, half * 0.55f),
-                Offset(-half * 0.05f, half * 1.12f),
-                half * 0.050f,
-                StrokeCap.Round,
-                alpha = alpha * 0.72f
+            // 叶脉与叶柄走**共用**的掌状脉（`drawMapleVeins`）：与杯套那片刻线、
+            // 飘落的秋叶是同一套（弯曲的支脉 + 收细 + 细羽）。这几片是这一张的主体，
+            // 尺寸也最大，细羽给足才不读成一块红纸
+            drawMapleVeins(
+                ink = deep,
+                half = half,
+                alpha = alpha * 0.40f,
+                strokeWidth = half * 0.024f,
+                feathers = true,
+                // 细羽裁在叶形里，不然下侧瓣的朝下羽会在叶底拖出一圈须
+                clip = path
             )
-            for (lobe in 0..4) {
-                val tipA = mapleTipAngle(lobe)
-                val tipR = mapleTipRadius(half, lobe) * 0.86f
-                drawLine(
-                    deep,
-                    Offset(0f, half * 0.55f),
-                    Offset(cos(tipA) * tipR, half * 0.55f + sin(tipA) * tipR),
-                    // 正中那条是主脉，比支脉粗一倍
-                    if (lobe == 2) half * 0.040f else half * 0.024f,
-                    StrokeCap.Round,
-                    alpha = alpha * 0.42f
-                )
-            }
         }
     }
 }
