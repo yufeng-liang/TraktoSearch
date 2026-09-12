@@ -10,6 +10,7 @@ import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiCharacterCatalog
 import com.tracktosearch.data.ai.AiErrorCode
 import com.tracktosearch.data.ai.AiGreeting
+import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestionType
@@ -53,7 +54,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
@@ -312,6 +315,25 @@ class AiSpriteViewModel @Inject constructor(
 
     init {
         observeConnectivityState()
+        observeQuotaSnapshot()
+    }
+
+    /**
+     * 额度变化时把当日用量落盘：服务端没有独立额度查询接口，重启后恢复激活态
+     * 只能靠这份快照把「今日 x/80」补回来。按 distinct dailyUsed 去重，避免每次刷新都写。
+     */
+    private fun observeQuotaSnapshot() {
+        viewModelScope.launch(ioDispatcher) {
+            _uiState
+                .map { it.quota?.dailyUsed }
+                .distinctUntilChanged()
+                .collect { dailyUsed ->
+                    if (dailyUsed == null) return@collect
+                    val friendId = authManager.friendId.value.orEmpty()
+                    if (friendId.isBlank()) return@collect
+                    aiRepository.saveQuotaSnapshot(friendId, dailyUsed)
+                }
+        }
     }
 
     /**
@@ -514,6 +536,9 @@ class AiSpriteViewModel @Inject constructor(
             val restored = aiRepository.readActivatedCharacterId(friendId) ?: return@launch
             if (!canReadPrivateState(friendId, generation)) return@launch
             if (_uiState.value.characters.none { it.id == restored }) return@launch
+            // 额度只随各功能响应顺带返回，重启后没有现值；读当日快照把「今日 x/80」补回来，
+            // 本轮计数随会话重置故显示 0，跨日快照不命中则维持「额度暂不可用」
+            val snapshotDailyUsed = aiRepository.readQuotaSnapshotDailyUsed(friendId)
             var restoredSelected = false
             _uiState.update { state ->
                 // 本次会话里已经激活过就不覆盖，避免落盘的旧值顶掉刚激活的角色
@@ -523,7 +548,16 @@ class AiSpriteViewModel @Inject constructor(
                     state.copy(
                         activatedCharacterId = restored,
                         selectedCharacterId = restored,
-                        activationState = AiActivationState.SUCCESS
+                        activationState = AiActivationState.SUCCESS,
+                        quota = state.quota ?: snapshotDailyUsed?.let { dailyUsed ->
+                            AiQuota(
+                                sessionUsed = 0,
+                                sessionLimit = 14,
+                                dailyUsed = dailyUsed,
+                                dailyLimit = 80,
+                                resetAt = null
+                            )
+                        }
                     )
                 }
             }

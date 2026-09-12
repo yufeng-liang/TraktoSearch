@@ -26,6 +26,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -868,6 +869,31 @@ class AiRepository @Inject constructor(
     suspend fun clearActivatedCharacterId(friendId: String) {
         runCatching { storage.remove(friendId, AiCacheFeature.ACTIVATION) }
     }
+
+    /**
+     * 读取当日额度用量快照（dailyUsed），按 UTC 日隔离。
+     * 服务端没有独立额度查询接口，重启后恢复激活态时靠它把「今日 x/80」显示出来。
+     */
+    suspend fun readQuotaSnapshotDailyUsed(friendId: String): Int? = runCatching {
+        val raw = storage.read(friendId, AiCacheFeature.QUOTA_SNAPSHOT, quotaSnapshotDay())
+            ?: return@runCatching null
+        Json { ignoreUnknownKeys = true }.decodeFromString<AiQuotaSnapshotDto>(raw).dailyUsed
+    }.getOrNull()
+
+    /** 把最近一次响应里的额度用量落到当日快照，供重启后恢复显示。 */
+    suspend fun saveQuotaSnapshot(friendId: String, dailyUsed: Int) {
+        runCatching {
+            storage.write(
+                friendId,
+                AiCacheFeature.QUOTA_SNAPSHOT,
+                Json.encodeToString(AiQuotaSnapshotDto(dailyUsed)),
+                quotaSnapshotDay()
+            )
+        }
+    }
+
+    /** 快照按 UTC 日分键：与网关 usage_day（同样取 UTC 日历日）的复位边界一致，跨日自然不命中。 */
+    private fun quotaSnapshotDay(): String = LocalDate.now(ZoneOffset.UTC).toString()
 
     /** 昵称变化后清除当前精灵的旧点评，避免昵称原文与解析结果错配。 */
     suspend fun clearGreetingCache(friendId: String, characterId: String) {

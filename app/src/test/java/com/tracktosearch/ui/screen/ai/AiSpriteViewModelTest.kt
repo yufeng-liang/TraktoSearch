@@ -1102,6 +1102,45 @@ class AiSpriteViewModelTest {
     }
 
     @Test
+    fun restoreActivation_backfillsQuotaFromDailySnapshot() = runTest {
+        val viewModel = viewModel()
+        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
+        coEvery { aiRepository.readQuotaSnapshotDailyUsed("friend-a") } returns 23
+
+        viewModel.restoreActivation()
+        advanceUntilIdle()
+
+        // 重启后没有现值额度，靠当日快照补回「今日 23/80」，本轮计数随会话重置显示 0
+        val quota = viewModel.uiState.value.quota
+        assertThat(quota?.dailyUsed).isEqualTo(23)
+        assertThat(quota?.dailyLimit).isEqualTo(80)
+        assertThat(quota?.sessionUsed).isEqualTo(0)
+    }
+
+    @Test
+    fun restoreActivation_keepsQuotaUnavailableWhenSnapshotMissing() = runTest {
+        val viewModel = viewModel()
+        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
+        coEvery { aiRepository.readQuotaSnapshotDailyUsed("friend-a") } returns null
+
+        viewModel.restoreActivation()
+        advanceUntilIdle()
+
+        // 跨日或从未用过功能：没有快照就维持「额度暂不可用」，不能凭空造一个 0/80
+        assertThat(viewModel.uiState.value.quota).isNull()
+    }
+
+    @Test
+    fun quotaChange_persistsDailySnapshotForNextLaunch() = runTest {
+        val viewModel = viewModel()
+        viewModel.seedState { it.copy(quota = quota(sessionUsed = 2, dailyUsed = 31)) }
+        advanceUntilIdle()
+
+        // 额度一旦刷新就落盘，重启后恢复激活态才能把它读回来
+        coVerify(atLeast = 1) { aiRepository.saveQuotaSnapshot("friend-a", 31) }
+    }
+
+    @Test
     fun activationSuccessPersistsCharacterForLaterProcesses() = runTest {
         val viewModel = viewModel()
         viewModel.seedVoiceReadyState()

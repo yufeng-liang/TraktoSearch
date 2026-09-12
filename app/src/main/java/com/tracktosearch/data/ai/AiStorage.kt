@@ -32,6 +32,9 @@ enum class AiCacheFeature(val wireName: String) {
     QUIZ_RESULT("quiz_result"),
     // 已激活角色：不落盘的话杀进程后激活即失效，用户得再喊一次名字并再烧一次配额
     ACTIVATION("activation"),
+    // 当日额度用量快照：服务端没有独立的额度查询接口，额度只随各功能响应顺带返回；
+    // 重启后恢复激活态时靠它显示「今日 x/80」，而不是退化成「额度暂不可用」
+    QUOTA_SNAPSHOT("quota_snapshot"),
     TTS("tts"),
     // 详情页 AI 分析：缓存后缀含 mediaKey/场景/环境键，换片或换时段自然不命中
     DETAIL_ANALYSIS("detail_analysis"),

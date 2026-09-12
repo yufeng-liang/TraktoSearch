@@ -45,6 +45,12 @@ data class AiQuota(
     val resetAt: Long?
 )
 
+/** 当日额度用量快照：只存跨重启仍有意义的 dailyUsed，session 计数每次打开都重置故不落盘。 */
+@Serializable
+data class AiQuotaSnapshotDto(
+    val dailyUsed: Int
+)
+
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
 data class AiActivateRequest(
