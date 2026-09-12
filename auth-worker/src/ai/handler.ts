@@ -87,6 +87,8 @@ import {
     type TtsPublicAudio,
 } from './tts.ts';
 import { recordHealthEvent, type HealthRouteContext } from './health.ts';
+import { handleAiProfileApi } from './profile-handler.ts';
+import { handleAiDetailApi } from './detail-handler.ts';
 import { mapWithGate } from './async-pool.ts';
 import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, rankMovieTitlesForSlots, type QuizAngleType, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
 import { questionSlotMessages, unitSlotMessages, type SlotMovie, type SlotUnit } from './quiz-slot-messages.ts';
@@ -363,6 +365,35 @@ export async function handleAiApi(
         const body = await readJsonBody(request);
         assertAction(body, 'daily');
         return handleDailyStream(body, env, requestId, requireAiPayload(payload), audioOrigin, background);
+    }
+
+    // 画像与详情路由含 GET/PATCH/DELETE，必须排在下面的 POST-only 兜底之前；
+    // 两个 handler 自己读 body（各自的体积上限比 MAX_REQUEST_BYTES 小得多），
+    // 所以不能复用下面的 readJsonBody 结果。
+    const isProfileRoute = path === '/api/ai/profile'
+        || path === '/api/ai/profile/settings'
+        || path === '/api/ai/profile/sync'
+        || /^\/api\/ai\/profile\/[^/]+$/.test(path);
+    if (isProfileRoute) {
+        return handleAiProfileApi(
+            request,
+            env,
+            requestId,
+            path,
+            requireAiPayload(payload).sub,
+        );
+    }
+
+    if (path === '/api/ai/detail/analyze' || path === '/api/ai/recommendations/rank') {
+        const authenticatedPayload = requireAiPayload(payload);
+        return handleAiDetailApi(
+            request,
+            env,
+            requestId,
+            path,
+            authenticatedPayload.sub,
+            authenticatedPayload.device,
+        );
     }
 
     if (request.method !== 'POST') {
