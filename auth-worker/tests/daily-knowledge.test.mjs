@@ -924,6 +924,105 @@ test('placeholder source keeps no link even when the model copies the example UR
     assert.equal(copied.source.evidence, '本节由 AI 综合公开通识整理，未引用具体来源。');
 });
 
+test('强证据学科看来源是否真实可核验，不再卡 evidenceMode 的写法', () => {
+    const movies = [{ title: '星际穿越', mediaType: 'movie', evidence: ['上映年份：2014', '简介：团队穿越虫洞寻找适合人类生存的行星。'] }];
+    const strong = overrides => validKnowledgeUnit({
+        unitId: 'strong-subject-unit',
+        relationType: 'general_knowledge',
+        subjectGroup: 'science_and_nature',
+        subject: '物理',
+        concept: '时间膨胀',
+        title: '强引力下时间为什么会变慢',
+        takeaway: '引力越强，观察者测得的时间流逝越慢，这是广义相对论的推论。',
+        relatedMedia: null,
+        checkQuestion: {
+            prompt: '强引力环境下的时间流逝会怎样变化？',
+            options: [
+                { id: 'a', text: '与地球上完全一致' },
+                { id: 'b', text: '强引力下的时钟走得更慢' },
+                { id: 'c', text: '时间会倒流' },
+            ],
+            correctOptionIds: ['b'],
+            explanation: '时间膨胀说明强引力场附近的时钟走得更慢，星球上一小时可以对应地球上的数年。',
+        },
+        filmEvidence: '影片用强引力星球上的时间差呈现这一效应。',
+        explanation: '时间膨胀说明强引力场附近的时钟走得更慢，因此星球上一小时对应地球上数年。',
+        realWorldExample: 'GPS 卫星必须按相对论修正时钟，否则定位每天会偏出数公里。',
+        boundary: '这是来源支持的物理说明，不是对剧情的解读。',
+        source: { name: 'Encyclopaedia Britannica', url: 'https://www.britannica.com/science/time-dilation', evidence: '该条目说明引力时间膨胀的机制与观测证据。' },
+        ...overrides,
+    });
+
+    // 模型常写的组合：用 film_fact 框定「影片里的物理」，同时给出真实条目 —— 应当通过
+    assert.doesNotThrow(() => normalizeDailyKnowledgeUnit(
+        strong({ evidenceMode: 'film_fact' }),
+        { day: '2026-09-12', locale: 'zh-CN', movies },
+    ));
+
+    // 真正要拦的：强证据学科却没有真实来源
+    assert.throws(
+        () => normalizeDailyKnowledgeUnit(
+            strong({ source: { name: 'AI 综合解读', url: '', evidence: '本节由 AI 综合公开通识整理，未引用具体来源。' } }),
+            { day: '2026-09-12', locale: 'zh-CN', movies },
+        ),
+        /evidence-enhanced subject/,
+    );
+    assert.throws(
+        () => normalizeDailyKnowledgeUnit(
+            strong({ source: { name: '某电影资料馆', url: 'https://www.cafdc.cn/entry', evidence: '该资料说明时间膨胀。' } }),
+            { day: '2026-09-12', locale: 'zh-CN', movies },
+        ),
+        /evidence-enhanced subject/,
+    );
+});
+
+test('候选与二审提示词都带「输出前逐条自检」清单', async () => {
+    const { dailyCandidateMessages, dailyReviewMessages, normalizeDailyKnowledgeUnit } = await import('../src/ai/daily-knowledge.ts');
+    const candidate = dailyCandidateMessages('2026-09-12', 'zh-CN', [], null, []);
+    const system = String(candidate[0].content);
+    // 判废最集中的三条：难度取值、concept 回填、强证据学科配来源
+    assert.match(system, /输出前逐条自检/);
+    assert.match(system, /difficulty 只能是小写英文 easy、medium、hard/);
+    assert.match(system, /必须原样出现 concept 全文/);
+    assert.match(system, /source 必须是可信域内的真实条目/);
+    assert.match(system, /"name":"AI 综合解读","url":""/);
+    assert.match(system, /不得出现输入材料里没有的人名/);
+
+    // 二审同样带上（review 轮也会被判废，理由相同）
+    const unit = normalizeDailyKnowledgeUnit(
+        {
+            unitId: 'self-check-unit',
+            version: 1,
+            locale: 'zh-CN',
+            relationType: 'general_knowledge',
+            evidenceMode: 'film_fact',
+            subjectGroup: 'film_expression',
+            subject: '电影学',
+            concept: '片场口令',
+            title: '片场口令如何组织协作',
+            takeaway: '统一口令把多部门准备压缩成同一瞬间，降低拍摄现场的不确定性。',
+            relatedMedia: null,
+            filmEvidence: '开机前的部门准备和统一信号，是影片制作资料中可确认的协作方式。',
+            explanation: '片场口令是统一信号：片场时间成本高，它让摄影、灯光、表演和声音在同一时刻进入执行状态。',
+            realWorldExample: '复杂项目也需要明确职责边界和统一启动信号。',
+            boundary: '这是制作历史的说明，不同剧组流程会存在差异。',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: { name: 'AI 综合解读', url: '', evidence: '本节由 AI 综合公开通识整理，未引用具体来源。' },
+            checkQuestion: {
+                prompt: '统一口令的主要作用是什么？',
+                options: [{ id: 'a', text: '让所有人立刻改变立场' }, { id: 'b', text: '让多部门在同一瞬间进入执行状态' }],
+                correctOptionIds: ['b'],
+                explanation: '片场口令作为协作信号，能让多部门同时进入执行状态。',
+            },
+            characterLine: '',
+        },
+        { day: '2026-09-12', locale: 'zh-CN', movies: [] },
+    );
+    const review = dailyReviewMessages(unit, 'zh-CN', [], null, []);
+    assert.match(String(review[0].content), /输出前逐条自检/);
+});
+
 test('本地判废理由被翻译成中文修复指令再回灌给模型', async () => {
     const { dailyRepairHintFor, dailyCandidateMessages } = await import('../src/ai/daily-knowledge.ts');
 

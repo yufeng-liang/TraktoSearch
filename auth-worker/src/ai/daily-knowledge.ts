@@ -368,6 +368,17 @@ function isHttpUrl(value: string): boolean {
     }
 }
 
+/** 强证据学科的来源判据：真实具名、有摘要、链接落在可信域内（占位来源不算）。 */
+function hasVerifiableSource(source: KnowledgeSource): boolean {
+    if (source.name === DAILY_NO_SOURCE_NAME) return false;
+    if (source.evidence.trim() === '') return false;
+    try {
+        return isTrustedDailySourceHost(new URL(source.url).hostname);
+    } catch {
+        return false;
+    }
+}
+
 function normalizeSource(value: unknown): KnowledgeSource {
     const object = requireRecord(value, 'source');
     const name = requireText(object.name, 'source.name', 2, 120);
@@ -643,7 +654,12 @@ export function normalizeDailyKnowledgeUnit(
         throw invalidUnit('subject does not match generic methodology content');
     }
     if (EVIDENCE_ENHANCED_SUBJECTS.has(subject)) {
-        if (evidenceMode !== 'external_fact' || !source.evidence) throw invalidUnit('evidence-enhanced subject requires external source evidence');
+        // 强证据学科要拦的是「没有可核验来源却下科学结论」，判据因此落在来源本身：
+        // 不是「AI 综合解读」占位、evidence 非空、URL 落在可信域内的具体条目。
+        // 不再要求 evidenceMode 必须是 external_fact —— 真上游实测模型常写 film_fact 来框定
+        // 「影片里的物理」，同时附上 Britannica/NASA 的真实条目；这种组合是诚实的，
+        // 卡住它只会白烧一整轮修复（12 次抽样里 5 次，每轮多等 20-40 秒）。
+        if (!hasVerifiableSource(source)) throw invalidUnit('evidence-enhanced subject requires external source evidence');
     }
     if (!normalizeForMatch(checkQuestion.explanation).includes(normalizeForMatch(concept))) {
         throw invalidUnit('checkQuestion explanation must return to the same concept');
@@ -833,7 +849,8 @@ const DAILY_CONTENT_RULES = '内容规则：标题、结论和影视依据必须
     + '学科标签必须与内容真正检验的东西一致，禁止给“避免过度解读/如何向朋友推荐/再看一遍”这类与学科无关的通用方法内容硬套物理、化学、历史、马克思主义哲学等学科，'
     + '除非学科本身就是学习/记忆/元认知（教育学、心理学、认知科学、发展心理学）；'
     + '强证据学科（物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学）'
-    + '只有在你同时给出可核验 https 来源（evidenceMode=external_fact 且 source.evidence 非空）时才允许选，否则直接换一个不需要外部来源的学科；'
+    + '只有在你同时给出可信域内的具体条目链接（source 写真实来源名 + 该条目 URL + 非空 evidence，不能写「AI 综合解读」占位）时才允许选，'
+    + '否则直接换一个不需要外部来源的学科；evidenceMode 按内容口径照常写 film_fact / viewing_interpretation / external_fact 都可以；'
     + 'external_fact 的外部事实必须得到 source.evidence 与 URL 的实质支持，且 URL 必须落在上面列出的可信域内；'
     + 'checkQuestion 的选项文本不要以句号等句子标点结尾。'
     // 下面三条是本地门槛里最容易被内容写法踩中的：任一条不满足都判废，且报错信息在客户端不可见
@@ -842,7 +859,17 @@ const DAILY_CONTENT_RULES = '内容规则：标题、结论和影视依据必须
     + 'boundary 必须按 evidenceMode 用词：film_fact 要出现「事实」「资料」或「说明」，viewing_interpretation 要出现「解读」或「不是」，'
     + 'external_fact 要出现「来源」「事实」或「说明」，theme_extension 要出现「延伸」或「不是」。'
     + '剧透硬规则：title、takeaway、filmEvidence、characterLine、checkQuestion 的题干/选项/解析里只要出现「结局」「结尾」「死亡」「凶手」「真相」「逆转」'
-    + '（或对应语言的同义实词），spoilerLevel 就必须标成 heavy；能改写规避（如用「消逝」「代价」「从故事后段讲起」）就优先改写。';
+    + '（或对应语言的同义实词），spoilerLevel 就必须标成 heavy；能改写规避（如用「消逝」「代价」「从故事后段讲起」）就优先改写。'
+    // 输出前自检：真上游抽样（12 次生成）里判废集中在下面几条，规则散落在上文时模型照样踩。
+    // 逐条列在最后，等于把「本地门槛最常拦的三条」提前交给模型，省掉一整轮重写（实测一次修复轮
+    // 要多花 20-40 秒，而用户是在流式等待页上等这段时间）。
+    + '输出前逐条自检（这几条是本地校验最常拦下的）：'
+    + '① difficulty 只能是小写英文 easy、medium、hard；'
+    + '② checkQuestion.explanation 里必须原样出现 concept 全文；'
+    + '③ 选了物理/化学/生物与生态/医学与公共卫生/天文学/地理与气候/计算机与人工智能/数学与统计/工程与材料/建筑与城市规划/法学/军事学与战略/体育科学/食品科学'
+    + '这些强证据学科时，source 必须是可信域内的真实条目（真实来源名 + 条目 URL + 非空 evidence，不能是「AI 综合解读」占位）——做不到就换一个不需要外部来源的学科；'
+    + '④ 没有具体来源时写 {"name":"' + DAILY_NO_SOURCE_NAME + '","url":"","evidence":"' + DAILY_NO_SOURCE_EVIDENCE + '"}；'
+    + '⑤ 全文不得出现输入材料里没有的人名，角色统一用「主角」指代。';
 
 /**
  * 本地门槛的判废理由要回灌给模型重写。门槛内部用英文错误串（日志与健康事件按它聚合），
@@ -872,7 +899,7 @@ const DAILY_REPAIR_HINTS: Record<string, string> = {
     'filmEvidence must use specific watched input besides the title':
         'filmEvidence 必须原样照抄输入材料简介里 4 字以上的连续片段，不能只写片名',
     'evidence-enhanced subject requires external source evidence':
-        '这个学科必须有可核验来源：evidenceMode 改成 external_fact 并写清 source.evidence，或换一个不需要外部来源的学科',
+        '这个学科属于强证据学科，必须给出可信域内的真实条目：source 写真实来源名 + 该站点上的具体条目 URL + 非空 evidence（不能写「AI 综合解读」占位）；做不到就换一个不需要外部来源的学科',
     'explanation或realWorldExample出现了输入材料里没有的人物名（禁编造演职员/角色名）':
         '出现了输入材料里没有的人物名：演员名、角色名一律删掉，改用「主角」「主人公」这类通称',
     'checkQuestion explanation must return to the same concept':
