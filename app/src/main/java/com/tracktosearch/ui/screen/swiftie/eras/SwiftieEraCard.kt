@@ -167,13 +167,15 @@ fun SwiftieEraCard(
     val longTitles = remember(era) {
         BooleanArray(era.tracks.size) { era.tracks[it].length > LONG_TITLE_CHARS }
     }
-    // evermore 的母题是照片抠图（其余母题仍是线画）：位图只能在组合阶段读，
-    // draw 阶段（drawBehind）拿不到 resources。别的时代这里就是 null，不额外解码
-    val evermoreBack = if (era.motif == SwiftieEraMotif.BRAID_PLAID) {
-        ImageBitmap.imageResource(R.drawable.era_evermore_back)
-    } else {
-        null
+    // 母题的照片抠图（Red 的围巾、evermore 的背影，其余母题仍是线画）。位图只能在
+    // 组合阶段读，draw 阶段（drawBehind）拿不到 resources；别的时代这里恒为 null，
+    // 那 10 张卡片因此连一次解码都不做
+    val photoRes = when (era.motif) {
+        SwiftieEraMotif.RED_SCARF -> R.drawable.era_red_scarf
+        SwiftieEraMotif.BRAID_PLAID -> R.drawable.era_evermore_back
+        else -> null
     }
+    val propPhoto = photoRes?.let { ImageBitmap.imageResource(it) }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -296,7 +298,7 @@ fun SwiftieEraCard(
                         // 读一下真时钟就把整块定格的意义抹掉了
                         eraElapsedMs = -1L,
                         loverAimAngle = loverAimAngle(),
-                        evermoreBack = evermoreBack
+                        propPhoto = propPhoto
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -309,7 +311,7 @@ fun SwiftieEraCard(
                         columnFade = columnFadeAt(elapsed, longTitles, stagger),
                         eraElapsedMs = elapsed,
                         loverAimAngle = loverAimAngle(),
-                        evermoreBack = evermoreBack
+                        propPhoto = propPhoto
                     )
                 }
             }

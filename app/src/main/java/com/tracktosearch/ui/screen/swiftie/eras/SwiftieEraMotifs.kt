@@ -124,21 +124,26 @@ fun DrawScope.drawEraMotif(
     columnFade: Float,
     eraElapsedMs: Long,
     loverAimAngle: Float = LOVER_FALLBACK_AIM_ANGLE,
-    /** evermore 那一张的照片抠图。别的母题不用，默认 null 时该母题退化成只有底纹 */
-    evermoreBack: ImageBitmap? = null
+    /**
+     * 本母题的照片抠图。**只有两个母题用得上**：Red 的红围巾与 evermore 的背影 ——
+     * 其余母题一律传 null，那些函数根本不读这个参数，母题本身照旧画。
+     *
+     * 位图只能在组合阶段读（draw 阶段拿不到 resources），所以由 `SwiftieEraCard` 传进来。
+     */
+    propPhoto: ImageBitmap? = null
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
         SwiftieEraMotif.PORCH_GUITAR -> drawPorchGuitar(color, phase, alpha)
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
         SwiftieEraMotif.STAGE_CURTAIN -> drawStageCurtain(color, phase, alpha)
-        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha)
+        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto)
         SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
         SwiftieEraMotif.LOVER_ARCHER ->
             drawLoverArcher(color, phase, alpha, eraElapsedMs, loverAimAngle)
         SwiftieEraMotif.CARDIGAN_CHAIR -> drawCardiganChair(color, phase, alpha)
-        SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha, evermoreBack)
+        SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha, propPhoto)
         SwiftieEraMotif.LIGHTER_STARS -> drawLighterStars(color, phase, alpha)
         SwiftieEraMotif.LETTER_QUILL -> drawLetterQuill(phase, alpha)
         SwiftieEraMotif.VANITY_MIRROR -> drawVanityMirror(color, phase, alpha)
@@ -1093,20 +1098,35 @@ private fun DrawScope.drawDressSilhouette(
 }
 
 /**
- * 4 · Red：**围成一圈**的红围巾（卡片右上角）+ 一顶 fedora（共用的右侧列里）。
+ * 4 · Red：一条红围巾（卡片右上角）+ 一顶 fedora（共用的右侧列里）。
  *
  * 围巾是 *All Too Well* 的核心意象，所以它在卡片上不是「垂下来的一条」而是
- * **绕成一圈**的 —— 围在脖子上时的样子，一个厚线圈加两条穿过圈的垂端。
- * 直挂的一条与页面背景那根枯枝、以及别张卡片上的垂布（folklore 的开衫、
- * Speak Now 的裙摆）都太像，绕成圈之后一眼就分得出这是围巾。
+ * **绕起来挂着**的样子；直挂的一条与页面背景那根枯枝、以及别张卡片上的垂布
+ * （folklore 的开衫、Speak Now 的裙摆）都太像。
  *
- * 位置在**右上角**（见 [drawCoiledScarf] 的取框）而不是共用的右侧列：那一列
- * 从 0.34h 往下，正是曲目名最长那几行（"We Are Never Ever Getting Back Together"）
- * 伸到的地方。右上角在首行曲目以上，只有日期在它左边。
+ * 画的是**照片抠图**（`era_red_scarf.png`：用户给的素材，裁到外框、抹掉透明区的
+ * 黑 RGB、降到 760 宽），不再用 Canvas 手画。手画那版把罗纹与流苏试到第七种画法，
+ * 在 437px 的道具框里针脚的绒感与 `ALL TOO WELL` 的刺绣各占十几像素，几何化到
+ * 最后只能是一圈带描边的色带；照片自带全部质感，代价只有一张 0.85MB 的 PNG。
+ *
+ * 位置在**右上角**而不是共用的右侧列：那一列从 0.34h 往下，正是曲目名最长那几行
+ * （"We Are Never Ever Getting Back Together"）伸到的地方。照片下缘落在 0.39h，
+ * 纵向压到的只有第 1..4 行那几条短歌名，横向离它们的行尾还差 0.08w ——
+ * 也就是说这张卡上 `columnFade` 其实不会被触发，道具与长歌名在几何上根本不相交。
+ * 照片本身也画在曲目文字**底下**（母题在卡片 `drawBehind` 那一层），
+ * 让位系数仍然乘着，纯粹是与其他 11 张共用同一条通路。
+ *
+ * 手画稿留在仓库外（`build/egg-shots/red_scarf_handdrawn.kt.txt`），要再改结构时从那儿起。
  */
-private fun DrawScope.drawRedScarf(color: Color, phase: Float, alpha: Float) {
+private fun DrawScope.drawRedScarf(
+    color: Color,
+    phase: Float,
+    alpha: Float,
+    scarf: ImageBitmap?
+) {
     knitStripeTexture(color, phase)
-    drawCoiledScarf(color, phase, alpha)
+    // 位图读不到时（低配机预解压失败之类）就只剩底纹与那顶 fedora，不画半个围巾
+    if (scarf != null) drawRedScarfPhoto(scarf, phase, alpha)
     val box = propBox()
     val w = box.width
     val h = box.height
@@ -1115,141 +1135,44 @@ private fun DrawScope.drawRedScarf(color: Color, phase: Float, alpha: Float) {
     }
 }
 
-/**
- * 绕成一圈的围巾：一个厚线圈 + 圈上的罗纹 + 两条穿过圈垂下来的端头（带流苏）。
- *
- * 圈用**一条很粗的描边椭圆**画，不是两条同心椭圆之间填色：描边天生等宽，
- * 而两条椭圆之间那块在长短轴处的厚度差三成，读出来是一枚戒指而不是一条布。
- *
- * 圈整体逆时针歪 14°，两条垂端长短不一：正着摆的圈加对称的两条端头是个图标，
- * 不是搭在那儿的一件东西。
- */
-private fun DrawScope.drawCoiledScarf(color: Color, phase: Float, alpha: Float) {
-    val cw = size.width
-    val ch = size.height
-    // 右上角那一块：右缘留 0.03 的边距，下缘停在 0.245h —— 首行曲目在 0.26h 起
-    val bw = cw * 0.355f
-    val bh = ch * 0.225f
-    val cx = cw * 0.615f + bw * 0.46f
-    val cy = ch * 0.018f + bh * 0.38f
-    val rx = bw * 0.30f
-    val ry = bh * 0.32f
-    // 管的粗细。圈的内高 = 2·(ry − tube/2)，留得住一个看得见的洞
-    val tube = bh * 0.15f
-    // 呼吸：整圈随相位轻微起伏一格，幅度压在 1.5% —— 卡片上的道具会动，但不该「跳」
-    val breath = 1f + sin(phase * TAU) * 0.015f
-
-    // 两条垂端**先画**：它们是从线圈后面穿出来的，圈身要压在它们上面。
-    // 先画圈后画端头（上一版）读作两条搭在圈上的布，「穿过去」那层意思就没了
-    drawCoiledScarfEnds(color, alpha, cx, cy, rx, ry, tube, bh)
-    withTransform({
-        translate(cx, cy)
-        rotate(-14f, Offset.Zero)
-    }) {
-        // 垫白：圈身是半透明的粗描边，不垫这一层两条垂端会从管面里透出来，
-        // 读作画在圈上面而不是穿在圈后面
-        drawOval(
-            color = Color.White,
-            topLeft = Offset(-rx * breath, -ry * breath),
-            size = Size(rx * 2f * breath, ry * 2f * breath),
-            alpha = alpha * PROP_MASK,
-            style = Stroke(width = tube)
-        )
-        drawOval(
-            color = color,
-            topLeft = Offset(-rx * breath, -ry * breath),
-            size = Size(rx * 2f * breath, ry * 2f * breath),
-            alpha = alpha * 0.82f,
-            style = Stroke(width = tube)
-        )
-        // 罗纹：14 道横跨管面的短痕，沿圈等角分布。这是它读作「针织」的全部原因
-        for (i in 0 until 14) {
-            val a = i / 14f * TAU
-            val px = cos(a) * rx * breath
-            val py = sin(a) * ry * breath
-            // 法向按椭圆参数式取，短轴附近才不会歪
-            val nx = cos(a) * ry
-            val ny = sin(a) * rx
-            val len = hypot(nx, ny).coerceAtLeast(0.0001f)
-            val ux = nx / len
-            val uy = ny / len
-            drawLine(
-                color = color,
-                start = Offset(px - ux * tube * 0.46f, py - uy * tube * 0.46f),
-                end = Offset(px + ux * tube * 0.46f, py + uy * tube * 0.46f),
-                strokeWidth = tube * 0.13f,
-                alpha = alpha * 0.5f,
-                cap = StrokeCap.Round
-            )
-        }
-    }
-}
+/** 照片的落位：右缘留 0.025w 的边距、上缘从 0.018h 起 —— 旧手绘围巾就挂在右上角这一块。 */
+private const val RED_SCARF_PHOTO_RIGHT = 0.975f
+private const val RED_SCARF_PHOTO_TOP = 0.018f
+private const val RED_SCARF_PHOTO_WIDTH = 0.34f
 
 /**
- * 穿过线圈垂下来的两条端头，各带流苏。
+ * 照片的显影强度：有效 alpha = 0.35 × 2.2 ≈ 0.77，与 evermore 那张同一档。
  *
- * 两条**长短、粗细、撇向都不一样**：等长对称的两条挂在圈下面，整个道具就成了一枚吊坠。
- * 流苏沿端头自己的方向长，不是一律朝下 —— 端头是斜的，流苏垂直往下会脱开。
+ * [PROP_ALPHA]（0.35）是给线画道具定的 —— 线画在纸上本来就是「淡彩」，
+ * 照片整块有色，同值读作「褪色到快没了」。再往上就是往纸上贴了一张实心贴纸，
+ * 12 个母题里只有它一个实色，整体会跳。
  */
-private fun DrawScope.drawCoiledScarfEnds(
-    color: Color,
-    alpha: Float,
-    cx: Float,
-    cy: Float,
-    rx: Float,
-    ry: Float,
-    tube: Float,
-    bh: Float
-) {
-    for (e in 0..1) {
-        val sx = cx - rx * (0.45f - e * 0.40f)
-        val sy = cy + ry * (0.70f + e * 0.24f)
-        val ex = sx - bh * (0.10f - e * 0.16f)
-        val ey = sy + bh * (0.34f + e * 0.16f)
-        val width = tube * (0.86f - e * 0.14f)
-        drawLine(
-            color = color,
-            start = Offset(sx, sy),
-            end = Offset(ex, ey),
-            strokeWidth = width,
-            cap = StrokeCap.Round,
-            alpha = alpha * 0.80f
-        )
-        val dLen = hypot(ex - sx, ey - sy).coerceAtLeast(0.0001f)
-        val dxu = (ex - sx) / dLen
-        val dyu = (ey - sy) / dLen
-        // 法向：端头是斜的，罗纹与流苏都得按它自己的方向摆
-        val nxu = -dyu
-        val nyu = dxu
-        for (r in 1..3) {
-            val t = r / 4f
-            val mx = sx + (ex - sx) * t
-            val my = sy + (ey - sy) * t
-            drawLine(
-                color = color,
-                start = Offset(mx - nxu * width * 0.44f, my - nyu * width * 0.44f),
-                end = Offset(mx + nxu * width * 0.44f, my + nyu * width * 0.44f),
-                strokeWidth = width * 0.14f,
-                alpha = alpha * 0.5f,
-                cap = StrokeCap.Round
-            )
-        }
-        for (f in 0 until 4) {
-            val spread = (f - 1.5f) / 1.5f
-            val fxp = ex + nxu * width * 0.44f * spread
-            val fyp = ey + nyu * width * 0.44f * spread
-            val len = bh * (0.055f + abs(spread) * 0.018f)
-            drawLine(
-                color = color,
-                start = Offset(fxp, fyp),
-                // 末端再往外撇一点，四根才不是一把梳子
-                end = Offset(fxp + (dxu + nxu * spread * 0.35f) * len, fyp + dyu * len),
-                strokeWidth = width * 0.16f,
-                alpha = alpha * 0.9f,
-                cap = StrokeCap.Round
-            )
-        }
-    }
+private const val RED_SCARF_PHOTO_GAIN = 2.2f
+
+/**
+ * 把围巾照片贴到卡片右上角：宽度按卡片宽的比例算，高度按素材自己的长宽比跟出来。
+ *
+ * 呼吸：整张照片极轻微地左右摆一下（吊着的一条围巾本来就会晃），幅度压在照片宽的
+ * 1% —— 卡片上的道具会动，但不该「跳」。
+ */
+private fun DrawScope.drawRedScarfPhoto(photo: ImageBitmap, phase: Float, alpha: Float) {
+    val dstW = size.width * RED_SCARF_PHOTO_WIDTH
+    val dstH = dstW * photo.height / photo.width
+    val sway = sin(phase * TAU) * dstW * 0.010f
+    drawImage(
+        image = photo,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(photo.width, photo.height),
+        dstOffset = IntOffset(
+            (size.width * (RED_SCARF_PHOTO_RIGHT - RED_SCARF_PHOTO_WIDTH) + sway).roundToInt(),
+            (size.height * RED_SCARF_PHOTO_TOP).roundToInt()
+        ),
+        dstSize = IntSize(dstW.roundToInt(), dstH.roundToInt()),
+        alpha = (alpha * RED_SCARF_PHOTO_GAIN).coerceAtMost(1f),
+        filterQuality = FilterQuality.High
+    )
+    // 主色罩**不能画**：照片的透明区是整块矩形，罩上去在卡片上留下一个方框
+    // （evermore 那版真机踩过）。照片自己的红本来就与这张卡的主色同源。
 }
 
 /**
