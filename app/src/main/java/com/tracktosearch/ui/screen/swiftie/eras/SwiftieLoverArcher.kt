@@ -115,10 +115,33 @@ private const val BOW_FULL_DRAW_Y = 0.86f
 /**
  * 箭长占道具框宽的比例。
  *
- * 0.72 是从两头夹出来的：短了在背景那颗心（约 1.7 个箭长的三分之一宽）上穿不透，
- * 尾羽会埋在心里；长了松弦状态下箭尖会顶出道具框上缘，戳进曲目列那几行里。
+ * 这个数是「射出去之后看不看得见穿心」定下来的，不是从弓上量出来的 —— 两头夹：
+ *
+ * - 短了穿不出去。0.72 那一版：命中的箭只探过心中心 0.10 个箭长（约 27px），
+ *   而心形箭镞自身就有 0.20 个箭长，于是整颗镞都叠在心的正面 —— 真机截图上
+ *   读作**一颗小粉心贴在大粉心上**，没有穿刺。
+ * - 长了整支箭在画面上拖得太远：0.95 那一版尾羽垂到曲目第 13 行上，需求方判「箭还是太长」。
+ *
+ * 0.62 是最后定下的档：真机约 190px、心宽约 127px。再长一点点（0.75 试过）尾羽就拖到
+ * 心的下方读作「箭太长了」；再短（<0.55）箭镞自身的尺寸跟着缩，穿心的读数又不够。
  */
-private const val ARROW_LEN = 0.72f
+private const val ARROW_LEN = 0.62f
+
+/**
+ * 插住之后箭尖停在心中心之外多少个**箭长**（沿瞄准方向）。
+ *
+ * 这个值决定箭镞露不露得出来，以及**尾羽落在哪里**。三个实测锚点（真机屏上）：
+ * 心中心到心的下缘约 73px、镞心到箭尖 0.101L、镞自身高 0.201L。
+ *
+ * 约束是三头夹的：① 镞心要落到心的下缘之外（≥ (73 + 0.101L)/L）；② 尾羽要收在心
+ * 下缘那一带、不能垂进卡片文字（尾端 = 心中心 − L(1−插深) ≥ 心下缘 − 约 30px）；
+ * ③ 箭要短。①②联立可得箭长上限 ≈ 心高的 0.9 倍，于是箭长定在 0.62（真机约 190px）、
+ * 插深 0.36：镞身露到心外约 30px，尾羽梢停在下缘下方一点。
+ *
+ * 0.10 时镞心还在心面正中（整颗镞叠在心的正面，真机截图确认这就是「贴在爱心上」）；
+ * 0.48（0.75 箭长）时镞露得够，但尾羽收得太高、陷进心的下半张脸，整支箭读作插在心的正面。
+ */
+private const val STUCK_DEPTH = 0.36f
 
 /**
  * 测量尚未完成时的保守兜底方向。
@@ -552,17 +575,17 @@ internal fun swiftieLoverArrowStart(
     normalizeOrFallback(aimUnit, LOVER_FALLBACK_AIM_UNIT) * swiftieLoverArrowLength(propBox)
 
 /**
- * 插住之后箭尖停在哪：从心的中心沿 [aimUnit] 再往前 0.10 个箭长。
+ * 插住之后箭尖停在哪：从心的中心沿 [aimUnit] 再往前 [STUCK_DEPTH] 个箭长。
  *
- * 箭镞要真正嵌进瓷釉心，而不是停在心外当装饰。0.10 仍让尖端朝入射方向露出，
- * 同时把心形镞的主体压进心面；箭尾则继续从心的另一侧露出，保留「穿过」的层次。
+ * 深度由「箭镞要露出来」反推（见 [STUCK_DEPTH] 的注释）：露太少读作贴在心的正面，
+ * 露太多箭尖与心的尖瓣脱开、悬在下面。箭尾则继续从心的另一侧露出，保留「穿过」的层次。
  */
 internal fun swiftieLoverStuckTip(
     heart: Rect,
     length: Float,
     aimUnit: Offset = LOVER_FALLBACK_AIM_UNIT
 ): Offset = heart.center +
-    normalizeOrFallback(aimUnit, LOVER_FALLBACK_AIM_UNIT) * (length * 0.10f)
+    normalizeOrFallback(aimUnit, LOVER_FALLBACK_AIM_UNIT) * (length * STUCK_DEPTH)
 
 /** 三次贝塞尔上 [t] 处的点。弓臂的局部参考曲线仍保留，箭的飞行不再使用它。 */
 private fun cubicAt(p0: Offset, p1: Offset, p2: Offset, p3: Offset, t: Float): Offset {

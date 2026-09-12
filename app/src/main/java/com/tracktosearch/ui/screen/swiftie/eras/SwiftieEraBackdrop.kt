@@ -3138,16 +3138,14 @@ private fun DrawScope.drawLoverHeart(
                 strokeWidth = side * 0.055f,
                 alpha = alpha * 0.22f
             )
-            // 箭尾重新浮到心面上；箭镞也要在前景补一遍，否则它嵌进心里后会被釉面完全盖住。
-            drawArcheryArrow(tip, aim.angle, length, alpha * 0.95f, from = 0.49f)
-            drawArcheryArrow(
-                tip,
-                aim.angle,
-                length,
-                alpha * 0.95f,
-                from = 0f,
-                to = 0.17f
-            )
+            // 箭尾重新浮到心面上：杆从心的入射口（中央凹口那一带）往下穿过心体，出心之后
+            // 继续露出尾羽。**只补杆尾这一截，不再补箭镞**。
+            //
+            // 上一版还在前景补了一遍箭镞（`from = 0f, to = 0.17f`），理由是「否则镞嵌进心里
+            // 会被釉面盖住」—— 那是把结果当成了前提：真机截图里它读作**一颗小粉心贴在
+            // 大粉心的正面**，正是「没有穿刺」的来源。现在箭镞故意留在心后：尖端埋在
+            // 心体里看不见，镞的下半从心的下缘探出来，穿心由「杆入心、镞出心」成立。
+            drawArcheryArrow(tip, aim.angle, length, alpha * 0.95f, from = 0.60f)
         }
     }
     // 迸光在回弹的变换之外画：它是空气里的光，不跟着心一起晃
