@@ -190,6 +190,19 @@ android {
             versionNameSuffix = "-lover"
             matchingFallbacks += listOf("debug")
         }
+        // TTPD 时代专项优化的预览包，与上面两份同一套思路（点开即彩蛋、可拨时刻定格）。
+        //
+        // 再开一个而不是复用 eggpreview / loverpreview 的理由与 loverpreview 那段完全相同：
+        // 三方在各自的工作树里并行改同一批舞台代码，装机身份必须分开。这一套要盯的是
+        // 屏幕底下那台打字机 —— 它的独奏前摇只有 1400ms（TTPD_PREROLL_MS），
+        // 按键、回车横扫、字锤落点都要拨到那一拍才看得到，脚本见 scripts/ttpd-shot.sh。
+        // 包名 com.tracktosearch.ttpdpreview 与另两份并存于同一台设备。
+        create("ttpdpreview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".ttpdpreview"
+            versionNameSuffix = "-ttpd"
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {
