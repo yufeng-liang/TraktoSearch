@@ -34,7 +34,9 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 private const val TAU = 2f * PI.toFloat()
@@ -3376,8 +3378,28 @@ private val MOSS_PATCHES = floatArrayOf(
  */
 private const val LID_OPEN_DEGREES = 50f
 
-/** 立式琴深约是琴高的 0.6/1.2 —— 抬起量要按它把“琴深”折成真机像素。 */
-private const val LID_DEPTH_OF_HEIGHT = 0.5f
+/**
+ * 琴身的**深度向量**（占屏宽 / 屏高的比例）。只有这一份，琴身、顶面、琴盖、键盘托全按它推。
+ *
+ * 上一版是 `0.100w / -0.042h`：右侧板 144px 宽、后下角比前沿高出 0.042h，那一大块
+ * 平行四边形在屏幕上读作「另贴上来的一块板」，是全图最显眼的「飘」（需求方点名）。
+ * 收到 0.078w / -0.033h 之后侧板 112px 宽、后下角只高 0.033h，琴也从一个「斜四分之三」
+ * 变回参考图里那种近正面的角度 —— 参考剧照里琴是几乎正对着看的人。
+ */
+private const val PIANO_DX_FRACTION = 0.078f
+private const val PIANO_DY_FRACTION = -0.0328f
+
+/**
+ * 琴身整体下沉的屏高比例。
+ *
+ * 原来琴脚压在林地线上（`HERO_BOTTOM - 0.002 = 0.378h`），而卡片顶边在 0.458h ——
+ * 中间那 0.08h 空地上什么都没有，屏幕上是「琴飘在半山腰」。沉 0.045h 之后：琴脚落进
+ * 苔原带里、琴脚到卡片只剩 0.035h，后下角（`bodyB + dy`）也在林地线**以下**。
+ */
+private const val PIANO_SINK = 0.045f
+
+/** 立式琴深约是琴高的 0.6/1.2，再乘上收窄后的深度比例 —— 琴盖抬起量按它折真机像素。 */
+private const val LID_DEPTH_OF_HEIGHT = 0.5f * 0.78f
 
 /**
  * 一大片松林 + 灰雾 + 一台长满苔藓的**立式**钢琴，琴顶架起一块斜板。
@@ -3389,16 +3411,26 @@ private const val LID_DEPTH_OF_HEIGHT = 0.5f
  * ## 钢琴为什么改成立式、为什么要斜着摆
  *
  * 上一版是**正视的三角钢琴**：一个圆头的琴身加一块平铺的大琴盖，屏幕上读作一只浴缸
- * 加一块板（宽 0.45w、高只有 0.085h，2.4:1）。这一版按**斜四分之三视角**重画，
+ * 加一块板（宽 0.45w、高只有 0.085h，2.4:1）。这一版按**近正面的四分之三视角**重画，
  * 三个面都露出来：正脸（背光，最暗）、右侧面（更暗，往后收）、顶面（朝上受光，最亮）。
- * 深度向量 `dx / dy` 只有一份，琴身、顶面、琴盖、键盘托全按它推 —— 换角度只动这两个数。
+ * 深度向量 [PIANO_DX_FRACTION] / [PIANO_DY_FRACTION] 只有一份，琴身、顶面、琴盖、键盘托
+ * 全按它推 —— 换角度只动这两个数。
  *
  * 立式而不是三角：立柜的高宽比接近 1:1，在 0.38h 的英雄区里立得起来；三角钢琴是趴着的，
  * 在这块横长的区域里只会更扁。而「林子里被遗弃的钢琴」这个意象本身就是立式琴。
  *
- * 琴顶那块板是**掀开撑住的琴盖**：铰在顶面后沿，往后上方倾。板是硬的，所以自由边在投影里
- * 仍然平行于铰线、两端抬一样高 —— 一个平行四边形。**不许让两端抬不一样高**：那读作坡顶，
- * 而坡顶把需求方点名删掉的那栋木屋又读回来了。撑杆立在顶面上，板在顶面上还投一道影。
+ * 琴顶那块板是**掀开撑住的琴盖**：立式琴的顶板铰在**后沿**，掀开时是前边抬起来往后退，
+ * 所以自由边（前边）落在后沿的**左上**（前移量 `cosθ·dx`、抬起量 `sinθ·琴深`）。
+ * 这一点对着参考剧照核过：铰在后沿、自由边在琴的上方偏左，撑杆支在自由边那一侧。
+ * 板是硬的，所以自由边在投影里仍然平行于铰线、两端抬一样高 —— 一个平行四边形。
+ * **不许让两端抬不一样高**：那读作坡顶，而坡顶把需求方点名删掉的那栋木屋又读回来了。
+ * 撑杆立在顶面上，板在顶面上还投一道影。
+ *
+ * ## 落地
+ *
+ * 「琴像浮在画面上」被需求方点了两轮，三处一起改才压住：
+ * 琴身整体下沉（[PIANO_SINK]，后下角落到林地线**以下**）；右侧板不能是一整片均匀的死黑
+ * （读作另贴上来的一块板）；琴脚要有一整片**苔岸**埋住底边那条笔直的棱。
  *
  * ## 苔藓
  *
@@ -3422,7 +3454,8 @@ private fun DrawScope.drawPineMossPiano(
 ) {
     val w = size.width
     val h = size.height
-    // 林地线抬到 HERO_BOTTOM：再往下整台琴就压在卡片背后，等于没画
+    // 林地线 = HERO_BOTTOM。琴身再往下沉（[PIANO_SINK]）也不会被卡片吃掉：
+    // 卡片顶边在 0.458h，琴脚沉到 0.423h 时还剩 0.035h 的余量
     val groundY = h * HERO_BOTTOM
 
     // 林地：一层苔原。folklore 三档底色全是灰（#E8E6E2 / #8C8C8C / #4A4844），
@@ -3493,17 +3526,18 @@ private fun DrawScope.drawPineMossPiano(
     //
     // 高 0.158h 而不是 0.208h：`0.395w × 0.208h` 在 1440×3200 上是 569×666 像素，
     // **比自己还高**，而真的立式琴宽约 150cm、高约 120cm（宽:高 ≈ 1.25）。
-    // 更要紧的是上一版琴盖自由边的板厚带落在 `0.007h`，整条压进状态栏里；
-    // 现在琴身矮 0.05h、`dy` 收到 0.042h、抬起量收到 0.078h，最高点落在 `0.088h`，
-    // 离系统栏还剩一倍余量
+    // 更要紧的是早期那版琴盖自由边的板厚带落在 `0.007h`，整条压进状态栏里；
+    // 现在琴身矮 0.05h、`dy` 收到 0.033h、抬起量按 0.39×琴高折，板上苔簇最高到 0.175h，
+    // 离系统栏还差着半个屏
     val bodyW = w * 0.395f
     val bodyH = h * 0.158f
     val bodyL = w * 0.075f
     val bodyR = bodyL + bodyW
-    val bodyB = groundY - h * 0.002f
+    // 琴身整体下沉（见 [PIANO_SINK]）：琴脚落进苔原带、离卡片更近，后下角也不再露在天上
+    val bodyB = groundY + h * PIANO_SINK
     val bodyT = bodyB - bodyH
-    val dx = w * 0.100f
-    val dy = -h * 0.042f
+    val dx = w * PIANO_DX_FRACTION
+    val dy = h * PIANO_DY_FRACTION
 
     // 落地影：**三档往外摊**（贴着琴脚最深、往外两档越淡），阳光从左上来，影子往右下走。
     // 上一版是**一块等深的平行四边形**，压出来的那点差比苔原自身还浅，屏幕上读作
@@ -3521,15 +3555,37 @@ private fun DrawScope.drawPineMossPiano(
         drawPath(path = path, color = Color.Black, alpha = alpha * (0.26f - step * 0.065f))
     }
 
-    // 右侧板：往后收的那个面，全琴最暗（背光又侧对着光）
+    // 右侧板：往后收的那个面，背光又侧对着光，全琴最暗。
+    // **但不能是一整片均匀的死黑** —— 那样屏幕上读作「另贴上来的一块板」，而不是箱体的
+    // 侧面（需求方这轮点名了这块平行四边形）。面本身提亮一档，再沿上→下分三段渐暗
+    // （和落地影同一手法）：面里有了「离光越远越暗」的走向，它才是一个受光的立面。
+    // 后棱再描一道极淡的亮线，箱体那根竖转角才交代得出来
     path.rewind()
     path.moveTo(bodyR, bodyT)
     path.lineTo(bodyR + dx, bodyT + dy)
     path.lineTo(bodyR + dx, bodyB + dy)
     path.lineTo(bodyR, bodyB)
     path.close()
-    drawPath(path = path, color = deep, alpha = alpha)
-    drawPath(path = path, color = Color.Black, alpha = alpha * 0.20f)
+    drawPath(path = path, color = deep, alpha = alpha * 0.94f)
+    for (band in 0 until 3) {
+        val t0 = floatArrayOf(0f, 0.40f, 0.72f)[band]
+        val t1 = floatArrayOf(0.40f, 0.72f, 1f)[band]
+        val strength = floatArrayOf(0.05f, 0.10f, 0.16f)[band]
+        path.rewind()
+        path.moveTo(bodyR, bodyT + bodyH * t0)
+        path.lineTo(bodyR + dx, bodyT + bodyH * t0 + dy)
+        path.lineTo(bodyR + dx, bodyT + bodyH * t1 + dy)
+        path.lineTo(bodyR, bodyT + bodyH * t1)
+        path.close()
+        drawPath(path = path, color = Color.Black, alpha = alpha * strength)
+    }
+    drawLine(
+        color = mid,
+        start = Offset(bodyR + dx, bodyT + dy),
+        end = Offset(bodyR + dx, bodyB + dy),
+        strokeWidth = (w * 0.0030f).coerceAtLeast(1f),
+        alpha = alpha * 0.14f
+    )
 
     // 顶面：唯一朝上的面，最亮。苔藓整块铺在它上面
     path.rewind()
@@ -3589,7 +3645,7 @@ private fun DrawScope.drawPineMossPiano(
     // **仍然平行于铰线**，两端抬一样高 —— 所以这是一个干净的**平行四边形**，
     // “3D” 全靠位移同时带 x 与 y 分量（和其余所有面用的是同一份深度向量）。
     //
-    // 上一版故意让右端比左端多抬一截、右端又往右多伸出 0.046w，想要“不平行的立体感”，
+    // 更早的一版故意让右端比左端多抬一截、右端又往右多伸出 0.046w，想要“不平行的立体感”，
     // 结果那正是一块**坡顶**：下沿水平、上沿斜着、右侧还撑出一截检口。
     // 需求方让把房子去掉，而这块“屋顶”把房子又读回来了。硬板不会扭，这条也本就是错的
     val hingeLX = bodyL + dx
@@ -3886,29 +3942,46 @@ private fun DrawScope.drawPineMossPiano(
         }
         drawPath(path = path, color = if (pass == 1) MOSS_LIGHT else MOSS, alpha = alpha * (if (pass == 1) 0.34f else 0.44f))
     }
-    // 琴脚下那一圈：苔藓从地上爬上来，**跨在底边那根棱上**（一半在琴身、一半在地上），
-    // 琴与苔原才是长在一起的。半径收到 0.010–0.022w、压扁到 0.34：上一版 0.034w 的正圆
-    // 排成一列，读作一排绿硬币；而整排只落在 `bodyB` 这一条线上、不出琴身范围 ——
-    // 上一版按 `bodyW + dx` 铺到琴身右缘之外，右边几粒苔是悬在空地上的
-    for (i in 0 until 13) {
-        val f = (i + 0.5f) / 13f
-        val bx = bodyL + bodyW * f
-        val r = w * (0.010f + 0.012f * abs(sin(f * 5.7f + 0.3f)))
-        val cy = bodyB - r * 0.30f
-        drawOval(
-            color = MOSS,
-            topLeft = Offset(bx - r, cy - r * 0.62f),
-            size = Size(r * 2f, r * 1.34f),
-            alpha = alpha * 0.60f
-        )
+    // 琴脚下的**苔岸**：苔藓从地上爬上来，琴与苔原才是长在一起的。
+    //
+    // 一排跨在底边上的小椭圆（半径 0.010–0.022w）不够 —— 底边那条笔直的棱还在，屏幕上
+    // 只是「脚边有几块苔」，琴依旧像摆上去的（需求方两轮都说还在飘）。要的是**一整片岸**：
+    // 从琴脚爬上来、往两边散成一丛丛，前沿与后沿（比前沿高 |dy|）一起埋掉。
+    // 轮廓收成**枣核**（两端上下两条边收到同一点）—— 两端留竖直切口就是一块绿补丁
+    run {
+        val steps = 40
+        val bankL = bodyL - w * 0.030f
+        val bankSpan = bodyW + dx + w * 0.060f
+        path.rewind()
+        for (i in 0..steps) {
+            val t = i / steps.toFloat()
+            val bell = sin(t * PI.toFloat()).coerceAtLeast(0f)
+            val rise = h * (0.002f + bell.pow(0.6f) *
+                (0.012f + 0.010f * abs(sin(t * 7.3f + 0.4f))))
+            if (i == 0) path.moveTo(bankL, bodyB - rise) else path.lineTo(bankL + bankSpan * t, bodyB - rise)
+        }
+        for (i in steps downTo 0) {
+            val t = i / steps.toFloat()
+            val drop = h * (0.001f + 0.013f * sqrt(sin(t * PI.toFloat()).coerceAtLeast(0f)))
+            path.lineTo(bankL + bankSpan * t, bodyB + drop)
+        }
+        path.close()
+        drawPath(path = path, color = MOSS, alpha = alpha * 0.72f)
+        // 岸边一丛丛：整片单色的岸读作一块绿布。两端也要靠这些丛收掉硬切口
+        for (i in 0 until 17) {
+            val t = (i + 0.5f) / 17f
+            val dome = sin(t * PI.toFloat()).coerceAtLeast(0f).pow(0.45f)
+            val bx = bodyL - w * 0.034f + (bodyW + dx + w * 0.068f) * t
+            val r = w * (0.009f + 0.014f * abs(sin(t * 5.9f + 1.3f))) * (0.40f + 0.60f * dome)
+            val cy = bodyB - h * (0.001f + 0.021f * dome * (0.6f + 0.4f * abs(sin(t * 9.7f))))
+            drawOval(
+                color = if (i % 3 == 1) MOSS_LIGHT else MOSS,
+                topLeft = Offset(bx - r, cy - r * 0.60f),
+                size = Size(r * 2f, r * 1.26f),
+                alpha = alpha * 0.55f
+            )
+        }
     }
-    // 底边正下方一条很窄的接触暗带：琴脚与地之间那道缝不交代，琴就是浮着的
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset(bodyL, bodyB - h * 0.0015f),
-        size = Size(bodyW, h * 0.0043f),
-        alpha = alpha * 0.30f
-    )
     drawFogBand(HERO_BOTTOM + 0.09f, 0.13f, top, alpha * DISTANT_ALPHA * 1.6f)
 }
 
