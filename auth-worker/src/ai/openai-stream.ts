@@ -21,11 +21,18 @@ export async function readOpenAiSseStream(
     let content = '';
     let finishReason: string | null = null;
     let upstreamError: unknown = null;
+    // 上游偶尔无视 stream:true 直接回普通 JSON（实测百炼的额度耗尽就是这样）：这种响应里
+    // 没有 data: 行，不兜住就退化成「200 但正文为空」，把「这个模型没额度了」误判成
+    // 「这家挂了」——额度耗尽的模型于是每次都被重试一遍，正是要避免的白等。
+    let sawSseFrame = false;
+    let rawBody = '';
     try {
         for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+            const text = decoder.decode(value, { stream: true });
+            buffer += text;
+            if (!sawSseFrame) rawBody += text;
             // SSE 以行为单位：最后一段可能被截断，留在 buffer 里等下一块
             const lines = buffer.split('\n');
             buffer = lines.pop() ?? '';
@@ -40,6 +47,8 @@ export async function readOpenAiSseStream(
                 } catch {
                     continue; // 心跳/空行等非 JSON 行
                 }
+                sawSseFrame = true;
+                rawBody = '';
                 const record = chunk as Record<string, unknown> | null;
                 if (record && typeof record === 'object' && record.error) {
                     upstreamError = record;
@@ -66,5 +75,14 @@ export async function readOpenAiSseStream(
         }
     }
     if (upstreamError) return upstreamError;
+    // 整段都不是 SSE：按普通 JSON 处理，错误对象原样返回给调用方判定（额度耗尽/限频走这里）。
+    if (!sawSseFrame && rawBody.trim() !== '') {
+        try {
+            const parsed: unknown = JSON.parse(rawBody);
+            if (parsed && typeof parsed === 'object' && 'error' in parsed) return parsed;
+        } catch {
+            // 既不是 JSON 也不是 SSE：交给调用方按空正文处理
+        }
+    }
     return { choices: [{ message: { content }, finish_reason: finishReason }] };
 }

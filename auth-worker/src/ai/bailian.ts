@@ -87,15 +87,27 @@ export function bailianBaseUrl(env: BailianEnvironment): string {
     return (configured === '' ? BAILIAN_DEFAULT_BASE_URL : configured).replace(/\/+$/u, '');
 }
 
-/** 免费额度耗尽（403 AllocationQuota.FreeTierOnly）单列：它决定「换下一个模型」而不是「这家挂了」。 */
+/** 额度耗尽的统一错误码：上层据此把该模型记入「已耗尽」，后续轮换直接跳过。 */
+export const BAILIAN_QUOTA_EXHAUSTED_CODE = 'AI_QUOTA_EXHAUSTED';
+
+/**
+ * 免费额度耗尽判定。上游两种形态都出现过：
+ * - 403 响应体 `AllocationQuota.FreeTierOnly`（官方口径）；
+ * - 200 包在正文里的 `{"error":{"code":"insufficient_quota","message":"Free quota exhausted ..."}}`。
+ * 命中即意味「这个模型没额度了」：上层换下一个模型，并记住别再试它。
+ */
 export function isFreeQuotaExhausted(payload: unknown): boolean {
     if (typeof payload !== 'object' || payload === null) return false;
     const error = (payload as Record<string, unknown>).error;
     if (typeof error !== 'object' || error === null) return false;
     const record = error as Record<string, unknown>;
     const code = typeof record.code === 'string' ? record.code : '';
+    const type = typeof record.type === 'string' ? record.type : '';
     const message = typeof record.message === 'string' ? record.message : '';
-    return code === 'AllocationQuota.FreeTierOnly' || /free quota/i.test(message);
+    return code === 'AllocationQuota.FreeTierOnly'
+        || code === 'insufficient_quota'
+        || type === 'insufficient_quota'
+        || /free quota|quota exhausted/i.test(message);
 }
 
 export async function callBailianJson(
@@ -143,14 +155,14 @@ export async function callBailianJson(
                     : await response.json();
                 // 兼容模式把业务错误包在 200 里时也要判出来（免费额度用尽通常走 403，但不排除包 200）
                 if (isFreeQuotaExhausted(payload)) {
-                    throw new AppError('AI_UPSTREAM_ERROR', 'Bailian free quota exhausted', 502, response.status);
+                    throw new AppError(BAILIAN_QUOTA_EXHAUSTED_CODE, 'Bailian free quota exhausted', 502, response.status);
                 }
                 return payload;
             }
             // 403 免费额度耗尽属于「换模型」，不是「这家挂了」：带上原文让上层诊断能看懂
             if (response.status === 403) {
                 const text = await response.text().catch(() => '');
-                throw new AppError('AI_UPSTREAM_ERROR', 'Bailian free quota exhausted: ' + text.slice(0, 200), 502, 403);
+                throw new AppError(BAILIAN_QUOTA_EXHAUSTED_CODE, 'Bailian free quota exhausted: ' + text.slice(0, 200), 502, 403);
             }
             // 网关级 5xx 做一次短退避重试；4xx 是确定性错误直接上抛
             if (response.status >= 500 && attempt === 0) {

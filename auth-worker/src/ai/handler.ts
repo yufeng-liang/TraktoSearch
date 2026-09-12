@@ -22,6 +22,12 @@ import {
     type MimoEnvironment,
 } from './mimo.ts';
 import {
+    isQuotaExhaustedError,
+    markModelExhausted,
+    readExhaustedModels,
+    splitExhaustedModels,
+} from './model-quota.ts';
+import {
     callAgnesJson,
     AGNES_MODELS,
     AGNES_DEFAULT_MODEL,
@@ -3675,7 +3681,10 @@ async function callLlmJson(
         for (const extra of MODEL_FALLBACKS_BY_PROVIDER[p]) {
             if (!candidates.includes(extra)) candidates.push(extra);
         }
-        for (const m of candidates) {
+        // 额度已耗尽的模型排到最后：百炼按模型发免费额度，用尽后每次重试都是白等一个 RTT。
+        // 保留在队尾（而不是删掉）是为了不因一条过期记录把整家供应商掐死。
+        const ranked = splitExhaustedModels(candidates, await readExhaustedModels(env, p));
+        for (const m of [...ranked.available, ...ranked.exhausted]) {
             const startedAtMs = Date.now();
             try {
                 const result = p === 'agnes'
@@ -3712,6 +3721,14 @@ async function callLlmJson(
                 const durationMs = Date.now() - startedAtMs;
                 // 模型非法属于请求错误，不回退，直接上抛。
                 if (error instanceof AppError && error.code === 'INVALID_MODEL') throw error;
+                // 免费额度用尽不是「这家挂了」而是「这个模型没了」：记下来，后续请求直接跳过。
+                if (isQuotaExhaustedError(error)) {
+                    logAiDiagnostic('model_quota_exhausted', context, p, m, error);
+                    await markModelExhausted(env, p, m);
+                    lastError = error;
+                    recordHealthEvent(env, healthCtx, 'traffic', p, m, 'upstream_error', error, durationMs);
+                    continue;
+                }
                 logAiDiagnostic('upstream_failure', context, p, m, error);
                 lastError = error;
                 recordHealthEvent(env, healthCtx, 'traffic', p, m, 'upstream_error', error, durationMs);
@@ -3747,7 +3764,7 @@ function parseTextResultOrFallback<T>(
 }
 
 function logAiDiagnostic(
-    event: 'upstream_failure' | 'invalid_output',
+    event: 'upstream_failure' | 'invalid_output' | 'model_quota_exhausted',
     context: LlmRequestContext,
     provider: TextProvider,
     model: string,

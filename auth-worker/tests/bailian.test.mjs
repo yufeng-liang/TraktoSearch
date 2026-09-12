@@ -96,13 +96,13 @@ test('思考链 delta.reasoning_content 不混进正文', async () => {
     assert.equal(payload.choices[0].finish_reason, 'stop');
 });
 
-test('免费额度耗尽的 403 归类为可轮替的上游错误，且带上原文', async () => {
+test('免费额度耗尽的 403 归类为可轮替的专用错误码，且带上原文', async () => {
     await withFetch(async () => new Response(JSON.stringify({
         error: { code: 'AllocationQuota.FreeTierOnly', message: 'Free quota exhausted. To continue accessing the model on a paid basis…' },
     }), { status: 403 }), async () => {
         await assert.rejects(
             () => callBailianJson(env, 'qwen3.6-flash', [{ role: 'user', content: 'x' }]),
-            error => error.code === 'AI_UPSTREAM_ERROR' && /free quota exhausted/i.test(error.message),
+            error => error.code === 'AI_QUOTA_EXHAUSTED' && /free quota exhausted/i.test(error.message),
         );
     });
 });
@@ -110,11 +110,13 @@ test('免费额度耗尽的 403 归类为可轮替的上游错误，且带上原
 test('200 里包免费额度耗尽也要判成失败', async () => {
     const payload = { error: { code: 'AllocationQuota.FreeTierOnly', message: 'Free quota exhausted.' } };
     assert.equal(isFreeQuotaExhausted(payload), true);
+    // 实测另一种形态：code/type 都是 insufficient_quota，正文里才有 "Free quota exhausted"
+    assert.equal(isFreeQuotaExhausted({ error: { code: 'insufficient_quota', type: 'insufficient_quota', message: 'Free quota exhausted.' } }), true);
     assert.equal(isFreeQuotaExhausted({ error: { code: 'InvalidApiKey', message: 'bad key' } }), false);
     await withFetch(async () => new Response(JSON.stringify(payload), { status: 200 }), async () => {
         await assert.rejects(
             () => callBailianJson(env, 'qwen3.6-flash', [{ role: 'user', content: 'x' }]),
-            error => error.code === 'AI_UPSTREAM_ERROR' && /free quota exhausted/i.test(error.message),
+            error => error.code === 'AI_QUOTA_EXHAUSTED' && /free quota exhausted/i.test(error.message),
         );
     });
 });
@@ -146,6 +148,116 @@ test('模型白名单与 base URL 覆盖', () => {
     assert.throws(() => validateBailianModel('no-such-model'), error => error.code === 'INVALID_MODEL');
     assert.equal(bailianBaseUrl({}), BAILIAN_DEFAULT_BASE_URL);
     assert.equal(bailianBaseUrl({ BAILIAN_BASE_URL: 'https://example.test/v1/' }), 'https://example.test/v1');
+});
+
+test('免费额度耗尽的模型会被记住，后续请求不再白试它', async () => {
+    const { __resetModelQuotaMemo } = await import('../src/ai/model-quota.ts');
+    __resetModelQuotaMemo();
+    const kvStore = new Map();
+    const kv = {
+        async get(key) { return kvStore.has(key) ? kvStore.get(key) : null; },
+        async put(key, value) { kvStore.set(key, value); },
+    };
+    const dailyEnv = {
+        DB: {
+            prepare(sql) {
+                const statement = {
+                    bind() { return statement; },
+                    async run() { return { meta: { changes: 1 } }; },
+                    async all() { return { results: [] }; },
+                    async first() {
+                        if (String(sql).includes('FROM friends')) return { nickname: '小明' };
+                        return null;
+                    },
+                };
+                return statement;
+            },
+        },
+        KV: kv,
+        AI_TEST_MODE: true,
+        AI_TEST_CACHE: new Map(),
+        AI_TEST_QUOTA: new Map(),
+        AI_DEFAULT_PROVIDER: 'bailian',
+        BAILIAN_API_KEY: 'test-bailian-key',
+        AI_DAILY_ILLUSTRATION_ENABLED: 'false',
+    };
+    const calls = [];
+    await withFetch(async (url, init) => {
+        const body = JSON.parse(init.body);
+        calls.push(body.model);
+        if (body.model === 'qwen3.6-flash') {
+            // 实测形态：免费额度耗尽被包在 200 正文里（另一种是 403 FreeTierOnly）
+            return new Response(JSON.stringify({
+                error: { code: 'insufficient_quota', message: 'Free quota exhausted. To continue accessing the model on a paid basis, please add funds.' },
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        const content = JSON.stringify({
+            unitId: 'u_quota_probe',
+            version: 1,
+            locale: 'zh-CN',
+            relationType: 'general_knowledge',
+            evidenceMode: 'film_fact',
+            subjectGroup: 'film_expression',
+            subject: '电影学',
+            concept: '片场口令',
+            title: '片场口令如何组织协作',
+            takeaway: '统一口令把多部门准备压缩成同一瞬间，降低拍摄现场的不确定性。',
+            relatedMedia: null,
+            filmEvidence: '开机前的部门准备和统一信号，是影片制作资料中可确认的协作方式。',
+            explanation: '片场口令是统一信号：片场时间成本高，它让摄影、灯光、表演和声音在同一时刻进入执行状态。',
+            realWorldExample: '复杂项目也需要明确职责边界和统一启动信号。',
+            boundary: '这是制作历史的来源说明，不同剧组流程会存在差异。',
+            difficulty: 'easy',
+            spoilerLevel: 'none',
+            source: { name: 'AI 综合解读', url: '', evidence: '本节由 AI 综合公开通识整理，未引用具体来源。' },
+            checkQuestion: {
+                prompt: '统一口令的主要作用是什么？',
+                options: [{ id: 'a', text: '让所有人立刻改变立场' }, { id: 'b', text: '让多部门在同一瞬间进入执行状态' }],
+                correctOptionIds: ['b'],
+                explanation: '片场口令作为协作信号，能让多部门同时进入执行状态。',
+            },
+            characterLine: '',
+        });
+        return body.stream === true
+            ? sseResponse([chunkOf(content)])
+            : new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    }, async () => {
+        const dailyOnce = async sessionId => {
+            const response = await handleAiApi(
+                new Request('https://gateway.test/api/ai/daily', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'daily', sessionId, forceRefresh: true, locale: 'zh-CN' }),
+                }),
+                dailyEnv,
+                'request-quota-' + sessionId,
+                '/api/ai/daily',
+                { sub: 'friend-1', device: 'device-1' },
+            );
+            return response.json();
+        };
+
+        // 第一次：主模型没额度，轮换到下一个模型，并把结论记进 KV。
+        const first = await dailyOnce('quota-1');
+        assert.equal(first.data.isFallback, false, '第二个模型必须接手生成');
+        assert.equal(calls[0], 'qwen3.6-flash');
+        assert.equal(calls[1], 'qwen3.7-flash');
+        assert.deepEqual(JSON.parse(kvStore.get('ai:model-quota:v1:bailian')), ['qwen3.6-flash']);
+
+        // 第二次（同 isolate）：已耗尽的模型不再出现在候选里，第一次调用直接命中可用模型。
+        calls.length = 0;
+        await dailyOnce('quota-2');
+        assert.equal(calls[0], 'qwen3.7-flash', '已耗尽的模型不得再被尝试');
+        assert.ok(!calls.includes('qwen3.6-flash'));
+
+        // 第三次（换 isolate：清空内存记忆）：仍然靠 KV 记住，不再白试一次。
+        __resetModelQuotaMemo();
+        calls.length = 0;
+        await dailyOnce('quota-3');
+        assert.equal(calls[0], 'qwen3.7-flash', '跨 isolate 也要靠 KV 记住额度耗尽的模型');
+        assert.ok(!calls.includes('qwen3.6-flash'));
+    });
+    __resetModelQuotaMemo();
 });
 
 test('AI_DEFAULT_PROVIDER=bailian 时出题走百炼，且请求带关思考与 json_object', async () => {
