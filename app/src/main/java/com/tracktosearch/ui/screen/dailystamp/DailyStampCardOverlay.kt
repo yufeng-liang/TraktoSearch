@@ -394,6 +394,11 @@ private fun CarouselPage(
     onSideClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // 页里那道圆角是按设计尺度定的（[StampCardCorner]），页缩进槽里之后它在屏幕上就不是
+    // 24dp 了。阴影和压暗的纱都要按缩完的那个半径画，才跟纸的四角严丝合缝——差一点，
+    // 角上就会露出一圈没压暗的纸、或者一道压在纸外的暗边。
+    val corner = StampCardCorner * stampPageMetrics().scale
+    val veil = scrimColor(palette).copy(alpha = 1f)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -403,7 +408,6 @@ private fun CarouselPage(
                 val scale = lerp(1f, SIDE_SCALE, away)
                 scaleX = scale
                 scaleY = scale
-                alpha = lerp(1f, SIDE_ALPHA, away)
                 translationY = away * SIDE_DROP.toPx()
                 // 往中间收一点：露出来的是靠内那条边，卡片才像叠着而不是排着
                 translationX = -offset * SIDE_PULL.toPx()
@@ -426,7 +430,7 @@ private fun CarouselPage(
                 )
                 // 圆角跟着页内那道裁切走（见 StampPage 的 corner）：阴影是这一页的，
                 // 页切了四角而影子还是方的，四个角上就会露出方影的直角
-                .shadow(20.dp, RoundedCornerShape(StampCardCorner), clip = false)
+                .shadow(20.dp, RoundedCornerShape(corner), clip = false)
         ) {
             when (sheet) {
                 is DailyStampSheet.Line -> {
@@ -446,6 +450,15 @@ private fun CarouselPage(
 
                 is DailyStampSheet.Latent -> LatentCard(latent = sheet, palette = palette)
             }
+            // 侧卡压暗的那层纱，见 [SIDE_VEIL]。画在卡面之上、录进 Picture 的那一页之外，
+            // 所以导出的图里没有它——正中间那张的 away 是 0，这一层本来就是透明的。
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = lerp(0f, SIDE_VEIL, abs(turn())) }
+                    .clip(RoundedCornerShape(corner))
+                    .background(veil)
+            )
         }
     }
 }
@@ -601,18 +614,32 @@ private fun DailyStampCard(
 @Composable
 private fun StampPageBox(content: @Composable () -> Unit) {
     val density = LocalDensity.current
-    val slot = (LocalConfiguration.current.screenWidthDp - SIDE_PEEK.value * 2).dp
-    val width = minOf(slot, bandHeight() * StampPageAspect)
-    val height = width / StampPageAspect
-    val scale = height.value / StampDesignHeight.value
-    val pageDensity = remember(density, scale) {
-        Density(density.density * scale, density.fontScale)
+    val metrics = stampPageMetrics()
+    val pageDensity = remember(density, metrics.scale) {
+        Density(density.density * metrics.scale, density.fontScale)
     }
-    Box(modifier = Modifier.size(width = width, height = height)) {
+    Box(modifier = Modifier.size(width = metrics.width, height = metrics.height)) {
         CompositionLocalProvider(LocalDensity provides pageDensity) {
             Box(modifier = Modifier.fillMaxSize()) { content() }
         }
     }
+}
+
+/**
+ * 这一页铺在屏幕上占多大（屏幕 dp），以及缩进槽里的那份比例。
+ *
+ * 页里所有尺寸都是按设计尺度定的（[StampDesignHeight]、[StampCardCorner]），只有在这里
+ * 才知道它们在屏幕上折成多少 dp。要这份数的不止页自己的框（[StampPageBox]）：阴影和
+ * 压暗的纱画在页外、用的却是屏幕密度，圆角不跟着折算就会跟纸的四角对不上（[CarouselPage]）。
+ */
+private data class StampPageMetrics(val width: Dp, val height: Dp, val scale: Float)
+
+@Composable
+private fun stampPageMetrics(): StampPageMetrics {
+    val slot = (LocalConfiguration.current.screenWidthDp - SIDE_PEEK.value * 2).dp
+    val width = minOf(slot, bandHeight() * StampPageAspect)
+    val height = width / StampPageAspect
+    return StampPageMetrics(width = width, height = height, scale = height.value / StampDesignHeight.value)
 }
 
 /**
@@ -1130,14 +1157,25 @@ private val LATENT_BAR_GAP: Dp = 6.dp
  * 侧卡缩到多小。
  *
  * 底下这一族值一起决定「旁边那两张是同一叠里的下一张」这个观感，单调一个都会走味：
- * 缩放和透明度让侧卡退到后面，下沉让它像垫在底下那张，内收把露出来的那条边挪到靠中间
+ * 缩放和压暗让侧卡退到后面，下沉让它像垫在底下那张，内收把露出来的那条边挪到靠中间
  * 一侧，rotationY 才是把纸面转过去的那一下。全都从 [pageTurn] 那个 0~±1 的量线性插出来，
  * 所以这些数字是「翻到底时的样子」，滑动过程中取的是中间值。
  */
 private const val SIDE_SCALE = 0.84f
 
-/** 侧卡淡到多少。再淡就不像下一张卡，像一层没关掉的残影 */
-private const val SIDE_ALPHA = 0.62f
+/**
+ * 侧卡压暗多少。
+ *
+ * 这里原先调的是整层的 alpha（0.62）：半透明的纸是拿压暗层兑出来的，于是压暗层背后的
+ * 东西——底色的深浅斑块、卡影、被模糊过的内容——全都从纸里透出来显形。那不像「后面还有
+ * 一张卡」，像卡面自己在漏光，浅色主题下右边那条发灰就是这么来的。
+ *
+ * 现在是实心的纸 + 一层压暗层色的纱：纱只把纸压暗，不透底。0.20 是把纸从 200 压到 167
+ * 那一档，退后的量跟原来差不多，而纸是纸、底是底。
+ *
+ * 压暗层色取 [scrimColor]，深浅两个主题各取各的，所以这一档在两处都成立。
+ */
+private const val SIDE_VEIL = 0.20f
 
 /** 侧卡下沉多少：正中那张才像被托在最上面 */
 private val SIDE_DROP: Dp = 10.dp
