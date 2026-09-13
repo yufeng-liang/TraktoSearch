@@ -48,7 +48,10 @@ import com.tracktosearch.ui.screen.swiftie.buildSignatureWindows
  */
 private const val REF_FONT = 100f
 
-/** 整句话写完（含抬笔停顿）占用的毫秒。 */
+/**
+ * 整句话的**书写**部分占用的毫秒。抬笔停顿另算（[LETTER_PAUSE_MS]）—— 两者相加才是墨的
+ * 总时长（`SwiftieLetterArt.writeEndMs`），按写字进度映射时要按总时长收口。
+ */
 internal const val LETTER_WRITE_MS: Long = 2_600L
 
 /**

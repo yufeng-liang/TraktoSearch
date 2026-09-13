@@ -2569,11 +2569,14 @@ private fun DrawScope.drawLetterWriting(
 ) {
     if (art == null) return
     val frozen = eraElapsedMs < 0L
+    // 墨自己的时间轴 = 书写（LETTER_WRITE_MS）+ 抬笔停顿（LETTER_PAUSE_MS），所以按
+    // [SwiftieLetterArt.writeEndMs] 映射，**不能**按 LETTER_WRITE_MS 收口 —— 那样最后
+    // 几个字永远写不到（真机上停在 `and poe`，笔都退场了句子还没完）。
     val inkMs = if (frozen) {
         art.writeEndMs
     } else {
-        (eraElapsedMs.toFloat() / LETTER_WRITE_WALL_MS * LETTER_WRITE_MS).toLong()
-            .coerceIn(0L, LETTER_WRITE_MS)
+        (eraElapsedMs.toFloat() / LETTER_WRITE_WALL_MS * art.writeEndMs).toLong()
+            .coerceIn(0L, art.writeEndMs)
     }
     // 字号：那句话排进 [LETTER_TEXT_WIDTH_FRACTION]（用最长那一行的 em 数反推）
     val lineWidth = SwiftieLetterPath.LINE_WIDTH_EM[0].coerceAtLeast(0.1f)
