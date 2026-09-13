@@ -13,7 +13,7 @@
 #   包只含 arm64-v8a（sherpa-onnx 的取舍），装不进 x86_64 模拟器，只能用 arm64 真机；
 #   设备要处于解锁状态，锁屏挡在前面时抓回来的就是锁屏。
 #
-# 用法: scripts/ttpd-shot.sh <ms|eraN|typeN> [输出文件]
+# 用法: scripts/ttpd-shot.sh <ms|eraN|typeN|writeN> [输出文件]
 #   ms       直接给毫秒                 scripts/ttpd-shot.sh 90000
 #   eraN     第 N 张专辑卡片（1..12）   scripts/ttpd-shot.sh era11
 #   typeN    打字机的四个瞬间（都在 TTPD 段头那段独奏里，卡片还没出来或刚出来）：
@@ -22,10 +22,14 @@
 #     type3  出纸半程 —— 卡片升到一半、滚筒暗影压在纸上（feedProgress ≈ 0.5）
 #     type4  出纸落位 —— 整张纸坐定、机器在屏幕底下（与 era11 的时刻不同：
 #           这一拍只等纸，不等 31 行曲目点完）
+#   writeN   卡片右下角那行题词的写字（按**卡片自己的时钟**算，见 elapsedInCard）：
+#     write1 写到一半 —— 墨铺到五六成、羽毛笔还在场
+#     write2 写完抬笔 —— 整句都在、笔已淡走（墨留着不淡）
 #
-# typeN 的毫秒**从源码现算**，绝不抄一份常量表进 shell：独奏时长由
-# SwiftieTimeline.TTPD_PREROLL_MS 定、出纸时长由 SwiftieEraCard 的 CARD_FEED_MS 定，
-# 两处任何一处被调，这里跟着走（egg-shot.sh 对 eraN 就是这么处理的）。
+# typeN 与 writeN 的毫秒**从源码现算**，绝不抄一份常量表进 shell：独奏时长由
+# SwiftieTimeline.TTPD_PREROLL_MS 定、出纸时长由 SwiftieEraCard 的 CARD_FEED_MS 定、
+# 写字与收笔时长由 SwiftieEraMotifs 的 LETTER_WRITE_WALL_MS / QUILL_RETIRE_MS 定，
+# 几处任何一处被调，这里跟着走（egg-shot.sh 对 eraN 就是这么处理的）。
 #
 # 环境变量：
 #   ANDROID_SERIAL   多设备时指定目标（adb 自己认这个变量）
@@ -42,11 +46,12 @@ die() { echo "ttpd-shot: $*" >&2; exit 1; }
 
 usage() {
   cat >&2 <<'EOF'
-用法: scripts/ttpd-shot.sh <ms|eraN|typeN> [输出文件]
+用法: scripts/ttpd-shot.sh <ms|eraN|typeN|writeN> [输出文件]
 
   ms     直接给毫秒                scripts/ttpd-shot.sh 90000
   eraN   第 N 张专辑卡片（1..12）  scripts/ttpd-shot.sh era11
   typeN  打字机的四个瞬间 1..4     scripts/ttpd-shot.sh type2
+  writeN 题词写字的两拍 1..2       scripts/ttpd-shot.sh write1
 
 装包: ./gradlew :app:assembleTtpdpreview && adb install -r app/build/outputs/apk/ttpdpreview/app-ttpdpreview.apk （只支持 arm64 真机）
 EOF
@@ -57,6 +62,7 @@ EOF
 TIMELINE="app/src/main/java/com/tracktosearch/ui/screen/swiftie/SwiftieTimeline.kt"
 CARD="app/src/main/java/com/tracktosearch/ui/screen/swiftie/eras/SwiftieEraCard.kt"
 BACKDROP="app/src/main/java/com/tracktosearch/ui/screen/swiftie/eras/SwiftieEraBackdrop.kt"
+MOTIFS="app/src/main/java/com/tracktosearch/ui/screen/swiftie/eras/SwiftieEraMotifs.kt"
 
 # 取 `const val X: Long = 12_345L` 里的 12_345。刻意不从整行里抓第一串数字：
 # 常量名 `CARD_BASE_MS` 本身带下划线，`[0-9_]+` 会先命中名字里的 `_`。
@@ -122,6 +128,24 @@ type_ms() {
   esac
 }
 
+# ── 题目写字的两拍，同样现算 ───────────────────────────────────────
+# 写字的时钟是**卡片自己的**（SwiftieEraCard 的 elapsedInCard：卡片起点 = 出纸起点），
+# 所以锚点是 start + preroll，不再加 feed —— 出纸那一秒里笔已经在写了。
+write_ms() {
+  local start preroll write retire
+  start="$(era_start "$(num "$TIMELINE" 'const val TTPD_INDEX')")"
+  preroll="$(num "$TIMELINE" 'const val TTPD_PREROLL_MS')"
+  write="$(num "$MOTIFS" 'const val LETTER_WRITE_WALL_MS')"
+  retire="$(num "$MOTIFS" 'const val QUILL_RETIRE_MS')"
+  case "$1" in
+    # 写到一半：墨铺到五六成，羽毛笔正压在句尾那一截上
+    1) echo $(( start + preroll + write * 55 / 100 )) ;;
+    # 写完抬笔：整句都在，笔淡走之后停一拍再抓（0.3s 余量，免得抓到正在淡的那一帧）
+    2) echo $(( start + preroll + write + retire + 300 )) ;;
+    *) die "writeN 的 N 只能是 1..2：write$1" ;;
+  esac
+}
+
 TARGET="${1:-}"
 OUT="${2:-}"
 [ -n "$TARGET" ] || usage
@@ -159,8 +183,11 @@ case "$TARGET" in
   type[1-4])
     EXTRAS=(--el ms "$(type_ms "${TARGET#type}")")
     ;;
+  write[1-2])
+    EXTRAS=(--el ms "$(write_ms "${TARGET#write}")")
+    ;;
   *[!0-9]*|'')
-    die "看不懂的参数「$TARGET」：要么是纯毫秒，要么是 era1..era12 / type1..type4"
+    die "看不懂的参数「$TARGET」：要么是纯毫秒，要么是 era1..era12 / type1..type4 / write1..write2"
     ;;
   *)
     EXTRAS=(--el ms "$TARGET")
