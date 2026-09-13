@@ -175,6 +175,7 @@ import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
+import com.tracktosearch.ui.screen.ai.aiFeaturesEnabled
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
@@ -342,15 +343,20 @@ fun SearchScreen(
     val onboardingCompleted by onboardingStorage.isCompleted.collectAsStateWithLifecycle(
         initialValue = true
     )
-    val aiSpriteCloudDescription = stringResource(R.string.ai_sprite_cloud_description)
+    // release 关掉 AI 后长按云朵这条路不存在，无障碍描述也不再提精灵中心
+    val aiSpriteCloudDescription =
+        if (aiFeaturesEnabled) stringResource(R.string.ai_sprite_cloud_description) else null
     var localAiSpriteCenterVisible by remember { mutableStateOf(false) }
     val showAiSpriteCenter = externallyControlledAiSpriteCenterVisible ?: localAiSpriteCenterVisible
 
     fun setAiSpriteCenterVisible(visible: Boolean) {
+        // 唯一能打开精灵中心的地方都汇到这一句：编译期关掉后强制收合，
+        // 入口按钮、云朵长按、探头点击、MainScreen 的外部控制就全都够不到界面了
+        val allowed = visible && aiFeaturesEnabled
         if (externallyControlledAiSpriteCenterVisible == null) {
-            localAiSpriteCenterVisible = visible
+            localAiSpriteCenterVisible = allowed
         }
-        onAiSpriteCenterVisibilityChanged(visible)
+        onAiSpriteCenterVisibilityChanged(allowed)
     }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
     var activeSpriteAnchor by remember { mutableStateOf(AiSpriteAnchor.SearchBox) }
@@ -601,15 +607,18 @@ fun SearchScreen(
                     style = LocalTextStyle.current.copy(shadow = ambientTextHalo())
                 )
             }
-            // 精灵中心的显式入口：长按云朵这条路没有任何视觉提示，新用户发现不了
-            AiSpriteCenterEntryButton(
-                activatedCharacter = spriteState.activatedCharacter,
-                onClick = {
-                    interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                    setAiSpriteCenterVisible(true)
-                },
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
+            // 精灵中心的显式入口：长按云朵这条路没有任何视觉提示，新用户发现不了。
+            // release 关掉 AI 后整枚按钮不渲染。
+            if (aiFeaturesEnabled) {
+                AiSpriteCenterEntryButton(
+                    activatedCharacter = spriteState.activatedCharacter,
+                    onClick = {
+                        interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                        setAiSpriteCenterVisible(true)
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
+            }
         }
 
         // 白云图标（搜索框未激活时显示在搜索框上方 16dp，水平居中）
@@ -617,13 +626,22 @@ fun SearchScreen(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
             onboardingCompleted = onboardingCompleted,
-            onLongClick = {
-                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                setAiSpriteCenterVisible(true)
+            onLongClick = if (aiFeaturesEnabled) {
+                {
+                    interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                    setAiSpriteCenterVisible(true)
+                }
+            } else {
+                null
             },
             modifier = Modifier
                 .size(cloudIconSize)
-                .semantics { contentDescription = aiSpriteCloudDescription }
+                // release 关掉 AI 后描述为 null，云朵不再挂「精灵入口」这条无障碍提示
+                .then(
+                    aiSpriteCloudDescription?.let { desc ->
+                        Modifier.semantics { contentDescription = desc }
+                    } ?: Modifier
+                )
                 .align(Alignment.TopCenter)
                 .offset(
                     y = targetSearchBoxY - cloudIconSize - 16.dp
@@ -2047,7 +2065,8 @@ private fun CloudIconWithAnimation(
     cloudThemeManager: CloudThemeManager,
     isActive: Boolean,
     onboardingCompleted: Boolean,
-    onLongClick: () -> Unit,
+    // 可空：release 关掉 AI 后没有精灵中心可开，云朵只剩短按彩蛋一条路
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val hasPermission by cloudThemeManager.hasLocationPermission.collectAsStateWithLifecycle()

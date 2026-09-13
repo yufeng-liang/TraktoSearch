@@ -491,9 +491,16 @@ class AiSpriteViewModel @Inject constructor(
     fun tryConsumeOverlay(trigger: AiSpriteOverlayTrigger, dayKey: String): Boolean =
         overlayPolicy.tryConsume(isSpriteActivatedForMotion(), trigger, dayKey)
 
-    /** 自动探头要求角色已激活且有对应素材，没素材的角色不参与探头。 */
+    /**
+     * 自动探头要求角色已激活且有对应素材，没素材的角色不参与探头。
+     *
+     * release 编译期关掉 AI（[aiFeaturesEnabled]=false）时恒为 false：
+     * nextAiSpriteOverlayTrigger 首行就吃 activated 参数、tryConsumeOverlay 也经这里查激活态，
+     * 两处搜索页的探头触发与额度消费都从此断掉，是自动探头的唯一收口。
+     */
     fun isSpriteActivatedForMotion(): Boolean =
-        _uiState.value.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true
+        aiFeaturesEnabled &&
+            _uiState.value.activatedCharacterId?.let { automaticSpriteArt(it) != null } == true
 
     /** 每次打开精灵中心换一个会话 ID，保持「一次打开 = 一个会话」的配额语义。 */
     fun onSpriteCenterOpened() {
@@ -501,6 +508,9 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     fun ensureLoaded() {
+        // release 关掉 AI 后没有任何入口能到精灵中心，这里再拉角色目录、恢复激活、
+        // 排期试听就是白耗流量与音频焦点，直接不启动。
+        if (!aiFeaturesEnabled) return
         // 恢复落盘激活角色后要播试听：恢复是异步的，竞态上可能晚于
         // ensureLoaded 末尾那次 scheduleCharacterPreview，谁后完成谁负责触发
         restoreActivation(previewOnRestore = true)
@@ -525,6 +535,9 @@ class AiSpriteViewModel @Inject constructor(
      * 恢复出的角色选中后 UI 会进入试听 LOADING 态，不补触发就会干转 8 秒超时。
      */
     fun restoreActivation(previewOnRestore: Boolean = false) {
+        // release 关掉 AI：详情页只是想让「加入看单」庆祝插画有角色可画，精灵中心与助手
+        // 都不在，恢复落盘激活角色（顺带读一遍私有画像）没有消费方，不启动。
+        if (!aiFeaturesEnabled) return
         observeAuthState()
         if (activationRestored) return
         activationRestored = true

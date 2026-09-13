@@ -154,6 +154,7 @@ import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
+import com.tracktosearch.ui.screen.ai.aiFeaturesEnabled
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
@@ -224,10 +225,12 @@ fun TraktSearchScreen(
     val showAiSpriteCenter = externallyControlledAiSpriteCenterVisible ?: localAiSpriteCenterVisible
 
     fun setAiSpriteCenterVisible(visible: Boolean) {
+        // 与主搜索页同一口径：编译期关掉 AI 后这里强制收合，探头点击/外部控制都够不到界面
+        val allowed = visible && aiFeaturesEnabled
         if (externallyControlledAiSpriteCenterVisible == null) {
-            localAiSpriteCenterVisible = visible
+            localAiSpriteCenterVisible = allowed
         }
-        onAiSpriteCenterVisibilityChanged(visible)
+        onAiSpriteCenterVisibilityChanged(allowed)
     }
     var showAiSpriteMotion by rememberSaveable { mutableStateOf(false) }
     var overlayEntryHandled by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
@@ -836,14 +839,16 @@ fun TraktSearchScreen(
                         )
                     }
                     // 这一页原来完全没有精灵中心入口：只能点自动探头，而探头要求已激活，
-                    // 未激活的用户在这一页永远打不开精灵中心
-                    AiSpriteCenterEntryButton(
-                        activatedCharacter = spriteState.activatedCharacter,
-                        onClick = {
-                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            setAiSpriteCenterVisible(true)
-                        }
-                    )
+                    // 未激活的用户在这一页永远打不开精灵中心。release 关掉 AI 后整枚按钮不渲染。
+                    if (aiFeaturesEnabled) {
+                        AiSpriteCenterEntryButton(
+                            activatedCharacter = spriteState.activatedCharacter,
+                            onClick = {
+                                interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                                setAiSpriteCenterVisible(true)
+                            }
+                        )
+                    }
                 }
 
                 // Tab 栏

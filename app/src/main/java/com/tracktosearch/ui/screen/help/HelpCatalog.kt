@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.help
 
 import androidx.annotation.StringRes
 import com.tracktosearch.R
+import com.tracktosearch.ui.screen.ai.aiFeaturesEnabled
 
 /**
  * 帮助页段落分组。
@@ -260,7 +261,15 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
             R.string.help_tips_b13,
         ),
     ),
-)
+).let { catalog ->
+    // release 编译期关掉 AI 后，AI 精灵与 AI 画像两段说明整段摘除——功能都不在，
+    // 留着「长按云朵进精灵中心」这类描述就是指向不存在的东西。段落编号随过滤后的
+    // 下标自动连续；深链 helpIndexOf 认不到 key 时静默不滚，不会跳错段。
+    if (aiFeaturesEnabled) catalog
+    else catalog.filterNot {
+        it.key == HelpSections.AI_SPRITE || it.key == HelpSections.AI_PROFILE
+    }
+}
 
 /**
  * 帮助段落 key 常量，供功能页带参数跳转（`Routes.helpRoute(HelpSections.X)`）。

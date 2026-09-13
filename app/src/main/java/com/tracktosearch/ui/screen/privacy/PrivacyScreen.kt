@@ -113,6 +113,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.haptic.semantic
+import com.tracktosearch.ui.screen.ai.aiFeaturesEnabled
 import com.tracktosearch.ui.screen.settings.GroupDivider
 import com.tracktosearch.ui.screen.settings.settingsIconContainerColor
 import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
@@ -194,20 +195,23 @@ fun PrivacyScreen(
                 }
 
                 // 区块 A：AI 数据与画像（授权 → 派生功能 → 采集 → 传输 → 独立 AI 功能）
-                item {
-                    PrivacySectionCard(
-                        title = stringResource(R.string.privacy_section_ai_data),
-                        hazeState = hazeState
-                    ) {
-                        AiDataSwitchGroup(
-                            settings = aiProfileSettings,
-                            aiTasteEnabled = aiTasteEnabled,
-                            onAiTasteChanged = viewModel::setAiTasteEnabled,
-                            onProfileConsentChanged = viewModel::setAiProfileConsent,
-                            onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
-                            onBehaviorConsentChanged = viewModel::setAiBehaviorConsent,
-                            onSyncChanged = viewModel::setAiSyncEnabled
-                        )
+                // release 编译期关掉 AI 后整块不渲染：开关与描述都属于「涉及到 AI 的」入口
+                if (aiFeaturesEnabled) {
+                    item {
+                        PrivacySectionCard(
+                            title = stringResource(R.string.privacy_section_ai_data),
+                            hazeState = hazeState
+                        ) {
+                            AiDataSwitchGroup(
+                                settings = aiProfileSettings,
+                                aiTasteEnabled = aiTasteEnabled,
+                                onAiTasteChanged = viewModel::setAiTasteEnabled,
+                                onProfileConsentChanged = viewModel::setAiProfileConsent,
+                                onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
+                                onBehaviorConsentChanged = viewModel::setAiBehaviorConsent,
+                                onSyncChanged = viewModel::setAiSyncEnabled
+                            )
+                        }
                     }
                 }
 
@@ -231,21 +235,25 @@ fun PrivacyScreen(
                 }
 
                 // 区块 C：本地数据（不可逆动作单独成卡，与可逆开关分开）
-                item {
-                    PrivacySectionCard(
-                        title = stringResource(R.string.privacy_section_local_data),
-                        hazeState = hazeState
-                    ) {
-                        PrivacyActionRow(
-                            icon = Icons.Rounded.DeleteForever,
-                            iconTint = MaterialTheme.colorScheme.error,
-                            title = stringResource(R.string.settings_ai_profile_clear),
-                            subtitle = stringResource(R.string.settings_ai_profile_clear_desc),
-                            onClick = { showClearAiProfileDialog = true },
-                            enabled = aiProfileSettings.isAvailable &&
-                                !aiProfileSettings.isLoading &&
-                                !aiProfileSettings.isUpdating
-                        )
+                // release 关掉 AI 后这块只剩「清除本地 AI 画像」一项，整块跟着隐藏；
+                // 将来若往本地数据里加非 AI 条目，把 if 下沉到行一级
+                if (aiFeaturesEnabled) {
+                    item {
+                        PrivacySectionCard(
+                            title = stringResource(R.string.privacy_section_local_data),
+                            hazeState = hazeState
+                        ) {
+                            PrivacyActionRow(
+                                icon = Icons.Rounded.DeleteForever,
+                                iconTint = MaterialTheme.colorScheme.error,
+                                title = stringResource(R.string.settings_ai_profile_clear),
+                                subtitle = stringResource(R.string.settings_ai_profile_clear_desc),
+                                onClick = { showClearAiProfileDialog = true },
+                                enabled = aiProfileSettings.isAvailable &&
+                                    !aiProfileSettings.isLoading &&
+                                    !aiProfileSettings.isUpdating
+                            )
+                        }
                     }
                 }
 

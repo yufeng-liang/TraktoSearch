@@ -83,6 +83,10 @@ android {
             "OPEN_SOURCE_VERSION_CATALOG_BASE64",
             "\"$openSourceVersionCatalogBase64\""
         )
+        // AI 功能总开关：默认开启（debug 与三个 preview 包照常可见），release 构建类型里关掉。
+        // 编译期常量，UI 侧 if (BuildConfig.AI_FEATURES_ENABLED) 即可让 R8 在 release 整段剔除；
+        // 所有能打开 AI 界面的入口都走这个开关，见 ui/screen/ai/AiFeatureAccess.kt。
+        buildConfigField("Boolean", "AI_FEATURES_ENABLED", "true")
         // 已迁移到 auth-worker Secrets 的密钥（不再编译进 APK）：
         // GITEE_ACCESS_TOKEN / GITHUB_UPDATE_TOKEN / BAIDU_APP_ID / BAIDU_SECRET_KEY / BAIDU_API_KEY
     }
@@ -127,6 +131,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // 正式包隐藏全部 AI 功能入口（精灵中心、详情页助手、隐私页 AI 开关、帮助页 AI 章节）。
+            // 关掉的是 UI 入口与描述，数据层与 worker 链路原样保留，随时删掉本行即可恢复。
+            buildConfigField("Boolean", "AI_FEATURES_ENABLED", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

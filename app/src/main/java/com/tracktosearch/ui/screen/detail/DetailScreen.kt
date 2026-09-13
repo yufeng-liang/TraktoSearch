@@ -133,6 +133,7 @@ import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
+import com.tracktosearch.ui.screen.ai.aiFeaturesEnabled
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
@@ -236,7 +237,9 @@ fun DetailScreen(
     val spriteArtAvailable = spriteState.activatedCharacterId
         ?.let { automaticSpriteArt(it) != null } == true
     LaunchedEffect(spriteArtAvailable, spriteState.isAuthorized) {
-        detailAiViewModel.setSpriteEnabled(spriteArtAvailable)
+        // release 关掉 AI 后不启用助手探头（setSpriteEnabled(false) 会连 spriteVisible 一起收，
+        // 面板唯一来路是点探头，探头没了面板也开不了）
+        detailAiViewModel.setSpriteEnabled(aiFeaturesEnabled && spriteArtAvailable)
     }
 
     // 面板收起时释放面板锚点矩形，避免下一次面板打开前用旧位置摆精灵
@@ -675,7 +678,8 @@ fun DetailScreen(
             LaunchedEffect(tabCount) {
                 if (selectedTab > tabCount - 1) selectedTab = tabCount - 1
             }
-            // 切到推荐 tab 才请求 AI 排序：不在别的 tab 上提前烧额度，也不与详情加载抢带宽
+            // 切到推荐 tab 才请求 AI 排序：不在别的 tab 上提前烧额度，也不与详情加载抢带宽；
+            // release 关掉 AI 后不发起排序请求，推荐 tab 保持 TMDB 原序
             LaunchedEffect(
                 selectedTab,
                 recommendationsTabIndex,
@@ -683,7 +687,8 @@ fun DetailScreen(
                 detailAiState.scene,
                 uiState.recommendations
             ) {
-                if (showRecommendationsTab &&
+                if (aiFeaturesEnabled &&
+                    showRecommendationsTab &&
                     selectedTab == recommendationsTabIndex &&
                     uiState.recommendations.isNotEmpty()
                 ) {
