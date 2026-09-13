@@ -306,13 +306,13 @@ private fun CardCarousel(
         }
         Unit
     }
-    /** 落款带（图标 + 应用名）只出现在导出图上，屏幕上的卡片没有它，见 [StampBrand] */
+    /** 卡面底部那枚落款（图标 + 应用名），屏幕与导出图共用同一段绘制，见 [StampBrandRow] */
     val brand = rememberStampBrand(palette)
     /** 把当前那一页的卡面重放成位图交给保存/分享，两条路都用同一张软件位图 */
     val capture: suspend () -> Bitmap = {
         val picture = currentDate?.let { pictures[it] }
         requireNotNull(picture) { "Daily stamp card has not been recorded yet" }
-        captureCardPicture(picture, brand)
+        captureCardPicture(picture)
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -330,6 +330,7 @@ private fun CardCarousel(
             CarouselPage(
                 sheet = pageSheet,
                 palette = palette,
+                brand = brand,
                 turn = { pageTurn(pagerState.currentPage, pagerState.currentPageOffsetFraction, page) },
                 pictures = pictures,
                 onPosterClick = onDetail,
@@ -386,6 +387,7 @@ private fun CardCarousel(
 private fun CarouselPage(
     sheet: DailyStampSheet,
     palette: SplashPalette,
+    brand: StampBrand,
     turn: () -> Float,
     pictures: MutableMap<LocalDate, Picture>,
     onPosterClick: () -> Unit,
@@ -437,6 +439,7 @@ private fun CarouselPage(
                         picture = picture,
                         card = sheet.card,
                         palette = palette,
+                        brand = brand,
                         onPosterClick = onPosterClick,
                     )
                 }
@@ -458,6 +461,7 @@ private fun RecordedDailyStampCard(
     picture: Picture,
     card: DailyStampCardUi,
     palette: SplashPalette,
+    brand: StampBrand,
     onPosterClick: () -> Unit,
 ) {
     var posterRevision by remember(card.date, card.poster) { mutableIntStateOf(0) }
@@ -470,6 +474,7 @@ private fun RecordedDailyStampCard(
         DailyStampCard(
             card = card,
             palette = palette,
+            brand = brand,
             onPosterClick = onPosterClick,
             onPosterLoaded = { posterRevision += 1 },
         )
@@ -523,6 +528,7 @@ private fun bandHeight(): Dp {
 private fun DailyStampCard(
     card: DailyStampCardUi,
     palette: SplashPalette,
+    brand: StampBrand,
     onPosterClick: () -> Unit,
     onPosterLoaded: () -> Unit,
 ) {
@@ -568,6 +574,8 @@ private fun DailyStampCard(
                     ground = palette.paper,
                 )
             },
+            // 撕口虚线以下那一段：屏幕、导出图同高同一枚落款（未来那一页换成「那天见」）。
+            footnote = { StampBrandRow(brand = brand) },
         )
     }
 }
@@ -1001,7 +1009,7 @@ private fun ContentDrawScope.recordThenDraw(
 }
 
 /**
- * 把最近一次录下来的那一页重放成位图，再在底部那一条补上落款（见 [StampBrand]）。
+ * 把最近一次录下来的那一页重放成位图：屏幕上有什么，导出的就有什么（落款也在 Picture 里）。
  *
  * 显式建一张 ARGB_8888 位图，用 android.graphics.Canvas 回放 Picture：整条路都是软件
  * 光栅化，不经过 GPU 快照，也不依赖任何平台图层。
@@ -1013,16 +1021,14 @@ private fun ContentDrawScope.recordThenDraw(
  * 跑在主线程上是因为 Picture 每帧都会被重新录制，换到后台线程读它就会和绘制撞上。
  * 后面的 PNG 压缩另有 IO 线程，那一段才是耗时的。
  */
-private suspend fun captureCardPicture(picture: Picture, brand: StampBrand): Bitmap =
+private suspend fun captureCardPicture(picture: Picture): Bitmap =
     withContext(Dispatchers.Main.immediate) {
         require(picture.width > 0 && picture.height > 0) {
             "Daily stamp card has not been drawn yet"
         }
         Bitmap.createBitmap(picture.width, picture.height, Bitmap.Config.ARGB_8888)
             .also { bitmap ->
-                val canvas = AndroidCanvas(bitmap)
-                canvas.drawPicture(picture)
-                brand.draw(canvas, picture.width.toFloat(), picture.height.toFloat())
+                AndroidCanvas(bitmap).drawPicture(picture)
             }
     }
 

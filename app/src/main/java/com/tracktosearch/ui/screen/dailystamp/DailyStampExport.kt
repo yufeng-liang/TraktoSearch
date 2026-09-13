@@ -10,10 +10,16 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.os.Environment
 import android.text.TextPaint
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import com.tracktosearch.R
@@ -22,6 +28,7 @@ import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.saveBitmapToAlbum
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.StampDesignHeight
+import com.tracktosearch.ui.screen.splash.StampTearBottom
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,9 +46,9 @@ import java.util.Locale
  * 绘制。那一页是一块固定尺寸、不滚动的内容，录下来即所得，再手绘一遍只会出现
  * 「存下来的和看到的不一样」。
  *
- * 只有一处例外：页面底部那一条在屏幕上留白、在开屏上是「轻触跳过」，导出时补一行
- * 图标 + 应用名（见 [StampBrand]）。位置是页面自己留出来的（见 StampPage），
- * 所以这一行没有长在页面之外。
+ * 页面底部那一条（撕口虚线以下那一段）在屏幕上、开屏上、导出图上都在（见 [StampBrand]）：
+ * 开屏在那儿写「轻触跳过」，卡片与导出图在那儿落款。它长在页面自己留出来的槽里
+ * （见 StampPage 的 footnote），所以三张只差那一行的内容。
  *
  * 存 PNG 而不是 JPEG：卡面是大面积纯色加细字，JPEG 会在字缘留下彩边。
  */
@@ -60,12 +67,13 @@ private fun fileName(date: LocalDate): String = "TrackToSearch_DailyStamp_${stam
 /**
  * 导出图底部那一行落款：图标在上、应用名在下，整块水平居中。
  *
- * 位置就是开屏那一行「轻触跳过」的那个槽（见 StampPage 的 [StampStripHeight]）：屏幕上
- * 这一条是空的（图本来就在应用里，落款是废话；「跳过」更是没意义），导出时才补上这两行，
- * 发出去之后它们是唯一说明这张图出自哪儿的东西。
+ * 位置是撕口虚线以下那一段的正中（见 StampPage 的 footnote 槽与 [StampTearBottom]）：那一段
+ * 是存根，落款是它唯一的内容。开屏在那儿是「轻触跳过」，日签卡与导出图在这儿是这枚落款，
+ * 未来那一页则是「那天见」——三种呈现同高。
  *
- * 页面本身——纸、光锥、齿孔轨、海报、台词、印章、日期、撕口虚线——都在录下来的 Picture 里
- * 一并重放了，所以这一行不用再铺底色与颗粒，直接画在页面底部的纸面上。
+ * 页面本身——纸、光锥、齿孔轨、海报、台词、印章、日期、撕口虚线、落款——都在录下来的
+ * Picture 里一并重放了（屏幕与导出来自同一段绘制），所以这里不用再铺底色与颗粒，
+ * 直接画在页面底部的纸面上。
  *
  * 尺寸按页面高度换算（见 [stampBrandLayout]）：导出图的分辨率跟着屏幕走（就是卡面那点像素），
  * 页内每个元素都是「设计尺寸 × 这个比例」，这一行不跟上就会在别的机器上比页内元素大一号。
@@ -79,8 +87,8 @@ internal class StampBrand(context: Context, palette: SplashPalette) {
     /**
      * 图标解析不出来时（自适应图标异常等）整带退化成一行应用名，不让导出整体失败。
      *
-     * 拖到第一次导出才解码：这个类在卡片打开那一下就建好了，而多数人打开卡片是看一眼就
-     * 关掉。自适应图标要解析一遍 XML，塞进那一帧只是白掉帧。
+     * 拖到第一次绘制才解码：日签卡一打开就会画这一行，而自适应图标要解析一遍 XML，
+     * 塞进打开卡片的那一帧只是白掉帧。
      */
     private val icon: Bitmap? by lazy {
         try {
@@ -145,9 +153,12 @@ internal class StampBrandLayout(
 /**
  * 竖排：图标在上、名字在下，整块水平居中。
  *
- * 底线压在 [BRAND_BOTTOM_DP] 上，整块往上长。它必须留在页面底部那一条里、不进到撕口虚线
- * 上面去（虚线在 [StampTearBottom]），所以图标只取 20dp、间距 5dp——这条约束由
- * StampBrandLayoutTest 钉着，改这几个数会被测试拦下来。
+ * 整块在「页底 → 撕口虚线」那一段（[StampTearBottom] = 80dp）里垂直居中：那一段本来就
+ * 是撕下来的存根，落款是它唯一的内容，钉死在页底只会显得下半张比上半张空。整块多高由
+ * 图标边长加间距加名字那一行算出来，于是改图标尺寸时居中关系跟着走，不必再配一个底距。
+ *
+ * 落位一律从**页底**往上量（位图的 y 向下长，页底在 [heightPx] 那一头）：上下两个空相等
+ * 时，块的顶边 = 页高 − 空 − 块高。
  *
  * 抽成纯函数只为单测：改字号或改图标尺寸时这几个数要一起动，靠人眼核对很容易漏。
  */
@@ -160,12 +171,16 @@ internal fun stampBrandLayout(
     nameDescentPx: Float,
 ): StampBrandLayout {
     val iconSide = BRAND_ICON_DP * unit
-    val bottom = heightPx - BRAND_BOTTOM_DP * unit
     // ascent 是负值，减掉它才是从行顶量到基线
-    val nameTop = bottom - (nameDescentPx - nameAscentPx)
+    val nameHeight = nameDescentPx - nameAscentPx
+    val block = iconSide + BRAND_GAP_DP * unit + nameHeight
+    val band = StampTearBottom.value * unit
+    val gap = ((band - block) / 2f).coerceAtLeast(0f)
+    val blockTop = heightPx - gap - block
+    val nameTop = blockTop + iconSide + BRAND_GAP_DP * unit
     return StampBrandLayout(
         iconSidePx = iconSide,
-        iconTopPx = nameTop - BRAND_GAP_DP * unit - iconSide,
+        iconTopPx = blockTop,
         nameBaselinePx = nameTop - nameAscentPx,
         nameLeftPx = (widthPx - nameWidthPx) / 2f,
     )
@@ -178,16 +193,37 @@ internal fun rememberStampBrand(palette: SplashPalette): StampBrand {
 }
 
 /**
+ * 屏幕上的那一行落款：和导出图共用 [StampBrand.draw] 与 [stampBrandLayout]。
+ *
+ * 画布是撕口虚线以下那一条（页内高 [StampTearBottom]），而 [stampBrandLayout] 的坐标系是
+ * 整页——导出图那边传的是位图尺寸。于是这里把画布往上平移「这一条在页内的顶边」
+ * （页高减这一条的高），落点就与导出的那一张逐像素相同：两者本来就是同一段绘制代码，
+ * 导出那边重放的是这一页录下来的 Picture，这一行就在 Picture 里。
+ *
+ * 页高在这里自己量（[StampDesignHeight] 按当前密度换算）：这一页的密度是缩过的
+ * （见 DailyStampCardOverlay 的 StampPageBox），必须在这个槽里读，读到页外的密度会
+ * 整整大出一档。
+ */
+@Composable
+internal fun StampBrandRow(brand: StampBrand, modifier: Modifier = Modifier) {
+    val pageHeightPx = with(LocalDensity.current) { StampDesignHeight.toPx() }
+    Canvas(modifier = modifier.fillMaxSize()) {
+        translate(top = size.height - pageHeightPx) {
+            brand.draw(drawContext.canvas.nativeCanvas, size.width, pageHeightPx)
+        }
+    }
+}
+
+/**
  * 落款那一块的设计尺寸，单位是设计 dp / 设计 sp。
  *
- * 这几个数的上下限不是审美问题而是版面约束：整块要装进页面底部那一条（[StampStripHeight]
- * 44dp）之内、不碰到撕口虚线（[StampTearBottom] 80dp），改之前先看 StampBrandLayoutTest。
+ * 这几个数的上下限不是审美问题而是版面约束：整块（图标 + 间距 + 名字行）要装进「页底 →
+ * 撕口虚线（[StampTearBottom] 80dp）」那一段里并居中，改之前先看 StampBrandLayoutTest。
  */
-private const val BRAND_ICON_DP = 20f
+private const val BRAND_ICON_DP = 32.5f
 private const val BRAND_GAP_DP = 5f
-private const val BRAND_BOTTOM_DP = 38f
-/** 与开屏那行「轻触跳过」同一档：这一条本来就是在同一个槽里 */
-private const val BRAND_NAME_SP = 11f
+/** 比开屏那行「轻触跳过」大两档：卡片那一档的字号，见 [StampTextSize] */
+private const val BRAND_NAME_SP = 14f
 /** 图标圆角占边长的比例，与统计分享图的 22/84 同一档 */
 private const val BRAND_ICON_CORNER = 0.26f
 /** 与激活登录页标题同字距：34sp 下的 -2.04sp ≈ -0.06em（Paint 的 letterSpacing 相对字号） */
@@ -196,7 +232,7 @@ private const val BRAND_NAME_SPACING = -0.06f
  * 图标解码边长。
  *
  * 按最终尺寸解码就得先知道导出图多大，而那个尺寸要等这一页画完才知道；干脆解一档够大的
- * 再缩——128px 缩到 40px 上下，自适应图标的边缘仍旧干净。
+ * 再缩——128px 缩到 60px 上下，自适应图标的边缘仍旧干净。
  */
 private const val BRAND_ICON_DECODE_PX = 128
 
