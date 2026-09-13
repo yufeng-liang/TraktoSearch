@@ -288,7 +288,17 @@ fun SwiftieEraCard(
             // clip 必须夹在 graphicsLayer 与 shadow 之间：放到 shadow 之后，
             // 那圈 10dp 的投影会整张浮在纸还没出来的地方
             .then(feedModifier)
-            .shadow(elevation = 10.dp, shape = CARD_SHAPE, clip = false)
+            // **出纸那一张不投影**。10dp 的环境投影绕着圆角有一圈，被不透明的纸盖住之后
+            // 只剩四个圆角外面露着 —— 四块三角暗边，读作脏（半透明白纸时它把整张纸一起
+            // 染灰，谁也没比谁干净，所以看不出来）。这一张也不需要它：纸的下缘压在滚筒上，
+            // 接触暗影由 [feedModifier] 画，其余三边是真纸压在真机器上，没有离地
+            .then(
+                if (feedProgress == null) {
+                    Modifier.shadow(elevation = 10.dp, shape = CARD_SHAPE, clip = false)
+                } else {
+                    Modifier
+                }
+            )
             .clip(CARD_SHAPE)
             // 半透明白纸压在水彩天空上；主色只染一层薄底。
             // **出纸那一张（TTPD）是不透明的**：它正下方就是那台打字机与滚筒上打好的两行字，
