@@ -2,12 +2,10 @@ package com.tracktosearch.ui.screen.dailystamp
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Environment
@@ -16,12 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import com.tracktosearch.R
@@ -29,7 +21,7 @@ import com.tracktosearch.ui.component.SaveToAlbumResult
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.saveBitmapToAlbum
 import com.tracktosearch.ui.screen.splash.SplashPalette
-import com.tracktosearch.ui.screen.splash.grainTile
+import com.tracktosearch.ui.screen.splash.StampDesignHeight
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,18 +30,18 @@ import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.ceil
-import kotlin.math.roundToInt
 
 /**
  * 日签卡片的导出。
  *
- * 位图是把卡面那次绘制录下来的 Picture 重放一遍（见 DailyStampCardOverlay 的
- * captureCardPicture），也就是屏幕上那张卡的原样——不像观看统计那样另写一套 Canvas
- * 绘制。卡片是一块固定尺寸、不滚动的内容，录下来即所得，再手绘一遍只会出现
+ * 位图是把那一页的绘制录下来的 Picture 重放一遍（见 DailyStampCardOverlay 的
+ * captureCardPicture），也就是屏幕上那一张的原样——不像观看统计那样另写一套 Canvas
+ * 绘制。那一页是一块固定尺寸、不滚动的内容，录下来即所得，再手绘一遍只会出现
  * 「存下来的和看到的不一样」。
  *
- * 只有一处例外：卡面上方多接一条落款带（见 [StampBrand]），屏幕上没有它。
+ * 只有一处例外：页面底部那一条在屏幕上留白、在开屏上是「轻触跳过」，导出时补一行
+ * 图标 + 应用名（见 [StampBrand]）。位置是页面自己留出来的（见 StampPage），
+ * 所以这一行没有长在页面之外。
  *
  * 存 PNG 而不是 JPEG：卡面是大面积纯色加细字，JPEG 会在字缘留下彩边。
  */
@@ -66,26 +58,23 @@ private fun stamp(date: LocalDate): String =
 private fun fileName(date: LocalDate): String = "TrackToSearch_DailyStamp_${stamp(date)}.png"
 
 /**
- * 导出图顶上那条落款带：应用图标一行，应用名一行，都水平居中。
+ * 导出图底部那一行落款：图标在上、应用名在下，整块水平居中。
  *
- * 只画在存下来／分享出去的那张图上，屏幕上的卡片没有它——卡片本来就在应用里，落款是废话；
- * 发出去之后这两行是唯一说明这张票根出自哪儿的东西。
+ * 位置就是开屏那一行「轻触跳过」的那个槽（见 StampPage 的 [StampStripHeight]）：屏幕上
+ * 这一条是空的（图本来就在应用里，落款是废话；「跳过」更是没意义），导出时才补上这两行，
+ * 发出去之后它们是唯一说明这张图出自哪儿的东西。
  *
- * 接在卡面上方新加的一条带子里，而不是盖在票头那一行上：那一行左右已经有日期和编号，
- * 再塞进去就是三样东西挤一行。带子和卡面同底色、同一张噪点瓦片、同一个颗粒强度，
- * 接起来是一整张纸；差一点纹理，导出图上就是一道横线。
+ * 页面本身——纸、光锥、齿孔轨、海报、台词、印章、日期、撕口虚线——都在录下来的 Picture 里
+ * 一并重放了，所以这一行不用再铺底色与颗粒，直接画在页面底部的纸面上。
  *
- * 尺寸全按 [density] 换算，字号还跟系统字体缩放：卡面本身是按当前缩放渲染后录下来的，
- * 落款不跟着走，字体调大的机器上这两行会显得比卡片小一号。
+ * 尺寸按页面高度换算（见 [stampBrandLayout]）：导出图的分辨率跟着屏幕走（就是卡面那点像素），
+ * 页内每个元素都是「设计尺寸 × 这个比例」，这一行不跟上就会在别的机器上比页内元素大一号。
+ * 不跟 fontScale：图标与名字是一枚固定落款（图标本来就是 dp，不随字号变），
+ * 跟着放大反而会撞到上面那条撕口虚线。
  */
-internal class StampBrand(context: Context, palette: SplashPalette, density: Density) {
+internal class StampBrand(context: Context, palette: SplashPalette) {
 
     private val name: String = context.getString(R.string.app_name)
-    private val iconPx: Float = with(density) { BRAND_ICON.toPx() }
-    private val topPx: Float = with(density) { BRAND_TOP.toPx() }
-    private val gapPx: Float = with(density) { BRAND_GAP.toPx() }
-    private val bottomPx: Float = with(density) { BRAND_BOTTOM.toPx() }
-    private val cornerPx: Float = with(density) { BRAND_CORNER.toPx() }
 
     /**
      * 图标解析不出来时（自适应图标异常等）整带退化成一行应用名，不让导出整体失败。
@@ -95,134 +84,121 @@ internal class StampBrand(context: Context, palette: SplashPalette, density: Den
      */
     private val icon: Bitmap? by lazy {
         try {
-            val side = iconPx.roundToInt().coerceAtLeast(1)
-            context.packageManager.getApplicationIcon(context.packageName).toBitmap(side, side)
+            context.packageManager.getApplicationIcon(context.packageName)
+                .toBitmap(BRAND_ICON_DECODE_PX, BRAND_ICON_DECODE_PX)
         } catch (_: Exception) {
             null
         }
     }
 
-    /** 带子的底：卡面底色，颗粒已经乘进去了，见 [grainedPaper] */
-    private val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = BitmapShader(
-            grainedPaper(palette.sheet.toArgb()),
-            Shader.TileMode.REPEAT,
-            Shader.TileMode.REPEAT,
-        )
-    }
-
     private val iconPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
-    /** 落款走次级墨色：它是注解，不该和台词抢。字重压到粗体是因为这一行只有 12sp */
+    /** 落款走次级墨色：它是注解，不该和台词抢。字重压到粗体是因为这一行只有 11sp */
     private val namePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = with(density) { BRAND_NAME.toPx() }
         color = palette.inkSoft.toArgb()
         typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         letterSpacing = BRAND_NAME_SPACING
     }
 
-    /** 这条带子占多少像素高，导出位图按它加高，卡面按它下移。读它会连带解码图标 */
-    val bandHeightPx: Int by lazy {
-        ceil(
-            topPx +
-                (if (icon != null) iconPx + gapPx else 0f) +
-                (namePaint.descent() - namePaint.ascent()) +
-                bottomPx
-        ).toInt()
-    }
-
-    /**
-     * 把带子画在 [canvas] 顶上，[widthPx] 是卡面宽度。调用方随后把卡面下移 [bandHeightPx] 回放。
-     *
-     * 带子往下多铺一个圆角的量：卡面自己 clip 过圆角，它顶上那两个角是透明的，不垫在下面
-     * 导出图上就缺两块。垫上之后整张图是「顶上圆、腰是直的、底下还是卡面那两个圆角」，
-     * 也就是把票根往上接长了一截，而不是另贴了一块牌子。
-     */
-    fun draw(canvas: Canvas, widthPx: Float) {
-        val band = Path().apply {
-            addRoundRect(
-                RectF(0f, 0f, widthPx, bandHeightPx + cornerPx),
-                floatArrayOf(cornerPx, cornerPx, cornerPx, cornerPx, 0f, 0f, 0f, 0f),
-                Path.Direction.CW,
-            )
-        }
-        canvas.drawPath(band, paperPaint)
-
-        var y = topPx
+    /** 把这一行画进 [canvas] 底部的那一条，[widthPx]×[heightPx] 是整页的尺寸 */
+    fun draw(canvas: Canvas, widthPx: Float, heightPx: Float) {
+        val unit = designUnit(heightPx)
+        namePaint.textSize = BRAND_NAME_SP * unit
+        val layout = stampBrandLayout(
+            widthPx = widthPx,
+            heightPx = heightPx,
+            unit = unit,
+            nameWidthPx = namePaint.measureText(name),
+            nameAscentPx = namePaint.ascent(),
+            nameDescentPx = namePaint.descent(),
+        )
         icon?.let { bitmap ->
-            val left = (widthPx - iconPx) / 2f
-            val dst = RectF(left, y, left + iconPx, y + iconPx)
+            val left = (widthPx - layout.iconSidePx) / 2f
+            val dst = RectF(
+                left,
+                layout.iconTopPx,
+                left + layout.iconSidePx,
+                layout.iconTopPx + layout.iconSidePx,
+            )
             // 圆角裁切：方形图标压在暖纸上显得生硬，和统计分享图同一处理
-            val radius = iconPx * BRAND_ICON_CORNER
+            val radius = layout.iconSidePx * BRAND_ICON_CORNER
             canvas.save()
             canvas.clipPath(Path().apply { addRoundRect(dst, radius, radius, Path.Direction.CW) })
             canvas.drawBitmap(bitmap, null, dst, iconPaint)
             canvas.restore()
-            y += iconPx + gapPx
         }
-        // ascent 是负值，减掉它才是从行顶量到基线
-        canvas.drawText(
-            name,
-            (widthPx - namePaint.measureText(name)) / 2f,
-            y - namePaint.ascent(),
-            namePaint,
-        )
+        canvas.drawText(name, layout.nameLeftPx, layout.nameBaselinePx, namePaint)
     }
+}
+
+/** 1 设计 dp 在这张导出图上有多少像素。页面是按 [StampDesignHeight] 排的 */
+internal fun designUnit(heightPx: Float): Float = heightPx / StampDesignHeight.value
+
+/** 落款那一块在页面里的落点，单位是像素 */
+internal class StampBrandLayout(
+    val iconSidePx: Float,
+    val iconTopPx: Float,
+    val nameBaselinePx: Float,
+    val nameLeftPx: Float,
+)
+
+/**
+ * 竖排：图标在上、名字在下，整块水平居中。
+ *
+ * 底线压在 [BRAND_BOTTOM_DP] 上，整块往上长。它必须留在页面底部那一条里、不进到撕口虚线
+ * 上面去（虚线在 [StampTearBottom]），所以图标只取 20dp、间距 5dp——这条约束由
+ * StampBrandLayoutTest 钉着，改这几个数会被测试拦下来。
+ *
+ * 抽成纯函数只为单测：改字号或改图标尺寸时这几个数要一起动，靠人眼核对很容易漏。
+ */
+internal fun stampBrandLayout(
+    widthPx: Float,
+    heightPx: Float,
+    unit: Float,
+    nameWidthPx: Float,
+    nameAscentPx: Float,
+    nameDescentPx: Float,
+): StampBrandLayout {
+    val iconSide = BRAND_ICON_DP * unit
+    val bottom = heightPx - BRAND_BOTTOM_DP * unit
+    // ascent 是负值，减掉它才是从行顶量到基线
+    val nameTop = bottom - (nameDescentPx - nameAscentPx)
+    return StampBrandLayout(
+        iconSidePx = iconSide,
+        iconTopPx = nameTop - BRAND_GAP_DP * unit - iconSide,
+        nameBaselinePx = nameTop - nameAscentPx,
+        nameLeftPx = (widthPx - nameWidthPx) / 2f,
+    )
 }
 
 @Composable
 internal fun rememberStampBrand(palette: SplashPalette): StampBrand {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    return remember(context, palette, density) { StampBrand(context, palette, density) }
+    return remember(context, palette) { StampBrand(context, palette) }
 }
 
 /**
- * 把噪点瓦片乘进卡面底色，得到一张「已经有颗粒的纸」，平铺就能用。
+ * 落款那一块的设计尺寸，单位是设计 dp / 设计 sp。
  *
- * 不在画布上另叠一层 Multiply：android.graphics 里 PorterDuff.Mode.MULTIPLY 是 Modulate，
- * 连 alpha 一起乘，8% 的一层盖下来会把整条带子的不透明度也压到 8%；而卡面那层颗粒走的是
- * Compose 的 BlendMode.Multiply，那是不动 alpha 的另一个算子。与其按版本分叉去要
- * android.graphics.BlendMode（API 29 才有），不如把这点乘法直接算在瓦片上。
- *
- * 算式和 Compose 那边逐像素相同：src 预乘后是 [BRAND_GRAIN_ALPHA]×灰度，
- * kMultiply 出来就是 底色 ×(1 − a + a×灰度)。128×128 一张，只在建这个类时算一遍。
+ * 这几个数的上下限不是审美问题而是版面约束：整块要装进页面底部那一条（[StampStripHeight]
+ * 44dp）之内、不碰到撕口虚线（[StampTearBottom] 80dp），改之前先看 StampBrandLayoutTest。
  */
-private fun grainedPaper(paperArgb: Int): Bitmap {
-    val tile = grainTile()
-    val size = tile.width
-    val grain = IntArray(size * size)
-    tile.getPixels(grain, 0, size, 0, 0, size, size)
-    val red = (paperArgb shr 16) and 0xFF
-    val green = (paperArgb shr 8) and 0xFF
-    val blue = paperArgb and 0xFF
-    val pixels = IntArray(grain.size) { index ->
-        // 瓦片是灰的，取一个通道就够
-        val grey = (grain[index] and 0xFF) / 255f
-        val factor = 1f - BRAND_GRAIN_ALPHA + BRAND_GRAIN_ALPHA * grey
-        (0xFF shl 24) or
-            ((red * factor).roundToInt().coerceIn(0, 255) shl 16) or
-            ((green * factor).roundToInt().coerceIn(0, 255) shl 8) or
-            (blue * factor).roundToInt().coerceIn(0, 255)
-    }
-    return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
-        setPixels(pixels, 0, size, 0, 0, size, size)
-    }
-}
-
-private val BRAND_TOP: Dp = 20.dp
-private val BRAND_ICON: Dp = 36.dp
-private val BRAND_GAP: Dp = 9.dp
-private val BRAND_BOTTOM: Dp = 8.dp
-/** 与卡面圆角一致（DailyStampCardOverlay 里 clip 的 11dp），接缝处轮廓才连得上 */
-private val BRAND_CORNER: Dp = 11.dp
-private val BRAND_NAME: TextUnit = 12.sp
+private const val BRAND_ICON_DP = 20f
+private const val BRAND_GAP_DP = 5f
+private const val BRAND_BOTTOM_DP = 38f
+/** 与开屏那行「轻触跳过」同一档：这一条本来就是在同一个槽里 */
+private const val BRAND_NAME_SP = 11f
 /** 图标圆角占边长的比例，与统计分享图的 22/84 同一档 */
 private const val BRAND_ICON_CORNER = 0.26f
 /** 与激活登录页标题同字距：34sp 下的 -2.04sp ≈ -0.06em（Paint 的 letterSpacing 相对字号） */
 private const val BRAND_NAME_SPACING = -0.06f
-/** 与卡面颗粒同强度，见 DailyStampCardOverlay 的 GRAIN_ALPHA */
-private const val BRAND_GRAIN_ALPHA = 0.08f
+/**
+ * 图标解码边长。
+ *
+ * 按最终尺寸解码就得先知道导出图多大，而那个尺寸要等这一页画完才知道；干脆解一档够大的
+ * 再缩——128px 缩到 40px 上下，自适应图标的边缘仍旧干净。
+ */
+private const val BRAND_ICON_DECODE_PX = 128
 
 /**
  * 是否含有可导出的卡面像素。

@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.dailystamp
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
-import android.graphics.Color as AndroidColor
 import android.graphics.Picture
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -35,7 +34,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -48,10 +46,10 @@ import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,39 +67,28 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.draw
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -116,17 +103,23 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.navigation.DetailSeedStore
+import com.tracktosearch.ui.screen.splash.PosterCompactFontScale
 import com.tracktosearch.ui.screen.splash.QuoteSeal
 import com.tracktosearch.ui.screen.splash.SplashPalette
-import com.tracktosearch.ui.screen.splash.grainBrush
+import com.tracktosearch.ui.screen.splash.StampBackdrop
+import com.tracktosearch.ui.screen.splash.StampDesignHeight
+import com.tracktosearch.ui.screen.splash.StampLinesToSource
+import com.tracktosearch.ui.screen.splash.StampPage
+import com.tracktosearch.ui.screen.splash.StampPageAspect
+import com.tracktosearch.ui.screen.splash.StampPosterFrame
+import com.tracktosearch.ui.screen.splash.StampQuoteBlock
+import com.tracktosearch.ui.screen.splash.stampPosterSize
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -385,7 +378,7 @@ private fun CardCarousel(
  * graphicsLayer 里读只让这一层重画。
  *
  * 缩放和旋转的支点放在靠内那条边上：侧卡于是绕着贴着中间卡的那条边往里转，像一叠
- * 摊开的票根；支点放在中心的话它会整张往外缩，看着是并排三张而不是叠在一起的三张。
+ * 摊开的纸；支点放在中心的话它会整张往外缩，看着是并排三张而不是叠在一起的三张。
  */
 @Composable
 private fun CarouselPage(
@@ -427,7 +420,9 @@ private fun CarouselPage(
                     indication = null,
                     onClick = onSideClick,
                 )
-                .shadow(20.dp, RoundedCornerShape(11.dp), clip = false)
+                // 方角：这一页是整屏铺满的一张纸（见 StampPage），圆角会连本体一起裁掉，
+                // 而导出用的正是这一页的像素——裁出来的四个角在分享出去的白底上就是四个缺口
+                .shadow(20.dp, RectangleShape, clip = false)
         ) {
             when (sheet) {
                 is DailyStampSheet.Line -> {
@@ -505,18 +500,18 @@ private fun bandHeight(): Dp {
 }
 
 /**
- * 卡面。
+ * 卡面：一页日签，和开屏那一屏同一套版面（见 StampPage）。
  *
- * 从上到下：票头、海报、台词、出处、一道虚线、印章。虚线是票根的撕口，
- * 它把「那天看到的那句话」和「那天的印」分成上下两半——上半是内容，下半是凭证。
+ * 翻页槽是 9:16 的，这一页按设计高度 [StampDesignHeight] 排、再按密度缩进槽里。
+ * 屏幕上这一张、导出出去的那一张、以及开屏那一屏于是是同一份绘制（导出走 Picture 重放，
+ * 见 [RecordedDailyStampCard]）——原先卡片是另一套票根排版，导出图与开屏两张脸。
+ *
+ * 底部那一条是空的：屏幕上「轻触跳过」没有意义（点哪儿都不是跳过），应用名也是废话
+ * （这张图本来就在应用里）。导出时才在那里补一行图标 + 名字，见 DailyStampExport 的
+ * StampBrand。位置留着，所以屏幕与导出只差这一行。
  *
  * 海报和片名都可点，都进这部片的详情页：这张卡的下一步动作只有一个，
  * 不该逼用户去找唯一那个能点的地方。
- *
- * 颗粒和齿孔由 [drawCardTexture] 统一盖在最上面，它需要知道撕线落在卡面的哪个高度，
- * 而这个高度取决于台词有几行、有没有海报，只能等布局摆完才知道，所以撕线用
- * [onGloballyPositioned] 把自己的位置报上来。两个位置都取窗口坐标再相减，
- * 免得去猜中间隔了几层内边距。
  */
 @Composable
 private fun DailyStampCard(
@@ -525,329 +520,194 @@ private fun DailyStampCard(
     onPosterClick: () -> Unit,
     onPosterLoaded: () -> Unit,
 ) {
-    val tick = remember(card.date) {
-        card.date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.US))
-    }
-    val serial = remember(card.date) {
-        // 当年的第几天，补零到三位：票据编号从来不写 No.7，写 No.007
-        String.format(Locale.US, "No.%03d", card.date.dayOfYear)
-    }
-    // 和开屏是同一块噪点瓦片（固定种子），两屏的纸面纹理必须看起来是同一张纸
-    val grain = remember { grainBrush() }
-    var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    var notchCenterY by remember { mutableFloatStateOf(Float.NaN) }
-
-    Column(
-        modifier = Modifier
-            .widthIn(max = 380.dp)
-            .clip(RoundedCornerShape(11.dp))
-            // 质感层排在 background 左边，卡面底色才算在它的图层里：齿孔要擦掉的正是这层底色
-            .drawWithContent {
-                drawCardTexture(
+    // 这一页的设计高度是钉死的（[StampDesignHeight]），于是只有超大字号那一档要收海报：
+    // 字号翻上去等于把四行台词的行高整段拉长，占的还是纵向那点余量。
+    val compact = LocalDensity.current.fontScale > PosterCompactFontScale
+    StampPageBox {
+        StampPage(
+            palette = palette,
+            date = card.date,
+            modifier = Modifier.fillMaxSize(),
+            backdrop = { StampBackdrop(palette) },
+            poster = {
+                CardPoster(
+                    card = card,
                     palette = palette,
-                    grain = grain,
-                    notchCenterY = notchCenterY,
+                    size = stampPosterSize(card.lines.size, compact),
+                    onClick = onPosterClick,
+                    onLoaded = onPosterLoaded,
                 )
-            }
-            .background(palette.sheet)
-            .onGloballyPositioned { cardCoords = it }
-            .padding(horizontal = 22.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        TicketHeader(tick = tick, serial = serial, palette = palette)
-        Spacer(Modifier.height(20.dp))
-        CardPoster(
-            card = card,
-            palette = palette,
-            onClick = onPosterClick,
-            onLoaded = onPosterLoaded,
-        )
-        Spacer(Modifier.height(22.dp))
-        card.lines.forEach { line ->
-            CardLine(
-                text = line,
-                palette = palette,
-                isEnglish = card.isEnglish,
-                lineCount = card.lines.size,
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        CardSource(card = card, palette = palette, onClick = onPosterClick)
-        Spacer(Modifier.height(22.dp))
-        TearLine(
-            palette = palette,
-            modifier = Modifier.onGloballyPositioned { tear ->
-                notchCenterY = tearCenterIn(cardCoords, tear)
+            },
+            quoteBlock = {
+                StampQuoteBlock(
+                    lines = card.lines,
+                    isEnglish = card.isEnglish,
+                    title = card.title,
+                    titleWrap = card.titleWrap,
+                    year = card.year,
+                    palette = palette,
+                    sourceOnClick = onPosterClick,
+                )
+            },
+            seal = {
+                QuoteSeal(
+                    keyword = card.sealKeyword,
+                    latin = card.keywordLatin,
+                    sealLang = card.sealLang,
+                    palette = palette,
+                    // 这一页的底是 paper 不是 sheet，做旧那层要拿正确的底色去盖才不留色差
+                    ground = palette.paper,
+                )
             },
         )
-        Spacer(Modifier.height(20.dp))
-        QuoteSeal(
-            keyword = card.sealKeyword,
-            latin = card.keywordLatin,
-            sealLang = card.sealLang,
-            palette = palette,
-            // 卡面是 sheet 不是 paper，做旧那层要拿卡面色去盖才不留色差
-            ground = palette.sheet,
-        )
     }
 }
 
 /**
- * 票头：一行，左边日期，右边编号。
+ * 把这一页缩进轮播槽：9:16 的框 + 一份缩小的密度。
  *
- * 原先只有一行居中的日期刻度，读起来是装饰；票据的抬头总是日期在左、编号在右，
- * 摆成两端对齐这一行才像票根上印的东西。编号取当年的第几天：它和日期是同一个信息的
- * 两种写法，不用另存字段，而「今年的第 243 天」本身就有攒到年底的意思。
+ * 不能套 graphicsLayer 缩放：图层录不进 Picture，而这一页要旁路录一份给导出，
+ * 套上去导出就只剩一张白图（这条路在 [RecordedDailyStampCard] 里已经踩过）。
+ * 改密度之后页内所有 dp/sp 尺寸按同一比例落到目标像素上，字仍是按最终大小排的，不会糊。
  *
- * 颜色走 [dateInk] 而不是 inkFaint，理由在那边。
+ * 尺寸取「槽宽」和「槽高换算成的宽」里小的那个，再按 9:16 推出高：形不能变形，能被让掉的
+ * 是大小。按槽高直接定宽会在窄屏上顶出槽外——槽左右各留了 [SIDE_PEEK] 给侧卡探头，
+ * 而一页纸比那点空宽，多出来的部分会盖到侧卡上。
+ *
+ * 外框用的是没改过的密度，于是它占的像素正好是「框高 × 屏密度」；里层换成缩小后的密度，
+ * 按 [StampDesignHeight] 排的版面于是等比铺满这个框。设计宽度是推出来的（853 × 9/16 ≈ 480dp），
+ * 与机型无关——同一张日签在任何机器上都是同一页，只是大小不同。
  */
 @Composable
-private fun TicketHeader(tick: String, serial: String, palette: SplashPalette) {
-    val ink = dateInk(palette)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = tick,
-            color = ink,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 0.42.em,
-        )
-        Text(
-            text = serial,
-            color = ink,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            // 字距比日期收一半：编号是三位数字，撑开到 0.42em 会散成三个孤零零的字符
-            letterSpacing = 0.2.em,
-        )
+private fun StampPageBox(content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    val slot = (LocalConfiguration.current.screenWidthDp - SIDE_PEEK.value * 2).dp
+    val width = minOf(slot, bandHeight() * StampPageAspect)
+    val height = width / StampPageAspect
+    val scale = height.value / StampDesignHeight.value
+    val pageDensity = remember(density, scale) {
+        Density(density.density * scale, density.fontScale)
+    }
+    Box(modifier = Modifier.size(width = width, height = height)) {
+        CompositionLocalProvider(LocalDensity provides pageDensity) {
+            Box(modifier = Modifier.fillMaxSize()) { content() }
+        }
     }
 }
 
 /**
- * 卡片上的海报，和开屏一样做成相纸装裱：奶油色卡纸 + 压一层纸色。
+ * 卡片上的海报：装裱、投影、压色交给 [StampPosterFrame]，这里只负责把这一天的海报装进去。
  *
- * 压色不是为了好看而已：未处理的彩色海报贴在暖纸卡面上像硬插进来的一块图，
- * 压掉一点饱和度之后它才像原本就印在这张卡上。
+ * 走 Coil 而不是先把字节解成 Bitmap：海报可能是刚下载下来的，卡又是在点开时才出现，
+ * 等它一帧比卡着不动好。海报到位之后由 [RecordedDailyStampCard] 重新录一遍卡面——
+ * 异步图片的绘制节点不保证进得来，录制得赶在它画出来之后。
  *
- * 卡纸内侧还有一条发丝线：没有它海报是贴在卡纸上的另一张纸，有了它才像陷进卡纸
- * 开出来的窗里。
+ * `allowHardware(false)`：导出的那张图在软件 Canvas 上重放，硬件 Bitmap 参与不了。
  */
 @Composable
 private fun CardPoster(
     card: DailyStampCardUi,
     palette: SplashPalette,
+    size: DpSize,
     onClick: () -> Unit,
     onLoaded: () -> Unit,
 ) {
     if (card.poster == null) return
-    val tintColor = if (palette.isDark) Color(0xFF16100B) else palette.paper
-    val tintAlpha = if (palette.isDark) 0.22f else 0.14f
-    // 暗色主题的 ink 本身是浅色，同一条线在两套主题下一边是压痕、一边是高光，
-    // 都能把海报和卡纸分开，不必为此另兑颜色
-    val hairline = palette.ink.copy(alpha = if (palette.isDark) 0.34f else 0.22f)
     val interactionSource = remember { MutableInteractionSource() }
     val context = LocalContext.current
     val posterRequest = remember(card.poster, context) {
         ImageRequest.Builder(context)
             .data(card.poster)
-            // Picture 仍会旁路录制供导出，硬件 Bitmap 不能参与软件 Canvas 绘制。
             .allowHardware(false)
             .build()
     }
-    Box(
-        modifier = Modifier
-            .size(width = 122.dp, height = 183.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(palette.cream)
-            .hapticClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                // 日签卡是图片卡，进详情不震（用户规则：点击图片无触感）
-                semantic = null,
-                onClick = onClick,
-            )
-            .padding(5.dp)
+    StampPosterFrame(
+        palette = palette,
+        size = size,
+        modifier = Modifier.hapticClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            // 日签卡是图片卡，进详情不震（用户规则：点击图片无触感）
+            semantic = null,
+            onClick = onClick,
+        ),
     ) {
         AsyncImage(
             model = posterRequest,
             contentDescription = card.title,
             onSuccess = { onLoaded() },
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(3.dp))
-                .drawWithContent {
-                    drawContent()
-                    drawRect(color = tintColor, alpha = tintAlpha, blendMode = BlendMode.Multiply)
-                    // 1 物理像素的发丝线，画在开窗内沿。整条往里收半像素：描边是沿路径
-                    // 居中长的，贴着边画会有一半落在上面那道圆角裁切之外，只剩半条。
-                    drawRoundRect(
-                        color = hairline,
-                        topLeft = Offset(0.5f, 0.5f),
-                        size = Size(size.width - 1f, size.height - 1f),
-                        cornerRadius = CornerRadius(3.dp.toPx() - 0.5f),
-                        style = Stroke(width = 1f),
-                    )
-                }
+            modifier = Modifier.fillMaxSize(),
         )
     }
-}
-
-/** 单行台词。字号随行数递减，保证 4 行也不触发自动折行——换行位置是排版的一部分 */
-@Composable
-private fun CardLine(
-    text: String,
-    palette: SplashPalette,
-    isEnglish: Boolean,
-    lineCount: Int,
-) {
-    val fontSize = when {
-        isEnglish && lineCount >= 4 -> 15f
-        isEnglish && lineCount == 3 -> 16f
-        isEnglish -> 17f
-        lineCount >= 4 -> 16.5f
-        lineCount == 3 -> 18f
-        else -> 19.5f
-    }
-    val lineHeightFactor = if (isEnglish) 1.58f else if (lineCount >= 4) 1.60f else 1.64f
-    Text(
-        text = text,
-        modifier = Modifier.fillMaxWidth(),
-        color = palette.ink,
-        fontSize = fontSize.sp,
-        lineHeight = (fontSize * lineHeightFactor).sp,
-        fontFamily = FontFamily.Serif,
-        // 与开屏台词同一档字重，理由见 SplashQuoteOverlay 的 QuoteLine：500 在只装了 400/700
-        // 的衬线族上会被取回常规体。卡片是要存下来分享的那一张，字更该压得住纸。
-        fontWeight = FontWeight.SemiBold,
-        fontStyle = if (isEnglish) FontStyle.Italic else FontStyle.Normal,
-        letterSpacing = if (isEnglish) 0.006.em else 0.012.em,
-        textAlign = TextAlign.Center,
-    )
-}
-
-/** 出处行：破折号 + 书名号包起的片名 + 退一档字号的年份，整行可点进详情页 */
-@Composable
-private fun CardSource(
-    card: DailyStampCardUi,
-    palette: SplashPalette,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val text = buildAnnotatedString {
-        append(EM_DASH)
-        append(' ')
-        append(card.titleWrap.first)
-        append(card.title)
-        append(card.titleWrap.second)
-        append(' ')
-        // 年份和片名同色，只退一档字号。原先是把 inkSoft 再压到 70% 透明度，那样压在卡面上
-        // 只有 2.84:1（暗色 3.34:1）；而 inkSoft 本身要够 4.5:1 就得留在 0.9，再乘掉三成
-        // 必然不合格，调透明度救不回来。注解感交给字号和括号，开屏那层同样处理。
-        withStyle(SpanStyle(fontSize = 10.5.sp)) {
-            append("(${card.year})")
-        }
-    }
-    Text(
-        text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .hapticClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                semantic = HapticSemantic.LIGHT_TAP,
-                onClick = onClick,
-            ),
-        color = palette.inkSoft,
-        fontSize = 12.5.sp,
-        letterSpacing = 0.1.em,
-        textAlign = TextAlign.Center,
-    )
 }
 
 /**
  * 还没到那天的卡片。
  *
- * 骨架和 [DailyStampCard] 完全一样（票头、海报、台词、出处、撕口、印），一眼看得出是
- * 同一种票根，只是每一格都还没显影：
+ * 版面和 [DailyStampCard] 完全一样（海报、台词、出处、撕口、印、日期），一眼看得出是
+ * 同一页，只是每一格都还没显影：
  * - 海报取 w92 那一档、解到 12 像素再放大。放大靠双线性插值，出来的就是一团糊掉的
  *   色块——留下的是那天的色调，不是那部片。不用 Modifier.blur：它在 API 30 及以下是
  *   空操作，靠它保密等于在老机器上把海报直接摊开。糊完再压一层自上而下加重的纱。
  * - 台词和出处是几行墨条，条数长短按日期播种（[latentBars]），同一天每次打开都一样。
  *   有形无字：看得出那儿有两行字，读不出是哪两行。
  * - 印只剩界格，印文没落下。
+ * - 底下那句未来提示替代了印章之下的留白：这一页没有「今天看到的那句话」，
+ *   得有一句话说明这一格还没到。
  *
  * 台词、片名、印文这些字段压根没带进这一层（见 [DailyStampSheet.Latent]）：不给看不是
  * 「先显示再遮住」——遮罩会随实现走样，不带出来才是真的不给看。
  */
 @Composable
 private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
-    val tick = remember(latent.date) {
-        latent.date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.US))
-    }
-    val serial = remember(latent.date) {
-        String.format(Locale.US, "No.%03d", latent.date.dayOfYear)
-    }
-    val grain = remember { grainBrush() }
     val bars = remember(latent.date) { latentBars(latent.date) }
-    var cardCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    var notchCenterY by remember { mutableFloatStateOf(Float.NaN) }
-
-    Column(
-        modifier = Modifier
-            .widthIn(max = 380.dp)
-            .clip(RoundedCornerShape(11.dp))
-            .drawWithContent {
-                drawCardTexture(
-                    palette = palette,
-                    grain = grain,
-                    notchCenterY = notchCenterY,
-                )
-            }
-            .background(palette.sheet)
-            .onGloballyPositioned { cardCoords = it }
-            .padding(horizontal = 22.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        TicketHeader(tick = tick, serial = serial, palette = palette)
-        Spacer(Modifier.height(20.dp))
-        LatentPoster(url = latent.tinyPosterUrl, palette = palette)
-        Spacer(Modifier.height(22.dp))
-        bars.quote.forEachIndexed { index, row ->
-            if (index > 0) Spacer(Modifier.height(12.dp))
-            InkBars(widths = row, height = 11.dp, palette = palette)
-        }
-        Spacer(Modifier.height(18.dp))
-        InkBars(widths = bars.source, height = 7.dp, palette = palette)
-        Spacer(Modifier.height(22.dp))
-        TearLine(
+    StampPageBox {
+        StampPage(
             palette = palette,
-            modifier = Modifier.onGloballyPositioned { tear ->
-                notchCenterY = tearCenterIn(cardCoords, tear)
+            date = latent.date,
+            modifier = Modifier.fillMaxSize(),
+            backdrop = { StampBackdrop(palette) },
+            poster = {
+                LatentPoster(
+                    url = latent.tinyPosterUrl,
+                    palette = palette,
+                    size = stampPosterSize(lineCount = 2, compact = false),
+                )
             },
-        )
-        Spacer(Modifier.height(20.dp))
-        LatentSeal(palette = palette)
-        Spacer(Modifier.height(18.dp))
-        Text(
-            text = stringResource(R.string.daily_stamp_future_card),
-            modifier = Modifier.fillMaxWidth(),
-            color = palette.inkSoft,
-            fontSize = 11.sp,
-            lineHeight = 19.sp,
-            fontFamily = FontFamily.Serif,
-            letterSpacing = 0.08.em,
-            textAlign = TextAlign.Center,
+            quoteBlock = {
+                bars.quote.forEachIndexed { index, row ->
+                    if (index > 0) Spacer(Modifier.height(LATENT_QUOTE_BAR_GAP))
+                    InkBars(widths = row, height = LATENT_QUOTE_BAR_HEIGHT, palette = palette)
+                }
+                Spacer(Modifier.height(StampLinesToSource))
+                InkBars(widths = bars.source, height = LATENT_SOURCE_BAR_HEIGHT, palette = palette)
+            },
+            seal = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    LatentSeal(palette = palette)
+                    Spacer(Modifier.height(LATENT_CAPTION_GAP))
+                    Text(
+                        text = stringResource(R.string.daily_stamp_future_card),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = palette.inkSoft,
+                        // 字号、字距、行高跟这一页的注解语汇对齐（出处行那一档：小字、拉开字距、
+                        // 衬线）：原先那套 11sp / 0.08em 是给卡纸上的票根写的，缩进这一页之后
+                        // 偏小偏挤，读起来像贴在页边的批注
+                        fontSize = 12.sp,
+                        lineHeight = 19.sp,
+                        fontFamily = FontFamily.Serif,
+                        letterSpacing = 0.1.em,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            },
         )
     }
 }
 
 /**
- * 糊掉的海报：真模糊 + 一层自上而下加重的纱，卡纸内沿那道发丝线照旧。
+ * 糊掉的海报：真模糊 + 一层自上而下加重的纱，装裱照旧走 [StampPosterFrame]。
  *
  * API 31 起走 [Modifier.blur]：真高斯模糊，色块之间是连续过渡，看着就是「隔着毛玻璃
  * 看一张海报」。低版本 blur 是空操作，退回把图解到十几个像素再放大——那一档只能靠
@@ -855,9 +715,11 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
  *
  * 走模糊那条路时解码尺寸要放大一档：40px 配上十几 dp 的模糊半径已经什么都读不出来，
  * 而 12px 的图再叠模糊会先看到方块的轮廓被抹开，成了「马赛克又被涂了一层」。
+ *
+ * 那层纱往卡纸色上化（不是往纸色）：海报陷在卡纸开出来的窗里，纱要收在窗内沿那圈。
  */
 @Composable
-private fun LatentPoster(url: String?, palette: SplashPalette) {
+private fun LatentPoster(url: String?, palette: SplashPalette, size: DpSize) {
     val context = LocalContext.current
     val blurs = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val request = remember(url, context, blurs) {
@@ -866,7 +728,8 @@ private fun LatentPoster(url: String?, palette: SplashPalette) {
                 .data(address)
                 .size(if (blurs) LATENT_BLUR_DECODE_PX else LATENT_DECODE_PX)
                 .scale(Scale.FILL)
-                // 导出用不到这张卡，但两张卡走同一套装裱代码，这里也不要硬件位图
+                // 这一页不进 Picture 录制（未显影那天没有可导出的东西），但两张卡走
+                // 同一套装裱代码，这里也不开硬件位图
                 .allowHardware(false)
                 .crossfade(false)
                 .build()
@@ -875,35 +738,20 @@ private fun LatentPoster(url: String?, palette: SplashPalette) {
     val veil = remember(palette) {
         Brush.verticalGradient(
             0f to Color.Transparent,
-            0.42f to palette.sheet.copy(alpha = 0.20f),
-            1f to palette.sheet.copy(alpha = 0.74f),
+            0.42f to palette.cream.copy(alpha = 0.20f),
+            1f to palette.cream.copy(alpha = 0.74f),
         )
     }
     val desaturate = remember {
         ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(LATENT_SATURATION) })
     }
-    val hairline = palette.ink.copy(alpha = if (palette.isDark) 0.34f else 0.22f)
-    Box(
-        modifier = Modifier
-            .size(width = 122.dp, height = 183.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(palette.cream)
-            .padding(5.dp)
-    ) {
+    StampPosterFrame(palette = palette, size = size) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(3.dp))
                 .drawWithContent {
                     drawContent()
                     drawRect(brush = veil)
-                    drawRoundRect(
-                        color = hairline,
-                        topLeft = Offset(0.5f, 0.5f),
-                        size = Size(size.width - 1f, size.height - 1f),
-                        cornerRadius = CornerRadius(3.dp.toPx() - 0.5f),
-                        style = Stroke(width = 1f),
-                    )
                 }
         ) {
             if (request != null) {
@@ -919,11 +767,11 @@ private fun LatentPoster(url: String?, palette: SplashPalette) {
                         .fillMaxSize()
                         .then(
                             if (blurs) {
-                                // 边界跟着圆角裁：不裁的话模糊会把颜色晕到卡纸上，
-                                // 像海报洇了出来
+                                // 边界跟着开窗的圆角裁（5dp，见 StampPosterFrame 的内层）：
+                                // 不裁的话模糊会把颜色晕到卡纸上，像海报洇了出来
                                 Modifier.blur(
                                     radius = LATENT_BLUR,
-                                    edgeTreatment = BlurredEdgeTreatment(RoundedCornerShape(3.dp)),
+                                    edgeTreatment = BlurredEdgeTreatment(RoundedCornerShape(5.dp)),
                                 )
                             } else {
                                 Modifier
@@ -941,7 +789,7 @@ private fun InkBars(widths: List<Dp>, height: Dp, palette: SplashPalette) {
     val color = palette.ink.copy(alpha = LATENT_BAR_ALPHA)
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(LATENT_BAR_GAP, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         widths.forEach { width ->
@@ -992,145 +840,22 @@ private fun LatentSeal(palette: SplashPalette) {
  * 之间会变形，那就不像「那天的字还没显出来」，而像一堆随机方块。
  *
  * 条数和字数无关，也不该有关：真台词有几个字是当天才该知道的事。
+ *
+ * 长短按这一页的设计宽度（[StampDesignHeight] 那一档下、去掉页边距的 412dp）定：
+ * 原先那几档是按 336dp 宽的票根卡定的，缩进这一页之后那几行墨条会细成一排小数点。
  */
 private fun latentBars(date: LocalDate): LatentBars {
     val random = Random(date.toEpochDay())
     return LatentBars(
         quote = listOf(
-            List(random.nextInt(6, 10)) { random.nextInt(9, 16).dp },
-            List(random.nextInt(4, 8)) { random.nextInt(9, 16).dp },
+            List(random.nextInt(6, 10)) { random.nextInt(11, 20).dp },
+            List(random.nextInt(4, 8)) { random.nextInt(11, 20).dp },
         ),
-        source = List(random.nextInt(3, 6)) { random.nextInt(7, 12).dp },
+        source = List(random.nextInt(3, 6)) { random.nextInt(9, 16).dp },
     )
 }
 
 private class LatentBars(val quote: List<List<Dp>>, val source: List<Dp>)
-
-/**
- * 撕线中心在卡面坐标系里的纵坐标；卡片还没量到时是 NaN，齿孔那一步会跳过。
- *
- * 不用两次 positionInRoot() 相减：卡片现在坐在轮播页的 graphicsLayer 里，缩放和 rotationY
- * 都作用在根坐标上，相减得到的差值被 scaleY 乘过一遍（侧卡 0.84），而 drawNotches 拿它
- * 当卡面内的局部坐标用，齿孔会画偏。更麻烦的是 onGloballyPositioned 只在布局变化时回调，
- * 侧卡变成中间卡只改图层属性、不重新布局，偏掉的那个值就一直留着。
- * localPositionOf 会把中间这些变换逆掉，无论页面正处在哪一档形变，量出来的都是卡面内的位置。
- */
-private fun tearCenterIn(card: LayoutCoordinates?, tear: LayoutCoordinates): Float =
-    card?.localPositionOf(tear, Offset(0f, tear.size.height / 2f))?.y ?: Float.NaN
-
-/** 票根的撕口：一道虚线，不是实线也不是 Divider——实线会把卡片切成两张 */
-@Composable
-private fun TearLine(palette: SplashPalette, modifier: Modifier = Modifier) {
-    val dash = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 7f), 0f) }
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(1.dp)
-    ) {
-        drawLine(
-            color = palette.inkFaint.copy(alpha = 0.55f),
-            start = Offset(0f, size.height / 2f),
-            end = Offset(size.width, size.height / 2f),
-            strokeWidth = size.height,
-            pathEffect = dash,
-        )
-    }
-}
-
-/**
- * 卡面的质感层：颗粒 + 撕线两端的齿孔。
- *
- * 两件事的先后是有讲究的，所以它们必须在同一次绘制里排队，不能各自散在子元素上。
- *
- * 颗粒盖在卡片内容之上，印章也在下面。印章的做旧是拿卡面底色按噪点盖回去的
- * （见 SealInk 的 KDoc）：颗粒要是只铺在底色上、印章画在颗粒之上，那些咬痕盖回去的就是
- * 干净的底色，看着比周围还新，正好和做旧反着来。
- *
- * 齿孔又排在颗粒之后。它是把像素擦掉，擦完再铺一层颗粒等于把洞填回去。
- */
-private fun ContentDrawScope.drawCardTexture(
-    palette: SplashPalette,
-    grain: Brush,
-    notchCenterY: Float,
-) {
-    val punch = notchPunchesThrough
-    val nativeCanvas = drawContext.canvas.nativeCanvas
-    // DstOut 擦的是「当前图层」的像素。不先开一层离屏的，卡片背后的压暗层和日历
-    // 会一起被擦穿；开了之后擦出来的洞只是这一层透了，底下的东西照原样露出来。
-    val layer = if (punch) {
-        nativeCanvas.saveLayer(0f, 0f, size.width, size.height, null)
-    } else {
-        0
-    }
-    drawContent()
-    drawRect(brush = grain, alpha = GRAIN_ALPHA, blendMode = BlendMode.Multiply)
-    drawNotches(palette = palette, centerY = notchCenterY, punch = punch)
-    if (punch) nativeCanvas.restoreToCount(layer)
-}
-
-/**
- * 撕线两端的半圆缺口。
- *
- * 首选真挖穿：[BlendMode.DstOut] 把离屏层里的像素擦掉，缺口透出卡片背后的东西，
- * 这才是票根从票上撕下来的样子。
- *
- * 兜底是拿 [SplashPalette.paper] 画实心半圆盖上去。卡片底下就是 paper 底，盖上去和挖穿
- * 看的是同一个结果，只是那两块不透明——导出的 PNG 上区别更小，缺口本来就落在
- * 透明背景边上。什么时候走兜底见 [notchPunchesThrough]。
- *
- * [centerY] 是撕线在卡面里的高度，布局还没报上来时是 NaN，那一帧先不画：
- * 齿孔的位置错了比暂时没有齿孔更难看。
- */
-private fun DrawScope.drawNotches(palette: SplashPalette, centerY: Float, punch: Boolean) {
-    if (centerY.isNaN() || centerY <= 0f || centerY >= size.height) return
-    val radius = NOTCH_RADIUS.toPx()
-    val color = if (punch) Color.Black else palette.paper
-    // 擦洞时颜色本身没有意义，只有 alpha 参与运算，取纯黑是为了不让人误以为它是配色
-    val blendMode = if (punch) BlendMode.DstOut else BlendMode.SrcOver
-    drawCircle(color = color, radius = radius, center = Offset(0f, centerY), blendMode = blendMode)
-    drawCircle(
-        color = color,
-        radius = radius,
-        center = Offset(size.width, centerY),
-        blendMode = blendMode,
-    )
-}
-
-/**
- * 这台设备上 DstOut 到底挖不挖得穿。
- *
- * 在 1×1 的软件位图上先试一刀，走的是和真齿孔完全相同的 API：开一层离屏、涂满不透明、
- * 再用 DstOut 擦一遍，读回来的 alpha 归零才算挖得动。SealInk 当初放弃 DstOut 就是因为
- * 抠洞依赖离屏图层，而日签要在软件 Canvas 上重放一遍导出，多一层图层就多一处两条路径
- * 可能不一致的地方；现在屏幕和导出回放的已经是同一份 Picture，那个顾虑只剩「这一层
- * 到底拿不拿得到」，正好可以在软件画布上验——导出走的就是软件画布。
- *
- * 探测结果全进程留一份：它只跟设备的绘制实现有关，不会中途变。
- */
-private val notchPunchesThrough: Boolean by lazy { probeNotchPunch() }
-
-private fun probeNotchPunch(): Boolean = try {
-    val probe = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-    try {
-        val nativeCanvas = AndroidCanvas(probe)
-        CanvasDrawScope().draw(
-            density = Density(1f),
-            layoutDirection = LayoutDirection.Ltr,
-            canvas = GraphicsCanvas(nativeCanvas),
-            size = Size(1f, 1f),
-        ) {
-            val layer = nativeCanvas.saveLayer(0f, 0f, 1f, 1f, null)
-            drawRect(color = Color.Black)
-            drawRect(color = Color.Black, blendMode = BlendMode.DstOut)
-            nativeCanvas.restoreToCount(layer)
-        }
-        AndroidColor.alpha(probe.getPixel(0, 0)) == 0
-    } finally {
-        probe.recycle()
-    }
-} catch (_: Exception) {
-    false
-}
 
 /**
  * 影片详情、保存、分享：卡片外的三枚小按钮，做成描边药丸，不用 Material 的填充按钮
@@ -1264,14 +989,14 @@ private fun ContentDrawScope.recordThenDraw(
 }
 
 /**
- * 把最近一次录下来的卡面重放成位图，顶上接一条落款带（见 [StampBrand]）。
+ * 把最近一次录下来的那一页重放成位图，再在底部那一条补上落款（见 [StampBrand]）。
  *
  * 显式建一张 ARGB_8888 位图，用 android.graphics.Canvas 回放 Picture：整条路都是软件
- * 光栅化，不经过 GPU 快照，也不依赖任何平台图层。位图比卡面高出落款带那一截，
- * 带子画在顶上，卡面整体下移同样的量再放——落款于是长在这张纸上，不是叠在它上面。
+ * 光栅化，不经过 GPU 快照，也不依赖任何平台图层。
  *
- * 齿孔那一刀（DstOut）录在 Picture 自己的离屏层里，回放时擦的还是那一层，
- * 不会连带把落款带擦出两个洞。
+ * 位图就是这一页的尺寸，不再加高：落款画的是页面自己留出来的那一条（屏幕上那里空着、
+ * 开屏那里是「轻触跳过」），于是屏幕、开屏、导出三张只差这一行——原先导出图要往上接
+ * 一条带子，那张图比屏幕上多出一截。
  *
  * 跑在主线程上是因为 Picture 每帧都会被重新录制，换到后台线程读它就会和绘制撞上。
  * 后面的 PNG 压缩另有 IO 线程，那一段才是耗时的。
@@ -1281,13 +1006,11 @@ private suspend fun captureCardPicture(picture: Picture, brand: StampBrand): Bit
         require(picture.width > 0 && picture.height > 0) {
             "Daily stamp card has not been drawn yet"
         }
-        val band = brand.bandHeightPx
-        Bitmap.createBitmap(picture.width, picture.height + band, Bitmap.Config.ARGB_8888)
+        Bitmap.createBitmap(picture.width, picture.height, Bitmap.Config.ARGB_8888)
             .also { bitmap ->
                 val canvas = AndroidCanvas(bitmap)
-                brand.draw(canvas, picture.width.toFloat())
-                canvas.translate(0f, band.toFloat())
                 canvas.drawPicture(picture)
+                brand.draw(canvas, picture.width.toFloat(), picture.height.toFloat())
             }
     }
 
@@ -1374,36 +1097,19 @@ private fun scrimColor(palette: SplashPalette): Color =
     if (palette.isDark) Color(0xCC120C08) else Color(0x993C2212)
 
 /**
- * 票头那一行的墨色。
+ * 未显影那几行的墨条：行距、条高、条与条之间的空。
  *
- * 不走 inkFaint：那是画线的颜色，压在卡面上只有 1.6:1（暗色 2.2:1），日期和编号
- * 再装饰也是字，得看得见。这里按 ink 另兑一档——明色 0.76、暗色 0.44，压在 sheet 上
- * 3.71:1 / 3.53:1，过了非正文文字那条 3:1 的线，又还比出处弱一档。
- *
- * 兑在这个文件里而不是往共享色板加一档：inkFaint 同时是撕口虚线、日历格线和禁用图标的
- * 颜色，为了这一行把它压深，那几处细线会立刻变成描边。开屏台词层印章下那行年份是同样的
- * 处理，两边各自兑，色板不动。
+ * 按这一页的设计档（[StampDesignHeight] 与 [StampQuoteBlock] 的字号）配：两句台词的位置是
+ * 两行 23sp 的正文，墨条高度取实心笔画那一档，行距取字号自带行高的一半——
+ * 太整齐会读成表格，太细又成了下划线。
  */
-private fun dateInk(palette: SplashPalette): Color =
-    palette.ink.copy(alpha = if (palette.isDark) 0.44f else 0.76f)
+private val LATENT_QUOTE_BAR_HEIGHT: Dp = 14.dp
+private val LATENT_QUOTE_BAR_GAP: Dp = 18.dp
+private val LATENT_SOURCE_BAR_HEIGHT: Dp = 9.dp
+private val LATENT_BAR_GAP: Dp = 6.dp
 
-private const val EM_DASH = "—"
-
-/**
- * 颗粒层的不透明度。
- *
- * 卡面只有一块 sheet 底色，纯色印出来是塑料片；这一层把纸的粗糙度还回来。
- * 0.08 是「看不出有一层东西、但把纯色破掉了」的位置，再重一档字缘就开始发毛。
- *
- * 它同时是可读性的一部分：颗粒盖在文字之上，Multiply 之后每个像素被乘上
- * 0.958~0.980（瓦片灰度 120~191，见 grainBrush），也就是整卡最多压暗 4%。台词
- * 6.13:1、片名和年份 4.91:1、票头 3.64:1（明色实景，已经把这一层算进去）都还留着余量，
- * 但这个值往上调就是在吃这点余量，要动先重算一遍对比度。
- */
-private const val GRAIN_ALPHA = 0.08f
-
-/** 齿孔半径。半圆露在卡面上的那一半就是这个尺寸，再大就从票根变成信封的开窗 */
-private val NOTCH_RADIUS: Dp = 7.dp
+/** 未来提示离那枚空印多远。它就是这一页的落款，不该贴着印边 */
+private val LATENT_CAPTION_GAP: Dp = 16.dp
 
 /**
  * 侧卡缩到多小。

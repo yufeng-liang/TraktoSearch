@@ -115,7 +115,7 @@ import java.util.Locale
  *
  * 整屏的底、字色、强调色跟随当前主题（[DailyStampPalette]），格子那张纸不跟——
  * 纸永远是纸黄的（见 [DailyStampPalette.tile]）。衬线字和拉开的字距留着，那是日签
- * 自己的字面性格。台词卡片仍是票根质感的纸，见 [rememberDailyStampCardPalette]。
+ * 自己的字面性格。台词卡片是开屏那一页日签纸，见 [rememberDailyStampCardPalette]。
  *
  * 格子是「纸上贴海报，海报下印词」：海报按原始 2:3 比例贴在纸上，四周留一圈白边，
  * 关键词单独一行落在纸的下沿。早先的版本把关键词压在淡海报上，海报只剩色温差，

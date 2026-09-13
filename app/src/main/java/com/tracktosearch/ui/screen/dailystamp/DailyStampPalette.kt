@@ -13,7 +13,7 @@ import com.tracktosearch.ui.screen.splash.SplashPalette
  * 整屏的底与字色映射当前 [MaterialTheme] 的中性色，格子那张纸不映射——纸是固定的
  * 纸黄，见 [tile]。字段名沿用旧组件用的 ink 一套，换色不必牵动排版代码。
  *
- * 台词卡片不走这里——它仍是票根质感的纸，见 [rememberDailyStampCardPalette]。
+ * 台词卡片不走这里——那是一页开屏日签纸，见 [rememberDailyStampCardPalette]。
  */
 @Immutable
 internal data class DailyStampPalette(
@@ -105,8 +105,8 @@ private val TILE_SEAL = Color(0xFFB4472F)
 /**
  * 台词卡片用的纸色板。
  *
- * 卡片是要保存/分享出去的那张票根，纸感是它的主体，所以不跟随主题色。深浅只看当前
- * 主题的明度而不是系统深色模式：应用内的主题设置可以和系统相反。
+ * 卡片是开屏那一页日签（见 StampPage），纸感是它的主体，所以不跟随主题色，只分深浅。
+ * 深浅看当前主题的明度而不是系统深色模式：应用内的主题设置可以和系统相反。
  */
 @Composable
 internal fun rememberDailyStampCardPalette(): SplashPalette =
