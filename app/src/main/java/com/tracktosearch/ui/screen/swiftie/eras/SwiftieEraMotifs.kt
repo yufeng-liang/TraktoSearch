@@ -143,7 +143,12 @@ internal fun DrawScope.drawEraMotif(
         SwiftieEraMotif.CARDIGAN_CHAIR -> drawCardiganChair(color, phase, alpha)
         SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha, evermoreBack)
         SwiftieEraMotif.LIGHTER_STARS -> drawLighterStars(color, phase, alpha)
-        SwiftieEraMotif.LETTER_QUILL -> drawLetterQuill(letterArt, phase, alpha, eraElapsedMs)
+        SwiftieEraMotif.LETTER_QUILL ->
+            // 这一张**不吃 columnFade**：墨是内容（同曲目文字，从不淡出），而羽毛笔在卡片右下角、
+            // 母题又画在文字**下面**，长歌名那一列与它撞不上 —— 让位机制在这里只会把「正在写的
+            // 那一句」一起压暗（2026-09-13 真机上量到：写到一半时墨的有效 alpha 只有 0.52，
+            // 写完那一拍 0.87，同一个句子的浓淡随歌名行跳动）
+            drawLetterQuill(letterArt, phase, PROP_ALPHA, eraElapsedMs)
         SwiftieEraMotif.VANITY_MIRROR -> drawVanityMirror(color, phase, alpha)
     }
 }
@@ -2531,6 +2536,8 @@ private const val LETTER_INK_WEIGHT = 2.9f
  * （铺满卡片的横线读作稿纸，与「卡片右下角手写一句」不是一件事）。
  *
  * @param art 字形与中线表。null = 字库没建出来（低内存那一档），那就只剩笔
+ * @param alpha 恒为 [PROP_ALPHA]（调用处喂的就是它）：这一张不吃 `columnFade`，理由见
+ *   `drawEraMotif` 里那一支的注释
  * @param phase 0f..1f 的母题相位。写字不跟它走（见 [drawLetterWriting]），它只用来给笔
  *   一点极轻的摆动
  * @param eraElapsedMs 负数 = 低配机那一档定格：**停在写完的样子**，而且没有笔
