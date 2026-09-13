@@ -285,6 +285,18 @@ private fun Modifier.collapsingRow(
 private const val TYPING_HEAD_BLINK_MS = 420L
 
 /**
+ * 打字头那一格的高度，按行高算。
+ *
+ * 曲名字号是行高的 0.75（见调用处的 `titleStyle`），Special Elite 的大写字高约 0.67 个字号
+ * —— 相乘 ≈ 行高的 0.50。真机上量过：行高 57.5px 时大写顶到基线正好 29px（0.504）。
+ * 这个比值不随密度与系统字号变（字号本身是用 `Dp.toSp()` 折过的），所以能写死。
+ */
+private const val TYPING_HEAD_SPAN = 0.50f
+
+/** 首帧还没有排版结果时，基线按行高估的位置（真机量到的 0.651）。 */
+private const val TYPING_HEAD_FALLBACK_BASELINE = 0.651f
+
+/**
  * 打字头走过一行。
  *
  * ## 为什么不是淡入
@@ -308,6 +320,9 @@ private const val TYPING_HEAD_BLINK_MS = 420L
  *
  * 长曲名被 Ellipsis 截断时，只数到**省略号之前**那些字（`getLineEnd(visibleEnd = true)`），
  * 游标走到省略号就停住，不会继续往行尾滑。
+ *
+ * 游标的高度也一样要**贴着字**：字是垂直居中排的，按行高切一段固定比例会整体栽到基线
+ * 下面去。这里按「大写顶 → 基线」画，基线从排版结果取（见 [TYPING_HEAD_SPAN]）。
  *
  * clip 而不是 `graphicsLayer`：`graphicsLayer` 只能整体设 alpha 或做仿射变换，
  * 而揭示边要停在行里任意位置，只能在绘制时裁。
@@ -362,13 +377,21 @@ private fun Modifier.typingRow(
     }
     clipRect(right = head) { content.drawContent() }
     // 游标：只占行高的一半多一点。齐行高的竖条读起来是「文本插入符」而不是字锤，
-    // 而这台机器上落下来的是一小块方形印字头
+    // 而这台机器上落下来的是一小块方形印字头。
+    //
+    // **高度带是大写顶到基线**，不是行高的一段固定比例：字是垂直居中排的，按行高
+    // 切一段会整体栽到基线下面去（上一版占 0.56、底边压到基线下 7px）。
+    // 基线从排版结果里取（`getLineBaseline`）—— 字号跟着行高走，它也跟着走
     if ((elapsedInCard() / TYPING_HEAD_BLINK_MS) % 2L != 0L) return@drawWithContent
     val headW = (rowHeight.toPx() * 0.17f).coerceAtLeast(1f)
+    val headH = rowHeight.toPx() * TYPING_HEAD_SPAN
+    val baseline = titleResult?.let {
+        (size.height - it.size.height) * 0.5f + it.getLineBaseline(0)
+    } ?: (size.height * TYPING_HEAD_FALLBACK_BASELINE)
     drawRect(
         color = cursor,
-        topLeft = Offset(head - headW * 0.5f, size.height * 0.22f),
-        size = Size(headW, size.height * 0.56f)
+        topLeft = Offset(head - headW * 0.5f, baseline - headH),
+        size = Size(headW, headH)
     )
 }
 
