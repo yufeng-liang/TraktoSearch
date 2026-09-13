@@ -50,6 +50,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     @Inject lateinit var themeStorage: ThemeStorage
+    // 开屏日签开关：系统 splash 的图标分两档，见 TraktSearchApp.onCreate 里的那次预读
+    @Inject lateinit var splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
     @Inject lateinit var appDatabaseProvider: Provider<AppDatabase>
     // 惰性 Provider：注入本身不触发 EncryptedSharedPreferences 初始化，仅在使用时才解析
@@ -86,6 +88,20 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                 runBlocking { themeStorage.readThemeModeSnapshot() }
             )
             StartupTrace.mark("application.theme_mode.apply.done")
+            // 开屏日签开关：系统 splash 用哪一档图标靠它（开着的场合用静态图标，
+            // 好让日签一就绪就散场而不切掉半截合板动画）。窗口的主题在 Activity 创建时就要定，
+            // 那时没有协程可等，所以这一次必须在主线程同步读出来存进 SplashStartup。
+            // 与上面主题模式合并成「启动期两次同步首值读」，都是几十毫秒级的 DataStore 读。
+            SplashStartup.quoteEnabled = try {
+                runBlocking { splashQuoteStorage.preloadAndGetValue() }
+            } catch (e: Exception) {
+                // 读盘失败走默认值（开）：图标选择不该因为一次读盘失败改变
+                true
+            }
+            StartupTrace.mark(
+                "application.splash_quote_flag",
+                "enabled=${SplashStartup.quoteEnabled}"
+            )
             // 数据库与豆瓣凭据存储预热：SQLCipher 的 loadLibs 与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
             // （TraktRepository → MarkActionRecordDao → AppDatabase）时固定消耗 200ms-1s；
             // DoubanAuthStorage 首次初始化同样同步读 EncryptedSharedPreferences（MasterKey 走 Keystore），

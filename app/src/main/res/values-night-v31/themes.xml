@@ -16,4 +16,13 @@
         <!-- 启动完成后立即切换到的主题 -->
         <item name="postSplashScreenTheme">@style/Theme.TraktoSearch</item>
     </style>
+    <!-- 开屏日签开着的场合走这一档：静态图标、不写动画时长。
+         深色的差别只在背景色由 values-night 覆盖，图标与品牌条两档共用。 -->
+    <style name="Theme.App.Starting.SplashQuote">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_clapper</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding_image</item>
+        <item name="postSplashScreenTheme">@style/Theme.TraktoSearch</item>
+    </style>
 </resources>

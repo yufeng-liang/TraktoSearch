@@ -74,21 +74,23 @@ import kotlin.math.min
  * 所以视觉上是同一块画面继续往下演，而不是两段动画拼接。
  *
  * 节奏见 [SplashQuoteTiming]：光晕扩散 → 海报浮起 → 台词逐行升起 → 出处淡入 →
- * 印章压下、日期跟着落下 → 停留 5 秒 → 光晕散开同时整层淡出，露出下面已经组合好的主界面。
- * 任意时刻轻触屏幕直接跳到散开阶段。
+ * 印章压下、日期跟着落下 → 停留（当天首看 8 秒 / 再看 3 秒）→ 光晕散开同时整层淡出，
+ * 露出下面已经组合好的主界面。App 已就绪之后任意轻触直接跳到散开阶段。
  *
  * 逐步浮现只演给当天第一次看的人。同一天再进 App 时整页一次摊开：海报、台词、出处、
  * 印章从第一帧就都在，停留 3 秒后退场。逐行升起那一遍是给人认画面、从头念一遍用的，
  * 已经看过之后它只是在挡路。系统关掉动效时走的也是这一条路——无障碍设置的意思是
  * 不要动效，不是不要内容，所以那一档仍按完整可读时长停留。
  *
- * 「一次摊开」说的是页内元素，不含整层淡入：那一下是这一层盖上来的方式，只出现一次、
- * 320ms，和逐行升起要省掉的那一秒多不是一回事。见下面 [continuesSystemSplash] 那一段。
+ * 这一层不再等「导航落到主页」才上场：它以日签数据就绪为准，紧接着系统场记板压上去，
+ * 主界面在它背后继续加载。用户等 App 启动的那段时间因此花在有内容的这一页纸上，
+ * 而不是一块只有品牌名的暖纸底。冷启动直进主页、先过登录页两条路现在都走这一条。
  *
- * [continuesSystemSplash] 区分这一层是「接着场记板演」还是「后来才盖上来」：冷启动直接进主页时
- * 它紧贴着系统 splash，硬切才没有接缝；先落在登录页、之后才进主页的情况下屏幕上已经有别的画面，
- * 硬切会像闪了一下，所以整层淡入。淡入这段时间里手指可能还按在屏幕上，
- * 跳过因此要等到 [SplashQuoteTiming.SKIP_AT_MS] 才收点击，免得刚亮起来就被误触掀掉。
+ * [contentReady] 是「App 已就绪」：导航已组合、日签收掉之后立刻能交互。它管三件事——
+ * 跳过提示浮出的时机、整层收点击的时机、以及演完之后肯不肯散场。
+ * 就绪之前轻触一律不响应：收掉日签之后下面还没有东西可看，那一下此刻没有意义。
+ * 跳过提示浮出后再给 [SplashQuoteTiming.SKIP_READ_MS] 才允许自然退场，
+ * 否则慢启动的机器上提示刚亮就收场，用户根本来不及读它。
  *
  * [onSplashQuoteShown] 在这一层真的开演时回调一次，用来记当天的日签：
  * 记的时机必须是「这条台词确实亮在屏幕上过」，在启动流程里提前记会把用户没看见的台词写进日历。
@@ -96,7 +98,7 @@ import kotlin.math.min
 @Composable
 fun SplashQuoteOverlay(
     quote: SplashQuoteUi,
-    continuesSystemSplash: Boolean = true,
+    contentReady: Boolean,
     onSplashQuoteShown: () -> Unit = {},
     onFinished: () -> Unit,
 ) {
@@ -134,22 +136,20 @@ fun SplashQuoteOverlay(
     var visibleLines by remember { mutableIntStateOf(if (instant) lineCount else 0) }
     var sourceVisible by remember { mutableStateOf(instant) }
     var sealVisible by remember { mutableStateOf(instant) }
-    var skipVisible by remember { mutableStateOf(instant) }
+    // 起手就是不透明，只有退场时这一层才动 alpha。
+    // 「整层淡入」那一档是「先过登录页、后来才盖到主页上」时代的产物——那条路已经不存在了，
+    // 这一层现在总是紧接着系统场记板上场（日签数据一就绪就压上去、系统 splash 随之散场）。
     var exiting by remember { mutableStateOf(false) }
-    // 紧接系统 splash 的场合起手就是不透明（硬切），后来才盖上的场合从 0 淡进来。
-    // 整页一次摊开的那一遍仍然淡入：整层淡入是这一层「盖上来」的方式，和页内元素逐个
-    // 浮现是两件事——前者只出现一次、320ms，后者才是要跳过的那一秒多。
-    // 系统关掉动效时不淡入，那是唯一该硬切的情形。
-    var entered by remember { mutableStateOf(continuesSystemSplash || reduceMotion) }
+    // 「跳过」给足可读时间之后才允许自然退场。慢启动的机器上用户刚看到提示它就收场，
+    // 那行字等于白印；这一个布尔就是那道门。
+    var skipReadable by remember { mutableStateOf(false) }
+    // 这一层「有话要说 + 给得起一次轻触」的时长。两档都至少按当天首看的完整可读时间算：
+    // 逐步浮现那一档本来就演这么久，整页一次摊开的那一档三秒太短——用户还没抬手就收场了。
+    val holdMs = maxOf(readSpanMs, staticHoldMs)
 
     LaunchedEffect(Unit) {
         onSplashQuoteShown()
-        entered = true
-        if (instant) {
-            delay(staticHoldMs)
-            exiting = true
-            return@LaunchedEffect
-        }
+        if (instant) return@LaunchedEffect
         bloom = true
         launch {
             delay(SplashQuoteTiming.POSTER_AT_MS)
@@ -170,15 +170,32 @@ fun SplashQuoteOverlay(
             delay(SplashQuoteTiming.SEAL_AT_MS)
             sealVisible = true
         }
-        launch {
-            delay(SplashQuoteTiming.SKIP_AT_MS)
-            skipVisible = true
-        }
-        delay(readSpanMs)
+    }
+
+    // 跳过提示在 App 就绪那一刻浮出（状态初值），再过 SKIP_READ_MS 才认它可以被读完
+    LaunchedEffect(contentReady) {
+        if (!contentReady) return@LaunchedEffect
+        delay(SplashQuoteTiming.SKIP_READ_MS)
+        skipReadable = true
+    }
+
+    // 退场条件：这一层已经亮过、App 已就绪、停留时长够了、跳过提示也给足了可读时间。
+    // App 迟迟不就绪时这一层就停在最后定格画面上等——比露出一个半加载的界面强，
+    // 那段等待期正好拿来跑「必要加载工作」。
+    LaunchedEffect(contentReady, skipReadable) {
+        if (!contentReady || !skipReadable) return@LaunchedEffect
+        delay(holdMs)
         exiting = true
     }
 
-    // 跳过和自然结束汇到同一条退场路径：都只是把 exiting 置为 true
+    // 等待的硬上限：从这一层真正出现在屏幕上那一刻起算。越过它宁可露出底下正在加载的界面，
+    // 也不能把用户永久困在一页日签上——启动链里任何一环挂死都不该变成一堵墙。
+    LaunchedEffect(Unit) {
+        delay(SplashQuoteTiming.HARD_WAIT_MS)
+        exiting = true
+    }
+
+    // 跳过、停留结束、硬上限三条路汇到同一条退场路径：都只是把 exiting 置为 true
     LaunchedEffect(exiting) {
         if (!exiting) return@LaunchedEffect
         delay(SplashQuoteTiming.EXIT_MS)
@@ -186,9 +203,10 @@ fun SplashQuoteOverlay(
     }
 
     val exitMs = SplashQuoteTiming.EXIT_MS.toInt()
-    // 淡入和退场淡出共用这一个 alpha：另起一层 alpha 会在「刚淡入就被点掉」时两个动画抢同一个值
+    // 这一层只在退场时动 alpha：起手就是不透明（接着系统场记板，中间没有别的画面），
+    // 「刚才还是 0 现在要淡到 1」这种情形不存在，所以这里不会和退场抢同一个值。
     val layerAlpha by animateFloatAsState(
-        targetValue = if (exiting || !entered) 0f else 1f,
+        targetValue = if (exiting) 0f else 1f,
         animationSpec = tween(durationMillis = if (exiting) exitMs else ENTER_FADE_MS),
         label = "splashLayerAlpha"
     )
@@ -219,6 +237,11 @@ fun SplashQuoteOverlay(
         animationSpec = tween(durationMillis = 480),
         label = "splashVignetteAlpha"
     )
+    // 「跳过」这一行只在 App 就绪之后亮：它亮了就代表点了有用。
+    // 还没就绪的那些帧里轻触不响应（见下面的 onClick），提示自然也不该在。
+    val skipVisible = contentReady
+    // 亮出来之后还收 600ms 才收点击：那 600ms 是它自己的浮现时间，
+    // 在它还没看清时就把「点哪都能跳过」打开，等于让用户点一个他还没看见的东西。
     val skipAlpha by animateFloatAsState(
         targetValue = if (skipVisible && !exiting) 1f else 0f,
         animationSpec = tween(durationMillis = 600),
@@ -257,9 +280,9 @@ fun SplashQuoteOverlay(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                // 淡入进来的那一路要等跳过提示浮起来才收点击：这一层是突然盖上去的，
-                // 手指可能正落在原来那个界面的按钮上，立刻收点击等于替用户按了跳过
-                onClick = { if (!exiting && (continuesSystemSplash || skipVisible)) exiting = true }
+                // App 就绪之前整层不收点击：收掉日签之后下面还没有东西可看，那一下此刻没有意义，
+                // 而且手指可能正落在启动过程中刚出现的东西上，放行等于替用户按下去。
+                onClick = { if (contentReady && !exiting) exiting = true }
             ),
         // 纸色画在页内而不是这一层的背景上：日签卡要录下同一页给导出用，
         // 底色落在页外录进去就是透明底（见 StampPage 的 base）
@@ -1027,10 +1050,8 @@ private const val RAIL_LINE_INK_DARK = 0.07f
  */
 
 /**
- * 后来才盖上来时整层的淡入时长。
- *
- * 320ms 是「看得出是淡进来的、又不用等」的那一档：短于 250ms 观感上就是硬切，
- * 长过 400ms 会让人觉得启动卡了一下。紧接系统 splash 的场合不走这段，见 SplashQuoteOverlay。
+ * 这一层 alpha 动画的时长档位。非退场那一档现在只是个占位——起手就目标 1，
+ * 动画不跑；留着是为了退场那条路有一致的写法。
  */
 private const val ENTER_FADE_MS = 320
 

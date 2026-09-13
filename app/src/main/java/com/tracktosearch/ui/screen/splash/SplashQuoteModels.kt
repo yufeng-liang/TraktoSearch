@@ -160,12 +160,14 @@ internal data class SplashPalette(
  * 台词层的时间轴，单位毫秒。版面本身另有一份网页原型：docs/previews/splash-quote-visual.html。
  *
  * 停留时长按「今天是不是第一次看」分两档，见 [stay]：原型里只有一个 2000，实测四行台词读不完，
- * 提到 3000 也只够「已经读过、再扫一眼」。当天第一次看的人得先认海报再从头念，给 5000 才读得完整层；
+ * 提到 3000 也只够「已经读过、再扫一眼」。当天第一次看的人得先认海报再从头念，给 8000 才读得完整层；
  * 同一天再进 App 的仍是 3000——那时候多留一秒都是在挡路。
  *
  * 前面这些浮现时刻只用在当天第一次看那一遍。同一天再进 App 时整页从第一帧就是全的
- * （见 SplashQuoteOverlay 的 instant），[BLOOM_MS] 到 [SKIP_AT_MS] 这一段一个都不用等，
- * 整层就是 [STAY_REPEAT_MS] 加 [EXIT_MS]。
+ * （见 SplashQuoteOverlay 的 instant），[BLOOM_MS] 到 [SEAL_AT_MS] 这一段一个都不用等，
+ * 整层就是停留加上 [EXIT_MS]。
+ *
+ * 跳过提示出现的时刻在这里没有位置：它由「App 是否已就绪」决定，见 [SKIP_READ_MS]。
  */
 internal object SplashQuoteTiming {
     const val BLOOM_MS = 400L
@@ -180,7 +182,20 @@ internal object SplashQuoteTiming {
      * 落在停留期开头，不占额外时长，整层总时长不变。
      */
     const val SEAL_AT_MS = 1250L
-    const val SKIP_AT_MS = 1400L
+    /**
+     * 跳过提示浮出之后，还要过多久才允许自然退场。
+     *
+     * 提示出现的时刻由「App 就绪」决定（见 SplashQuoteOverlay 的 contentReady），
+     * 这一段是它自己的可读时间：慢启动的机器上就绪得晚，提示刚亮就收场等于白印。
+     */
+    const val SKIP_READ_MS = 600L
+    /**
+     * 这一层最多在屏幕上待多久（含退场动画），从它真正出现那一刻起算。
+     *
+     * 只管「App 迟迟不就绪」这一种情形：正常路径远早于此就收场了。越过它宁可露出底下
+     * 正在加载的界面，也不能把用户永久困在一页日签上——启动链里任何一环挂死都不该变成一堵墙。
+     */
+    const val HARD_WAIT_MS = 10_000L
     /** 当天第一次看这条台词的停留时长 */
     const val STAY_FIRST_MS = 8000L
     /** 同一天再进 App 的停留时长 */
