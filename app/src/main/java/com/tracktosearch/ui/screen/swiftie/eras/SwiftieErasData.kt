@@ -143,7 +143,15 @@ data class SwiftieEra(
      * 这个值**逐张填**，不设全局默认值：改这个数会改到卡片的标题排版，而其余 11 张
      * 的观感是逐张定过的。
      */
-    val titleStrokeEm: Float = 0f
+    val titleStrokeEm: Float = 0f,
+    /**
+     * 发行日期用哪套字库。null = 系统默认（多数时代）。
+     *
+     * TTPD 那一张填打字机字体：卡片的曲目列与前摇都是这台机器打的，日期是印在
+     * 纸头上的一行，同一支机器打出来的东西不该有两种字面。
+     * 那套子集是按曲名与数字做的，`2024-04-19` 用得上的字符（0-9 与连字符）本来就在里面。
+     */
+    @FontRes val dateFontResId: Int? = null
 )
 
 /**
@@ -444,6 +452,8 @@ object SwiftieErasData {
         // 长专辑名在 18dp 上用的是 Caslon Display（高对比、细笔画），字号又小，
         // 读着比下面那一列打字机曲名还轻。合成加粗一档（0.03em ≈ 0.54dp）
         titleStrokeEm = 0.03f,
+        // 日期也跟着这台机器走同一支字面
+        dateFontResId = R.font.era_typewriter,
         // The Anthology 版 31 首（需求方指定）：标准版 16 首 + Anthology 加曲 15 首
         tracks = listOf(
             "Fortnight",

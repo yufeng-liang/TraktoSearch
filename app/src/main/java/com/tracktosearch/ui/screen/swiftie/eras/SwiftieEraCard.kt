@@ -394,9 +394,15 @@ fun SwiftieEraCard(
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))
+            // 日期的字面逐张定：TTPD 那一张跟着曲目列用打字机字体（见 `dateFontResId`），
+            // 其余 11 张是系统默认。null 时不传 fontFamily，与改动前逐像素一致
+            val dateFamily = era.dateFontResId?.let { res ->
+                remember(res) { FontFamily(Font(res)) }
+            }
             Text(
                 text = era.releaseDate,
                 style = TextStyle(
+                    fontFamily = dateFamily,
                     fontSize = with(density) { 11.dp.toSp() },
                     color = textColors.date.copy(alpha = SwiftieEraContrast.DATE_ALPHA)
                 )
