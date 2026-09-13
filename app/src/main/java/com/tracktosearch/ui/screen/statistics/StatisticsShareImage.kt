@@ -502,8 +502,8 @@ private fun drawHeader(
     }
     canvas.drawText(data.cardTitle, textLeft, top + 38f, textPaint(38f, INK, bold = true, serif = true))
     canvas.drawText(data.dateText, textLeft, top + 74f, textPaint(24f, INK_SOFT))
-    // 右上角落款：应用名，和底部 tagline 呼应
-    val namePaint = textPaint(24f, ACCENT, spacing = 0.06f)
+    // 右上角落款：应用名，和底部 tagline 呼应。字体与字距对齐激活登录页标题（Serif Bold，-2.04sp/34sp ≈ -0.06em）
+    val namePaint = textPaint(24f, ACCENT, bold = true, serif = true, spacing = -0.06f)
     val nameWidth = namePaint.measureText(data.appName)
     canvas.drawText(data.appName, left + width - nameWidth, top + 38f, namePaint)
     return top + iconSize
@@ -784,7 +784,8 @@ private fun drawFooter(
     }
     canvas.drawLine(left, top, left + width, top, dashPaint)
     var y = top + 52f
-    val namePaint = textPaint(31f, INK, bold = true, serif = true, spacing = 0.05f)
+    // 署名与激活登录页标题一致：Serif Bold，字距 -0.06em（对应登录页 34sp 下的 -2.04sp）
+    val namePaint = textPaint(31f, INK, bold = true, serif = true, spacing = -0.06f)
     val nameWidth = namePaint.measureText(data.appName)
     canvas.drawText(data.appName, left + (width - nameWidth) / 2f, y, namePaint)
     y += 14f

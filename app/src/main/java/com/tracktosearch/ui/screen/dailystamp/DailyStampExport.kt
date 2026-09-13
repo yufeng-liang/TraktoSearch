@@ -219,7 +219,8 @@ private val BRAND_CORNER: Dp = 11.dp
 private val BRAND_NAME: TextUnit = 12.sp
 /** 图标圆角占边长的比例，与统计分享图的 22/84 同一档 */
 private const val BRAND_ICON_CORNER = 0.26f
-private const val BRAND_NAME_SPACING = 0.14f
+/** 与激活登录页标题同字距：34sp 下的 -2.04sp ≈ -0.06em（Paint 的 letterSpacing 相对字号） */
+private const val BRAND_NAME_SPACING = -0.06f
 /** 与卡面颗粒同强度，见 DailyStampCardOverlay 的 GRAIN_ALPHA */
 private const val BRAND_GRAIN_ALPHA = 0.08f
 
