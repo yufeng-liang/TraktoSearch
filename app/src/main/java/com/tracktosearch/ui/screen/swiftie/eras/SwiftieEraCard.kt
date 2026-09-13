@@ -178,7 +178,7 @@ fun SwiftieEraCard(
     } else {
         null
     }
-    // TTPD 那张信纸要写出 `All’s fair in love / and poetry.`：字形轮廓与中线表同样只能
+    // TTPD 那张卡片要写出 `All’s fair in love / and poetry.`：字形轮廓与中线表同样只能
     // 在组合阶段建（draw 阶段拿不到 resources，也不该每帧再排一次字）。
     // 别的时代这里是 null，一点不额外算
     val letterContext = LocalContext.current

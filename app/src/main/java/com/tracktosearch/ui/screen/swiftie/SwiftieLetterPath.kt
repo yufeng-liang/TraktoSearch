@@ -1,7 +1,7 @@
 package com.tracktosearch.ui.screen.swiftie
 
 /**
- * 信纸上那句 `All’s fair in love / and poetry.` 的**笔心中线**，由
+ * 卡片右下角那句 `All’s fair in love / and poetry.` 的**笔心中线**，由
  * `scripts/build-swiftie-letter-path.py` 从 `res/font/era_ttpd_letter.ttf`
  * （子集化的 Great Vibes）的字形骨架生成。
  *

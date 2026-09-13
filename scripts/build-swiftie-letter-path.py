@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成信纸那句 `All’s fair in love / and poetry.` 的笔心中线表 `SwiftieLetterPath.kt`。
+"""生成卡片右下角那句 `All’s fair in love / and poetry.` 的笔心中线表 `SwiftieLetterPath.kt`。
 
 与 `build-swiftie-signature-path.py`（签名那十二笔）同一套做法：把每个字形单独渲成
 1px = 1 font unit 的位图，细化取骨架，距离变换取每个点的笔尖半径，再按「一支笔真的会走的
@@ -140,7 +140,7 @@ def pause_weights(strokes: list[sig.Stroke]) -> list[float]:
 HEADER = '''package com.tracktosearch.ui.screen.swiftie
 
 /**
- * 信纸上那句 `All’s fair in love / and poetry.` 的**笔心中线**，由
+ * 卡片右下角那句 `All’s fair in love / and poetry.` 的**笔心中线**，由
  * `scripts/build-swiftie-letter-path.py` 从 `res/font/era_ttpd_letter.ttf`
  * （子集化的 Great Vibes）的字形骨架生成。
  *

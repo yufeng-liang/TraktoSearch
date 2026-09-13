@@ -113,8 +113,8 @@ private const val SIGNATURE_STILL_PHASE = 0.35f
 /**
  * 一笔的笔心中线，已经按字号缩放、按笔位平移到画布坐标。
  *
- * **签名与信纸（`SwiftieLetterInk`）共用这一个类**：两者都是「沿中线铺圆头圆接的变宽粗线」，
- * 差别只在签名铺完要被字形 mask 裁、信纸的墨就是字形本身。
+ * **签名与题词（`SwiftieLetterInk`）共用这一个类**：两者都是「沿中线铺圆头圆接的变宽粗线」，
+ * 差别只在签名铺完要被字形 mask 裁、题词的墨就是字形本身。
  *
  * @param halfWidth 每个点上的半宽
  * @param t 每个点的累计时间比例，离线烤好（曲率大处慢、回描段快）
@@ -127,7 +127,7 @@ internal class SignatureStroke(
     val window: SignatureWindow
 ) {
 
-    /** 沿线走到 [progress]（0f..1f）时笔尖在哪。信纸那边用它把羽毛笔钉在笔迹的前沿上。 */
+    /** 沿线走到 [progress]（0f..1f）时笔尖在哪。题词那边用它把羽毛笔钉在笔迹的前沿上。 */
     fun pointAt(progress: Float): Offset {
         var head = 0
         while (head + 1 < t.size && t[head + 1] <= progress) head++
