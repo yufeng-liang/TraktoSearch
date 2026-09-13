@@ -215,9 +215,10 @@ private inline fun buildTriples(count: Int, seed: Int, item: (Random) -> FloatAr
  * 飘落物走的是另一份 12s 的相位，不在本文件里。
  *
  * @param eraElapsedMs 本段已过的毫秒，`-1` 或负数 = 待机态（本段还没开始）。
- *   **三张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）、reputation
- *   那条蛇（整段走完「进场 → 绕王座 → 立起头 → 出画」一趟），以及 Midnights 面钟上弦的
- *   两根指针（一次性动作，`phase` 那个 3.6s 锯齿问不出「走到第几拍」）。其余 9 张只看 [phase]
+ *   **四张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）、reputation
+ *   那条蛇（整段走完「进场 → 绕王座 → 立起头 → 出画」一趟）、Lover 彩虹上那颗心（命中
+ *   之后才带箭），以及 Midnights 面钟上弦的两根指针（一次性动作，`phase` 那个 3.6s 锯齿
+ *   问不出「走到第几拍」）。其余 8 张只看 [phase]
  * @param cardBounds TTPD 卡片在根坐标里的边框（px），[Rect.Zero] = 还没量到。
  *   打字机按它把出纸口坐到纸的下缘、把滚筒对齐纸宽 —— 机器在屏幕底下，纸从滚筒
  *   后头升上来，先打的行升得最高
@@ -4734,7 +4735,7 @@ internal const val MIDNIGHT_CLOCK_ANGLE_BASE_DEG: Float = 0f
 /** 卡出现后多久起转。卡片前 400ms 在长出来，眼神还在入场动画上。 */
 internal const val MIDNIGHT_WIND_START_MS: Long = 800L
 
-/** 主程时长：分针走两整圈、时针从 2 点推到 3 点。 */
+/** 主程时长：分针走一整圈、时针从 2 点推到 3 点。 */
 internal const val MIDNIGHT_WIND_MS: Float = 1_800f
 
 /**
@@ -4766,7 +4767,7 @@ private const val MIDNIGHT_FULL_TURN_DEG: Float = 360f
  */
 private const val MIDNIGHT_HAND_GEAR_RATIO: Float = 12f
 
-/** 起手姿态（时针在 2 点）。落位是 3:00，分针两整圈回到 12 —— 两个都是整点。 */
+/** 起手姿态（时针在 2 点）。落位是 3:00，分针一整圈回到 12 —— 两个都是整点。 */
 private const val MIDNIGHT_HOUR_START_DEG: Float = 60f
 
 /** 落位姿态：严格的 3:00:00。 */
