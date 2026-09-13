@@ -90,7 +90,6 @@ import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SplashQuote
 import com.tracktosearch.ui.component.NeumorphicIconButton
-import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -99,8 +98,6 @@ import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.grainBrush
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.theme.floatingDialogColor
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -137,7 +134,6 @@ fun DailyStampScreen(
     val palette = rememberDailyStampPalette()
     val cardPalette = rememberDailyStampCardPalette()
     val content = rememberDailyStampContent(state)
-    val hazeState = remember { HazeState() }
     val haptics = rememberAppHaptics()
     var showSplashQuoteSettings by remember { mutableStateOf(false) }
 
@@ -153,8 +149,10 @@ fun DailyStampScreen(
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             val topBarHeight = 65.dp + statusBarHeight
-            // 顶栏改成与搜索源列表页相同的覆盖层：初始用内容顶部留白避开，滚动后内容
-            // 进入顶栏背后，Haze 才有真实内容可采样。网格预算仍扣掉同一份顶栏高度。
+            // 顶栏是一层纯覆盖，没有毛玻璃：这一页按高度收缩到一屏展示、不滚动，顶栏背后
+            // 永远是同一张纸、同一份留白，采不到也没必要采——原先那层 haze 既没有采样源
+            // （本页从未注册 hazeSource）又被 isContentUnderTopBar=false 按成透明，整层在空转。
+            // 网格预算照旧扣掉这份顶栏高度，内容仍从它下面开始。
             val budget = maxHeight - topBarHeight - DAILY_STAMP_CALENDAR_CHROME - 10.dp
             Column(
                 modifier = Modifier
@@ -177,7 +175,6 @@ fun DailyStampScreen(
                 Spacer(Modifier.height(10.dp))
             }
             DailyStampTopBar(
-                hazeState = hazeState,
                 cardOpen = content.sheet != null,
                 onBack = onBack,
                 onSplashQuoteSettingsClick = { showSplashQuoteSettings = true },
@@ -372,10 +369,9 @@ internal fun DailyStampCalendar(
     }
 }
 
-/** 与搜索源列表页保持一致的毛玻璃顶栏和圆形操作按钮。 */
+/** 日签页自己的顶栏：整条透明，只放返回、标题和开屏台词开关这一枚圆钮。 */
 @Composable
 private fun DailyStampTopBar(
-    hazeState: HazeState,
     cardOpen: Boolean,
     onBack: () -> Unit,
     onSplashQuoteSettingsClick: () -> Unit,
@@ -384,14 +380,8 @@ private fun DailyStampTopBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // 卡片打开时整屏退到后面，顶栏也跟着虚掉，只剩一团影子
             .dailyStampCardBlur(active = cardOpen)
-            .hazeTopBar(
-                state = hazeState,
-                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
-                blurRadius = 24.dp,
-                // 日签页按高度收缩到一屏展示，不滚动，因此始终保持初始透明态。
-                isContentUnderTopBar = false,
-            )
             .clickable(enabled = false, onClick = {})
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
@@ -420,7 +410,8 @@ private fun DailyStampTopBar(
                 onClick = onSplashQuoteSettingsClick,
                 isDark = isDark,
                 lightBorderAlpha = 0.35f,
-                hazeState = hazeState,
+                // 这一页是静止的纸，钮背后没有可采的内容：不给采样源，玻璃退成实心底
+                hazeState = null,
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Settings,
