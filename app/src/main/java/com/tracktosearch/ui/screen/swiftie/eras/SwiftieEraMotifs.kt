@@ -2506,16 +2506,35 @@ private val LETTER_PAPER = Color(0xFFEFE7D6)
  */
 private const val LETTER_TEXT_WIDTH_FRACTION = 0.337f
 
-/** 墨的右缘离卡片右缘的比例 —— 与其余 11 张道具列的右边距取同一个数。 */
-private const val LETTER_TEXT_RIGHT_MARGIN = 0.975f
+/**
+ * 墨的右缘离卡片右缘的比例。
+ *
+ * **比其余 11 张道具列的 0.975 收进来一截**：写字的是右手位的羽毛笔，笔尖落在笔迹
+ * 前沿、羽面在笔尖**右上方**，写到行尾时羽面已经越过卡片右缘 —— 真机上量到
+ * （86560/86580 两拍）**羽尖比墨右缘再出去 ≈142px**。
+ *
+ * 2026-09-13 定案：笔自己**长出卡片**（见 `SwiftieEraCard` 里出纸那张不裁形状），
+ * 题词只让出屏幕那点余量 —— 卡缘到屏边只剩 73px，贴 0.975 时羽尖会落到屏外约 23px
+ * 被切；收到 0.94 之后羽尖最右 x≈1430（屏 1440，还余 9px），同时**伸出卡外 65px**。
+ * 卡宽由 `widthIn(max = 480.dp)` 封顶，所以这个余量在任何机型上都不会翻负。
+ */
+private const val LETTER_TEXT_RIGHT_MARGIN = 0.94f
 
 /**
- * 第二行基线在卡片高度上的位置：落在卡片下内边距那一档。
+ * 第二行基线在卡片高度上的位置：**墨的下沿正好落在卡片的下内边距那一档**。
+ *
+ * 值是这样定出来的（TTPD 卡在真机上：卡高 2083px、宽 1292px、内边距 16dp≈56px）：
+ * 第二行（`and poetry.`）的笔迹最低点比基线低 24px（那个 `y` 的下伸部，真机量的），
+ * 所以基线取 `1 − (56 + 24) / 2083 = 0.9616` —— 取 0.961 让墨底压在下内边距线上，
+ * 与卡片正文的下边距齐平。
+ *
+ * 2026-09-13 之前是 0.895：那是**信纸还在**的时候按纸面定的，纸撤掉之后这句题词就
+ * 悬在卡片下沿上方 200px（≈57dp）的空处，读作「没落位」。
  *
  * 第一行由它减去一个行距（[SwiftieLetterPath.LINE_PITCH_EM]）得到 —— 行距是生成字库时
  * 定死的，这里只能跟着它走。
  */
-private const val LETTER_SECOND_BASELINE_FRACTION = 0.895f
+private const val LETTER_SECOND_BASELINE_FRACTION = 0.961f
 
 /** 墨的权重（相对 [PROP_ALPHA]）。写上去的字要一眼读得出来。 */
 private const val LETTER_INK_WEIGHT = 2.9f
@@ -2678,6 +2697,9 @@ private const val TARGET_LEAN_DEG = 31f
  *
  * `0.65 = 0.52 ÷ 0.32 × 0.40`：道具列从 0.40 收到 0.32（与其余 11 张一致）之后 `u` 小了
  * 两成，把系数提上来，屏幕上的**绝对笔长**与验证过的那一版一样。
+ *
+ * 2026-09-13 一度收到 0.60（怕行尾的羽面顶到卡片右缘），当天又改回 0.65：笔改成
+ * **直接长出卡片**（见 `SwiftieEraCard` 里出纸那张不裁形状），就不用缩笔了。
  */
 private const val QUILL_SPAN = 0.65f
 

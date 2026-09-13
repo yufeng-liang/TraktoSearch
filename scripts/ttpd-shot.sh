@@ -25,6 +25,7 @@
 #   writeN   卡片右下角那行题词的写字（按**卡片自己的时钟**算，见 elapsedInCard）：
 #     write1 写到一半 —— 墨铺到五六成、羽毛笔还在场
 #     write2 写完抬笔 —— 整句都在、笔已淡走（墨留着不淡）
+#     write3 第一行刚写完 —— **笔横向最伸出卡片的一瞬**（看有没有被裁）
 #
 # typeN 与 writeN 的毫秒**从源码现算**，绝不抄一份常量表进 shell：独奏时长由
 # SwiftieTimeline.TTPD_PREROLL_MS 定、出纸时长由 SwiftieEraCard 的 CARD_FEED_MS 定、
@@ -51,7 +52,7 @@ usage() {
   ms     直接给毫秒                scripts/ttpd-shot.sh 90000
   eraN   第 N 张专辑卡片（1..12）  scripts/ttpd-shot.sh era11
   typeN  打字机的四个瞬间 1..4     scripts/ttpd-shot.sh type2
-  writeN 题词写字的两拍 1..2       scripts/ttpd-shot.sh write1
+  writeN 题词写字的三拍 1..3       scripts/ttpd-shot.sh write1
 
 装包: ./gradlew :app:assembleTtpdpreview && adb install -r app/build/outputs/apk/ttpdpreview/app-ttpdpreview.apk （只支持 arm64 真机）
 EOF
@@ -142,7 +143,11 @@ write_ms() {
     1) echo $(( start + preroll + write * 55 / 100 )) ;;
     # 写完抬笔：整句都在，笔淡走之后停一拍再抓（0.3s 余量，免得抓到正在淡的那一帧）
     2) echo $(( start + preroll + write + retire + 300 )) ;;
-    *) die "writeN 的 N 只能是 1..2：write$1" ;;
+    # 第一行刚写完（笔在最右）：**笔横向最伸出卡片的一瞬**，看它有没有被裁。
+    # 第一行 `All's fair in love` 占两句总长的 4.791/(4.791+3.215) ≈ 60%，
+    # 加上抬笔停顿的分布，取 66% —— 这时笔尖正落在 `love` 的收笔上
+    3) echo $(( start + preroll + write * 66 / 100 )) ;;
+    *) die "writeN 的 N 只能是 1..3：write$1" ;;
   esac
 }
 
@@ -191,11 +196,11 @@ case "$TARGET" in
   type[1-4])
     EXTRAS=(--el ms "$(type_ms "${TARGET#type}")")
     ;;
-  write[1-2])
+  write[1-3])
     EXTRAS=(--el ms "$(write_ms "${TARGET#write}")")
     ;;
   *[!0-9]*|'')
-    die "看不懂的参数「$TARGET」：要么是纯毫秒，要么是 era1..era12 / type1..type4 / write1..write2"
+    die "看不懂的参数「$TARGET」：要么是纯毫秒，要么是 era1..era12 / type1..type4 / write1..write3"
     ;;
   *)
     EXTRAS=(--el ms "$TARGET")
