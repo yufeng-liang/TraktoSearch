@@ -23,7 +23,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -343,21 +346,52 @@ fun SwiftieEraCard(
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                Text(
-                    text = era.name,
-                    style = TextStyle(
-                        fontFamily = titleFont,
-                        // toSp() 除掉 fontScale：CARD_CHROME_HEIGHT 是 dp 预算，
-                        // 标题跟着系统字号长就会把曲目列挤出卡片
-                        fontSize = with(density) { titleFontSizeFor(era.name).toSp() },
-                        color = textColors.body
-                    ),
-                    // 允许折两行：13 个字体的字宽差得很远，按字数估的字号可能还是偏大，
-                    // 折行总比裁掉专辑名好；真的还放不下就省略号，别硬切字形
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
+                // 字号用 toSp() 除掉 fontScale：CARD_CHROME_HEIGHT 是 dp 预算，
+                // 标题跟着系统字号长就会把曲目列挤出卡片
+                val titleSize = titleFontSizeFor(era.name)
+                val titleStyle = TextStyle(
+                    fontFamily = titleFont,
+                    fontSize = with(density) { titleSize.toSp() },
+                    color = textColors.body
                 )
+                if (era.titleStrokeEm > 0f) {
+                    // 合成加粗：同一段文字画两遍，底下那一层只描边、上面那一层实心。
+                    // 描边加在**细笔画上的比例比粗笔画大**，所以出来是「更实」而不是整体放大
+                    // —— 这是没有粗体字重时唯一不动字形轮廓的加法（12 套字库多数只有 Regular）。
+                    // 两层同字号、同换行规则、同宽约束，量出来的行盒一致，Box 只是把它们叠起来
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = era.name,
+                            style = titleStyle.copy(
+                                drawStyle = Stroke(
+                                    width = with(density) { (titleSize * era.titleStrokeEm).toPx() },
+                                    join = StrokeJoin.Round,
+                                    cap = StrokeCap.Round
+                                )
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = era.name,
+                            style = titleStyle,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Text(
+                        text = era.name,
+                        style = titleStyle,
+                        // 允许折两行：13 个字体的字宽差得很远，按字数估的字号可能还是偏大，
+                        // 折行总比裁掉专辑名好；真的还放不下就省略号，别硬切字形
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
