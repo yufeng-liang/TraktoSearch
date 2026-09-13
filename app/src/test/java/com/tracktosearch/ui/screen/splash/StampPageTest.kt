@@ -58,4 +58,61 @@ class StampPageTest {
         assertThat(stampLineSpec(isEnglish = false, lineCount = 2).letterSpacing).isEqualTo(0.012f)
         assertThat(stampLineSpec(isEnglish = true, lineCount = 2).letterSpacing).isEqualTo(0.006f)
     }
+
+    @Test
+    fun `卡片那一档比开屏大两档、分档规则不变`() {
+        // 用户 2026-09-13 两次定：日签卡与导出图上的字大两档，开屏不动
+        for (isEnglish in listOf(false, true)) {
+            for (lineCount in 2..4) {
+                val full = stampLineSpec(isEnglish, lineCount, StampTextSize.Full)
+                val card = stampLineSpec(isEnglish, lineCount, StampTextSize.Card)
+                assertThat(card.fontSize).isEqualTo(full.fontSize + 4f)
+                // 行高、斜体、字距不跟着变：变的是字，不是排版
+                assertThat(card.lineHeight).isEqualTo(full.lineHeight)
+                assertThat(card.letterSpacing).isEqualTo(full.letterSpacing)
+                assertThat(card.italic).isEqualTo(full.italic)
+            }
+        }
+    }
+
+    @Test
+    fun `印章在出处与日期之间居中`() {
+        // 出处行底边 400、印章高 60；那一段的下沿是日期块顶边，在 y = 1000 − 162 = 838
+        val band = stampSealBand(
+            available = 1000,
+            topBlockHeight = 400,
+            sealHeight = 60,
+            gap = 20,
+            bandBottom = 838,
+        )
+        val bandTop = band.topMargin + 400
+        assertThat((band.sealTop + 30).toFloat()).isWithin(1f).of((bandTop + 838) / 2f)
+    }
+
+    @Test
+    fun `印章让出去之后海报与台词的位置不变`() {
+        // 那一列按「海报 + 台词 + 出处 + 间距 + 印章」整体居中的高度算上边距，
+        // 于是印章挪到下面那一段之后，这一列仍在原来的位置
+        val band = stampSealBand(
+            available = 1000,
+            topBlockHeight = 400,
+            sealHeight = 60,
+            gap = 20,
+            bandBottom = 838,
+        )
+        assertThat(band.topMargin).isEqualTo((1000 - 400 - 20 - 60) / 2)
+    }
+
+    @Test
+    fun `那一段比印章还短时贴着出处排`() {
+        // 超矮窗口 + 超大字号：印章不能被推到出处行上面去
+        val band = stampSealBand(
+            available = 500,
+            topBlockHeight = 400,
+            sealHeight = 80,
+            gap = 20,
+            bandBottom = 420,
+        )
+        assertThat(band.sealTop).isEqualTo(band.topMargin + 400)
+    }
 }

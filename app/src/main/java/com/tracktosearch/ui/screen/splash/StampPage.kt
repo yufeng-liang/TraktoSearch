@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.splash
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -25,12 +24,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.SpanStyle
@@ -40,6 +44,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -63,9 +68,9 @@ import java.util.Locale
  * 末态（alpha 1、无位移、无缩放）不挂 graphicsLayer——图层录不进 Picture，
  * 而日签卡要旁路录一份给导出，页内任何一处图层都会让导出的那张图缺一块。
  *
- * 底部那一条 [StampStripHeight] 是三种呈现唯一的差别：开屏放「轻触跳过」，
- * 卡片上留白（虚线以下不摆东西），导出的图上补一行图标 + 应用名（见 DailyStampExport 的
- * StampBrand）。三处共用这一个高度，日期块和撕口虚线才落在同一个位置——
+ * 底部那一条 [StampStripHeight] 上的内容是三种呈现唯一的差别：开屏放「轻触跳过」，
+ * 卡片与导出图上放落款那一行（图标 + 应用名，见 DailyStampExport 的 StampBrand），
+ * 未来那一页放「那天见」。三处共用这一个高度，日期块和撕口虚线才落在同一个位置——
  * 「只把那一行换掉」说的就是这件事。
  */
 
@@ -89,7 +94,7 @@ internal val StampLinesToSource: Dp = 18.dp
 internal val StampSourceToSeal: Dp = 20.dp
 
 /**
- * 底部那一条的高度：开屏是「轻触跳过」，卡片上留白，导出图上画图标 + 名字。
+ * 底部那一条的高度：开屏是「轻触跳过」，卡片与导出图上是落款那一行（图标 + 名字）。
  *
  * 撕口虚线和日期块都由它推出来（见下面三个），所以这一条改高，那两样跟着上移——
  * 三处一起动，不会出现「开屏的日期在这儿、导出的日期在那儿」。
@@ -99,20 +104,38 @@ internal val StampStripHeight: Dp = 44.dp
 /** 撕口虚线离页底多远。虚线要压在底部那一条的上沿之外，见 [StampStripHeight] */
 internal val StampTearBottom: Dp = StampStripHeight + 36.dp
 
-/** 日期块离页底多远：贴在虚线上方 16dp */
-internal val StampDateBottom: Dp = StampTearBottom + 16.dp
+/** 日期块离页底多远：贴在虚线上方 6dp。太贴着虚线会把日期读成存根上的字 */
+internal val StampDateBottom: Dp = StampTearBottom + 6.dp
+
+/**
+ * 日期块有多高：月日一行（38sp）+ 3dp + 年份一行（11sp）。
+ *
+ * 这个高度只用来推出日期块的顶边（见 [StampSealBandBottom] 与 [StampContentBottomReserve]），
+ * 所以取的是设计值而不是量出来的行盒高度——差一两个 dp 只让印章在那一格里挪一个像素。
+ */
+internal val StampDateBlockHeight: Dp = 64.dp
 
 /**
  * 中间那一列要在底部让出的高度。
  *
- * 日期块自己那 66dp（月日 38sp 一行 + 5dp + 年份 11sp 一行）加离印章至少 8dp 的空。
- * 让出这一块之后，四行台词加上印章也不会顶到日期上；多出来的余量落在印章与日期之间，
- * 那里本来就是留白。
+ * 日期块自己那一块（见 [StampDateBlockHeight]）加离印章至少 8dp 的空。让出这一块之后，
+ * 四行台词加上印章也不会顶到日期上；多出来的余量落在印章与日期之间，那里本来就是留白。
  */
-internal val StampContentBottomReserve: Dp = StampDateBottom + 74.dp
+internal val StampContentBottomReserve: Dp = StampDateBottom + StampDateBlockHeight + 8.dp
 
 /** 撕口虚线左右各内收多少，让虚线不顶到齿孔轨 */
 internal val StampTearInset: Dp = 26.dp
+
+/**
+ * 印章那一段的下沿：日期块顶边离页底 [StampDateBottom]，再往上就是日期块本身。
+ *
+ * 印章在「出处行底边 → 这里」之间垂直居中（见 [stampSealBand]）。不拿页底当边界：
+ * 那样印章会压到日期上；也不拿撕口虚线（80dp）当边界：那是纸的撕口，不是版面的下边界。
+ *
+ * 这个值是**从页底量**的，而中间那一列的下边离页底还差一道 [StampContentBottomReserve]；
+ * 调用处要把它换算到那一列的坐标系里去（见 StampPage 里那段注释）。
+ */
+private val StampSealBandBottom: Dp = StampDateBottom + StampDateBlockHeight
 
 /**
  * 设计高度：这一页按「853dp 高的屏」来排。
@@ -229,6 +252,68 @@ internal fun Modifier.stampReveal(reveal: StampReveal): Modifier =
 // ---------------------------------------------------------------------------
 
 /**
+ * 把这一页裁成圆角矩形。[corner] 是 0 时原样返回，不挂任何东西。
+ *
+ * 走 `drawWithContent` + `clipPath` 而不是 [clip]：Compose 的 `Modifier.clip` 是一层图层
+ * （graphicsLayer(shape, clip = true)），而这一页要被日签卡录进 Picture 再重放成导出图，
+ * 图层进不了 Picture。画布上的 clipPath 只是一条绘制指令，录制、重放都在，屏幕上也是同一条。
+ */
+internal fun Modifier.stampCornerClip(corner: Dp): Modifier =
+    if (corner <= 0.dp) {
+        this
+    } else {
+        this.drawWithContent {
+            val radius = corner.toPx()
+            // 裁的是这一页的整块区域；圆角之外保持没画过（导出图上就是透明的四角）
+            clipPath(
+                path = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            rect = Rect(Offset.Zero, size),
+                            cornerRadius = CornerRadius(radius, radius),
+                        )
+                    )
+                }
+            ) { this@drawWithContent.drawContent() }
+        }
+    }
+
+/**
+ * 中间那一列的落位，以及印章在「出处 → 日期」那一段里的位置，单位都是像素。
+ *
+ * [topBlockHeight] 是海报 + 台词 + 出处那一块的高度，[sealHeight] 是印章（含印下那行英文）。
+ * [bandBottom] 是那一段下沿在**布局坐标系**里的 y（见 [StampSealBandBottom]）。
+ *
+ * [topMargin] 把印章那一份（[gap] + 印章）也一起算进这一列的居中：印章还在列里时，这一列
+ * 就是按这个高度居中的。于是海报、台词、出处的位置和从前一模一样，动过的只有印章。
+ *
+ * [sealTop] 让印章（含下方英文那一整块）在「出处行的底边 → [bandBottom]」的正中：台词行数、
+ * 印章是方印还是长方印、有没有那行英文，都只改变那一段的长度——居中关系不变。开屏、日签卡、
+ * 导出图三处共用这一条规矩（用户 2026-09-13 定）。
+ */
+internal fun stampSealBand(
+    available: Int,
+    topBlockHeight: Int,
+    sealHeight: Int,
+    gap: Int,
+    bandBottom: Int,
+): StampSealBand {
+    val slack = (available - topBlockHeight - gap - sealHeight).coerceAtLeast(0)
+    val topMargin = slack / 2
+    val bandTop = topMargin + topBlockHeight
+    val center = (bandTop + bandBottom) / 2
+    // 那一段比印章还短时（超矮窗口、超大字号）贴着出处行排，别翻到上面去
+    val sealTop = (center - sealHeight / 2).coerceAtLeast(bandTop)
+    return StampSealBand(topMargin = topMargin, sealTop = sealTop)
+}
+
+/** 见 [stampSealBand] */
+internal class StampSealBand(
+    val topMargin: Int,
+    val sealTop: Int,
+)
+
+/**
  * 静止的一页日签：底色与背景、居中那一列（海报 → 台词 → 出处 → 印）、钉在底部的日期块与
  * 撕口虚线、以及底部那一条的插槽。
  *
@@ -242,8 +327,16 @@ internal fun Modifier.stampReveal(reveal: StampReveal): Modifier =
  * statusBarsPadding），卡片不用——它不在状态栏底下。背景层不吃这道边：
  * 光锥和齿孔轨要铺满整页，那才是这张纸的边界。
  *
+ * [corner] 是这一页四个角切掉的半径：开屏铺满整屏，切了也看不见（还给状态栏那一带留缺口），
+ * 所以是 0；日签卡与导出图是浮在别的底色上的一张卡，24dp 那个圆角才读得出来。裁切走
+ * [stampCornerClip]（画布上的 clipPath，不是图层）——图层录不进 Picture，导出会缺角。
+ *
  * 各元素的浮现由调用方自理（槽位里包一层 [stampReveal]，或把修饰符交给下面的静态件）：
  * 开屏每个元素各有一档 alpha，卡片全都是末态。
+ *
+ * 三个槽位对应纸上的三层：[poster] / [quoteBlock] / [seal] 是中间那一列（印章自己在那一段里
+ * 居中，见 [stampSealBand]），[strip] 是日期块下面那一条，[footnote] 是撕口虚线以下那一段的
+ * 正中。
  */
 @Composable
 internal fun StampPage(
@@ -252,6 +345,7 @@ internal fun StampPage(
     modifier: Modifier = Modifier,
     columnModifier: Modifier = Modifier,
     base: Color = palette.paper,
+    corner: Dp = 0.dp,
     tearAlpha: Float = 1f,
     dateReveal: StampReveal = StampReveal(),
     backdrop: @Composable () -> Unit = {},
@@ -259,24 +353,55 @@ internal fun StampPage(
     quoteBlock: @Composable ColumnScope.() -> Unit = {},
     seal: @Composable () -> Unit = {},
     strip: @Composable BoxScope.() -> Unit = {},
+    footnote: @Composable BoxScope.() -> Unit = {},
 ) {
-    Box(modifier = modifier.background(base)) {
+    Box(modifier = modifier.stampCornerClip(corner).background(base)) {
         backdrop()
 
-        Column(
+        // 中间那一列（海报 → 台词 → 出处）与印章分开排：印章不在这一列里，它在「出处」
+        // 与日期之间那一段里居中（见 stampSealBand / StampSealBandBottom）。这一列的高度
+        // 仍然把印章那一份算进去，于是海报与台词的位置和印章还在列里时一模一样——
+        // 用户要的只是把印挪下去，不是把整页重排。
+        Layout(
             modifier = Modifier
                 .fillMaxSize()
                 .then(columnModifier)
                 .padding(horizontal = StampSidePadding)
                 .padding(top = StampTopPadding, bottom = StampContentBottomReserve),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            poster()
-            Spacer(Modifier.height(StampPosterToLines))
-            quoteBlock()
-            Spacer(Modifier.height(StampSourceToSeal))
-            seal()
+            content = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    poster()
+                    Spacer(Modifier.height(StampPosterToLines))
+                    quoteBlock()
+                }
+                Box { seal() }
+            },
+        ) { measurables, constraints ->
+            val topBlock = measurables[0].measure(constraints.copy(minHeight = 0))
+            val sealBox = measurables[1].measure(Constraints())
+            val gap = StampSourceToSeal.roundToPx()
+            // 那一段的下沿＝日期块顶边。它比这一列的底边还低一点（这一列底部为日期块留了
+            // StampContentBottomReserve，比日期块自己的高度多出几个 dp），所以从这一列底边
+            // 往页面底部数是「负的一段」——印章那一段本来就要伸到这一列的外面去。
+            val bandBottom =
+                constraints.maxHeight + (StampContentBottomReserve - StampSealBandBottom).roundToPx()
+            val column = stampSealBand(
+                available = constraints.maxHeight,
+                topBlockHeight = topBlock.height,
+                sealHeight = sealBox.height,
+                gap = gap,
+                bandBottom = bandBottom,
+            )
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                topBlock.place(
+                    x = (constraints.maxWidth - topBlock.width) / 2,
+                    y = column.topMargin,
+                )
+                sealBox.place(
+                    x = (constraints.maxWidth - sealBox.width) / 2,
+                    y = column.sealTop,
+                )
+            }
         }
 
         StampDateBlock(
@@ -296,14 +421,26 @@ internal fun StampPage(
                 .padding(bottom = StampTearBottom, start = StampTearInset, end = StampTearInset),
         )
 
-        // 底部那一条。空着的时候什么也不画，但位置留着——导出图在同一个位置上补
-        // 图标 + 应用名（见 DailyStampExport），屏幕与导出于是只差这一行。
+        // 底部那一条。开屏在这儿放「轻触跳过」，别的呈现空着——撕口以下那一段才是
+        // 落款的地方，见下面那个 footnote 槽。
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = StampStripHeight),
         ) {
             strip()
+        }
+
+        // 撕口虚线以下那一段的正中。那一段是存根：导出图在那儿落款（图标 + 应用名），
+        // 未来那一页在那儿写「那天见」，开屏在那儿放「轻触跳过」——三者同高。
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(StampTearBottom),
+            contentAlignment = Alignment.Center,
+        ) {
+            footnote()
         }
     }
 }
@@ -338,14 +475,39 @@ internal class StampLineSpec(
     val italic: Boolean,
 )
 
+/**
+ * 台词那一行的字号档。
+ *
+ * 开屏是铺满整屏的一页，日签卡是缩进槽里的那一张：同一页版式，卡上的字要大两档才看得清
+ * （用户 2026-09-13 两次定：只放卡片与导出，开屏不动）。差值是逐项量出来的两档，不是同一个
+ * 倍率——中文行 23/21/19 → 27/25/23，英文 20/19/17.5 → 24/23/21.5，出处 13 → 17，
+ * 印文 17 → 21（印面跟着 46 → 56，见 QuoteSeal），出处里那个年份小字 11 → 13。
+ * 日期那一块（月日 38sp、年份 11sp）两档相同：它不是「别的部分」，是这一页的落款。
+ */
+internal enum class StampTextSize {
+    /** 开屏 */
+    Full,
+
+    /** 日签卡与导出图 */
+    Card,
+}
+
 /** 见 [StampLineSpec] */
-internal fun stampLineSpec(isEnglish: Boolean, lineCount: Int): StampLineSpec = when {
-    isEnglish && lineCount >= 4 -> StampLineSpec(17.5f, 1.58f, 0.006f, italic = true)
-    isEnglish && lineCount == 3 -> StampLineSpec(19f, 1.58f, 0.006f, italic = true)
-    isEnglish -> StampLineSpec(20f, 1.58f, 0.006f, italic = true)
-    lineCount >= 4 -> StampLineSpec(19f, 1.60f, 0.012f, italic = false)
-    lineCount == 3 -> StampLineSpec(21f, 1.64f, 0.012f, italic = false)
-    else -> StampLineSpec(23f, 1.64f, 0.012f, italic = false)
+internal fun stampLineSpec(
+    isEnglish: Boolean,
+    lineCount: Int,
+    size: StampTextSize = StampTextSize.Full,
+): StampLineSpec {
+    // 卡片那一档就是在开屏那一档上加 4sp：行数与语种的分档规则两处共用
+    val step = if (size == StampTextSize.Card) 4f else 0f
+    return when {
+        isEnglish && lineCount >= 4 -> StampLineSpec(17.5f + step, 1.58f, 0.006f, italic = true)
+        isEnglish && lineCount == 3 -> StampLineSpec(19f + step, 1.58f, 0.006f, italic = true)
+        isEnglish -> StampLineSpec(20f + step, 1.58f, 0.006f, italic = true)
+        lineCount >= 4 -> StampLineSpec(19f + step, 1.60f, 0.012f, italic = false)
+        lineCount == 3 -> StampLineSpec(21f + step, 1.64f, 0.012f, italic = false)
+        else -> StampLineSpec(23f + step, 1.64f, 0.012f, italic = false)
+    }
 }
 
 /** 单行台词 */
@@ -356,8 +518,9 @@ internal fun StampQuoteLine(
     isEnglish: Boolean,
     lineCount: Int,
     modifier: Modifier = Modifier,
+    size: StampTextSize = StampTextSize.Full,
 ) {
-    val spec = remember(isEnglish, lineCount) { stampLineSpec(isEnglish, lineCount) }
+    val spec = remember(isEnglish, lineCount, size) { stampLineSpec(isEnglish, lineCount, size) }
     Text(
         text = text,
         modifier = modifier.fillMaxWidth(),
@@ -383,6 +546,8 @@ internal fun StampQuoteLine(
  *
  * [onClick] 不为空时整行可点（日签卡用它进影片详情），开屏那一屏不可点——
  * 那里点哪儿都是跳过。
+ *
+ * [size] 与台词同一档：卡片上的出处比开屏大一档，见 [StampTextSize]。
  */
 @Composable
 internal fun StampSourceLine(
@@ -391,10 +556,14 @@ internal fun StampSourceLine(
     year: Int,
     palette: SplashPalette,
     modifier: Modifier = Modifier,
+    size: StampTextSize = StampTextSize.Full,
     onClick: (() -> Unit)? = null,
     clickSemantic: HapticSemantic? = HapticSemantic.LIGHT_TAP,
 ) {
-    val text = remember(title, titleWrap, year) {
+    // 片名跟着台词一起放大；年份是注解，只跟着往上抬两档，别抢片名的位置
+    val titleStep = if (size == StampTextSize.Card) 4f else 0f
+    val yearStep = if (size == StampTextSize.Card) 2f else 0f
+    val text = remember(title, titleWrap, year, titleStep) {
         buildAnnotatedString {
             append(EM_DASH)
             append(' ')
@@ -402,7 +571,7 @@ internal fun StampSourceLine(
             append(title)
             append(titleWrap.second)
             append(' ')
-            withStyle(SpanStyle(fontSize = 11.sp)) {
+            withStyle(SpanStyle(fontSize = (11f + yearStep).sp)) {
                 append("($year)")
             }
         }
@@ -422,7 +591,7 @@ internal fun StampSourceLine(
         text = text,
         modifier = clickable.fillMaxWidth(),
         color = palette.inkSoft,
-        fontSize = 13.sp,
+        fontSize = (13f + titleStep).sp,
         letterSpacing = 0.1.em,
         textAlign = TextAlign.Center,
     )
@@ -442,6 +611,7 @@ internal fun ColumnScope.StampQuoteBlock(
     titleWrap: Pair<String, String>,
     year: Int,
     palette: SplashPalette,
+    size: StampTextSize = StampTextSize.Full,
     lineReveal: (Int) -> StampReveal = { StampReveal() },
     sourceReveal: StampReveal = StampReveal(),
     sourceOnClick: (() -> Unit)? = null,
@@ -453,6 +623,7 @@ internal fun ColumnScope.StampQuoteBlock(
             isEnglish = isEnglish,
             lineCount = lines.size,
             modifier = Modifier.stampReveal(lineReveal(index)),
+            size = size,
         )
     }
     Spacer(Modifier.height(StampLinesToSource))
@@ -462,6 +633,7 @@ internal fun ColumnScope.StampQuoteBlock(
         year = year,
         palette = palette,
         modifier = Modifier.stampReveal(sourceReveal),
+        size = size,
         onClick = sourceOnClick,
     )
 }
@@ -603,7 +775,7 @@ internal fun StampDateBlock(
         )
         Text(
             text = date.year.toString(),
-            modifier = Modifier.padding(top = 5.dp),
+            modifier = Modifier.padding(top = 3.dp),
             color = stampDateInk(palette),
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,

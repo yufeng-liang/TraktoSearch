@@ -53,6 +53,8 @@ import com.tracktosearch.R
  *
  * [ground] 是印章压着的底色。做旧那层是「拿底色按噪点盖掉一部分印面」，所以它必须知道
  * 底色是什么：开屏压在 paper 上，日签卡片压在 sheet 上。传错了会在印面上留下一层色差。
+ *
+ * [sizes] 是这一档尺寸，见 [SealSizes]。
  */
 @Composable
 internal fun QuoteSeal(
@@ -62,9 +64,7 @@ internal fun QuoteSeal(
     palette: SplashPalette,
     modifier: Modifier = Modifier,
     ground: Color = palette.paper,
-    sealWidth: Dp = SEAL_WIDTH,
-    fontSize: TextUnit = 17.sp,
-    latinFontSize: TextUnit = 9.sp,
+    sizes: SealSizes = SealSizes.Full,
 ) {
     if (keyword.isBlank()) return
     val typeface = sealTypeface(sealLang)
@@ -73,16 +73,16 @@ internal fun QuoteSeal(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (isSquareSeal(keyword)) {
-            CarvedSeal(keyword, typeface, palette, ground, sealWidth, fontSize)
+            CarvedSeal(keyword, typeface, palette, ground, sizes)
         } else {
-            RibbonSeal(keyword, typeface, palette, ground, fontSize)
+            RibbonSeal(keyword, typeface, palette, ground, sizes.fontSize)
         }
         if (latin != null) {
             Text(
                 text = latin.uppercase(),
                 modifier = Modifier.padding(top = 6.dp),
                 color = palette.seal.copy(alpha = 0.88f),
-                fontSize = latinFontSize,
+                fontSize = sizes.latinFontSize,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.18.em,
@@ -90,6 +90,25 @@ internal fun QuoteSeal(
             )
         }
     }
+}
+
+/**
+ * 一枚印的三档尺寸：印面边长、印文字号、印下那行英文的字号。
+ *
+ * 日签卡与导出图上的字比开屏大两档（见 StampTextSize），印文 17 → 21sp 就得把印面
+ * 46 → 56dp 一起放大：界格到笔画的余量是逐字量过的（最紧 0.91dp），只放大字号会把
+ * 笔画压出界格。三字长方印的高度按印面宽度等比推出来，见 [CarvedSeal]。
+ */
+internal enum class SealSizes(
+    val width: Dp,
+    val fontSize: TextUnit,
+    val latinFontSize: TextUnit,
+) {
+    /** 开屏 */
+    Full(46.dp, 17.sp, 9.sp),
+
+    /** 日签卡与导出图 */
+    Card(56.dp, 21.sp, 11.sp),
 }
 
 /**
@@ -105,16 +124,19 @@ private fun CarvedSeal(
     typeface: SealTypeface,
     palette: SplashPalette,
     ground: Color,
-    sealWidth: Dp,
-    fontSize: TextUnit,
+    sizes: SealSizes,
 ) {
     val rows = sealRows(keyword)
     // 竖排一列时行距收到 .98，才给界格让出一圈白；两行两列不用收，本来就有余量
     val column = rows.all { it.length == 1 }
-    val glyphSize = fontSize * glyphScale(keyword, typeface)
+    val glyphSize = sizes.fontSize * glyphScale(keyword, typeface)
     Box(
         modifier = Modifier
-            .size(width = sealWidth, height = if (rows.size == 3) RECT_HEIGHT else sealWidth)
+            .size(
+                width = sizes.width,
+                // 三字印把印面撑高：高度按宽度等比推，换尺寸档时比例不变
+                height = if (rows.size == 3) sizes.width * RECT_RATIO else sizes.width,
+            )
             .sealFace(palette.seal, ground),
         contentAlignment = Alignment.Center,
     ) {
@@ -395,10 +417,8 @@ private val TightLineStyle = TextStyle(
     ),
 )
 
-private val SEAL_WIDTH = 46.dp
-
-/** 三字长方印的高度：宽度不变，只把上下撑开，容得下竖排一列三个字 */
-private val RECT_HEIGHT = 64.dp
+/** 三字长方印的高度与宽度之比：宽度变档时高度跟着变，容得下竖排一列三个字 */
+private const val RECT_RATIO = 64f / 46f
 private val CORNER = 3.dp
 private val BORDER_WIDTH = 1.4.dp
 private const val GLYPH_SCALE_X = 1.06f

@@ -73,7 +73,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -85,6 +84,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -105,6 +105,7 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.screen.splash.PosterCompactFontScale
 import com.tracktosearch.ui.screen.splash.QuoteSeal
+import com.tracktosearch.ui.screen.splash.SealSizes
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.StampBackdrop
 import com.tracktosearch.ui.screen.splash.StampDesignHeight
@@ -113,6 +114,7 @@ import com.tracktosearch.ui.screen.splash.StampPage
 import com.tracktosearch.ui.screen.splash.StampPageAspect
 import com.tracktosearch.ui.screen.splash.StampPosterFrame
 import com.tracktosearch.ui.screen.splash.StampQuoteBlock
+import com.tracktosearch.ui.screen.splash.StampTextSize
 import com.tracktosearch.ui.screen.splash.stampPosterSize
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.CancellationException
@@ -420,9 +422,9 @@ private fun CarouselPage(
                     indication = null,
                     onClick = onSideClick,
                 )
-                // 方角：这一页是整屏铺满的一张纸（见 StampPage），圆角会连本体一起裁掉，
-                // 而导出用的正是这一页的像素——裁出来的四个角在分享出去的白底上就是四个缺口
-                .shadow(20.dp, RectangleShape, clip = false)
+                // 圆角跟着页内那道裁切走（见 StampPage 的 corner）：阴影是这一页的，
+                // 页切了四角而影子还是方的，四个角上就会露出方影的直角
+                .shadow(20.dp, RoundedCornerShape(StampCardCorner), clip = false)
         ) {
             when (sheet) {
                 is DailyStampSheet.Line -> {
@@ -510,6 +512,10 @@ private fun bandHeight(): Dp {
  * （这张图本来就在应用里）。导出时才在那里补一行图标 + 名字，见 DailyStampExport 的
  * StampBrand。位置留着，所以屏幕与导出只差这一行。
  *
+ * 字号比开屏大一档（[StampTextSize.Card]），四角是圆的（[StampCardCorner]）：这一页是浮在
+ * 别的底色上的一张卡，不是一个铺满屏幕的界面。开屏两样都不跟——铺满整屏时圆角在屏幕外，
+ * 而字大不大是「缩进槽里那一张」的问题。
+ *
  * 海报和片名都可点，都进这部片的详情页：这张卡的下一步动作只有一个，
  * 不该逼用户去找唯一那个能点的地方。
  */
@@ -528,6 +534,7 @@ private fun DailyStampCard(
             palette = palette,
             date = card.date,
             modifier = Modifier.fillMaxSize(),
+            corner = StampCardCorner,
             backdrop = { StampBackdrop(palette) },
             poster = {
                 CardPoster(
@@ -546,6 +553,7 @@ private fun DailyStampCard(
                     titleWrap = card.titleWrap,
                     year = card.year,
                     palette = palette,
+                    size = StampTextSize.Card,
                     sourceOnClick = onPosterClick,
                 )
             },
@@ -555,6 +563,7 @@ private fun DailyStampCard(
                     latin = card.keywordLatin,
                     sealLang = card.sealLang,
                     palette = palette,
+                    sizes = SealSizes.Card,
                     // 这一页的底是 paper 不是 sheet，做旧那层要拿正确的底色去盖才不留色差
                     ground = palette.paper,
                 )
@@ -577,6 +586,9 @@ private fun DailyStampCard(
  * 外框用的是没改过的密度，于是它占的像素正好是「框高 × 屏密度」；里层换成缩小后的密度，
  * 按 [StampDesignHeight] 排的版面于是等比铺满这个框。设计宽度是推出来的（853 × 9/16 ≈ 480dp），
  * 与机型无关——同一张日签在任何机器上都是同一页，只是大小不同。
+ *
+ * 四个圆角不在这里裁：那是页自己的事（见 StampPage 的 corner），裁在这一层会连
+ * Picture 一起裁——导出图缺四角。这一层只管把这一页摆进槽里。
  */
 @Composable
 private fun StampPageBox(content: @Composable () -> Unit) {
@@ -667,6 +679,7 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
             palette = palette,
             date = latent.date,
             modifier = Modifier.fillMaxSize(),
+            corner = StampCardCorner,
             backdrop = { StampBackdrop(palette) },
             poster = {
                 LatentPoster(
@@ -683,24 +696,23 @@ private fun LatentCard(latent: DailyStampSheet.Latent, palette: SplashPalette) {
                 Spacer(Modifier.height(StampLinesToSource))
                 InkBars(widths = bars.source, height = LATENT_SOURCE_BAR_HEIGHT, palette = palette)
             },
-            seal = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    LatentSeal(palette = palette)
-                    Spacer(Modifier.height(LATENT_CAPTION_GAP))
-                    Text(
-                        text = stringResource(R.string.daily_stamp_future_card),
-                        modifier = Modifier.fillMaxWidth(),
-                        color = palette.inkSoft,
-                        // 字号、字距、行高跟这一页的注解语汇对齐（出处行那一档：小字、拉开字距、
-                        // 衬线）：原先那套 11sp / 0.08em 是给卡纸上的票根写的，缩进这一页之后
-                        // 偏小偏挤，读起来像贴在页边的批注
-                        fontSize = 12.sp,
-                        lineHeight = 19.sp,
-                        fontFamily = FontFamily.Serif,
-                        letterSpacing = 0.1.em,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+            seal = { LatentSeal(palette = palette) },
+            // 那句提示挪到撕口虚线以下那一段的正中：那一带是存根，导出图在那儿落款，
+            // 未来这一页在那儿写「那天见」——两处同高，翻页时不会有东西跳一下。
+            footnote = {
+                Text(
+                    text = stringResource(R.string.daily_stamp_future_card),
+                    modifier = Modifier.fillMaxWidth(),
+                    color = palette.inkSoft,
+                    // 字号、字距跟这一页的注解语汇对齐（衬线、拉开字距），比出处行再大半档、
+                    // 加到 SemiBold：它在页底，是这一页唯一要读的话，不能看着像页边的批注
+                    fontSize = 17.sp,
+                    lineHeight = 24.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.1.em,
+                    textAlign = TextAlign.Center,
+                )
             },
         )
     }
@@ -1100,16 +1112,13 @@ private fun scrimColor(palette: SplashPalette): Color =
  * 未显影那几行的墨条：行距、条高、条与条之间的空。
  *
  * 按这一页的设计档（[StampDesignHeight] 与 [StampQuoteBlock] 的字号）配：两句台词的位置是
- * 两行 23sp 的正文，墨条高度取实心笔画那一档，行距取字号自带行高的一半——
- * 太整齐会读成表格，太细又成了下划线。
+ * 两行 27sp 的正文（卡片那一档，见 [StampTextSize]），墨条高度取实心笔画那一档，
+ * 行距取字号自带行高的一半——太整齐会读成表格，太细又成了下划线。
  */
-private val LATENT_QUOTE_BAR_HEIGHT: Dp = 14.dp
-private val LATENT_QUOTE_BAR_GAP: Dp = 18.dp
-private val LATENT_SOURCE_BAR_HEIGHT: Dp = 9.dp
+private val LATENT_QUOTE_BAR_HEIGHT: Dp = 17.dp
+private val LATENT_QUOTE_BAR_GAP: Dp = 22.dp
+private val LATENT_SOURCE_BAR_HEIGHT: Dp = 11.dp
 private val LATENT_BAR_GAP: Dp = 6.dp
-
-/** 未来提示离那枚空印多远。它就是这一页的落款，不该贴着印边 */
-private val LATENT_CAPTION_GAP: Dp = 16.dp
 
 /**
  * 侧卡缩到多小。
@@ -1183,7 +1192,14 @@ private const val LATENT_SATURATION = 0.45f
 private const val LATENT_BAR_ALPHA = 0.16f
 
 /** 空印的边长，与 QuoteSeal 的方印一致——同一枚印的两种状态，尺寸不该差一个像素 */
-private val LATENT_SEAL_SIZE: Dp = 46.dp
+private val LATENT_SEAL_SIZE: Dp = SealSizes.Card.width
+
+/**
+ * 卡片与导出图那一页的圆角（设计尺度，见 [StampPage]）：这一页是浮在别的底色上的一张卡。
+ *
+ * 开屏不跟——它铺满整屏，圆角落在屏幕外，只会给状态栏那一带留四个缺口。
+ */
+internal val StampCardCorner: Dp = 24.dp
 
 /** 卡片起落用的缓动：快进慢出，像一张纸被托起来 */
 private val CardEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
