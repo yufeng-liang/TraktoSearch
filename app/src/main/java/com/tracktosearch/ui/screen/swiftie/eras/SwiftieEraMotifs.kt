@@ -2536,7 +2536,7 @@ private const val LETTER_PAPER_WEIGHT = 0.80f / PROP_ALPHA
 private const val LETTER_INK_WEIGHT = 2.4f
 
 /**
- * 11 · TTPD：米白麻纸信纸 + 羽毛笔（正在写）+ 墨水瓶。
+ * 11 · TTPD：米白麻纸信纸 + 羽毛笔（正在写）。
  *
  * 唯一一个不吃 `color` 的母题：TTPD 主色是近白的 `#F5F1EA`，用它在白卡上画等于没画，
  * 所以墨与纸都是硬编码的（[LETTER_INK] / [LETTER_PAPER]）。主色那层薄底由卡片自己铺。
@@ -2569,8 +2569,7 @@ private fun DrawScope.drawLetterQuill(
         val paperR = paperL + paperW
         val paperB = paperT + paperH
         val pivot = Offset(paperL + paperW / 2f, paperT + paperH / 2f)
-        // 整张纸连纸上的字、游标、羽毛笔一起歪 [LETTER_TILT]，像随手摊在桌上。
-        // 墨水瓶**不进**这个 rotate —— 瓶子歪着读起来就是要倒了
+        // 整张纸连纸上的字与羽毛笔一起歪 [LETTER_TILT]，像随手摊在桌上
         rotate(degrees = LETTER_TILT, pivot = pivot) {
             // 纸底下的影子：一张纸摊在卡片上就有影子，右下偏（光在左上）。
             // 少了这一片，信纸是印在卡片上的一块米色，不是放在上面的一张纸 ——
@@ -2610,19 +2609,7 @@ private fun DrawScope.drawLetterQuill(
             drawPath(fold, Color.White, alpha = 0.60f)
             drawPath(fold, LETTER_INK, alpha = alpha * 0.9f, style = Stroke(width = u * 0.005f))
         }
-        // 瓶子压在信纸右上角。落位按**旋转之后**的那个纸角算 —— 纸整块歪了
-        // [LETTER_TILT]，拿未旋转的角点摆瓶子会差出 tan(倾斜角) × 半张纸那么多，
-        // 屏幕上读作「摆在纸旁边」而不是压在纸上（上一版就是这样）。
-        // 画在字之前 —— 羽毛笔的羽面要从瓶子前面掠过（笔握在手里，瓶子在桌上）
-        drawInkBottle(
-            alpha = alpha,
-            w = w,
-            h = h,
-            u = u,
-            corner = rotatedPoint(paperR, paperT, pivot, LETTER_TILT),
-            paper = Rect(paperL, paperT, paperR, paperB),
-            pivot = pivot
-        )
+        // 纸先摊好，再往上写字（同一处 rotate 分两次画，顺序就是层序）
         rotate(degrees = LETTER_TILT, pivot = pivot) {
             drawLetterWriting(art, phase, alpha, eraElapsedMs, u, paperL, paperT, paperW, paperH)
         }
@@ -2743,7 +2730,7 @@ private fun DrawScope.drawQuill(phase: Float, alpha: Float, u: Float, nib: Offse
     )
 }
 
-/** 信纸（连纸上的字与笔）歪的角度。瓶子要按转过之后的纸角落位，所以只能有一处。 */
+/** 信纸（连纸上的字与笔）歪的角度。 */
 private const val LETTER_TILT = -2f
 
 /**
@@ -2753,191 +2740,6 @@ private const val LETTER_TILT = -2f
  * 再正就成了一枚贴在卡片上的标签 —— 「随手摊在桌上」这件事全靠这一点歪。
  */
 private const val LETTER_WRITE_SPAN = 0.88f
-
-/** 把 [x] / [y] 绕 [pivot] 转 [degrees]。用来取「旋转之后」的纸角。 */
-private fun rotatedPoint(x: Float, y: Float, pivot: Offset, degrees: Float): Offset {
-    val rad = degrees / 180f * PI.toFloat()
-    val cs = cos(rad)
-    val sn = sin(rad)
-    val dx = x - pivot.x
-    val dy = y - pivot.y
-    return Offset(pivot.x + dx * cs - dy * sn, pivot.y + dx * sn + dy * cs)
-}
-
-/**
- * 墨水瓶：**压在信纸右上角**的一只玻璃瓶。
- *
- * ## 为什么要重画
- *
- * 上一版信纸与瓶子都是正视图里的剪影：纸是个矩形、瓶是个圆角矩形，两者只是叠在一起，
- * 屏幕上读作「纸旁边还画了个瓶子」，压没压上去看不出来。压在东西上这件事要三样东西
- * 同时成立，缺一样都不成：
- *
- * 1. **视线略高于瓶口**。所以螺帽有一个椭圆顶面、瓶底也露出一条椭圆的底面 ——
- *    纯正视图里这两处都是直线，看不出瓶子站在一个平面上。
- * 2. **两片影子**。投影（瓶底右下那一片，光在左上）说明瓶子离开纸面有高度；
- *    紧贴瓶底那一圈更深更小的接触影说明它确实落在纸上，没有飘着。只有投影没有接触影，
- *    瓶子会像浮在纸上方一厘米。
- * 3. **真的挡住纸**。瓶身垫一层白（[PROP_MASK]）：上一版瓶身只有 0.35 alpha，
- *    麻纸的边框描边、纸浆纤维、甚至笔迹都整条从瓶子里穿过去 —— 那读作一张贴纸，
- *    不是一只压在纸上的瓶子。
- *
- * 瓶底横跨纸缘：一半压着纸、一半探到纸外的桌面上，这才是「镇纸」；整只都在纸内
- * 只是「纸上还放着个瓶子」。[corner] 是旋转之后的纸右上角，瓶身左 52% 落在纸上。
- */
-private fun DrawScope.drawInkBottle(
-    alpha: Float,
-    w: Float,
-    h: Float,
-    u: Float,
-    corner: Offset,
-    paper: Rect,
-    pivot: Offset
-) {
-    val bw = w * 0.255f
-    val bh = h * 0.185f
-    val left = corner.x - bw * 0.52f
-    val right = left + bw
-    val top = corner.y + bh * 0.16f
-    val bottom = top + bh
-    val cx = (left + right) * 0.5f
-    // 底面在这个俯角下露出来的半高。瓶身底沿是它的下半个椭圆
-    val footRy = bh * 0.070f
-    val shoulderY = top + bh * 0.30f
-    val neckHalf = bw * 0.20f
-    val neckTop = top - h * 0.030f
-
-    // ── 影子（画在瓶子之前，被瓶身压住近侧那半片）──
-    val cast = u * 0.030f
-    drawOval(
-        LETTER_INK, Offset(left + cast, bottom - footRy + cast * 0.55f),
-        Size(bw, footRy * 2.2f), alpha = alpha * 0.50f
-    )
-    drawOval(
-        LETTER_INK, Offset(left + u * 0.008f, bottom - footRy * 0.94f),
-        Size(bw - u * 0.016f, footRy * 1.7f), alpha = alpha * 0.95f
-    )
-
-    // ── 瓶身 ──
-    val glass = Path()
-    glass.moveTo(left, bottom - footRy)
-    glass.lineTo(left, shoulderY)
-    // 收肩到瓶颈：吹制玻璃身上没有一处直角，肩这一段是全瓶最像玻璃的地方
-    glass.cubicTo(
-        left, top + (shoulderY - top) * 0.12f,
-        cx - neckHalf - u * 0.070f, top,
-        cx - neckHalf, top
-    )
-    glass.lineTo(cx - neckHalf, neckTop)
-    glass.lineTo(cx + neckHalf, neckTop)
-    glass.lineTo(cx + neckHalf, top)
-    glass.cubicTo(
-        cx + neckHalf + u * 0.070f, top,
-        right, top + (shoulderY - top) * 0.12f,
-        right, shoulderY
-    )
-    glass.lineTo(right, bottom - footRy)
-    // 底沿走下半个椭圆，不是两个圆角 —— 从略高的视线看下去，瓶底就是这么一条弧
-    glass.arcTo(Rect(left, bottom - footRy * 2f, right, bottom), 0f, 180f, false)
-    glass.close()
-    drawPath(glass, Color.White, alpha = alpha * PROP_MASK)
-    // 玻璃是透的，所以瓶身里该看见纸：压在纸上那半边透出麻纸的米白，探出纸缘那半边
-    // 透出卡片的白，**纸缘那条线穿过瓶身接着往下走**。
-    //
-    // 上一版整只瓶填一个米白，于是瓶身左右一个色 —— 瓶子跨在纸缘上这件事在屏幕上
-    // 完全看不出来（实测瓶内 (241,237,224) 与纸面 (240,235,222) 只差 1），
-    // 读作「纸旁边放着个瓶子」。这一段是「压在信纸右上角」最直接的一笔。
-    //
-    // 纸只填色 + 描边，纸浆纤维与笔迹仍被上面那层白挡着：透过玻璃看东西是糊的，
-    // 一根根纤维还清清楚楚反而不像玻璃
-    clipPath(glass) {
-        rotate(degrees = LETTER_TILT, pivot = pivot) {
-            drawRect(LETTER_PAPER, paper.topLeft, paper.size, alpha = 0.74f)
-            drawRect(
-                LETTER_INK, paper.topLeft, paper.size,
-                alpha = alpha * 0.5f, style = Stroke(width = u * 0.007f)
-            )
-        }
-    }
-    // 玻璃自己那层雾：把里面透出来的东西压淡一档，边界才像隔着一层玻璃看
-    drawPath(glass, Color.White, alpha = 0.26f)
-
-    // ── 瓶里的墨（不透明，上沿平、下沿跟着底面的弧）──
-    val wall = u * 0.016f
-    val inkTop = top + bh * 0.54f
-    val ink = Path()
-    ink.moveTo(left + wall, inkTop)
-    ink.lineTo(right - wall, inkTop)
-    ink.lineTo(right - wall, bottom - wall - footRy)
-    ink.arcTo(Rect(left + wall, bottom - wall - footRy * 2f, right - wall, bottom - wall), 0f, 180f, false)
-    ink.close()
-    drawPath(ink, LETTER_INK, alpha = alpha * 2.5f)
-    // 液面高光 + 两端上翘的弯液面。这三笔是「里面是液体」的全部依据
-    drawLine(
-        Color.White, Offset(left + wall + u * 0.024f, inkTop + u * 0.008f),
-        Offset(right - wall - u * 0.042f, inkTop + u * 0.008f), u * 0.008f, alpha = alpha * 2.0f
-    )
-    drawLine(
-        Color.White, Offset(left + wall + u * 0.004f, inkTop - u * 0.006f),
-        Offset(left + wall + u * 0.026f, inkTop + u * 0.008f), u * 0.005f, alpha = alpha * 1.2f
-    )
-    drawLine(
-        Color.White, Offset(right - wall - u * 0.004f, inkTop - u * 0.006f),
-        Offset(right - wall - u * 0.026f, inkTop + u * 0.008f), u * 0.005f, alpha = alpha * 1.2f
-    )
-
-    drawPath(glass, LETTER_INK, alpha = alpha * 1.5f, style = Stroke(width = u * 0.009f))
-    // 左壁一道长竖高光（光在左上）、右壁一道短的弱反光交代玻璃厚度
-    drawLine(
-        Color.White, Offset(left + u * 0.030f, shoulderY + u * 0.014f),
-        Offset(left + u * 0.030f, bottom - footRy - u * 0.020f), u * 0.010f, alpha = alpha * 1.3f
-    )
-    drawLine(
-        Color.White, Offset(right - u * 0.026f, inkTop + u * 0.030f),
-        Offset(right - u * 0.026f, bottom - footRy - u * 0.024f), u * 0.006f, alpha = alpha * 0.7f
-    )
-    // 肩上一段弧高光：这一笔把「收肩」说清楚
-    val gleam = Path()
-    gleam.moveTo(left + u * 0.046f, shoulderY - u * 0.006f)
-    gleam.quadraticTo(cx - neckHalf * 1.20f, top + u * 0.014f, cx - neckHalf * 0.55f, top + u * 0.026f)
-    drawPath(gleam, Color.White, alpha = alpha * 0.9f, style = Stroke(width = u * 0.008f))
-    // 底面：露出来的那一条比瓶身深一档，瓶子才像坐在纸上而不是浮着
-    drawArc(
-        color = LETTER_INK,
-        startAngle = 8f,
-        sweepAngle = 164f,
-        useCenter = false,
-        topLeft = Offset(left + wall * 0.5f, bottom - footRy * 2f),
-        size = Size(bw - wall, footRy * 2f),
-        alpha = alpha * 1.1f,
-        style = Stroke(width = u * 0.007f)
-    )
-
-    // ── 螺帽：侧面 + 一个椭圆顶面（顶面是「视线高于瓶口」的唯一证据）+ 三道防滑纹 ──
-    val capHalf = bw * 0.29f
-    val capH = h * 0.024f
-    val capTop = neckTop - capH
-    val capRy = capH * 0.44f
-    drawRoundRect(
-        LETTER_INK, Offset(cx - capHalf, capTop), Size(capHalf * 2f, capH + h * 0.005f),
-        CornerRadius(u * 0.020f), alpha = alpha * 1.9f
-    )
-    drawOval(
-        LETTER_PAPER, Offset(cx - capHalf, capTop - capRy), Size(capHalf * 2f, capRy * 2f),
-        alpha = 0.88f
-    )
-    drawOval(
-        LETTER_INK, Offset(cx - capHalf, capTop - capRy), Size(capHalf * 2f, capRy * 2f),
-        alpha = alpha * 1.6f, style = Stroke(width = u * 0.006f)
-    )
-    repeat(3) { index ->
-        val gx = cx + capHalf * (-0.44f + index * 0.44f)
-        drawLine(
-            Color.White, Offset(gx, capTop + capH * 0.26f), Offset(gx, capTop + capH * 0.86f),
-            u * 0.005f, alpha = alpha * 0.55f
-        )
-    }
-}
 
 /** 12 · Showgirl：更衣室化妆镜台（环绕灯泡轮转）+ 台面上的口红与粉扑。 */
 private fun DrawScope.drawVanityMirror(color: Color, phase: Float, alpha: Float) {

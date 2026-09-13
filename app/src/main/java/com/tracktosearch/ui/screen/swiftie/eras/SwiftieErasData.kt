@@ -39,7 +39,7 @@ enum class SwiftieEraMotif {
     BRAID_PLAID,
     /** 10 · Midnights：打火机（火苗跳动）+ 几颗四芒星 */
     LIGHTER_STARS,
-    /** 11 · TTPD：米白麻纸信纸 + 羽毛笔（写字）+ 墨水瓶 + 方块游标 */
+    /** 11 · TTPD：米白麻纸信纸（写着 All’s fair in love）+ 羽毛笔 */
     LETTER_QUILL,
     /** 12 · Showgirl：更衣室化妆镜台（环绕灯泡）+ 口红与粉扑 */
     VANITY_MIRROR
