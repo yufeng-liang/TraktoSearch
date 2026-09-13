@@ -3,18 +3,19 @@ package com.tracktosearch
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.ViewTreeObserver
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onPlaced
 import androidx.core.os.LocaleListCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -186,19 +187,23 @@ class MainActivity : AppCompatActivity() {
     private val scrollToTopProvider = ScrollToTopProvider()
     private var authInitializationJob: Job? = null
     /**
-     * 主界面导航树真的画出来了没有。
+     * 主界面导航树摆好了没有——布局完成，被放行的这一帧画出来就是主界面。
      *
-     * 系统 splash 的放行条件之一，而且必须是「画出来」而不是「组合了 / 布局完了」：
-     * 后两者都只保证下一帧会带上主界面，而系统 splash 的 pre-draw 条件在那一刻就解除了，
-     * 于是放行的那一帧还是空的——关掉日签的场合就是「合板动画 → 白屏 → 主界面」。
-     * 标记时机见 [installStartupFirstDrawTrace]。
+     * 系统 splash 的第二道放行条件（见 onCreate 里的 setKeepOnScreenCondition）。这里要的是
+     * 「布局完成」，不是「开始组合」：keep 条件在 pre-draw 判定，而 pre-draw 在同一帧的
+     * measure/layout 之后，所以布局完成的这一刻放行，这一帧的内容就是主界面本身；改成在组合
+     * 开始时放行，那一帧只有窗口底色——关掉日签的场合就是「合板动画 → 暖纸空窗 → 主界面」。
+     *
+     * 同样也不能「等它真的画出来」：keep 条件为真时 core-splashscreen 的 pre-draw 返回 false，
+     * 整帧绘制被取消（ViewRootImpl 连带跳过 OnDrawListener 派发），画这个动作压根不会发生，
+     * 于是那个信号永远等不到。标记点用 Modifier.onPlaced：它由 MeasureAndLayoutDelegate 在
+     * 布局末尾派发，持屏期间照跑，位置正好落在放行判定之前。
      */
-    private var navPlaced by mutableStateOf(false)
+    private var navPlaced = false
 
     /** 主界面导航树的组合门：日签先上屏、导航后一帧跟上，见 onCreate 第四段。 */
     private var navComposed by mutableStateOf(false)
 
-    private var startupFirstContentDrawLogged = false
     private var initialResumeHandled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -208,19 +213,29 @@ class MainActivity : AppCompatActivity() {
         // 动画正好把那段时间用掉）。主题必须在 super.onCreate 之前换掉，见 chooseSplashTheme。
         setTheme(chooseSplashTheme())
         var isReady by mutableStateOf(false)
-        // 日签层的门：日签数据（开关 + 台词 + 海报）备齐就开。
+        // 日签层的门：当天那条台词（连同它的海报）到手了才开。
         // 它要的就这么多：台词与海报一到手，这一页就是完整的，主界面在它背后继续加载。
+        // 拿不到就是整层不上屏——开关关着、海报没就绪都算，所以这个标志同时决定系统 splash
+        // 要不要等主界面（见下面 setKeepOnScreenCondition），不能只表示「这一段跑完了」。
         var stampReady by mutableStateOf(false)
-        // 主界面导航树真的画出来了没有（字段声明在下面，见 navPlaced 的说明）。
         // 通过 Compose 状态控制 Splash 的结束条件
         val splashScreen = installSplashScreen()
         StartupTrace.mark("activity.splash_installed")
+        // 退场也自己收。平台的默认退场会把图标淡出，那两百多毫秒里屏幕上只剩暖纸底和品牌条
+        // ——一扇空窗，用户报的正是这个。这里直接撤窗：放行条件保证这一刻内容早就画好了
+        // （有日签等日签数据，没日签等主界面布局完成），所以撤窗露出来的就是内容本身，
+        // 图标到内容是一次干净的切换，中间不留任何一帧只有底色的画面。
+        // 代价是合板动画不再有退场那一拍（平台只在默认退场里播它，而默认退场就是上面那个
+        // 淡出）：两档现在都停在图标本身，要动画就得连着淡出一起要，二选一。
+        splashScreen.setOnExitAnimationListener { provider ->
+            StartupTrace.mark("startup.splash_exit")
+            provider.remove()
+        }
         // 系统 splash 让位的条件，两种时刻取早者：
-        //   日签数据齐了（stampReady）→ 让位给日签，App 其余工作继续在它背后跑；
-        //   主界面真的画出来了（navPlaced）→ 没有日签接场的场合（开关关着、海报没就绪），
-        //     必须等到这一刻。不能写成 isReady，也不能写成「导航开始组合」或「主题铺好了」：
-        //     那些时刻导航树都还没上屏，放行只会露出一帧空背景
-        //     ——关掉日签的场合就是「合板动画 → 空白 → 主界面」。
+        //   日签这一页有内容可上屏（stampReady）→ 让位给日签，App 其余工作继续在它背后跑；
+        //   主界面真的摆好了（navPlaced）→ 没有日签接场的场合（开关关着、海报没就绪）必须等到
+        //     这一刻，且只等到这一刻：不能写成 isReady，也不能写成「导航开始组合」或
+        //     「主题铺好了」，那些时刻主界面都还没布局完，放行只会在屏幕上留一段暖纸空窗。
         // 最后那 10 秒是防呆：启动链任何一环挂死也不该把人永久困在场记板上。
         val splashHeldFrom = System.currentTimeMillis()
         splashScreen.setKeepOnScreenCondition {
@@ -247,7 +262,6 @@ class MainActivity : AppCompatActivity() {
                 layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
-        installStartupFirstDrawTrace()
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
@@ -281,7 +295,10 @@ class MainActivity : AppCompatActivity() {
                     splashQuoteLoader.load(language)
                 }
             }
-            stampReady = true
+            // 只有真的拿到台词（连同海报）才算日签能上屏。开关关着、或者海报没就绪，
+            // 这一层整层跳过，这面旗子就一直是 false——系统 splash 于是改成等主界面摆好
+            // （见 setKeepOnScreenCondition），那段等待才不会落到一块暖纸空窗上。
+            stampReady = splashQuote != null
             StartupTrace.mark("startup.stamp_ready", "quote=${splashQuote != null}")
         }
 
@@ -446,8 +463,8 @@ class MainActivity : AppCompatActivity() {
         // 这一层本来就要在日签背后继续加载，所以把它的组合推迟到日签首帧之后：
         // 系统 splash 一散场屏幕上就已经是完整的一页日签，而不是一个白屏接着主界面。
         //
-        // 关掉开屏日签时这一层就是「第一屏」本身，系统的 keep 条件于是在等它（见上面
-        // setKeepOnScreenCondition）：合板动画散场那一刻，主界面已经组合好了。
+        // 关掉开屏日签时这一层就是「第一屏」本身，系统的 keep 条件于是在等它摆好（见上面
+        // setKeepOnScreenCondition + navPlaced）：合板动画散场那一帧，主界面已经布局完成。
         //
         // 推迟的量是两帧。这里必须用时间而不是 withFrameNanos：lifecycleScope 的上下文里
         // 没有 Compose 的 MonotonicFrameClock，直接调会抛 IllegalStateException 把 App 打死
@@ -498,15 +515,25 @@ class MainActivity : AppCompatActivity() {
                             traktRepository
                         )
                     }
-                    AppNavigation(
-                        startDestination = currentDestination,
-                        initialTab = initialTab,
-                        authStateHolder = authStateHolder,
-                        sessionModeManager = sessionModeManager,
-                        onLoginSuccess = {
-                            currentDestination = Routes.MAIN
+                    // navPlaced 是系统 splash 的第二道放行条件：布局走完才算「主界面在了」。
+                    // onPlaced 在布局阶段末尾回调（见 navPlaced 的说明），而放行判定在随后
+                    // 同一帧的 pre-draw——所以被放行的那一帧画出来就已经是主界面。
+                    Box(modifier = Modifier.onPlaced {
+                        if (!navPlaced) {
+                            navPlaced = true
+                            StartupTrace.mark("startup.nav_placed")
                         }
-                    )
+                    }) {
+                        AppNavigation(
+                            startDestination = currentDestination,
+                            initialTab = initialTab,
+                            authStateHolder = authStateHolder,
+                            sessionModeManager = sessionModeManager,
+                            onLoginSuccess = {
+                                currentDestination = Routes.MAIN
+                            }
+                        )
+                    }
                 }
 
                 // 崩溃上报对话框（授权/上传中/失败重试，状态驱动）
@@ -516,9 +543,10 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 // 开屏台词层：压在最上面，等它自己散场或被点掉。
-                // 门是 stampReady 而不是 isReady——日签数据一备齐就压上来，主界面在它背后继续加载，
-                // 用户等 App 启动的时间因此花在有内容的一页纸上。系统 splash 也是等它（见上面
-                // setKeepOnScreenCondition）：日签一亮，场记板就散场，两者接的是同一块暖纸色。
+                // 门是「日签有内容可上屏」（stampReady）而不是 isReady——台词与海报一备齐就压上来，
+                // 主界面在它背后继续加载，用户等 App 启动的时间因此花在有内容的一页纸上。
+                // 系统 splash 也是等它（见上面 setKeepOnScreenCondition）：日签一亮，场记板就散场，
+                // 两者接的是同一块暖纸色。
                 //
                 // contentReady 是「App 已就绪」：跳过提示浮出、整层收点击、以及肯不肯退场都看它。
                 // 就绪之前轻触不响应，退出后必须马上有一个能用的界面接住。
@@ -599,32 +627,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    /**
-     * 首帧绘制探针：主界面真的画出来的那一刻，同时做两件事——
-     * 记一条启动跟踪，以及解除系统 splash 的第二道放行条件（[navPlaced]）。
-     *
-     * 「真的画出来」这个时刻没有别的可靠信号：组合完成、布局完成都只保证「下一帧会带上」，
-     * 而系统 splash 的 pre-draw 条件在那一刻就解除了，放行的那一帧仍然是空的。
-     * 关掉开屏日签时这一条就是「合板动画 → 白屏 → 主界面」的全部原因。
-     */
-    private fun installStartupFirstDrawTrace() {
-        val observer = window.decorView.viewTreeObserver
-        val listener = object : ViewTreeObserver.OnDrawListener {
-            override fun onDraw() {
-                // 导航树组合之前画出来的第一帧只是 Compose 的空根，不算「首帧内容」——
-                // 那个标记和系统 splash 的放行都要等导航树真正画出来那一帧。
-                if (!navComposed) return
-                if (!startupFirstContentDrawLogged) {
-                    startupFirstContentDrawLogged = true
-                    StartupTrace.mark("activity.first_content_draw")
-                }
-                navPlaced = true
-                if (observer.isAlive) observer.removeOnDrawListener(this)
-            }
-        }
-        observer.addOnDrawListener(listener)
     }
 
     private var statusBarHeight: Int = 0
