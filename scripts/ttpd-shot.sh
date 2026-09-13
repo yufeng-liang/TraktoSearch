@@ -71,7 +71,7 @@ MOTIFS="app/src/main/java/com/tracktosearch/ui/screen/swiftie/eras/SwiftieEraMot
 num() { grep -m1 -E "$2" "$1" | grep -oE '= *[0-9][0-9_]*' | grep -oE '[0-9_]+' | tr -d '_'; }
 
 # 第 N 张（0 起）卡片的起点毫秒。卡片时长按曲目数派生、锚点卡片
-# （ANCHOR_INDICES 里那几个，0 起编号）各多停 600ms、TTPD 那张另有 1400ms 独奏前摇
+# （ANCHOR_INDICES 里那几个，0 起编号）各多停 600ms、TTPD 那张另有 TTPD_PREROLL_MS 的独奏前摇
 # —— 前摇也在卡片时长里（SwiftieTimeline.cardDurationMs），改 TTPD 之后任何一张的
 # 起点都要带上它。这里对索引 ≥ 11（TTPD 之后）把前摇补回去。
 era_start() {
