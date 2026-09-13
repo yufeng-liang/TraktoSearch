@@ -174,6 +174,14 @@ case "$SCALE" in
 先跑: adb shell settings put global animator_duration_scale 1" ;;
 esac
 
+# 锁屏挡在前面时 `am start` 照样成功、screencap 照样有图 —— 抓回来的是锁屏，不是卡片
+# （2026-09-13 实测：write1/write2 两拍全是锁屏，还都长得像「彩蛋没画出来」）。
+# 别靠「截图是不是全黑」判断：这台机器的锁屏自己就是黑底 + 一个指纹圈。
+KEYGUARD="$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 'isKeyguardShowing=' || true)"
+case "$KEYGUARD" in
+  *true*) die "设备锁着（isKeyguardShowing=true），抓到的是锁屏。先在机器上解锁再跑。" ;;
+esac
+
 # app 侧的 era 是 0 起，脚本的 eraN 是 1 起
 EXTRAS=()
 case "$TARGET" in
