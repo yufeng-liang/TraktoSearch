@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -416,33 +417,6 @@ private fun DrawScope.starburstTexture(color: Color, phase: Float) {
         val diag = arm * 0.45f
         drawLine(color, center - Offset(diag, diag), center + Offset(diag, diag), thin * 0.7f, alpha = alpha * 0.7f)
         drawLine(color, center - Offset(diag, -diag), center + Offset(diag, -diag), thin * 0.7f, alpha = alpha * 0.7f)
-    }
-}
-
-/**
- * 11 · 手稿横线。
- *
- * 唯一一个不吃 `color` 的底纹：TTPD 主色是近白的 `#F5F1EA`，用它在白卡上画线
- * 等于没画，所以墨色硬编码成 [LETTER_INK]。主色那层薄底由卡片自己铺
- * （`SwiftieEraCard` 的 `drawRect(era.mainColor, alpha = 0.10f)`），这里再铺一次
- * 会把 TTPD 的米白叠成 0.19，12 张卡片里只有它一张底色偏亮。
- */
-private fun DrawScope.manuscriptLineTexture() {
-    repeat(9) { index ->
-        val y = size.height * (0.16f + index * 0.075f)
-        // 每行长度不一，像一段没写完的诗
-        val ratio = when (index % 3) {
-            0 -> 0.72f
-            1 -> 0.84f
-            else -> 0.58f
-        }
-        drawLine(
-            color = LETTER_INK,
-            start = Offset(size.width * 0.12f, y),
-            end = Offset(size.width * (0.12f + ratio * 0.76f), y),
-            strokeWidth = size.minDimension * 0.005f,
-            alpha = TEXTURE_ALPHA
-        )
     }
 }
 
@@ -2502,53 +2476,65 @@ private fun DrawScope.drawBrightStars(color: Color, phase: Float, alpha: Float, 
     }
 }
 
-/** TTPD 的墨色。见 [manuscriptLineTexture] 上面那段：这一张不吃时代主色。 */
+/** TTPD 的墨色：笔的轮廓与笔杆。这一张不吃时代主色（见 [drawLetterQuill] 上面那段）。 */
 private val LETTER_INK = Color(0xFF4A453E)
 
-/** 米白麻纸。比白卡再暖一点、深一点，不然纸放在卡片上没有边界。 */
+/**
+ * 卡片右下角**写下来那句话**的墨色，比 [LETTER_INK] 深一档。
+ *
+ * 这个值调过两轮：先是因为「墨色浅」加深到 `382F27`；信纸去掉、字落到卡片白底上之后
+ * 又收回来一档 —— 同一档墨压在白底上显重，压在米白纸上的经验不适用了。
+ */
+private val LETTER_WRITING_INK = Color(0xFF443C33)
+
+/**
+ * 米白麻纸。信纸去掉之后这个色没退休：它成了**羽毛笔羽面的填色** ——
+ * 笔要「不透明、有填充色」，需求方点的就是这个信纸色。
+ */
 private val LETTER_PAPER = Color(0xFFEFE7D6)
 
 /**
- * 信纸那一列占卡片宽度的比例。
+ * 那句话在卡片上的宽度占比。
  *
- * 比其余 11 张的道具列（[SWIFTIE_PROP_COLUMN_FRACTION] = 0.32）宽一档：那张纸上要写出
- * **一整句话**，0.32 一列排出来的字号只有 19dp，句子的连笔挤在一起读不出来。
- * 只加宽这一张 —— 改那个共用常量会把 12 张的道具一起放大，而其余 11 张的尺寸是逐张调过的。
+ * `0.98 × 0.40 × 0.86`：信纸还在的时候，那句字的实际宽度就是这三个数乘出来的。
+ * 纸去掉、题词挪到卡片右下角，**字号原样搬过来** —— 要的是去掉那张纸，不是改字号。
  */
-private const val LETTER_PROP_FRACTION = 0.40f
+private const val LETTER_TEXT_WIDTH_FRACTION = 0.337f
+
+/** 墨的右缘离卡片右缘的比例 —— 与其余 11 张道具列的右边距取同一个数。 */
+private const val LETTER_TEXT_RIGHT_MARGIN = 0.975f
 
 /**
- * 句子在纸上的占宽比例。两侧各留一点白边 —— 字排到纸的边缘上读作「裁掉了」。
+ * 第二行基线在卡片高度上的位置：落在卡片下内边距那一档。
  *
- * 字号由它反推：`纸宽 × 它 ÷ 最长那一行的 em 数`。
+ * 第一行由它减去一个行距（[SwiftieLetterPath.LINE_PITCH_EM]）得到 —— 行距是生成字库时
+ * 定死的，这里只能跟着它走。
  */
-private const val LETTER_TEXT_SPAN = 0.86f
+private const val LETTER_SECOND_BASELINE_FRACTION = 0.895f
+
+/** 墨的权重（相对 [PROP_ALPHA]）。写上去的字要一眼读得出来。 */
+private const val LETTER_INK_WEIGHT = 2.9f
 
 /**
- * 纸的底色权重（相对 [PROP_ALPHA]）。
- *
- * 与其余道具一样**乘 columnFade** —— 长歌名点亮时整张纸跟着让位。这一张的纸比别的道具
- * 大一圈，不让位就会被歌名横穿过去（曲目名画在母题之上，纸的边缘会在字后面露出一道）。
- */
-private const val LETTER_PAPER_WEIGHT = 0.80f / PROP_ALPHA
-
-/** 墨的权重（相对 [PROP_ALPHA]）。写上去的字要读得出来，比纸浆纤维那类纹理重得多。 */
-private const val LETTER_INK_WEIGHT = 2.4f
-
-/**
- * 11 · TTPD：米白麻纸信纸 + 羽毛笔（正在写）。
+ * 11 · TTPD：卡片右下角写着那句题词，一支羽毛笔正把它写下来。
  *
  * 唯一一个不吃 `color` 的母题：TTPD 主色是近白的 `#F5F1EA`，用它在白卡上画等于没画，
- * 所以墨与纸都是硬编码的（[LETTER_INK] / [LETTER_PAPER]）。主色那层薄底由卡片自己铺。
+ * 所以墨与笔都是硬编码的（[LETTER_INK] / [LETTER_PAPER]）。主色那层薄底由卡片自己铺
+ * （`SwiftieEraCard` 的 `drawRect(era.mainColor, alpha = 0.10f)`）。
  *
- * 纸上写的是 `All’s fair in love / and poetry.`（TTPD 视觉里的那句题词）——
+ * 写的是 `All’s fair in love / and poetry.`（TTPD 视觉里的那句题词）——
  * 笔迹不是画出来的曲线，是离线从 Great Vibes 的字形骨架抽出中线、运行时沿中线铺墨
  * （见 [drawLetterInk]），所以那句字的形状与真字一样，笔画宽窄也对。
  *
- * @param art 字形与中线表。null = 字库没建出来（低内存那一档），纸上就只留纸与笔
- * @param phase 0f..1f 的母题相位。写字占前 [LETTER_WRITE_SPAN]，余下的相位让墨淡掉再重写
- * @param eraElapsedMs 负数 = 低配机那一档定格：**停在写完的样子**。
- *   定格在一张没写字的纸上等于这一张什么都没有
+ * 这一张的历史：先是「米白信纸 + 横格线 + 歪 2°」的一整张纸，纸上有纸浆纤维、卷边、影子；
+ * 后来整张纸都去掉了 —— 题词直接写在卡片右下角、**不正不歪**，横格线也一并撤掉
+ * （铺满卡片的横线读作稿纸，与「卡片右下角手写一句」不是一件事）。
+ *
+ * @param art 字形与中线表。null = 字库没建出来（低内存那一档），那就只剩笔
+ * @param phase 0f..1f 的母题相位。写字不跟它走（见 [drawLetterWriting]），它只用来给笔
+ *   一点极轻的摆动
+ * @param eraElapsedMs 负数 = 低配机那一档定格：**停在写完的样子**，而且没有笔
+ *   （写完就要收笔，定格档里一支笔永远杵在句尾更怪）
  */
 private fun DrawScope.drawLetterQuill(
     art: SwiftieLetterArt?,
@@ -2556,190 +2542,163 @@ private fun DrawScope.drawLetterQuill(
     alpha: Float,
     eraElapsedMs: Long
 ) {
-    manuscriptLineTexture()
-    val box = letterPropBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
-    translate(left = box.left, top = box.top) {
-        val paperL = w * 0.010f
-        val paperT = h * 0.130f
-        val paperW = w * 0.980f
-        val paperH = h * 0.620f
-        val paperR = paperL + paperW
-        val paperB = paperT + paperH
-        val pivot = Offset(paperL + paperW / 2f, paperT + paperH / 2f)
-        // 整张纸连纸上的字与羽毛笔一起歪 [LETTER_TILT]，像随手摊在桌上
-        rotate(degrees = LETTER_TILT, pivot = pivot) {
-            // 纸底下的影子：一张纸摊在卡片上就有影子，右下偏（光在左上）。
-            // 少了这一片，信纸是印在卡片上的一块米色，不是放在上面的一张纸 ——
-            // 「压在信纸上」得先让信纸自己浮起来
-            drawRect(
-                LETTER_INK, Offset(paperL + u * 0.009f, paperT + u * 0.012f),
-                Size(paperW, paperH), alpha = alpha * 0.34f
-            )
-            drawRect(
-                LETTER_PAPER, Offset(paperL, paperT), Size(paperW, paperH),
-                alpha = (alpha * LETTER_PAPER_WEIGHT).coerceAtMost(1f)
-            )
-            drawRect(
-                LETTER_INK, Offset(paperL, paperT), Size(paperW, paperH),
-                alpha = alpha * 0.8f, style = Stroke(width = u * 0.007f)
-            )
-            // 纸浆纤维：固定种子。每帧换一批纤维会像一层噪点在纸上爬
-            val random = Random(2024)
-            val fibers = Path()
-            repeat(32) {
-                val fx = paperL + random.nextFloat() * paperW
-                val fy = paperT + random.nextFloat() * paperH
-                val len = u * (0.02f + random.nextFloat() * 0.055f)
-                // 纤维大致同向（抄纸时纸浆的走向），角度只在 ±17° 里抖
-                val angle = (random.nextFloat() - 0.5f) * 0.6f
-                fibers.moveTo(fx, fy)
-                fibers.lineTo(fx + cos(angle) * len, fy + sin(angle) * len)
-            }
-            drawPath(fibers, LETTER_INK, alpha = alpha * 0.5f, style = Stroke(width = u * 0.004f))
-            // 卷边：右下角翻起一小片，背面比正面亮
-            val curl = u * 0.11f
-            val fold = Path()
-            fold.moveTo(paperR - curl, paperB)
-            fold.quadraticTo(paperR - curl * 0.30f, paperB - curl * 0.30f, paperR, paperB - curl)
-            fold.lineTo(paperR, paperB)
-            fold.close()
-            drawPath(fold, Color.White, alpha = 0.60f)
-            drawPath(fold, LETTER_INK, alpha = alpha * 0.9f, style = Stroke(width = u * 0.005f))
-        }
-        // 纸先摊好，再往上写字（同一处 rotate 分两次画，顺序就是层序）
-        rotate(degrees = LETTER_TILT, pivot = pivot) {
-            drawLetterWriting(art, phase, alpha, eraElapsedMs, u, paperL, paperT, paperW, paperH)
-        }
-    }
-}
-
-/**
- * 信纸那一列的框。
- *
- * 与 [swiftiePropBox] 同一个式子，只有占宽换成 [LETTER_PROP_FRACTION]。
- * 两处必须保持同一个**形状**（右侧一列、贴卡片下沿），否则往下挪一档就与别的道具错开。
- */
-private fun DrawScope.letterPropBox(): Rect {
-    val width = size.width * LETTER_PROP_FRACTION
-    val left = size.width * (0.975f - LETTER_PROP_FRACTION)
-    val bottom = size.height * 0.94f
-    val top = maxOf(size.height * 0.34f, bottom - width * 1.55f)
-    return Rect(left, top, left + width, bottom)
+    val box = propBox()
+    drawLetterWriting(art, phase, alpha, eraElapsedMs, min(box.width, box.height))
 }
 
 /**
  * 写字：墨沿离线烤好的中线的笔序铺开，笔尖沿**同一条**中线跟着走。
  *
- * 早先那一版是手画的三条贝塞尔曲线（三行假笔迹），被否掉了 —— 「信纸上写着那句话」
+ * 早先那一版是手画的三条贝塞尔曲线（三行假笔迹），被否掉了 —— 「写下来那句话」
  * 这件事，只有真的把那句话写出来才算数。
  *
- * 相位映射：前 [LETTER_WRITE_SPAN] 写字，余下的相位让墨淡掉再从头写（硬切回空纸会闪一下）。
- * 定格那一档（[eraElapsedMs] 为负）直接给**写完**的时刻 —— 一张永远空着的纸在定格档里
- * 等于这一张什么都没有。
+ * 时间轴是**一次性**的，不跟母题相位走：相位每 3.6 秒归零一次，跟着它走就会写完又擦掉
+ * 再从头写。这里改用卡片自己的单调时钟（[eraElapsedMs]），写完就停在写完的样子 ——
+ * 墨留在卡片上不再淡出。抬笔之后再 [QUILL_RETIRE_MS] 把笔淡走。
+ *
+ * 落位是**卡片右下角**：墨的右缘贴 [LETTER_TEXT_RIGHT_MARGIN]，第二行基线落在
+ * [LETTER_SECOND_BASELINE_FRACTION]。两行各自居中 —— 第二行相对第一行的居中量（0.788em）
+ * 是生成字库时烤进笔位里的，这里只按第一行起算（见 `SwiftieLetterPath`）。
  */
 private fun DrawScope.drawLetterWriting(
     art: SwiftieLetterArt?,
     phase: Float,
     alpha: Float,
     eraElapsedMs: Long,
-    u: Float,
-    paperL: Float,
-    paperT: Float,
-    paperW: Float,
-    paperH: Float
+    u: Float
 ) {
     if (art == null) return
     val frozen = eraElapsedMs < 0L
     val inkMs = if (frozen) {
         art.writeEndMs
     } else {
-        (phase / LETTER_WRITE_SPAN * LETTER_WRITE_MS).toLong()
+        (eraElapsedMs.toFloat() / LETTER_WRITE_WALL_MS * LETTER_WRITE_MS).toLong()
+            .coerceIn(0L, LETTER_WRITE_MS)
     }
-    val fade = if (frozen || phase <= LETTER_WRITE_SPAN) {
-        1f
-    } else {
-        ((1f - phase) / (1f - LETTER_WRITE_SPAN)).coerceIn(0f, 1f)
-    }
-    if (fade <= 0.01f) return
-    // 字号：最长那一行排进纸的 [LETTER_TEXT_SPAN]。两行的行内笔位已经在生成时按
-    // 「每行各自居中」摆好（`SwiftieLetterPath`），所以这里只按第一行的左边起算
+    // 字号：那句话排进 [LETTER_TEXT_WIDTH_FRACTION]（用最长那一行的 em 数反推）
     val lineWidth = SwiftieLetterPath.LINE_WIDTH_EM[0].coerceAtLeast(0.1f)
-    val fontSize = paperW * LETTER_TEXT_SPAN / lineWidth
+    val fontSize = size.width * LETTER_TEXT_WIDTH_FRACTION / lineWidth
     val nib = drawLetterInk(
         art = art,
         elapsedMs = inkMs,
-        left = paperL + (paperW - lineWidth * fontSize) / 2f,
-        firstBaseline = paperT + paperH * 0.52f,
+        left = size.width * LETTER_TEXT_RIGHT_MARGIN - lineWidth * fontSize,
+        firstBaseline = size.height * LETTER_SECOND_BASELINE_FRACTION -
+            SwiftieLetterPath.LINE_PITCH_EM * fontSize,
         fontSizePx = fontSize,
-        color = LETTER_INK,
-        alpha = (alpha * LETTER_INK_WEIGHT * fade).coerceAtMost(1f)
+        color = LETTER_WRITING_INK,
+        alpha = (alpha * LETTER_INK_WEIGHT).coerceAtMost(1f)
     )
-    drawQuill(phase, alpha, u, nib)
+    // 笔只在写字这段在场上。写完抬笔，笔淡走 —— 墨留在卡片上，笔不杵在句尾
+    if (frozen) return
+    val retire = ((eraElapsedMs - LETTER_WRITE_WALL_MS).toFloat() / QUILL_RETIRE_MS)
+        .coerceIn(0f, 1f)
+    if (retire >= 1f) return
+    drawQuill(phase, alpha * (1f - retire), u, nib)
 }
 
 /**
- * 羽毛笔：中央羽轴 + 两侧斜向羽枝 + 笔尖，斜插姿态。
+ * 羽毛笔：把 [SwiftieLetterQuill] 那支现成的矢量笔摆到 [nib] 上，并给它填上羽面。
  *
- * 笔尖钉在 [nib]（当前写到的位置）上，所以笔是「跟着字走」的。羽枝长度按纺锤形
- * 分布（中段最长）并全部合进一条 Path —— 等长羽枝排出来是一把梳子，
- * 一根一次 drawPath 则是 28 个绘制调用。
+ * 这几笔原来是手描的（一根直杆 + 十四对等长羽枝），被需求方否掉：「去搜参考图重画」。
+ * 现在用的是一条 CC0 的手绘插画矢量 —— 羽面左右不对称、三个羽枝缺口的位置、
+ * 右下那几簇散羽都是原图的手感，手描不出来那个「随手画」的松紧。
+ *
+ * 笔尖钉在 [nib]（当前写到的位置）上，所以笔是「跟着字走」的。
+ *
+ * 摆放 = 源图那条 group 变换**照抄**，外面再套「平移到笔尖 / 镜像 / 旋转 / 缩放」。
+ * Compose 里 `withTransform` 自上而下读，几何上是自内而外生效，所以先把源变换写在下边，
+ * 让路径先回到源图的 display 坐标系，再一级级往外摆。
+ *
+ * 镜像那一步（scale 的 x 取负）不是随手加的：源图是**左手**握笔（笔轴向左倾），
+ * 卡片上要右手握笔，镜像之后 `-SOURCE_AXIS_DEG` 就是新的右倾角，
+ * 所以旋转角写成 `目标倾角 + SOURCE_AXIS_DEG` 正好落在 [TARGET_LEAN_DEG]。
+ *
+ * 层序：**先铺羽面**（[LETTER_PAPER]，不透明），再画线稿，最后把笔杆单独加粗一笔。
+ * 源图是**空心**的线画（羽面在源图里就是留白），只画线条的话这支笔是一层透明网；
+ * 羽面那块多边形离线算好（见 [SwiftieLetterQuill.vane]），线稿压在它上面，
+ * 于是「不透明 + 有填充色」这两件事一起成立。笔杆那一段在源图里只有 0.0067u 宽，
+ * 压在羽面里读不出来，所以额外用 [QUILL_SHAFT_WIDTH] 描一遍。
  */
 private fun DrawScope.drawQuill(phase: Float, alpha: Float, u: Float, nib: Offset) {
-    // 斜插约 59°，笔杆随相位极轻地转，读作握在手里而不是插在纸上
-    val lean = 0.02f * sin(phase * TAU)
-    val ux = 0.52f + lean
-    val uy = -0.855f + lean * 0.3f
-    val shaft = u * 0.44f
-    val tip = Offset(nib.x + ux * shaft, nib.y + uy * shaft)
-    drawLine(LETTER_INK, nib, tip, u * 0.013f, alpha = alpha * 1.7f)
-    val ox = -uy
-    val oy = ux
-    val barbs = Path()
-    repeat(14) { index ->
-        val t = 0.30f + index * 0.05f
-        val px = nib.x + (tip.x - nib.x) * t
-        val py = nib.y + (tip.y - nib.y) * t
-        // 羽面按 **s² 的正弦**分布：最宽处落在羽轴 80% 高处，从那里往笔尖一路收细，
-        // 靠笔尖那一段几乎是光杆 —— 真羽毛笔就是把羽根那截羽枝刮掉、再把杆削成笔尖的。
-        // 上一版用 s 的正弦，最宽处在羽轴正中间、靠笔尖那头立刻就宽起来，
-        // 屏幕上读作羽毛装反了
-        val span = ((t - 0.30f) / 0.70f).coerceIn(0f, 1f)
-        val len = u * 0.125f * sin(span * span * PI.toFloat())
-        // 羽枝朝**羽尖**方向撇（+ux），不是朝笔尖：羽枝在羽轴上本来就是往梢部斜出去的，
-        // 撇错方向整支笔看起来是倒插着的
-        barbs.moveTo(px, py)
-        barbs.lineTo(px + (ox * 0.92f + ux * 0.42f) * len, py + (oy * 0.92f + uy * 0.42f) * len)
-        barbs.moveTo(px, py)
-        barbs.lineTo(px + (-ox * 0.92f + ux * 0.42f) * len, py + (-oy * 0.92f + uy * 0.42f) * len)
+    val path = SwiftieLetterQuill
+    // 笔随相位极轻地摆，读作握在手里而不是插在纸上
+    val sway = sin(phase * TAU) * QUILL_SWAY_DEG
+    // 目标长度 -> 源图单位的缩放系数。源图带符号（y 向下），这里只给大小
+    val s = u * QUILL_SPAN / path.SOURCE_LENGTH
+    val ink = (alpha * QUILL_INK_WEIGHT).coerceAtMost(1f)
+    val lineWidth = u * QUILL_LINE_WIDTH
+    withTransform({
+        translate(left = nib.x, top = nib.y)
+        rotate(degrees = TARGET_LEAN_DEG + path.SOURCE_AXIS_DEG + sway, pivot = Offset.Zero)
+        // x 取负 = 镜像成右手握笔；两轴同乘 s = 缩放到 [QUILL_SPAN]
+        scale(scaleX = -s, scaleY = s, pivot = Offset.Zero)
+        translate(left = -path.NIB.x, top = -path.NIB.y)
+        translate(left = 0f, top = path.SVG_SHIFT)
+        scale(scaleX = path.SVG_SCALE, scaleY = -path.SVG_SCALE, pivot = Offset.Zero)
+    }) {
+        drawPath(path.vane, LETTER_PAPER, alpha = (alpha * QUILL_FILL_WEIGHT).coerceAtMost(1f))
+        path.lines.forEach {
+            drawPath(it, LETTER_INK, alpha = ink)
+            drawPath(
+                path = it,
+                color = LETTER_INK,
+                alpha = ink,
+                style = Stroke(width = lineWidth, join = StrokeJoin.Round, cap = StrokeCap.Round)
+            )
+        }
+        drawPath(path.shaft, LETTER_INK, alpha = ink)
+        drawPath(
+            path = path.shaft,
+            color = LETTER_INK,
+            alpha = ink,
+            style = Stroke(
+                width = u * QUILL_SHAFT_WIDTH,
+                join = StrokeJoin.Round,
+                cap = StrokeCap.Round
+            )
+        )
     }
-    drawPath(barbs, LETTER_INK, alpha = alpha * 1.1f, style = Stroke(width = u * 0.005f))
-    // 笔尖：一个小三角 + 中缝。少了这一笔，羽毛就是插在纸上而不是在写
-    val point = Path()
-    point.moveTo(nib.x, nib.y)
-    point.lineTo(nib.x + ux * u * 0.085f + ox * u * 0.020f, nib.y + uy * u * 0.085f + oy * u * 0.020f)
-    point.lineTo(nib.x + ux * u * 0.085f - ox * u * 0.020f, nib.y + uy * u * 0.085f - oy * u * 0.020f)
-    point.close()
-    drawPath(point, LETTER_INK, alpha = alpha * 2.2f)
-    drawLine(
-        Color.White, nib,
-        Offset(nib.x + ux * u * 0.070f, nib.y + uy * u * 0.070f),
-        u * 0.005f, alpha = alpha * 1.6f
-    )
 }
 
-/** 信纸（连纸上的字与笔）歪的角度。 */
-private const val LETTER_TILT = -2f
+/** 笔轴相对竖直向右倾的角度。与 [SwiftieLetterQuill.SOURCE_AXIS_DEG] 一起决定旋转角。 */
+private const val TARGET_LEAN_DEG = 31f
 
 /**
- * 写字占相位的比例；剩下的让墨淡掉再从头写。
+ * 全笔长占 `u` 的比例。
  *
- * 从 −3.5° 收到 −2° 是需求方定的：那句题词要能一眼读出来，而斜着的连笔最难读。
- * 再正就成了一枚贴在卡片上的标签 —— 「随手摊在桌上」这件事全靠这一点歪。
+ * `0.65 = 0.52 ÷ 0.32 × 0.40`：道具列从 0.40 收到 0.32（与其余 11 张一致）之后 `u` 小了
+ * 两成，把系数提上来，屏幕上的**绝对笔长**与验证过的那一版一样。
  */
-private const val LETTER_WRITE_SPAN = 0.88f
+private const val QUILL_SPAN = 0.65f
+
+/** 笔随相位摆动的幅度（度）。旧版是 ±0.02 弧度，同一个量级。 */
+private const val QUILL_SWAY_DEG = 1.2f
+
+/** 线稿与笔杆的权重（相对 [PROP_ALPHA]）。笔是压在卡片上的实物，满不透明度。 */
+private const val QUILL_INK_WEIGHT = 2.9f
+
+/**
+ * 描边宽度（相对 `u`）。**不是**线宽本身：描边是在填充轮廓的外侧再加这么多，
+ * 每侧只加一半。源图笔迹 0.0067u，加 0.007u 之后落到 0.0137u，屏幕上读得清。
+ */
+private const val QUILL_LINE_WIDTH = 0.007f
+
+/** 羽面填色的权重（相对 [PROP_ALPHA]）：填满，不透明。 */
+private const val QUILL_FILL_WEIGHT = 1f / PROP_ALPHA
+
+/**
+ * 笔杆那一笔的宽度（相对 `u`）。
+ *
+ * 源图那一段杆只有 0.0067u 宽，压在羽面里读不出来（需求方要「笔杆明显一些」）。
+ * 加上这一笔之后杆落到 0.019u 上下，差不多是原来的三倍。
+ */
+private const val QUILL_SHAFT_WIDTH = 0.012f
+
+/** 那句话写完实际花掉的墙钟时长。写完墨就留在那儿，笔退场。 */
+private const val LETTER_WRITE_WALL_MS = 3_200L
+
+/** 抬笔之后笔淡走的时长。 */
+private const val QUILL_RETIRE_MS = 420L
 
 /** 12 · Showgirl：更衣室化妆镜台（环绕灯泡轮转）+ 台面上的口红与粉扑。 */
 private fun DrawScope.drawVanityMirror(color: Color, phase: Float, alpha: Float) {
