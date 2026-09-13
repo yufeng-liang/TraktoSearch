@@ -14,9 +14,12 @@ class SwiftieSequenceClockTest {
         assertThat(swiftiePhaseAt(3_100L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
         assertThat(swiftiePhaseAt(99_409L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
         // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放
-        assertThat(swiftiePhaseAt(100_810L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(108_810L)).isEqualTo(SwiftieSequencePhase.BRACELET)
-        assertThat(swiftiePhaseAt(113_310L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(102_010L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        // 手链在签名写到 800ms 时进场，但那不是一段 —— 相位还是 SIGNATURE
+        assertThat(swiftiePhaseAt(102_010L + SwiftieTimeline.BRACELET_ENTRY_MS))
+            .isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(107_409L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(107_410L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
         assertThat(swiftiePhaseAt(117_999L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
         assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.REWIND)
         assertThat(swiftiePhaseAt(119_500L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
@@ -33,7 +36,6 @@ class SwiftieSequenceClockTest {
             SwiftieTimeline.ERAS_INTRO_START,
             SwiftieTimeline.ERAS_CARDS_START,
             SwiftieTimeline.SIGNATURE_START,
-            SwiftieTimeline.BRACELET_START,
             SwiftieTimeline.FINAL_HOLD_START,
             SwiftieTimeline.REWIND_START,
             SwiftieTimeline.LOVER_BLOOM_START,
@@ -41,6 +43,8 @@ class SwiftieSequenceClockTest {
             SwiftieTimeline.TOTAL_MS
         )
         assertThat(starts).isInOrder()
+        // 十个段落对十个起点：手链没有自己的相位，它和签名同场（见 SwiftieSequencePhase 的注释）
+        assertThat(SwiftieSequencePhase.values()).hasLength(starts.size)
         assertThat(starts.map { swiftiePhaseAt(it) })
             .isEqualTo(SwiftieSequencePhase.values().toList())
     }

@@ -33,16 +33,26 @@ import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.sin
 
-/** 十二笔书写合计占用。 */
-const val SIGNATURE_WRITE_MS: Long = 6_800L
+/**
+ * 十二笔书写合计占用。
+ *
+ * 2026-09-13 从 6800 缩短到 4400（快约 1.55 倍）：需求方要把手链的进场叠进签名里、
+ * 把省下的时间留给最终合影。**代价是文案上说好的手速对齐没了** —— 原先刻意让这支笔
+ * 写得和背景那台打字机一样快（它 86ms 打一个字符、这里 93ms 写一个字符，两个家族长的
+ * 名字不会一处像快进、一处像慢放），现在笔是 60ms 一个字符、打字机还是 86ms。
+ * 要恢复对齐就得同时改 `TTPD_PREROLL_MS`（打字机那两行的总时长），那是另一件事。
+ */
+const val SIGNATURE_WRITE_MS: Long = 4_400L
 
 /**
  * 抬笔停顿合计占用，按 [SwiftieSignaturePath.PAUSE_WEIGHT] 分给 11 个间隙。
  *
  * 是**总量**而不是每个间隙的时长：补 `i` 上那一点之前要停久一点、换词之前也要停，
  * 每个间隙不一样长，但合计锁死，签名段的账本才不会被笔数一改就崩。
+ *
+ * 2026-09-13 从 500 压到 300：书写提速之后停顿按原比例就显得拖，收成同一个手感。
  */
-const val SIGNATURE_PAUSE_TOTAL_MS: Long = 500L
+const val SIGNATURE_PAUSE_TOTAL_MS: Long = 300L
 
 /** 写完之后整字通体闪一次。 */
 const val SIGNATURE_FLASH_MS: Long = 700L
@@ -396,8 +406,8 @@ private fun flashAlpha(elapsedMs: Long, writeEndMs: Long): Float {
  * 笔顺、笔速、每一点的笔宽都在 [SwiftieSignaturePath] 里，由离线脚本从字形骨架生成。
  * 这里只负责把那些中线摆到画布上、按时间铺开。
  *
- * @param elapsedInSignature 签名段起点以来的毫秒。给一个 ≥ 8000 的常量就是写完的样子，
- *   「减少动效」的静态终态正是这么用的
+ * @param elapsedInSignature 签名段起点以来的毫秒。喂 [SwiftieTimeline.SIGNATURE_MS]（写完 + 闪过）
+ *   或更大的常量就是写完的样子，「减少动效」的静态终态正是这么用的
  * @param animated 闪粉是否要一直闪。静态终态传 false —— 那是一张停着的画面，
  *   挂一条无限动画会把帧时钟永久唤着，用户忘了退出就一直在耗电。
  *   传 false 之后 `time` 恒定，`drawBehind` 里不再有变化的 state 读，只画一次
