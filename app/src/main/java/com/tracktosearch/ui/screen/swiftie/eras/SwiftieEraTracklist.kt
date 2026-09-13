@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -170,6 +171,14 @@ internal fun SwiftieEraTracklist(
                         .coerceIn(0f, 1f)
                 }
             }
+            // 这一行的两个 Text 各自的排版结果：打字头要**逐字**落在字上，
+            // 而按键的落点只有排版结果知道（见 [typingRow]）。
+            // 用普通数组而不是 mutableStateOf —— 它在**绘制**阶段被读，不需要触发重组；
+            // 每次排版都会刷新，draw 一定晚于 layout，读到的就是这一帧的
+            val numberLayout = remember { arrayOfNulls<TextLayoutResult>(1) }
+            val titleLayout = remember { arrayOfNulls<TextLayoutResult>(1) }
+            // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
+            val numberText = String.format(Locale.US, "%02d", index + 1)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -188,6 +197,11 @@ internal fun SwiftieEraTracklist(
                                         ((elapsedInCard() - appearAt).toFloat() / stagger)
                                             .coerceIn(0f, 1f)
                                     },
+                                    numberWidth = numberWidth,
+                                    numberChars = numberText.length,
+                                    numberLayout = { numberLayout[0] },
+                                    titleLayout = { titleLayout[0] },
+                                    title = title,
                                     rowHeight = rowHeight,
                                     cursor = textColors.number,
                                     elapsedInCard = elapsedInCard
@@ -218,20 +232,21 @@ internal fun SwiftieEraTracklist(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
-                    text = String.format(Locale.US, "%02d", index + 1),
+                    text = numberText,
                     style = numberStyle,
                     // 列宽是定死的 rowHeight×1.375，不禁止折行的话
                     // 「01」会在放大档位折成两行、被行高裁掉下半截
                     maxLines = 1,
                     softWrap = false,
+                    onTextLayout = { numberLayout[0] = it },
                     modifier = Modifier.width(numberWidth)
                 )
                 Text(
                     text = title,
                     style = titleStyle,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { titleLayout[0] = it }
                 )
             }
         }
@@ -281,14 +296,38 @@ private const val TYPING_HEAD_BLINK_MS = 420L
  * 正在被打 —— 真机也只有一根字锤。揭示就是裁一刀，字形被拦腰截断的那半个字由游标
  * 压着，看不见切口。
  *
+ * ## 落点按**字**取，不按行宽均分
+ *
+ * 行是 `fillMaxWidth`，曲名却大多只占半行。按「行宽 × 进度」推游标，短曲名（`loml`）
+ * 打完之后游标还在一路往右滑，滑过的是一块空白 —— 屏幕上读作游标跑丢了。
+ * 所以落点从两个 Text **自己的排版结果**里逐字取（`getHorizontalPosition`）：
+ * 序号那两位取序号的，曲名取曲名的，游标永远停在**下一个字的字格**上。
+ *
+ * 进度也按字取整（`(p * 总字数).toInt()`）：真机一格一格走，被揭示的字因此总是完整的
+ * 一个 —— 切口落在字格边界上，不需要靠游标去盖半个字形。
+ *
+ * 长曲名被 Ellipsis 截断时，只数到**省略号之前**那些字（`getLineEnd(visibleEnd = true)`），
+ * 游标走到省略号就停住，不会继续往行尾滑。
+ *
  * clip 而不是 `graphicsLayer`：`graphicsLayer` 只能整体设 alpha 或做仿射变换，
  * 而揭示边要停在行里任意位置，只能在绘制时裁。
  *
  * @param progress 0f..1f 的打字进度。**在绘制阶段读**（读的是时钟），不引起重组
+ * @param numberWidth 序号列的宽度（定宽格子，见 `numberWidth` 那个局部量）
+ * @param numberChars 序号有几位
+ * @param numberLayout 序号自己的排版结果。序号列是定宽格子而数字只占左边一小截，
+ *   按列宽均分着走会让游标在数字打完之后空滑一段才进曲名
+ * @param titleLayout 曲名的排版结果，给出每个字的落点。首帧可能还没有（见调用处的数组）
+ * @param title 曲目名，排版结果还没到时按它算个大概
  * @param cursor 游标色。取序号那一档 —— 比正文浅，压在前沿上不抢字
  */
 private fun Modifier.typingRow(
     progress: () -> Float,
+    numberWidth: Dp,
+    numberChars: Int,
+    numberLayout: () -> TextLayoutResult?,
+    titleLayout: () -> TextLayoutResult?,
+    title: String,
     rowHeight: Dp,
     cursor: Color,
     elapsedInCard: () -> Long
@@ -301,14 +340,34 @@ private fun Modifier.typingRow(
         content.drawContent()
         return@drawWithContent
     }
-    clipRect(right = size.width * p) { content.drawContent() }
+    val numberPx = numberWidth.toPx()
+    val num = numberLayout()
+    val titleResult = titleLayout()
+    // 省略号之前真正排出来的字数。没截断时就是曲目名的全长
+    val titleChars = titleResult?.getLineEnd(0, visibleEnd = true) ?: title.length
+    val total = (numberChars + titleChars).coerceAtLeast(1)
+    val typed = (p * total).toInt().coerceIn(0, total)
+    // 已经落上去 k 个字，裁剪边就停在**第 k 个字的左沿**上（= 游标要落的那一格）。
+    // usePrimaryDirection = false：这一列全是拉丁字母与数字，字格边界不需要按双向文本
+    // 的书写方向去分辨（那一位在这个 Compose 版本上没有默认值，必须显式给）
+    val head = when {
+        typed < numberChars -> num?.getHorizontalPosition(typed, usePrimaryDirection = false)
+            ?: (numberPx * typed / numberChars)
+        else -> numberPx + (
+            titleResult?.getHorizontalPosition(
+                (typed - numberChars).coerceIn(0, titleChars),
+                usePrimaryDirection = false
+            ) ?: ((size.width - numberPx) * ((typed - numberChars).toFloat() / titleChars))
+            )
+    }
+    clipRect(right = head) { content.drawContent() }
     // 游标：只占行高的一半多一点。齐行高的竖条读起来是「文本插入符」而不是字锤，
     // 而这台机器上落下来的是一小块方形印字头
     if ((elapsedInCard() / TYPING_HEAD_BLINK_MS) % 2L != 0L) return@drawWithContent
     val headW = (rowHeight.toPx() * 0.17f).coerceAtLeast(1f)
     drawRect(
         color = cursor,
-        topLeft = Offset(size.width * p - headW * 0.5f, size.height * 0.22f),
+        topLeft = Offset(head - headW * 0.5f, size.height * 0.22f),
         size = Size(headW, size.height * 0.56f)
     )
 }
