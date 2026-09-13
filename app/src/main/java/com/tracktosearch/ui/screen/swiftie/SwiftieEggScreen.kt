@@ -853,8 +853,8 @@ private fun SwiftieEggContent(
 
         // 页面背景三层，压在水彩天空之上、所有内容之下。
         //
-        // **必须挂在这一层而不是 SwiftieErasStage 里** —— 终局那 18.6s（签名 / 手链 / 定格）
-        // Eras 舞台整层卸载，背景却要一直在；放进去就会在 T100810 那一帧整屏闪回水彩天空。
+        // **必须挂在这一层而不是 SwiftieErasStage 里** —— 终局那 15.99s（签名 + 手链 / 定格）
+        // Eras 舞台整层卸载，背景却要一直在；放进去就会在卡片段收尾那一帧整屏闪回水彩天空。
         if (backdropMounted && !staticFinale) {
             SwiftieEraBackdropLayer(
                 outgoing = backdropOutgoing,

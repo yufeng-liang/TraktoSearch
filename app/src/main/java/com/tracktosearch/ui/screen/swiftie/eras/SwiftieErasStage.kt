@@ -45,6 +45,14 @@ private const val AUTO_RESUME_MS: Long = 3_000L
  */
 private const val GLOBE_FORM_MS: Float = 900f
 
+/**
+ * TTPD 段首尾，轴淡出 / 淡入各占的时长。
+ *
+ * 300ms 与卡片自己的长出（`CARD_GROW_MS` 400ms）同一量级：段末轴回来的时候，
+ * 下一张卡片正从轴上长出来，两者差得太远会读成「轴回来晚了」。
+ */
+private const val AXIS_HANDOVER_MS: Float = 300f
+
 /** 当前该显示第几张卡片。倒滑与绽放期间钉在 Lover。 */
 private fun activeEraIndexAt(elapsedMs: Long): Int =
     SwiftieTimeline.eraIndexAt(elapsedMs) ?: if (elapsedMs < SwiftieTimeline.ERAS_CARDS_START) {
@@ -150,9 +158,36 @@ fun SwiftieErasStage(
     }
 
     // 卡片段之外不收触摸：重挂载之后（倒滑 / 绽放 / 淡出）碰一下就会把时钟
-    // 倒拨回卡片段，而那三段正是配乐钉死的收尾
+    // 倒拨回卡片段，而那三段正是配乐钉死的收尾。
+    // TTPD 那一段也不收 —— 轴那时已经淡到看不见（见 [axisPresence]），
+    // 留一块看不见却按得动的热区，点一下就把时钟拨到 TTPD 再定格，太像见鬼
     val axisInteractive by remember {
-        derivedStateOf { clock.elapsedMs < SwiftieTimeline.ERAS_CARDS_END }
+        derivedStateOf {
+            clock.elapsedMs < SwiftieTimeline.ERAS_CARDS_END &&
+                activeEraIndexAt(clock.elapsedMs) != SwiftieTimeline.TTPD_INDEX
+        }
+    }
+
+    /**
+     * 轴的在场度：1f 全显，0f 完全让位。**TTPD 那一段让位**。
+     *
+     * 打字机是从卡片下缘往下铺的：机身前脸 + 键盘一直落到屏幕底，而轴正好压在键盘上。
+     * 12 段色带、播放头、TS1-12 标签、两端的年份全叠在键帽上，读不出是刻度也读不出
+     * 机型，只剩一片杂乱 —— 而这台机器是这个时代唯一的画面主体，让路的是轴。
+     *
+     * 只改 alpha、**不动布局**：把轴的高度让给插槽会让卡片与机器整块下移，
+     * 段末轴回来时再跳回去（轴是其余 11 张卡片「从轴上长出」的锚点，段末必须回到原位），
+     * 两次跳位比让位本身难看得多。
+     *
+     * 两端各用 [AXIS_HANDOVER_MS] 淡出淡入，硬切会在段界上闪一下。
+     */
+    val axisPresence: () -> Float = {
+        val elapsed = clock.elapsedMs
+        val eraStart = SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX)
+        val eraEnd = SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX + 1)
+        val gone = ((elapsed - eraStart).toFloat() / AXIS_HANDOVER_MS).coerceIn(0f, 1f)
+        val back = ((eraEnd - elapsed).toFloat() / AXIS_HANDOVER_MS).coerceIn(0f, 1f)
+        1f - minOf(gone, back)
     }
 
     /**
@@ -281,8 +316,8 @@ fun SwiftieErasStage(
                     seekTick++
                     onFrozenChange(true)
                 },
-                // 球成型时轴让位
-                modifier = Modifier.graphicsLayer { alpha = 1f - globeForm() }
+                // 球成型时轴让位；TTPD 那一段轴整块让位给打字机（见 axisPresence）
+                modifier = Modifier.graphicsLayer { alpha = (1f - globeForm()) * axisPresence() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))

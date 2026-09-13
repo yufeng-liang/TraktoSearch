@@ -18,14 +18,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
@@ -66,6 +71,16 @@ internal val TTPD_MACHINE_RESERVE = 104.dp
 private val FEED_ROLLER_SHADOW = 14.dp
 
 /**
+ * 出纸那张卡片的揭示裁切往右多留的比例（相对卡宽）。
+ *
+ * 右下角那支羽毛笔**长出卡片右缘**：笔尖行到行尾时墨右缘在 0.94 卡宽，羽尖还要再往外
+ * ≈142px（真机上量的），合计伸出卡外约 65px（真机 1440 宽、卡宽 1292、卡缘到屏边 73px）。
+ * 裁切卡在 `size.width` 就把伸出去的那截羽面切平了，所以右边界放到卡外。
+ * 竖向不动，仍是「纸的前沿」，笔不会比纸先露。
+ */
+private const val FEED_CLIP_OVERHANG_FRACTION = 0.10f
+
+/**
  * 滚筒暗影与前沿的墨色。
  *
  * 不用纯黑：TTPD 三档底色是米白，纯黑压在米白纸上是一道脏边。这个暖灰是
@@ -89,7 +104,9 @@ const val CARD_GAP_MS: Long = 100L
 private const val MOTIF_CYCLE_MS: Long = 3_600L
 
 /** 卡片圆角。 */
-private val CARD_SHAPE = RoundedCornerShape(20.dp)
+private val CARD_CORNER = 20.dp
+
+private val CARD_SHAPE = RoundedCornerShape(CARD_CORNER)
 
 /** 曲目行的理想行高。18 行只有 288dp，绝大多数屏幕都用这个值。 */
 private val TRACK_ROW_HEIGHT_MAX = 16.dp
@@ -183,6 +200,15 @@ fun SwiftieEraCard(
     // 画布上排字用的测量器：只有 Red 的纸套要印一行 MAPLE LATTE。与照片同理，
     // 文字只能在组合阶段量；其余 11 张卡拿到这个对象也不会去量
     val textMeasurer = rememberTextMeasurer()
+    // TTPD 那张卡片要写出 `All’s fair in love / and poetry.`：字形轮廓与中线表同样只能
+    // 在组合阶段建（draw 阶段拿不到 resources，也不该每帧再排一次字）。
+    // 别的时代这里是 null，一点不额外算
+    val letterContext = LocalContext.current
+    val letterArt = if (era.motif == SwiftieEraMotif.LETTER_QUILL) {
+        remember(letterContext) { buildSwiftieLetterArt(letterContext) }
+    } else {
+        null
+    }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -191,6 +217,11 @@ fun SwiftieEraCard(
     )
     // 回落起点由总时长倒推：durationMs - 400 - 100
     val recedeStartMs = durationMs - CARD_RECEDE_MS - CARD_GAP_MS
+
+    // 正文那一层的裁切：出纸那张（TTPD）在节点上不裁形状（好让羽毛笔长出卡片右缘，
+    // 见下面 `.then(...)` 那一段），圆角就由这里补上 —— 正文自己不会伸到圆角外，
+    // 这一刀只是把「文字/高亮贴到圆角上」那点毛边留住。其余 11 张节点已裁，这里是本体
+    val cardContentClip = if (feedProgress == null) Modifier else Modifier.clip(CARD_SHAPE)
 
     // 出纸那一层。11 张卡片这里是 Modifier 本体，一笔都不多画
     val feedModifier = if (feedProgress == null) {
@@ -212,7 +243,10 @@ fun SwiftieEraCard(
             if (p <= 0f) return@drawWithContent
             // 纸从底下那台机器里**往上**出来：下缘钉死在出口上，前沿（纸的上边）上移
             val frontier = size.height * (1f - p)
-            clipRect(top = frontier) {
+            // 右边界放到卡片外：这一张的羽毛笔要**长出卡片右缘**（见 `drawLetterQuill`），
+            // 裁在 `size.width` 就把伸出去的那截羽面切平了。竖向仍是纸的前沿 ——
+            // 截出来是一条横带，笔在纸没到它那一行之前照样不露
+            clipRect(top = frontier, right = size.width * (1f + FEED_CLIP_OVERHANG_FRACTION)) {
                 this@drawWithContent.drawContent()
                 if (p >= 1f) return@clipRect
                 // 滚筒暗影钉在纸的下缘（出口不动），不跟着前沿走。
@@ -284,12 +318,47 @@ fun SwiftieEraCard(
             // clip 必须夹在 graphicsLayer 与 shadow 之间：放到 shadow 之后，
             // 那圈 10dp 的投影会整张浮在纸还没出来的地方
             .then(feedModifier)
-            .shadow(elevation = 10.dp, shape = CARD_SHAPE, clip = false)
-            .clip(CARD_SHAPE)
-            // 半透明白纸压在水彩天空上；主色只染一层薄底
-            .background(Color.White.copy(alpha = 0.86f))
+            // **出纸那一张不投影**。10dp 的环境投影绕着圆角有一圈，被不透明的纸盖住之后
+            // 只剩四个圆角外面露着 —— 四块三角暗边，读作脏（半透明白纸时它把整张纸一起
+            // 染灰，谁也没比谁干净，所以看不出来）。这一张也不需要它：纸的下缘压在滚筒上，
+            // 接触暗影由 [feedModifier] 画，其余三边是真纸压在真机器上，没有离地
+            .then(
+                if (feedProgress == null) {
+                    Modifier.shadow(elevation = 10.dp, shape = CARD_SHAPE, clip = false)
+                } else {
+                    Modifier
+                }
+            )
+            // **出纸那一张（TTPD）不裁卡片形状**：它右下角那支羽毛笔要长出卡片右缘
+            // （笔尖行到行尾时羽面越过卡缘，见 `drawLetterQuill`），裁一刀就把羽面切平了。
+            // 圆角白底改由 `background(shape)` 自己画，正文那一层另外裁（[cardContentClip]）。
+            // 其余 11 张照旧 clip + 矩形白底，一笔都不变
+            .then(
+                if (feedProgress == null) {
+                    Modifier
+                        .clip(CARD_SHAPE)
+                        // 半透明白纸压在水彩天空上；主色只染一层薄底。
+                        // （出纸那一张的白底在另一支里，不透明，理由见下）
+                        .background(Color.White.copy(alpha = 0.86f))
+                } else {
+                    // **出纸那一张（TTPD）是不透明的**：它正下方就是那台打字机与滚筒上打好的两行字，
+                    // 0.86 的白会把机身的滚轮、压纸杆和那两行字一起透上来，读作「印花了」——
+                    // 其余 11 张底下只有天空，透一点反而好看，这一张不行
+                    Modifier.background(Color.White, CARD_SHAPE)
+                }
+            )
             .drawBehind {
-                drawRect(color = era.mainColor, alpha = 0.10f)
+                // 出纸那张节点不裁形状（见上），这一层薄底得自己收在圆角里 ——
+                // 方角色块会从圆角外侧露到天空上，读作卡片角上糊了一块
+                if (feedProgress == null) {
+                    drawRect(color = era.mainColor, alpha = 0.10f)
+                } else {
+                    drawRoundRect(
+                        color = era.mainColor,
+                        alpha = 0.10f,
+                        cornerRadius = CornerRadius(CARD_CORNER.toPx())
+                    )
+                }
                 // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
                 // 只要读了 elapsedInCard()，这个 drawBehind 就会每帧失效，
                 // 母题里那一堆 Path / Brush 也就每帧重建一次。让位系数同理定在 1f，
@@ -307,7 +376,8 @@ fun SwiftieEraCard(
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
                         textMeasurer = textMeasurer,
-                        propMapleInk = propMapleInk
+                        propMapleInk = propMapleInk,
+                        letterArt = letterArt
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -322,7 +392,8 @@ fun SwiftieEraCard(
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
                         textMeasurer = textMeasurer,
-                        propMapleInk = propMapleInk
+                        propMapleInk = propMapleInk,
+                        letterArt = letterArt
                     )
                 }
             }
@@ -331,7 +402,7 @@ fun SwiftieEraCard(
             // 仍是各自可停靠的叶子，contentDescription 里的曲目数反而无处可去
             .semantics(mergeDescendants = true) { contentDescription = description }
     ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+        Column(modifier = cardContentClip.padding(horizontal = 18.dp, vertical = 16.dp)) {
             // 1989 的标题不走字体：封面上那四个数字是马克笔直接写的，
             // 辨识特征是干笔的空隙，而字体的笔画是实心的（见 SwiftieMarker1989）
             if (era.name == "1989") {
@@ -341,26 +412,63 @@ fun SwiftieEraCard(
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                Text(
-                    text = era.name,
-                    style = TextStyle(
-                        fontFamily = titleFont,
-                        // toSp() 除掉 fontScale：CARD_CHROME_HEIGHT 是 dp 预算，
-                        // 标题跟着系统字号长就会把曲目列挤出卡片
-                        fontSize = with(density) { titleFontSizeFor(era.name).toSp() },
-                        color = textColors.body
-                    ),
-                    // 允许折两行：13 个字体的字宽差得很远，按字数估的字号可能还是偏大，
-                    // 折行总比裁掉专辑名好；真的还放不下就省略号，别硬切字形
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
+                // 字号用 toSp() 除掉 fontScale：CARD_CHROME_HEIGHT 是 dp 预算，
+                // 标题跟着系统字号长就会把曲目列挤出卡片
+                val titleSize = titleFontSizeFor(era.name)
+                val titleStyle = TextStyle(
+                    fontFamily = titleFont,
+                    fontSize = with(density) { titleSize.toSp() },
+                    color = textColors.body
                 )
+                if (era.titleStrokeEm > 0f) {
+                    // 合成加粗：同一段文字画两遍，底下那一层只描边、上面那一层实心。
+                    // 描边加在**细笔画上的比例比粗笔画大**，所以出来是「更实」而不是整体放大
+                    // —— 这是没有粗体字重时唯一不动字形轮廓的加法（12 套字库多数只有 Regular）。
+                    // 两层同字号、同换行规则、同宽约束，量出来的行盒一致，Box 只是把它们叠起来
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = era.name,
+                            style = titleStyle.copy(
+                                drawStyle = Stroke(
+                                    width = with(density) { (titleSize * era.titleStrokeEm).toPx() },
+                                    join = StrokeJoin.Round,
+                                    cap = StrokeCap.Round
+                                )
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = era.name,
+                            style = titleStyle,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Text(
+                        text = era.name,
+                        style = titleStyle,
+                        // 允许折两行：13 个字体的字宽差得很远，按字数估的字号可能还是偏大，
+                        // 折行总比裁掉专辑名好；真的还放不下就省略号，别硬切字形
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(2.dp))
+            // 日期的字面逐张定：TTPD 那一张跟着曲目列用打字机字体（见 `dateFontResId`），
+            // 其余 11 张是系统默认。null 时不传 fontFamily，与改动前逐像素一致
+            val dateFamily = era.dateFontResId?.let { res ->
+                remember(res) { FontFamily(Font(res)) }
+            }
             Text(
                 text = era.releaseDate,
                 style = TextStyle(
+                    fontFamily = dateFamily,
                     fontSize = with(density) { 11.dp.toSp() },
                     color = textColors.date.copy(alpha = SwiftieEraContrast.DATE_ALPHA)
                 )

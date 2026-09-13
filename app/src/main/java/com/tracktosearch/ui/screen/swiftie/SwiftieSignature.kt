@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Canvas
@@ -32,16 +33,26 @@ import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.sin
 
-/** 十二笔书写合计占用。 */
-const val SIGNATURE_WRITE_MS: Long = 6_800L
+/**
+ * 十二笔书写合计占用。
+ *
+ * 2026-09-13 从 6800 缩短到 4400（快约 1.55 倍）：需求方要把手链的进场叠进签名里、
+ * 把省下的时间留给最终合影。**代价是文案上说好的手速对齐没了** —— 原先刻意让这支笔
+ * 写得和背景那台打字机一样快（它 86ms 打一个字符、这里 93ms 写一个字符，两个家族长的
+ * 名字不会一处像快进、一处像慢放），现在笔是 60ms 一个字符、打字机还是 86ms。
+ * 要恢复对齐就得同时改 `TTPD_PREROLL_MS`（打字机那两行的总时长），那是另一件事。
+ */
+const val SIGNATURE_WRITE_MS: Long = 4_400L
 
 /**
  * 抬笔停顿合计占用，按 [SwiftieSignaturePath.PAUSE_WEIGHT] 分给 11 个间隙。
  *
  * 是**总量**而不是每个间隙的时长：补 `i` 上那一点之前要停久一点、换词之前也要停，
  * 每个间隙不一样长，但合计锁死，签名段的账本才不会被笔数一改就崩。
+ *
+ * 2026-09-13 从 500 压到 300：书写提速之后停顿按原比例就显得拖，收成同一个手感。
  */
-const val SIGNATURE_PAUSE_TOTAL_MS: Long = 500L
+const val SIGNATURE_PAUSE_TOTAL_MS: Long = 300L
 
 /** 写完之后整字通体闪一次。 */
 const val SIGNATURE_FLASH_MS: Long = 700L
@@ -112,16 +123,32 @@ private const val SIGNATURE_STILL_PHASE = 0.35f
 /**
  * 一笔的笔心中线，已经按字号缩放、按笔位平移到画布坐标。
  *
+ * **签名与题词（`SwiftieLetterInk`）共用这一个类**：两者都是「沿中线铺圆头圆接的变宽粗线」，
+ * 差别只在签名铺完要被字形 mask 裁、题词的墨就是字形本身。
+ *
  * @param halfWidth 每个点上的半宽
  * @param t 每个点的累计时间比例，离线烤好（曲率大处慢、回描段快）
  */
-private class SignatureStroke(
+internal class SignatureStroke(
     val x: FloatArray,
     val y: FloatArray,
     val halfWidth: FloatArray,
     val t: FloatArray,
     val window: SignatureWindow
 ) {
+
+    /** 沿线走到 [progress]（0f..1f）时笔尖在哪。题词那边用它把羽毛笔钉在笔迹的前沿上。 */
+    fun pointAt(progress: Float): Offset {
+        var head = 0
+        while (head + 1 < t.size && t[head + 1] <= progress) head++
+        if (head + 1 >= t.size) return Offset(x[head], y[head])
+        val span = t[head + 1] - t[head]
+        val fraction = if (span > 1e-6f) ((progress - t[head]) / span).coerceIn(0f, 1f) else 0f
+        return Offset(
+            x[head] + (x[head + 1] - x[head]) * fraction,
+            y[head] + (y[head + 1] - y[head]) * fraction
+        )
+    }
 
     /**
      * 把「写到 [progress] 为止」的墨迹追加到 [into]。
@@ -158,8 +185,11 @@ private class SignatureStroke(
  * 一段变宽的矩形。
  *
  * 法向量取这一段自己的方向 —— 用相邻两段的平均法向在急转处会退化。拐角由 [disc] 补。
+ *
+ * **internal 是为了信纸（`SwiftieLetterInk`）：那一句 `All’s fair in love / and poetry.`
+ * 的墨用的是同一套铺法**，两处的笔性必须逐像素一致。
  */
-private fun quad(
+internal fun quad(
     into: Path,
     fromX: Float, fromY: Float, fromWidth: Float,
     toX: Float, toY: Float, toWidth: Float
@@ -183,7 +213,7 @@ private fun quad(
  * 用两段正角弧拼，绕向（顺时针）与 [quad] 一致：默认的 NonZero 填充下，反绕向的形状会把
  * 重叠处抵消成空洞，而这条带子处处重叠 —— `addOval` 是逆时针的，不能用。
  */
-private fun disc(into: Path, centerX: Float, centerY: Float, radius: Float) {
+internal fun disc(into: Path, centerX: Float, centerY: Float, radius: Float) {
     if (radius <= 0f) return
     val box = Rect(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
     into.arcTo(box, 0f, 180f, forceMoveTo = true)
@@ -376,8 +406,8 @@ private fun flashAlpha(elapsedMs: Long, writeEndMs: Long): Float {
  * 笔顺、笔速、每一点的笔宽都在 [SwiftieSignaturePath] 里，由离线脚本从字形骨架生成。
  * 这里只负责把那些中线摆到画布上、按时间铺开。
  *
- * @param elapsedInSignature 签名段起点以来的毫秒。给一个 ≥ 8000 的常量就是写完的样子，
- *   「减少动效」的静态终态正是这么用的
+ * @param elapsedInSignature 签名段起点以来的毫秒。喂 [SwiftieTimeline.SIGNATURE_MS]（写完 + 闪过）
+ *   或更大的常量就是写完的样子，「减少动效」的静态终态正是这么用的
  * @param animated 闪粉是否要一直闪。静态终态传 false —— 那是一张停着的画面，
  *   挂一条无限动画会把帧时钟永久唤着，用户忘了退出就一直在耗电。
  *   传 false 之后 `time` 恒定，`drawBehind` 里不再有变化的 state 读，只画一次

@@ -9,9 +9,18 @@ package com.tracktosearch.ui.screen.swiftie
  * ## 为什么终局排在倒滑之前
  *
  * 配乐末尾 1:58–2:02 唱的是 Lover，所以 [REWIND_START] 与 [LOVER_BLOOM_END] 是
- * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 2998ms，而签名 8s +
- * 手链 4.5s + 定格 6.09s 共 18.59s 放不下 —— 于是终局整块排在倒滑之前，
- * 倒滑与绽放成为收尾：12 个时代 → 签名 → 手链 → 定格 → 飞回 Lover → 绽放 → 淡出。
+ * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 2998ms，而签名 5.4s +
+ * 手链（与签名同场）+ 定格 10.59s 放不下 —— 于是终局整块排在倒滑之前，
+ * 倒滑与绽放成为收尾：12 个时代 → 终局（签名 + 手链 + 合影）→ 飞回 Lover → 绽放 → 淡出。
+ *
+ * ## 终局为什么只有一段
+ *
+ * 签名与手链**同场**：手链在签名写到一半时就从两侧进场（见 [BRACELET_ENTRY_MS]），
+ * 三条滚到位时签名还没收笔。于是账本上不需要「手链段」这个边界，
+ * `SwiftieSequencePhase` 里也就没有 BRACELET 这个相位 —— 整条序列 10 段而不是 11 段。
+ *
+ * 2026-09-13 之前是「签名 8000ms 独占 → 手链 4500ms 独占（含 1700ms 左右摆动）」，
+ * 需求方定案改成：手链不摆、提前进场、签名写快点，省下的 7100ms 全部给定格。
  */
 object SwiftieTimeline {
 
@@ -53,15 +62,17 @@ object SwiftieTimeline {
     /**
      * TTPD 段开头留给打字机独奏的前摇。
      *
-     * 这 1400ms 里屏幕上**没有卡片**：背景那台打字机自己敲字、滑架逐格右移，
-     * 1250ms 一次回车横扫，然后纸才从滚筒出来 —— 卡片就是那张纸（见 `SwiftieEraCard`
-     * 的 `feedProgress`）。没有这一拍，纸是「凭空长出来的」，打字机白画。
+     * 这 2600ms 里屏幕上**没有卡片**：背景那台打字机自己敲两行词（`I love you,` /
+     * `it's ruining my life`，见 `SwiftieEraBackdrop` 的 `rememberTypewriterStubLines`），
+     * 然后纸才从滚筒出来 —— 卡片就是那张纸（见 `SwiftieEraCard` 的 `feedProgress`）。
+     * 没有这一拍，纸是「凭空长出来的」，打字机白画。
      *
-     * 加在账本上而不是从 TTPD 自己的 5000ms 静置里挪：静置那段是 31 行读完之后
-     * 留给眼睛的，挪走就变成「行刚点完就收卡」。代价是唯一的弹性段
-     * [FINAL_HOLD_MS] 从 6090ms 缩到 4690ms（需求方已确认）。
+     * 从 1400ms 拉到 2600ms 正好是**两整行**：一行打完要有时间读出来，「打一行就出纸」
+     * 读不出打字机的样子。加在账本上而不是从 TTPD 自己的 5000ms 静置里挪：静置那段是
+     * 31 行读完之后留给眼睛的，挪走就变成「行刚点完就收卡」。代价落在唯一的弹性段
+     * [FINAL_HOLD_MS] 上（需求方已确认）。
      */
-    const val TTPD_PREROLL_MS: Long = 1_400L
+    const val TTPD_PREROLL_MS: Long = 2_600L
 
     /**
      * 12 张专辑曲目数，顺序与 Eras 一致。
@@ -76,7 +87,7 @@ object SwiftieTimeline {
             (if (index in ANCHOR_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
 
-    /** 12 张卡片合计 97710ms。 */
+    /** 12 张卡片合计 98910ms。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS
         .withIndex()
         .sumOf { (index, count) -> cardDurationMs(index, count) }
@@ -98,29 +109,50 @@ object SwiftieTimeline {
     const val ERAS_CARDS_START: Long = ERAS_INTRO_START + ERAS_INTRO_MS
 
     /**
-     * T100810：第 12 张卡片走完。
+     * T102010：第 12 张卡片走完。
      *
      * 与 [REWIND_START] **不再是同一个值** —— 终局插在两者之间，
      * 所以判「是否还在卡片段内」只能用这个常量。
      */
     val ERAS_CARDS_END: Long = ERAS_CARDS_START + ERAS_CARDS_MS
 
-    /** T100810–108810：签名逐段揭示。 */
-    val SIGNATURE_START: Long = ERAS_CARDS_END
-    const val SIGNATURE_MS: Long = 8_000L
+    /**
+     * 终局一整段：签名（写字 4400 + 抬笔停顿 300 + 收笔闪光 700）与手链同场。
+     *
+     * T102010–107410。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
+     * `SIGNATURE_PAUSE_TOTAL_MS` / `SIGNATURE_FLASH_MS`，**相加必须正好等于本值**
+     * （`SwiftieTimelineTest` 守着）。
+     *
+     * 原先是 8000ms（写字 6800）。2026-09-13 需求方定案：写字加速到 4400ms
+     * （快约 1.55 倍），并把抬笔停顿从 500 压到 300 —— 签名不再是「一段要等完的表演」，
+     * 而是手链进场的背景。
+     */
+    const val SIGNATURE_MS: Long = 5_400L
 
-    /** T108810–113310：手链弹性落下。 */
-    val BRACELET_START: Long = SIGNATURE_START + SIGNATURE_MS
-    const val BRACELET_MS: Long = 4_500L
+    /** 签名段起点。 */
+    val SIGNATURE_START: Long = ERAS_CARDS_END
 
     /**
-     * T113310–118000：定格合影，留出截图时间。
+     * 手链进场相对 [SIGNATURE_START] 的偏移。
+     *
+     * 800ms 落在签名写到 18% 的地方：先看到笔在写，手链再从两侧滚进来，三条都停住时
+     * 签名还剩两成没写完（见 `SwiftieBracelet` 的 `BRACELET_SETTLED_MS`）。
+     * 这个值是「手链什么时候开始」的唯一来源 —— `SwiftieFinaleStage` 与
+     * `SwiftieStaticFinale` 都从它算，不许各写一份。
+     */
+    val BRACELET_ENTRY_MS: Long = 800L
+
+    /**
+     * T107410–118000：定格合影，留出截图时间。
      *
      * 这一段是账本里唯一的**弹性段**：前面各段都由内容决定长度，
-     * 后面各段由配乐钉死，误差全落在这里。改曲目数只会让定格变长变短，
+     * 后面各段由配乐钉死，误差全落在这里。改曲目数、改手链进场时刻都只会让定格变长变短，
      * 不会把 Lover 绽放错开配乐。`SwiftieTimelineTest` 守着它不许变负。
+     *
+     * 2026-09-13 从 3490ms 涨到 10590ms —— 终局整块从 12500ms 缩到 5400ms，
+     * 省下的 7100ms 全部落在这里（需求方定案：给合影，不给卡片）。
      */
-    val FINAL_HOLD_START: Long = BRACELET_START + BRACELET_MS
+    val FINAL_HOLD_START: Long = SIGNATURE_START + SIGNATURE_MS
     val FINAL_HOLD_MS: Long = REWIND_START - FINAL_HOLD_START
 
     /** T118000–119500：播放头倒滑回第 7 段。 */
@@ -137,8 +169,13 @@ object SwiftieTimeline {
     /** 主题三写入的那一帧：扩散刚好铺满全屏。早一帧会露出颜色跳变。 */
     val THEME_COMMIT_AT: Long = ERAS_INTRO_START
 
-    /** mesh 运动预热：签名快写完时才开始（写完前 1460ms），前面 105s 一帧不出。 */
-    val MOTION_PREHEAT_AT: Long = SIGNATURE_START + 6_540L
+    /**
+     * mesh 运动预热：签名快写完时才开始，前面一路一帧不出。
+     *
+     * `SIGNATURE_WRITE_MS − 260`：那 260ms 是给「签名收笔之后到预热真的开始跑」
+     * 留的余量，写字加速之后跟着一起往前挪（2026-09-13 之前是 6800 − 260 = 6540）。
+     */
+    val MOTION_PREHEAT_AT: Long = SIGNATURE_START + 4_140L
 
     /** 第 [index] 张卡片的起始时刻。 */
     fun eraStartMs(index: Int): Long {

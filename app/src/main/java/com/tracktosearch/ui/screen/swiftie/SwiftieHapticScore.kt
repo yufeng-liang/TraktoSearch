@@ -1,10 +1,6 @@
 package com.tracktosearch.ui.screen.swiftie
 
 import com.tracktosearch.ui.haptic.HapticSemantic
-import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_DROP_MS
-import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SWAY_MAX_DEG
-import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SWAY_MS
-import com.tracktosearch.ui.screen.swiftie.bracelet.braceletSwayDegrees
 import com.tracktosearch.ui.screen.swiftie.eras.AXIS_TICK_FADE_IN_AT
 import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SWIFTIE_ERA_EDGES
@@ -12,7 +8,6 @@ import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
 import com.tracktosearch.ui.screen.swiftie.eras.TRACK_REVEAL_START_MS
 import com.tracktosearch.ui.screen.swiftie.eras.TRACK_STAGGER_MS
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieEraCenterFraction
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -63,15 +58,6 @@ enum class SwiftieHapticCueKind {
     /** [SIGNATURE_FLASH] 的替身：一记 `confirm()` */
     SIGNATURE_FLASH_TICK,
 
-    /** 三条手链落下，按绘制顺序（后→前）三记，逐记转轻 */
-    BRACELET_DROP,
-
-    /** 摆动余震：振幅跟着 `braceletSwayDegrees` 的 |sin| 衰减 */
-    BRACELET_SWAY,
-
-    /** [BRACELET_SWAY] 的替身：前三个摆幅峰值各一记 */
-    BRACELET_SWAY_TICK,
-
     /** 倒滑跨卡片边界，五记 */
     REWIND_TICK,
 
@@ -85,8 +71,11 @@ enum class SwiftieHapticCueKind {
     /**
      * 密集事件：`SwiftieReducedMotion` 开着时整类丢掉。
      *
-     * 两类：摆动余震那段包络与它的替身。它们是「同一件事在手上抖很多下」，
-     * 减少动效时该消失的正是这种。
+     * **今天一类都没有。** 唯一的成员是手链落地后的摆动余震与它的替身 —— 2026-09-13
+     * 摆动删掉（「手链不要抖动晃来晃去」），落地那三记也一并删掉（需求方选了「安静地进场」，
+     * 好让签名那条书写包络一路响到收笔），于是这一类空了。这条通路**留着**：
+     * 它是规格明写的要求，`SwiftieEggScreen` 那一侧的 `reducedMotion` 也还接着
+     * （见类注释末尾那段）。哪天手链入场加了逐珠的连击，就该在这里登记成密集事件。
      *
      * [AXIS_TICK] **不在**这里 —— 它从 12 记拉链收成了一记「标尺出现了」，
      * 那是和 [DIFFUSION_FILL] 同一类的路标，属于结构性事件。
@@ -95,7 +84,6 @@ enum class SwiftieHapticCueKind {
      */
     internal val dense: Boolean
         get() = when (this) {
-            BRACELET_SWAY, BRACELET_SWAY_TICK -> true
             else -> false
         }
 
@@ -110,7 +98,6 @@ enum class SwiftieHapticCueKind {
             DIFFUSION_RISE_TICK -> DIFFUSION_RISE
             SIGNATURE_STROKE -> SIGNATURE_WRITE
             SIGNATURE_FLASH_TICK -> SIGNATURE_FLASH
-            BRACELET_SWAY_TICK -> BRACELET_SWAY
             LOVER_BLOOM_TICK -> LOVER_BLOOM
             else -> null
         }
@@ -165,15 +152,19 @@ data class SwiftieEnvelopeCue(
  * [SwiftieTimeline] 给段落边界，`AXIS_TICK_FADE_IN_AT` 给轴线那一记，
  * `CARD_GROW_MS` / `TRACK_REVEAL_START_MS` /
  * `TRACK_STAGGER_MS` 给卡片内部的节拍，`SIGNATURE_WRITE_MS` / `SIGNATURE_PAUSE_TOTAL_MS` /
- * `SwiftieSignaturePath` 的两张权重表给签名段，`BRACELET_DROP_MS` / `BRACELET_SWAY_MS`
- * 给手链段，`SWIFTIE_ERA_EDGES` 给倒滑跨过的五条刻度。改了曲目数或换了配乐，谱子跟着动。
+ * `SwiftieSignaturePath` 的两张权重表给签名段，`SWIFTIE_ERA_EDGES` 给倒滑跨过的五条刻度。
+ * 改了曲目数或换了配乐，谱子跟着动。
+ *
+ * **手链一整段不在谱子里**（2026-09-13）：它现在是在签名段内安静地滚进来 ——
+ * 落地不出声，摆动也删了（需求方定案），于是原来那三记落地与 1700ms 余震包络一起消失。
+ * 逐珠划过仍旧由手指驱动，见 `SwiftieBracelet` 的拖动回调。
  *
  * 唯一几个本文件自己定的数是**包络的形状**（切几格、峰值多高），它们不是时刻，
  * 集中在文件末尾并逐个写明出处。
  *
  * ### 总量
  *
- * 默认档 53 记离散 + 5 段包络。
+ * 默认档 47 记离散 + 4 段包络（终局签名段占 12 记离散与 1 段包络，手链一记都没有）。
  * 最重要的一条不变式：**卡片段总共只有 24 记** —— 12 张卡各一记落地、12 段曲目列
  * 铺完各一记收尾，**不逐曲目**。逐曲目就是 96 秒里 180 次震动，手会麻，也什么都表达不了。
  *
@@ -234,7 +225,6 @@ private fun buildScore(reducedMotion: Boolean): List<SwiftieHapticCue> =
             axisIntroCues() +
             erasCardCues() +
             signatureCues() +
-            braceletCues() +
             rewindCues() +
             loverBloomCues()
         )
@@ -258,8 +248,8 @@ private fun buildScore(reducedMotion: Boolean): List<SwiftieHapticCue> =
  * - `2` 包络的替身。
  *
  * 第 0 档现在是**第二道防线**：手链第三记落地与摆动余震曾经压在同一毫秒上，
- * 那一记会把整段 1700ms 的余震掐死。真正的修法是把余震包络后移一格
- * （见 [braceletCues]），这条排序规则留着兜住以后再冒出来的同毫秒碰撞。
+ * 那一记会把整段 1700ms 的余震掐死（两者后已一并删除，见 `SwiftieHapticCueKind.dense`），
+ * 这条排序规则留着兜住以后再冒出来的同毫秒碰撞。
  */
 private fun SwiftieHapticCue.sameMillisRank(): Int = when {
     this is SwiftieEnvelopeCue -> 1
@@ -450,67 +440,6 @@ private fun signatureCues(): List<SwiftieHapticCue> {
 }
 
 /**
- * 手链段：三记落地 + 一段摆动余震。**35 颗珠子不各响一记。**
- *
- * 落地按绘制顺序（后→前）三记逐记转轻，语义取 `THUD` 一族里能拿到的三档：
- * `DRAG_START`（满幅 THUD）→ `GESTURE_END`（半幅 THUD）→ `SCROLL_EDGE`
- * （0.4 幅 `LOW_TICK`）。三记摊在 `BRACELET_DROP_MS` 上，末记压在落地那一刻。
- *
- * 余震包络的振幅直接取 `braceletSwayDegrees` 的绝对值除以 `BRACELET_SWAY_MAX_DEG` ——
- * 和屏幕上那条 `exp(-2.4t) · sin(4πt)` 是同一条曲线，不另抄一份。
- * 它同样是多峰的（|sin| 在 1700ms 里过四个峰），RichTap 接不下；HE 通路上它反而整段
- * 保留 —— |sin| 的采样不过零，整条是一个非零 run，转成一条 16 点曲线。落点规则同签名段。
- * **起点比末记落地晚一格**，理由见下面的行内注释。
- *
- * 表里还有一行「可拖交互逐珠划过」不在谱子里：那是手指驱动的，不是时间驱动的，
- * 见 `SwiftieBracelet` 的拖动回调。
- */
-private fun braceletCues(): List<SwiftieHapticCue> {
-    val dropSemantics = listOf(
-        HapticSemantic.DRAG_START,
-        HapticSemantic.GESTURE_END,
-        HapticSemantic.SCROLL_EDGE,
-    )
-    val swayTimingsMs = evenSteps(BRACELET_SWAY_MS, SWAY_ENVELOPE_POINTS)
-    // 余震包络比落地晚**一格**（约 100ms）起。落地那一刻本来两件事压在同一毫秒上，
-    // 而平台上后发的一记会掐掉正在播的波形 —— 那记落地会把整段 1700ms 的余震掐死。
-    // 后移一格就够：视觉上「落地即起晃」差 100ms 不可感知。
-    // buildScore 里那条「无关离散排在包络之前」的排序规则留着当第二道防线
-    val swayStartMs = SwiftieTimeline.BRACELET_START + BRACELET_DROP_MS + swayTimingsMs.first()
-    return buildList {
-        dropSemantics.forEachIndexed { index, semantic ->
-            add(
-                SwiftieDiscreteCue(
-                    atMs = SwiftieTimeline.BRACELET_START +
-                        BRACELET_DROP_MS * (index + 1) / dropSemantics.size,
-                    kind = SwiftieHapticCueKind.BRACELET_DROP,
-                    semantic = semantic,
-                )
-            )
-        }
-        add(
-            SwiftieEnvelopeCue(
-                atMs = swayStartMs,
-                kind = SwiftieHapticCueKind.BRACELET_SWAY,
-                timingsMs = swayTimingsMs,
-                amplitudes = swayAmplitudes(SWAY_ENVELOPE_POINTS),
-            )
-        )
-        // 替身：前三个摆幅峰值各一记。|sin(4πt)| 的峰在 t = 1/8、3/8、5/8，
-        // 第四个峰（7/8）已经被 exp 衰减压到几乎无感，不值一记
-        repeat(SWAY_STAND_IN_COUNT) { index ->
-            add(
-                SwiftieDiscreteCue(
-                    atMs = swayStartMs + BRACELET_SWAY_MS * (2 * index + 1) / 8,
-                    kind = SwiftieHapticCueKind.BRACELET_SWAY_TICK,
-                    semantic = HapticSemantic.FREQUENT_TICK,
-                )
-            )
-        }
-    }
-}
-
-/**
  * 倒滑段：播放头从轴末端飞回 Lover 段中心，跨过的每条卡片刻度一记 `segmentTick()`。
  *
  * 跨过的是第 11..7 条刻度，正好五条 —— 数量不是写死的，由
@@ -658,24 +587,6 @@ private fun humpEnvelope(
 private fun humpRiseSteps(points: Int, riseFraction: Float): Int =
     (points * riseFraction).roundToInt().coerceIn(1, points - 1)
 
-/**
- * 摆动余震的振幅：直接量屏幕上那条摆角曲线。
- *
- * 在每格中点取一次 `braceletSwayDegrees`，除以 `BRACELET_SWAY_MAX_DEG` 归一。
- * 取绝对值是因为触感没有左右 —— 往左晃和往右晃在手上是同一记。
- * 于是 |sin(4πt)| 在 1700ms 里过四个峰，包络是多峰的，只有 tier 1 播得出来。
- *
- * 采样点是从**视觉的**摆动起点（`BRACELET_DROP_MS`）算的，而包络自己晚一格才起
- * （见 [braceletCues]），所以整条曲线在手上比眼里晚约 100ms。形状一模一样，只是整体后移。
- */
-private fun swayAmplitudes(points: Int): List<Float> {
-    val stepMs = BRACELET_SWAY_MS.toFloat() / points
-    return List(points) { index ->
-        val sampleAtMs = BRACELET_DROP_MS + (stepMs * (index + 0.5f)).toLong()
-        (abs(braceletSwayDegrees(sampleAtMs)) / BRACELET_SWAY_MAX_DEG).coerceIn(0f, 1f)
-    }
-}
-
 // ----------------------------------------------------------------------------
 // 包络的形状参数。**这里没有一个毫秒数** —— 时长全部来自各段自己的常量，
 // 下面只定「一段切几格」与「振幅到多高」。控制点数都按 100ms 上下一格取，
@@ -702,12 +613,6 @@ private const val SIGNATURE_FLASH_ENVELOPE_MS = 200L
 
 /** 闪光 200ms 切 5 格，每格 40ms。 */
 private const val SIGNATURE_FLASH_POINTS = 5
-
-/** 摆动 1700ms 切 17 格，每格 100ms —— 够画出 |sin| 的四个峰。 */
-private const val SWAY_ENVELOPE_POINTS = 17
-
-/** 摆动替身的记数，设计文档写的「3 记衰减」。 */
-private const val SWAY_STAND_IN_COUNT = 3
 
 /** 绽放 3500ms 切 14 格，每格 250ms。 */
 private const val LOVER_BLOOM_POINTS = 14

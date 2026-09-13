@@ -51,7 +51,14 @@ private val TAGLINE_MAX_SIZE = 18.dp
 /** 两侧至少留出的空。 */
 private val TAGLINE_SIDE_ROOM = 32.dp
 
-/** 手链收住之后文案才浮出来，不和珠子落地抢注意力。 */
+/** 手链第一条链起步的时刻。整段入场嵌在签名段里 —— 笔还在写，珠子已经从两侧滚进来了。 */
+private val BRACELET_ENTRY_START: Long =
+    SwiftieTimeline.SIGNATURE_START + SwiftieTimeline.BRACELET_ENTRY_MS
+
+/** 三条链全部停住的时刻。 */
+private val BRACELET_ALL_SETTLED_AT: Long = BRACELET_ENTRY_START + BRACELET_SETTLED_MS
+
+/** 手链停住之后文案才浮出来，不和还在滚的珠子抢注意力。 */
 private const val TAGLINE_FADE_MS: Float = 800f
 
 /** 签名与手链之间的间距。 */
@@ -61,7 +68,10 @@ private val SIGNATURE_GAP = 32.dp
 private val TAGLINE_GAP = 16.dp
 
 /**
- * 终局：签名 + 手链 + 文案（Spec §5 的 T99410–118000、§7、§8）。
+ * 终局：签名 + 手链 + 文案（Spec §5 的终局段、§7、§8）。
+ *
+ * 签名与手链**同场**：手链在签名写到 800ms 时就从两侧滚进来（见 `SwiftieTimeline`
+ * 的 `BRACELET_ENTRY_MS`），所以这里不再有「签名段看完再看手链」那一段等待。
  *
  * 排在倒滑之前 —— 配乐末尾那句 Lover 要留给绽放（见 `SwiftieTimeline` 的类注释）。
  *
@@ -93,7 +103,7 @@ fun SwiftieFinaleStage(
         // 插槽高度按宽度算，见 braceletHeightFor —— 下垂量是宽度的比例
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             SwiftieBracelet(
-                elapsedInBracelet = { elapsedMs() - SwiftieTimeline.BRACELET_START },
+                elapsedInBracelet = { elapsedMs() - BRACELET_ENTRY_START },
                 nickname = nickname,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -107,8 +117,8 @@ fun SwiftieFinaleStage(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
-                    val start = SwiftieTimeline.BRACELET_START + BRACELET_SETTLED_MS
-                    alpha = ((elapsedMs() - start) / TAGLINE_FADE_MS).coerceIn(0f, 1f)
+                    alpha = ((elapsedMs() - BRACELET_ALL_SETTLED_AT) / TAGLINE_FADE_MS)
+                        .coerceIn(0f, 1f)
                 }
         )
     }

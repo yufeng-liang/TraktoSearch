@@ -2,10 +2,6 @@ package com.tracktosearch.ui.screen.swiftie
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.ui.haptic.HapticSemantic
-import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_DROP_MS
-import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SWAY_MAX_DEG
-import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SWAY_MS
-import com.tracktosearch.ui.screen.swiftie.bracelet.braceletSwayDegrees
 import com.tracktosearch.ui.screen.swiftie.eras.AXIS_TICK_FADE_IN_AT
 import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SWIFTIE_ERA_EDGES
@@ -14,7 +10,6 @@ import com.tracktosearch.ui.screen.swiftie.eras.TRACK_REVEAL_START_MS
 import com.tracktosearch.ui.screen.swiftie.eras.TRACK_STAGGER_MS
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieEraCenterFraction
 import org.junit.Test
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -46,16 +41,6 @@ class SwiftieHapticScoreTest {
         amplitudes.indices.drop(1).dropLast(1).filter { index ->
             amplitudes[index] > amplitudes[index - 1] && amplitudes[index] > amplitudes[index + 1]
         }
-
-    /** 段内偏移 [offsetMs] 落在包络的第几个控制点上。 */
-    private fun controlPointAt(envelope: SwiftieEnvelopeCue, offsetMs: Long): Int {
-        var cursor = 0L
-        envelope.timingsMs.forEachIndexed { index, ms ->
-            cursor += ms
-            if (offsetMs < cursor) return index
-        }
-        return envelope.timingsMs.lastIndex
-    }
 
     // ------------------------------------------------------------------------
     // 最重要的一条：卡片段只有 24 记
@@ -124,10 +109,11 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun wholeSequenceStaysInsideTheDiscreteBudget() {
-        // 53 记离散摊在 125.998 秒里。轴线那一段只有一记 —— 12 记拉链在屏幕上没有对应物
-        assertThat(score.discrete()).hasSize(53)
+        // 47 记离散摊在 125.998 秒里，其中 24 记落在卡片段。轴线那一段只有一记 ——
+        // 12 记拉链在屏幕上没有对应物。手链一整段没有触感（安静地滚进来）
+        assertThat(score.discrete()).hasSize(47)
         assertThat(score.discrete().size).isAtMost(65)
-        assertThat(score.envelopes()).hasSize(5)
+        assertThat(score.envelopes()).hasSize(4)
     }
 
     @Test
@@ -174,17 +160,15 @@ class SwiftieHapticScoreTest {
     // ------------------------------------------------------------------------
 
     @Test
-    fun reducedMotionDropsTheDenseRowsOnly() {
+    fun reducedMotionHasNothingToDropBecauseTheSwayIsGone() {
         val dropped = SwiftieHapticCueKind.entries.filter { kind ->
             score.of(kind).isNotEmpty() && quiet.of(kind).isEmpty()
         }
-        // 只有摆动余震那段包络与它的替身。AXIS_TICK 不在里面 —— 它收成一记
-        // 「标尺出现了」之后就是结构性路标了。逐珠那一行不在谱子里（手指驱动）
-        assertThat(dropped).containsExactly(
-            SwiftieHapticCueKind.BRACELET_SWAY,
-            SwiftieHapticCueKind.BRACELET_SWAY_TICK,
-        )
-        dropped.forEach { assertThat(it.dense).isTrue() }
+        // 2026-09-13：手链的落地与摆动余震一起删掉（需求方定案「安静地进场」），
+        // 密集事件这一类就此空了。哪天又出现密集事件，这条会先红 —— 那时要做的就是
+        // 在 SwiftieHapticCueKind.dense 里登记它，并按两档各验一遍
+        assertThat(dropped).isEmpty()
+        assertThat(SwiftieHapticCueKind.entries.filter { it.dense }).isEmpty()
     }
 
     @Test
@@ -199,7 +183,6 @@ class SwiftieHapticScoreTest {
             SwiftieHapticCueKind.TRACKLIST_DONE,
             SwiftieHapticCueKind.SIGNATURE_WRITE,
             SwiftieHapticCueKind.SIGNATURE_FLASH,
-            SwiftieHapticCueKind.BRACELET_DROP,
             SwiftieHapticCueKind.REWIND_TICK,
             SwiftieHapticCueKind.LOVER_BLOOM,
         ).forEach { kind ->
@@ -213,7 +196,7 @@ class SwiftieHapticScoreTest {
                     it.atMs < SwiftieTimeline.ERAS_CARDS_END
             }
         ).isEqualTo(24)
-        assertThat(quiet.discrete()).hasSize(50)
+        assertThat(quiet.discrete()).hasSize(47)
         assertThat(quiet.envelopes()).hasSize(4)
     }
 
@@ -327,92 +310,36 @@ class SwiftieHapticScoreTest {
         assertThat(flash.durationMs).isLessThan(SIGNATURE_FLASH_MS)
         assertThat(flash.amplitudes.max()).isWithin(1e-6f).of(1f)
         assertThat(flash.amplitudes.last()).isEqualTo(0f)
-        // 整段签名的触感不许溢出签名段
-        assertThat(flash.atMs + flash.durationMs).isAtMost(SwiftieTimeline.BRACELET_START)
+        // 整段签名（含收笔闪光）不许溢出终局段。手链在签名写到 800ms 时就进场了，
+        // 但它一记都不发 —— 书写那条包络要一路响到收笔
+        assertThat(flash.atMs + flash.durationMs)
+            .isAtMost(SwiftieTimeline.SIGNATURE_START + SwiftieTimeline.SIGNATURE_MS)
     }
 
     // ------------------------------------------------------------------------
-    // 手链段：三记落地 + 一段余震。35 颗珠子不各响一记
+    // 终局段：只有那支笔在响，手链是安静地滚进来的
     // ------------------------------------------------------------------------
 
     @Test
-    fun braceletLandsInThreeCuesGettingLighterNotThirtyFiveBeads() {
-        val drops = score.of(SwiftieHapticCueKind.BRACELET_DROP)
-        assertThat(drops).hasSize(3)
-        // 第一记不许压在段落起点：那一刻手链还在画面之外，什么都没落下
-        assertThat(drops.first().atMs).isGreaterThan(SwiftieTimeline.BRACELET_START)
-        // 末记压在落下走完那一刻 —— 最前那条（13 ♡ 87）着地
-        assertThat(drops.last().atMs)
-            .isEqualTo(SwiftieTimeline.BRACELET_START + BRACELET_DROP_MS)
-        val gaps = drops.map { it.atMs }.zipWithNext { previous, next -> next - previous }
-        assertThat(gaps.toSet()).hasSize(1)
-        // 逐记转轻：满幅 THUD → 半幅 THUD → 0.4 幅 LOW_TICK
-        assertThat(score.semantics(SwiftieHapticCueKind.BRACELET_DROP)).containsExactly(
-            HapticSemantic.DRAG_START,
-            HapticSemantic.GESTURE_END,
-            HapticSemantic.SCROLL_EDGE,
+    fun finaleIsJustThePenBecauseTheBraceletEntersSilently() {
+        val inFinale = score.cues.filter {
+            it.atMs >= SwiftieTimeline.SIGNATURE_START && it.atMs < SwiftieTimeline.FINAL_HOLD_START
+        }
+        // 手链 2026-09-13 改成在签名段里从两侧滚进来，落地那三记与 1700ms 余震一起删了
+        // （需求方定案「安静地进场」）。这一段就只剩这支笔：12 笔替身 + 收笔闪一记
+        val standIns = inFinale.filterIsInstance<SwiftieDiscreteCue>()
+        assertThat(standIns.map { it.kind }.toSet()).containsExactly(
+            SwiftieHapticCueKind.SIGNATURE_STROKE,
+            SwiftieHapticCueKind.SIGNATURE_FLASH_TICK,
+        )
+        assertThat(score.of(SwiftieHapticCueKind.SIGNATURE_STROKE))
+            .hasSize(SwiftieSignaturePath.WRITE_WEIGHT.size)
+        assertThat(standIns).hasSize(SwiftieSignaturePath.WRITE_WEIGHT.size + 1)
+        // 两段包络也都在这一段里，且都在手链进场之前就起好了
+        assertThat(inFinale.filterIsInstance<SwiftieEnvelopeCue>().map { it.kind }).containsExactly(
+            SwiftieHapticCueKind.SIGNATURE_WRITE,
+            SwiftieHapticCueKind.SIGNATURE_FLASH,
         ).inOrder()
-    }
-
-    @Test
-    fun swayEnvelopeStartsOneStepLateSoTheLandingCannotCutItOff() {
-        val sway = score.envelope(SwiftieHapticCueKind.BRACELET_SWAY)
-        val lastDrop = score.of(SwiftieHapticCueKind.BRACELET_DROP).last()
-        // 落地与起晃本来压在同一毫秒上。平台上后发的一记会掐掉正在播的波形 ——
-        // 那记落地会把整段 1700ms 的余震掐死。后移一格（约 100ms）就够，
-        // 视觉上「落地即起晃」差一格不可感知
-        assertThat(sway.atMs).isEqualTo(lastDrop.atMs + sway.timingsMs.first())
-        assertThat(sway.atMs).isGreaterThan(lastDrop.atMs)
-        // 后移之后仍然离定格合影段很远
-        assertThat(sway.atMs + sway.durationMs).isLessThan(SwiftieTimeline.FINAL_HOLD_START)
-    }
-
-    @Test
-    fun swayEnvelopeIsTheVisibleSwayCurveMeasuredNotAnInventedOne() {
-        val sway = score.envelope(SwiftieHapticCueKind.BRACELET_SWAY)
-        assertThat(sway.durationMs).isEqualTo(BRACELET_SWAY_MS)
-        // 每格的振幅就是屏幕上那条摆角曲线在格中点的值，归一到 0f..1f。
-        // 采样点从**视觉的**摆动起点算（包络自己晚一格才起），所以形状一模一样、整体后移。
-        // 两条曲线一旦分家，手上的余震就会和眼里的摆动错开
-        val stepMs = BRACELET_SWAY_MS.toFloat() / sway.timingsMs.size
-        sway.amplitudes.forEachIndexed { index, amplitude ->
-            val sampleAtMs = BRACELET_DROP_MS + (stepMs * (index + 0.5f)).toLong()
-            val expected = abs(braceletSwayDegrees(sampleAtMs)) / BRACELET_SWAY_MAX_DEG
-            assertThat(amplitude).isWithin(1e-6f).of(expected)
-        }
-    }
-
-    @Test
-    fun swayEnvelopeHasFourEverWeakerPeaksLikeTheDampedSine() {
-        val amplitudes = score.envelope(SwiftieHapticCueKind.BRACELET_SWAY).amplitudes
-        val peaks = peakIndices(amplitudes)
-        // |sin(4πt)| 在 1700ms 里过四个峰，格数必须够密才画得出来
-        assertThat(peaks).hasSize(4)
-        // 指数衰减：一峰弱于一峰。这也是 RichTap 那层接不下它的原因（只收单峰）
-        peaks.map { amplitudes[it] }
-            .zipWithNext { high, low -> assertThat(low).isLessThan(high) }
-    }
-
-    @Test
-    fun swayStandInsSitOnTheFirstThreePeaks() {
-        val ticks = score.of(SwiftieHapticCueKind.BRACELET_SWAY_TICK)
-        // 第四个峰已经被 exp 衰减压到几乎无感，不值一记
-        assertThat(ticks).hasSize(3)
-        val sway = score.envelope(SwiftieHapticCueKind.BRACELET_SWAY)
-        val peaks = peakIndices(sway.amplitudes)
-        ticks.forEachIndexed { index, tick ->
-            assertThat(tick.atMs).isAtLeast(sway.atMs)
-            assertThat(tick.atMs).isLessThan(sway.atMs + sway.durationMs)
-            // 每记必须落在对应那个峰所在的那一格上下 —— 摆到最边上才是该响的一刻。
-            // 容一格：替身按解析式的 t = 1/8、3/8、5/8 排，包络是按格中点采样的
-            val bucket = controlPointAt(sway, tick.atMs - sway.atMs)
-            assertThat(abs(bucket - peaks[index])).isAtMost(1)
-        }
-        score.semantics(SwiftieHapticCueKind.BRACELET_SWAY_TICK).forEach {
-            assertThat(it).isEqualTo(HapticSemantic.FREQUENT_TICK)
-        }
-        // 整段手链的触感不许溢进定格合影段
-        assertThat(sway.atMs + sway.durationMs).isAtMost(SwiftieTimeline.FINAL_HOLD_START)
     }
 
     // ------------------------------------------------------------------------
@@ -514,7 +441,7 @@ class SwiftieHapticScoreTest {
     @Test
     fun noEnvelopeSharesAMillisecondWithAnUnrelatedDiscreteCue() {
         // 同一毫秒上排一段包络和一记无关的离散事件，等于让后发的那一记去掐前一记 ——
-        // 手链落地与摆动余震曾经就是这样，1700ms 的余震被一记落地掐死。
+        // 手链落地与摆动余震曾经就是这样，1700ms 的余震被一记落地掐死（两者后已一并删除）。
         // buildScore 里「无关离散排在包络之前」那条排序规则是第二道防线，
         // 但真正该做的是**一开始就不要撞**，这条钉住的是那个
         score.envelopes().forEach { envelope ->

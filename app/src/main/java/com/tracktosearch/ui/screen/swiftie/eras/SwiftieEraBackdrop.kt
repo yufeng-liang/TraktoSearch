@@ -12,21 +12,31 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.unitHeartPath
@@ -36,6 +46,7 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -248,6 +259,11 @@ fun SwiftieEraBackdropLayer(
     // 这一层拿到的号同 `SwiftieEraParticleLayer`：每帧变的时钟派生 lambda，
     // 在组合阶段读一次就把整层拖成逐帧重组
     val maple = rememberMapleBentArt()
+    // 12 张里只有 TTPD 那一张有机器，但位图与那两行字都是**页面级**的：
+    // 解码与排版都只能在组合阶段做（draw 阶段拿不到 resources、也不该每帧排字），
+    // 换张淡变时两张舞台同时要画，所以放在这里、两边共用同一份
+    val typewriter = ImageBitmap.imageResource(R.drawable.era_ttpd_typewriter)
+    val stubLines = rememberTypewriterStubLines()
     Spacer(
         modifier = modifier.fillMaxSize().drawBehind {
             val from = outgoing().coerceIn(0, skies.lastIndex)
@@ -257,15 +273,58 @@ fun SwiftieEraBackdropLayer(
             val eraMs = eraElapsedMs()
             val card = cardBounds()
             if (mix <= 0f || from == to) {
-                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, maple)
+                drawStage(
+                    from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam,
+                    maple, typewriter, stubLines
+                )
             } else {
-                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, maple)
+                drawStage(
+                    from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam,
+                    maple, typewriter, stubLines
+                )
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
-                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam, maple)
+                drawStage(
+                    to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam,
+                    maple, typewriter, stubLines
+                )
             }
         }
     )
+}
+
+/**
+ * 前摇那两行字：**Fortnight 那句词**，断句与内容都是需求方点名的。
+ *
+ * 第一行 `I love you,`，第二行 `it's ruining my life`（11 / 20 字，都不带引号）。
+ * 打字机在这个时代打的就是这张专辑里的话；专辑名已经在卡片标题上写着，
+ * 机器再打一遍是重复。断在逗号后面，不是按中点找空格 —— 这一句的重音就落在那儿。
+ *
+ * 撇号用**直引号** `'`（U+0027）：这个字体是按子集嵌进来的（见
+ * `scripts/fetch-swiftie-fonts.sh` 的 specialelite 那行），子集里有直引号没有弯引号；
+ * 而且打字机上本来就只有直引号这一颗字。要换成弯引号得先重做子集。
+ */
+private fun typewriterStubText(): List<String> =
+    listOf("I love you,", "it's ruining my life")
+
+/**
+ * 把前摇那两行预排一次。
+ *
+ * 与表盘罗马数字同一套路：`TextMeasurer` 只能在组合阶段用，这里按 [STUB_REFERENCE]
+ * 排好，draw 阶段再按实际字号缩放。字号用 `Dp.toSp()` 折算（除掉 fontScale）——
+ * 排出来的 px 与 draw 阶段 `STUB_REFERENCE.toPx()` 严格同尺度，缩放比才是准的。
+ */
+@Composable
+private fun rememberTypewriterStubLines(): List<TextLayoutResult> {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(measurer, density) {
+        val style = TextStyle(
+            fontSize = with(density) { STUB_REFERENCE.toSp() },
+            fontFamily = FontFamily(Font(R.font.era_typewriter))
+        )
+        typewriterStubText().map { measurer.measure(it, style) }
+    }
 }
 
 /**
@@ -285,7 +344,9 @@ private fun DrawScope.drawStage(
     shapes: BackdropShapes,
     numerals: List<TextLayoutResult>,
     lowRam: Boolean,
-    maple: MapleArt
+    maple: MapleArt,
+    typewriter: ImageBitmap?,
+    stubLines: List<TextLayoutResult>
 ) {
     if (alpha <= 0.01f) return
     val stage = SwiftieErasData.STAGE[index]
@@ -312,7 +373,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.MIDNIGHT_CLOCK ->
             drawMidnightClock(path, top, mid, deep, phase, alpha, eraMs, shapes, numerals)
         SwiftieEraBackdrop.TYPEWRITER_DESK ->
-            drawTypewriterDesk(path, top, mid, deep, phase, alpha, eraMs, card)
+            drawTypewriterDesk(typewriter, stubLines, path, top, mid, deep, phase, alpha, eraMs, card)
         SwiftieEraBackdrop.THEATRE_STAGE -> drawTheatreStage(path, top, mid, deep, phase, alpha)
     }
 }
@@ -5048,29 +5109,38 @@ private fun DrawScope.drawMidnightClock(
 // ─────────────────────── 11 · The Tortured Poets Department ───────────────────────
 
 /**
- * 台灯光锥 + 一台**正对观众**的打字机，坐在屏幕底下。
+ * 台灯光锥 + 屏幕底下那台打字机 + 它正在打的那截露头的纸。
+ *
+ * ## 机器是一张位图，不是画出来的
+ *
+ * 手画的那一版（四排键、两根色带盘、扇形排布的字锤）能读出「一台打字机」，但不像
+ * **某一台**真机器：键帽的排布、色带盘的位置、字锤的扇形全是按结构猜的。改用需求方给的
+ * 渲染图 `era_ttpd_typewriter.webp`（机身正面那只连字标是照官方样式描上去的银色 TTPD），
+ * 只把「正在打字」这件事用叠加层补出来。位图上敲不动的部分（键帽、字锤、旋钮）
+ * **不再假装会动** —— 那才是手画那一版最好的地方：它画什么都能动，于是什么都动得不像。
  *
  * ## 卡片就是这台机器吐上来的那张纸
  *
- * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 1400ms 里屏幕上没有卡片：机器自己
- * 敲字、滑架逐格左移，1250ms 一次回车横扫回位，字打在滚筒上那截露头的纸上；然后纸
- * 开始往上走 —— 那张纸就是曲目卡片（揭示由 `SwiftieEraCard` 的 `feedProgress` 做，
- * 下缘钉死在出纸口上、上缘上移）。真机正是这个方向：印字点在滚筒上不动，纸往上卷，
- * 越早打的行越靠上 —— 第 1 首在纸的最顶上，歌名从上到下读下去就是打字的顺序。
+ * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 2600ms 里屏幕上没有卡片：机器把专辑名
+ * 那两行**一个字一个字**打在露头的那截纸上（见 [drawTypewriterStub]），然后纸开始往上走
+ * —— 那张纸就是曲目卡片（揭示由 `SwiftieEraCard` 的 `feedProgress` 做，下缘钉死在压纸杆
+ * 上、上缘上移）。真机正是这个方向：印字点在压纸辊上不动、纸往上卷，越早打的行越靠上
+ * —— 第 1 首在纸的最顶上，歌名从上到下读下去就是打字的顺序。
  *
- * 出纸口 [card] 的下缘必须坐在卡片下缘上、滚筒必须与卡片同宽：31 首的卡片高度按屏高
- * 派生、宽度在平板上封顶 480dp，写死比例换台设备纸就会比机器宽出一截。卡片在布局层
- * 被抬高了 `TTPD_MACHINE_RESERVE`（见 `SwiftieErasStage`），机器的滚筒、暗腔与两肩
- * 全落在那段里；键盘越往下越被时间轴挡住，属预期。
+ * ## 几何（图片像素，全部量自底图）
  *
- * ## 为什么换成正视
+ * 卡片下缘坐在**压纸杆**的上缘（[TTPD_PLATEN_LINE]）—— 纸从杆后头出来，那根亮着的金属杆
+ * 就压在卡片的下沿上；露头那截纸从**压纸辊的顶轮廓**（[TTPD_ROLLER_TOP]）往上露，往下
+ * 被辊子挡住；敲击的闪光落在**色带导子**（[TTPD_GUIDE_X] / [TTPD_GUIDE_Y]）上。
  *
- * 机器原先坐在卡片**上缘**（俯视、纸往下挂）。挪到底下之后纵向预算不再只有上缘那
- * 0.137h —— 从卡片下缘到屏幕底整段都是机器的，于是换回最经典的正对视角：滚筒横在
- * 顶上、字锤从暗腔里朝滚筒抬、四排键从后往前渐大、回车杆在左端翘起。纸从滚筒后头
- * 升上来，机器的每一层都在纸的下沿之下，不会被纸挡。
+ * 机器比纸宽 [TTPD_MACHINE_OVER_PAPER]：真机的压纸辊本来就比纸宽出一圈，而按屏宽定尺寸
+ * 在平板上会让卡片（封顶 480dp）比机器还宽 —— 于是机器跟着**卡片宽度**走，不跟屏宽。
+ * 卡片在布局层被抬高了 `TTPD_MACHINE_RESERVE`（见 `SwiftieErasStage`），
+ * 花字与前脸落在抬高那一段里，键盘往下被时间轴压住，属预期。
  */
 private fun DrawScope.drawTypewriterDesk(
+    image: ImageBitmap?,
+    stubLines: List<TextLayoutResult>,
     path: Path,
     top: Color,
     mid: Color,
@@ -5084,7 +5154,8 @@ private fun DrawScope.drawTypewriterDesk(
     val h = size.height
 
     // 台灯光锥：自左上打向右下，落在底部那台机器上。锥体本身是竖直的，绕锥顶转 34°。
-    // 亮度随相位极轻地呼吸（白炽灯的电流声），幅度只有 ±0.02
+    // 亮度随相位极轻地呼吸（白炽灯的电流声），幅度只有 ±0.02。
+    // **画在机器之前**：这一层只负责把桌子照亮，机器自己有渲染图里的打光
     val apex = Offset(w * 0.06f, -h * 0.03f)
     rotate(degrees = 34f, pivot = apex) {
         drawCone(
@@ -5100,40 +5171,26 @@ private fun DrawScope.drawTypewriterDesk(
 
     // 两层雾给卡片与机器分层：中带那条压在卡片后面的水彩上（TTPD 三档底色是米白 →
     // 米白 → 灰米，卡片也是米白，不压它卡片边界在屏幕上找不到）；顶上那条收远山。
-    // 机器那一段不铺 —— 前摇里字全打在滚筒上那截纸上，糊一层灰就把字洗没了
+    // 机器那一段不铺 —— 渲染图自带景深，压一层灰反而把它洗平
     drawFogBand(0.34f, 0.30f, deep, alpha * DISTANT_ALPHA * 1.5f)
     drawFogBand(0.06f, 0.14f, top, alpha * DISTANT_ALPHA)
 
-    drawTypewriter(path, mid, deep, alpha, eraMs, card)
+    // 位图解不出来（低内存档）就宁可不画机器：桌面空着好过画一台残机
+    if (image == null) return
+    drawTypewriter(image, stubLines, mid, alpha, eraMs, card)
 }
 
 /**
- * 打字机本体（正视：滚筒在顶、暗腔居中、四排键在前）。
+ * 打字机本体：底图 + 「正在打」的叠加层。
  *
- * 纵向尺寸**全部**写成「离出纸口 [Rect.bottom] 多远往下」：出纸口坐在卡片下缘上，而卡片
- * 位置随曲目数与屏高变，写成屏高的比例每换台设备就得重算滚筒、四排键、前脸的相对位置。
- *
- * ## 正视的层次
- *
- * 1. **滚筒横在机器顶上**：纸从它后头升上来，压纸架横在纸前。按圆柱上色 —— 暗—亮—暗
- *    三条横带 + 两端轴套与刻纹旋钮（旋钮每打完一行转一格，是「纸在往上走」的证据）。
- * 2. **滑架下是一条暗腔**：全图最暗的一块，字锤从腔里朝滚筒抬。一道真正的暗缝比任何
- *    描边都更像「后面还有东西」。
- * 3. **两肩高出键盘区**：色带盘盖坐在肩顶，轮廓「高—低—高」，机器有了肩宽。
- * 4. **四排键近大远小**（见 [TYPE_KEY_TIERS]）：越靠前的一排键帽更大、整排更宽，每颗键
- *    下面还露出一小截键杆。
- *
- * ## 滑架不横移
- *
- * 真机是纸跟着滑架往左走、字锤原地敲。这里**反过来**：纸不动，打字点沿滚筒左→右走，
- * 每 [TYPE_LINE_MS] 一行、末 12% 是回车横扫飞回行首。原因是升上来的那张纸就是曲目卡片，
- * 卡片在布局里钉死不动 —— 滑架带着纸横移，纸和卡片当场错开一截。
- * 代价是机械原理不对，但屏幕上「打字机正在打字」这件事读得出来，而错位读得出来。
+ * [eraMs] 为负 = 待机（换张淡变期，本段还没开始）：两行字已经打完，灯下是一页静纸，
+ * 不敲也不抖。整段 11.3s 里机器一直在打，打的就是屏幕上正在逐行点亮的那 31 首 ——
+ * 节拍按 [TTPD_PREROLL_MS] 里的字符数均分，于是**前摇正好打完两行**，不多不少。
  */
 private fun DrawScope.drawTypewriter(
-    path: Path,
+    image: ImageBitmap,
+    stubLines: List<TextLayoutResult>,
     mid: Color,
-    deep: Color,
     alpha: Float,
     eraMs: Long,
     card: Rect
@@ -5141,585 +5198,311 @@ private fun DrawScope.drawTypewriter(
     val w = size.width
     val h = size.height
 
-    // 出纸口坐在卡片下缘。量不到就用 0.74h 兜底（那是布局层 TTPD_MACHINE_RESERVE
-    // 抬高后的典型位置），并钳在合理带内 —— 卡片下缘不该低于 0.84h（机器只剩一条缝）
-    val exitY = (if (card.width > 1f) card.bottom else h * 0.74f)
+    // 纸（卡片）的下缘：量不到卡片就按抬高之后的典型位置兜底，并钳在合理带内 ——
+    // 换张期这一层拿到的还是上一张卡片的框，量到的数不能用
+    val paperBottom = (if (card.width > 1f) card.bottom else h * 0.74f)
         .coerceIn(h * 0.55f, h * 0.84f)
-    val paperL = if (card.width > 1f) card.left else w * 0.055f
-    val paperR = if (card.width > 1f) card.right else w * 0.945f
-    val paperW = paperR - paperL
-    val paperCx = (paperL + paperR) / 2f
+    val paperW = if (card.width > 1f) card.width else w * 0.90f
 
-    // 机身左右各出画 0.02w
-    val mL = -w * 0.02f
-    val mW = w * 1.04f
-    val mR = mL + mW
+    val scale = paperW * TTPD_MACHINE_OVER_PAPER / TTPD_MACHINE_IMAGE_W
+    val machineW = TTPD_MACHINE_IMAGE_W * scale
+    val machineH = TTPD_MACHINE_IMAGE_H * scale
+    val machineL = (w - machineW) / 2f
+    val machineT = paperBottom - TTPD_PLATEN_LINE * scale
+    // 压纸辊顶轮廓：露头那截纸与打字点在它上面
+    val rollerTop = machineT + TTPD_ROLLER_TOP * scale
+    val rollerL = machineL + TTPD_ROLLER_L * scale
+    val rollerR = machineL + TTPD_ROLLER_R * scale
 
-    // ── 纵向分层（一律「出口往下多远」，改总高只动这十来个数）──
-    val platenCy = exitY + h * 0.030f
-    val platenRy = h * 0.017f
-    val recessTop = exitY + h * 0.050f
-    val recessBottom = exitY + h * 0.080f
-    val shoulderTop = exitY + h * 0.082f
-    val lipTop = exitY + h * 0.112f
-    // 横向：两肩各占 0.185w，中间 0.60w 是键盘区
-    val shoulderR = w * 0.185f
-    val shoulderSpan = shoulderR - mL
-    val midL = shoulderR
-    val midR = mR - shoulderSpan
-    val bankCx = w * 0.5f
-    val bankWidth = w * 0.60f
-
-    // ── 节拍 ──
-    // 待机（换张淡变期，本段还没开始）：不敲、不打、滚筒上那截纸是打了三行的一页
+    // ── 节拍：一个字符一拍 ──
     val idle = eraMs < 0L
-    val lineT = if (idle) 0.62f else (eraMs % TYPE_LINE_MS).toFloat() / TYPE_LINE_MS
-    val sweeping = lineT > TYPE_LINE_SPAN
-    // 打字点：行内左→右，末 12% 飞回行首
-    val typed = if (sweeping) 0f else lineT / TYPE_LINE_SPAN
-    val carriageT = if (sweeping) 1f - (lineT - TYPE_LINE_SPAN) / (1f - TYPE_LINE_SPAN) else typed
-    val printX = paperL + paperW * (0.07f + 0.84f * carriageT)
-    // 字锤：95ms 一击，前 35% 抬起、后 65% 落回。横扫途中不敲
-    val strikeIndex = if (idle || sweeping) -1 else ((eraMs / TYPE_STRIKE_MS) % TYPE_BARS).toInt()
-    val lift = if (strikeIndex < 0) {
+    val units = stubUnits(stubLines)
+    val typedUnits = if (idle) units else (eraMs / (SwiftieTimeline.TTPD_PREROLL_MS / units))
+    val mutter = stubCursor(typedUnits, stubLines)
+    val line = mutter.line
+    val chars = mutter.chars
+    val lineBreak = mutter.lineBreak
+    // 一击的余震：字符落下的那一瞬间最强，随后衰减到 0（下一拍再来）。
+    // 打字途中才敲得响，换行那一下（字锤停着、滚筒在转）不抖
+    val strike = if (idle || chars >= stubCharCount(stubLines, line)) {
         0f
     } else {
-        val t = (eraMs % TYPE_STRIKE_MS).toFloat() / TYPE_STRIKE_MS
-        (1f - abs(t - 0.35f) / 0.65f).coerceIn(0f, 1f)
+        val frac = chars - chars.toInt()
+        (1f - frac).coerceIn(0f, 1f).let { it * it * it }
     }
-    // 滚筒上那截露头的纸累积的行数。第 3 行之后不再涨 —— 出纸一启动卡片就从这里
-    // 接管，露头那截被卡片盖住
-    val stubLines = if (idle) 3 else (1L + eraMs / TYPE_LINE_MS).coerceIn(1L, 3L).toInt()
-    // 露头纸的可见度：前摇里机器自己敲给谁看全靠它；卡片开始升上来（前摇结束）后
-    // 300ms 淡掉 —— 卡片是不透明的，硬留着只会从纸边上漏出几道旧线
-    val stubAlpha = if (eraMs < SwiftieTimeline.TTPD_PREROLL_MS) {
-        1f
-    } else {
-        (1f - (eraMs - SwiftieTimeline.TTPD_PREROLL_MS) / 300f).coerceIn(0f, 1f)
-    }
+    // 机身整台**轻微发抖**：真机每一击都是从机身传到桌面的。幅度只有一两个像素 ——
+    // 再大就不是「打字」而是「地震」了
+    val shake = if (strike <= 0f) 0f else strike * (machineW * 0.0018f).coerceAtMost(2.5f)
 
-    // ── 滚筒后露头的那截纸（前摇期的「字打在哪」）──
-    // 印字行钉死在滚筒上沿之上：真机是印字点不动、纸往上卷，所以越早打的行越靠上，
-    // 第 0 行（最新那行）贴着滚筒
-    if (stubAlpha > 0.01f) {
-        val stubTop = exitY - h * 0.036f
-        path.rewind()
-        path.moveTo(paperCx - paperW * 0.470f, stubTop)
-        path.lineTo(paperCx + paperW * 0.470f, stubTop)
-        path.lineTo(paperCx + paperW * 0.492f, exitY - h * 0.002f)
-        path.lineTo(paperCx - paperW * 0.492f, exitY - h * 0.002f)
-        path.close()
-        // 纸色不能用 PAPER_WHITE：米白纸压在米白桌面上分不开。露头这截背着台灯，
-        // 压到灰米（deep 那一档）既分得开又是对的；顶边再提两条亮带表现「上亮下暗」
-        drawPath(path = path, color = deep, alpha = alpha * 0.92f * stubAlpha)
-        val stubH = h * 0.034f
-        drawRect(
-            color = PAPER_WHITE,
-            topLeft = Offset(paperCx - paperW * 0.470f, stubTop),
-            size = Size(paperW * 0.940f, stubH * 0.42f),
-            alpha = alpha * 0.30f * stubAlpha
+    translate(left = shake, top = 0f) {
+        drawImage(
+            image = image,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(image.width, image.height),
+            dstOffset = IntOffset(machineL.roundToInt(), machineT.roundToInt()),
+            dstSize = IntSize(machineW.roundToInt(), machineH.roundToInt()),
+            alpha = alpha,
+            filterQuality = FilterQuality.Medium
         )
-        drawRect(
-            color = PAPER_WHITE,
-            topLeft = Offset(paperCx - paperW * 0.478f, stubTop + stubH * 0.42f),
-            size = Size(paperW * 0.956f, stubH * 0.30f),
-            alpha = alpha * 0.14f * stubAlpha
-        )
-        drawPath(
-            path = path,
-            color = INK,
-            alpha = alpha * 0.42f * stubAlpha,
-            style = Stroke(width = (w * 0.0018f).coerceAtLeast(1f))
-        )
-        for (line in 0 until stubLines) {
-            val len = if (line == 0) typed else 0.70f + 0.26f * abs(sin(line * 2.7f))
-            if (len <= 0.01f) continue
-            val lineY = exitY - h * (0.006f + 0.0070f * line)
-            drawLine(
-                color = INK,
-                start = Offset(paperL + paperW * 0.07f, lineY),
-                end = Offset(paperL + paperW * (0.07f + 0.84f * len), lineY),
-                strokeWidth = (h * 0.0024f).coerceAtLeast(1f),
-                alpha = alpha * 0.68f * stubAlpha
+        // 色带导子（字锤穿过的那只银叉）在每一击上闪一下：位图上唯一能表现
+        // 「有东西正在动」的地方。看着小，少了它机器是一张照片
+        if (strike > 0.01f) {
+            drawUnitGlow(
+                brush = GUIDE_FLASH,
+                center = Offset(
+                    machineL + TTPD_GUIDE_X * scale,
+                    machineT + TTPD_GUIDE_Y * scale
+                ),
+                diameter = (rollerR - rollerL) * 0.17f,
+                alpha = alpha * strike * 0.55f
             )
         }
-    }
-
-    // ── 压纸滚筒 ──
-    // 按圆柱上色：整体一档深，靠上一条宽亮带、再往下一条窄亮带、最下压黑 ——
-    // 三档一叠就是一根横着的橡胶辊。上一轮是「圆角矩形 + 一道高光」，读作一根扁条。
-    // 滚筒只比纸宽 4%：真机就是这样，而且这样两端的旋钮才整只落在屏内
-    // （上一轮按机身宽算，机身出画，左右旋钮各被屏幕裁掉一半）
-    val platenL = paperL - paperW * 0.02f
-    val platenR = paperR + paperW * 0.02f
-    val platenW = platenR - platenL
-    drawRoundRect(
-        color = INK,
-        topLeft = Offset(platenL, platenCy - platenRy),
-        size = Size(platenW, platenRy * 2f),
-        cornerRadius = CornerRadius(platenRy * 0.5f),
-        alpha = alpha * 0.94f
-    )
-    drawRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(platenL + platenW * 0.010f, platenCy - platenRy * 0.66f),
-        size = Size(platenW * 0.980f, platenRy * 0.42f),
-        alpha = alpha * 0.21f
-    )
-    drawRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(platenL + platenW * 0.010f, platenCy - platenRy * 0.20f),
-        size = Size(platenW * 0.980f, platenRy * 0.22f),
-        alpha = alpha * 0.09f
-    )
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset(platenL, platenCy + platenRy * 0.40f),
-        size = Size(platenW, platenRy * 0.60f),
-        alpha = alpha * 0.22f
-    )
-    // 印字点：字锤落下那一瞬间在滚筒前壁上闪一下
-    if (lift > 0.55f) {
-        drawOval(
-            color = PAPER_WHITE,
-            topLeft = Offset(printX - w * 0.008f, platenCy + platenRy * 0.22f),
-            size = Size(w * 0.016f, platenRy * 0.50f),
-            alpha = alpha * 0.44f * lift
-        )
-    }
-    // 压纸架：横在纸前面把纸压向滚筒的那根杆 + 两只小胶轮。
-    // 没有它，纸和滚筒是两个不相干的形状
-    val bailY = platenCy + platenRy * 0.60f
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset(paperL - paperW * 0.03f, bailY),
-        size = Size(paperW * 1.06f, h * 0.0034f),
-        alpha = alpha * 0.52f
-    )
-    for (side in 0..1) {
-        val rx = paperCx + paperW * (if (side == 0) -0.27f else 0.27f)
-        drawOval(
-            color = Color.Black,
-            topLeft = Offset(rx - w * 0.013f, bailY - h * 0.0044f),
-            size = Size(w * 0.026f, h * 0.0106f),
-            alpha = alpha * 0.62f
-        )
-        drawOval(
-            color = PAPER_WHITE,
-            topLeft = Offset(rx - w * 0.004f, bailY - h * 0.0026f),
-            size = Size(w * 0.006f, h * 0.0038f),
-            alpha = alpha * 0.30f
-        )
-    }
-    // 两端：先一小段轴套（端面与滚筒之间那截），再是刻纹旋钮。
-    // 少了轴套，旋钮像是直接贴在滚筒端头上的一枚圆片
-    val knobAngle = (stubLines + typed) * 14f
-    for (side in 0..1) {
-        val kx = if (side == 0) platenL else platenR
-        val inward = if (side == 0) 1f else -1f
-        drawRect(
-            color = INK,
-            topLeft = Offset(if (inward > 0f) kx else kx - w * 0.020f, platenCy - platenRy * 0.70f),
-            size = Size(w * 0.020f, platenRy * 1.40f),
-            alpha = alpha * 0.99f
-        )
-        knurledKnob(kx, platenCy, w * 0.038f, platenRy * 1.52f, knobAngle * inward, mid, alpha)
-    }
-    // 回车杆：左端那根往左上翘出去的杆 + 末端握把。少了它一眼就知道是台假打字机。
-    // **在旋钮之后画**：真机上这根杆就是横在左旋钮前面的，压过去才对
-    val leverX = platenL - mW * 0.022f
-    val leverY = platenCy - h * 0.042f
-    drawLine(
-        color = INK,
-        start = Offset(platenL + mW * 0.050f, platenCy - platenRy * 0.30f),
-        end = Offset(leverX, leverY),
-        strokeWidth = (mW * 0.010f).coerceAtLeast(1f),
-        alpha = alpha * 0.92f,
-        cap = StrokeCap.Round
-    )
-    drawCircle(color = mid, radius = mW * 0.016f, center = Offset(leverX, leverY), alpha = alpha * 0.45f)
-    drawCircle(
-        color = INK,
-        radius = mW * 0.016f,
-        center = Offset(leverX, leverY),
-        alpha = alpha * 0.84f,
-        style = Stroke(width = (mW * 0.0035f).coerceAtLeast(1f))
-    )
-
-    // ── 滑架下面那条暗腔 ──
-    // 全图最暗的一块，也是这一版唯一新增的结构。纵向只有 0.150h，四条同亮度的横带叠
-    // 起来读不出前后；而一条比任何部件都暗的腔，一眼就是「这里是空的、后面还有东西」。
-    // 真机上这里确实是空的：纸从这条缝绕下去，字锤从这条缝抬起来。
-    //
-    // 0.93 而不是 0.66：**背景层的 alpha 是 1.0**（它是两张背景交叉渐变的权重，
-    // 不是 `PROP_ALPHA` 那类道具系数）。上一版按 0.34 估的，实测这条腔的合成值是 82、
-    // 而机身 `INK × 0.88` 是 72 —— 该最暗的地方比它前面的机身还亮，整台机器的前后关系是反的。
-    // 0.93 让底色只剩七个百分点（≈ 17），比机身深一大截
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset(mL, recessTop),
-        size = Size(mW, recessBottom - recessTop),
-        alpha = alpha * 0.93f
-    )
-    // 字锤：11 根从腔底立起来，正在打的那一根抬到印字点。
-    // 用 mid（TTPD 的 mid 近白）而不是 INK —— 暗腔里的金属靠反光被看见，
-    // 深色的杆画在黑腔里等于没画
-    val hitY = platenCy + platenRy * 0.58f
-    for (i in 0 until TYPE_BARS) {
-        val f = i / (TYPE_BARS - 1f)
-        val fromX = w * (0.25f + 0.50f * f)
-        val fromY = recessBottom - h * 0.001f
-        // 扇形排布：两侧的杆更斜，中间的近乎直立
-        val restX = fromX + (bankCx - fromX) * 0.34f
-        val restY = recessTop + h * 0.004f
-        val p = if (i == strikeIndex) lift else 0f
-        drawLine(
-            color = mid,
-            start = Offset(fromX, fromY),
-            end = Offset(restX + (printX - restX) * p, restY + (hitY - restY) * p),
-            strokeWidth = (w * 0.0034f).coerceAtLeast(1f),
-            alpha = alpha * (0.26f + 0.50f * p),
-            cap = StrokeCap.Round
-        )
-    }
-    // 色带导子：立在印字点前的那只小叉子，随字锤一起抬。少了它印字点上什么都没有
-    drawRect(
-        color = mid,
-        topLeft = Offset(printX - w * 0.006f, recessTop + h * 0.004f - h * 0.008f * lift),
-        size = Size(w * 0.012f, h * 0.011f),
-        alpha = alpha * (0.28f + 0.34f * lift)
-    )
-
-    // ── 两肩 ──
-    // 肩比中段高 0.010h，色带盘盖坐在肩顶。轮廓因此是「高—低—高」，机器有了肩宽；
-    // 上一轮整台机器一条等高的直边，屏幕上就是一块板
-    for (side in 0..1) {
-        val sL = if (side == 0) mL else midR
-        val sR = sL + shoulderSpan
-        val inset = shoulderSpan * 0.05f
-        val faceTop = shoulderTop + h * 0.008f
-        // 肩顶面：后缘略窄 = 俯视的透视
-        path.rewind()
-        path.moveTo(sL + inset, shoulderTop)
-        path.lineTo(sR - inset, shoulderTop)
-        path.lineTo(sR, faceTop)
-        path.lineTo(sL, faceTop)
-        path.close()
-        drawPath(path = path, color = INK, alpha = alpha * 0.80f)
-        drawLine(
-            color = PAPER_WHITE,
-            start = Offset(sL + inset, shoulderTop),
-            end = Offset(sR - inset, shoulderTop),
-            strokeWidth = (h * 0.0024f).coerceAtLeast(1f),
-            alpha = alpha * 0.20f
-        )
-        // 肩的前脸：一路落到前沿，比顶面暗一档 —— 朝上的面受光、朝前的面背光
-        drawRect(
-            color = INK,
-            topLeft = Offset(sL, faceTop),
-            size = Size(shoulderSpan, lipTop - faceTop),
-            alpha = alpha * 0.93f
-        )
-        // 台灯在左上：左肩外棱受光、右肩外棱压暗
-        drawRect(
-            color = if (side == 0) PAPER_WHITE else Color.Black,
-            topLeft = Offset(if (side == 0) sL else sR - mW * 0.030f, faceTop),
-            size = Size(mW * 0.030f, lipTop - faceTop),
-            alpha = alpha * (if (side == 0) 0.10f else 0.17f)
-        )
-        // 折角：顶面到前脸那条亮线
-        drawLine(
-            color = PAPER_WHITE,
-            start = Offset(sL, faceTop),
-            end = Offset(sR, faceTop),
-            strokeWidth = (h * 0.0018f).coerceAtLeast(1f),
-            alpha = alpha * 0.15f
-        )
-        // 色带盘盖：沉进肩顶的一只扁椭圆。盘里绕的色带是黑的，盘心比机身还深，
-        // 亮的只有金属外圈那一道与中央的轴
-        val cx = (sL + sR) * 0.5f
-        val cy = shoulderTop + h * 0.0044f
-        val rx = shoulderSpan * 0.32f
-        val ry = h * 0.0068f
-        drawOval(
-            color = Color.Black,
-            topLeft = Offset(cx - rx * 1.16f, cy - ry * 1.22f),
-            size = Size(rx * 2.32f, ry * 2.44f),
-            alpha = alpha * 0.55f
-        )
-        drawOval(color = INK, topLeft = Offset(cx - rx, cy - ry), size = Size(rx * 2f, ry * 2f), alpha = alpha)
-        drawOval(
-            color = mid,
-            topLeft = Offset(cx - rx, cy - ry),
-            size = Size(rx * 2f, ry * 2f),
-            alpha = alpha * 0.46f,
-            style = Stroke(width = (w * 0.0022f).coerceAtLeast(1f))
-        )
-        drawOval(
-            color = mid,
-            topLeft = Offset(cx - rx * 0.20f, cy - ry * 0.22f),
-            size = Size(rx * 0.40f, ry * 0.44f),
-            alpha = alpha * 0.58f
-        )
-        // 色带：从盘的内侧拉进腔里的导子。一左一右两条，色带走向能看见
-        drawLine(
-            color = mid,
-            start = Offset(cx + (if (side == 0) rx else -rx), cy + ry * 0.5f),
-            end = Offset(printX + (if (side == 0) -w * 0.018f else w * 0.018f), recessTop + h * 0.007f),
-            strokeWidth = (h * 0.0020f).coerceAtLeast(1f),
-            alpha = alpha * 0.30f
-        )
-    }
-
-    // ── 中段机身：键盘坐的那块斜坡 ──
-    // 三个层次：腔（最暗）< 中段 < 肩。中段更靠里、受光比肩少，但比腔亮得多
-    drawRect(
-        color = INK,
-        topLeft = Offset(midL, recessBottom),
-        size = Size(midR - midL, lipTop - recessBottom),
-        alpha = alpha * 0.88f
-    )
-    drawRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(midL, recessBottom),
-        size = Size(midR - midL, h * 0.0034f),
-        alpha = alpha * 0.14f
-    )
-
-    // ── 四排键 ──
-    // 键帽是**横扁的椭圆**，不是圆：键面朝上，投影在竖直方向被压掉六成。
-    //
-    // 键帽**必须比机身暗**。上一轮用 `mid`（TTPD 的 mid 是 #F5F1EA，近白）画帽面，
-    // 实测键帽 (206,203,198) 压在 (99,95,89) 的机身上，亮度差一倍 —— 屏幕上就是
-    // 「一盘珍珠」，正是被点名过的那种廉价感。真机是深色胶木键帽 + 一圈镀铬边 + 白字母：
-    // 亮的只有那圈边和那个字母，两者都只有一两个像素宽。
-    //
-    // 四排**近大远小**（见 [TYPE_KEY_TIERS]）：越靠前的一排键帽更大、整排更宽，
-    // 每颗键下面再露一小截键杆。上一轮四排等大等宽，读作一块机械键盘；
-    // 逐排放大 5% 之后同一块斜坡上就有了纵深，键也成了「架在杆上」而不是「印在板上」
-    val pressedRow = if (strikeIndex < 0) -1 else strikeIndex % TYPE_KEY_ROWS.size
-    for (row in TYPE_KEY_ROWS.indices.reversed()) {
-        val keys = TYPE_KEY_ROWS[row]
-        val scale = TYPE_KEY_TIERS[row]
-        // 第 0 排最靠里（贴着两肩下沿）、最小；越靠前越大越低。低到出屏的那几排
-        // 被时间轴挡住，属预期 —— 机器本来就坐在屏幕底
-        val rowY = exitY + h * (0.120f + 0.0112f * row)
-        val keyRx = mW * 0.0250f * scale
-        val keyRy = h * 0.0047f * scale
-        // 每排往右错三分之一个键，和真机一样
-        val rowCx = bankCx + keyRx * 0.33f * (row - 1.5f)
-        val pitch = bankWidth * scale / keys
-        val pressedCol = if (row == pressedRow) (strikeIndex * 7) % keys else -1
-        for (k in 0 until keys) {
-            val down = if (k == pressedCol) lift else 0f
-            val cx = rowCx + (k - (keys - 1) / 2f) * pitch
-            val cy = rowY + keyRy * 0.34f * down
-            val rx = keyRx * (1f - 0.05f * down)
-            val ry = keyRy * (1f - 0.05f * down)
-            // 键杆：帽下面露出的一小截。按下时缩短，那就是「被按下去了」
-            drawRect(
-                color = Color.Black,
-                topLeft = Offset(cx - rx * 0.30f, cy),
-                size = Size(rx * 0.60f, ry * (2.2f - 1.2f * down)),
-                alpha = alpha * 0.44f
-            )
-            // 键座：比键帽大一圈的暗环，同时是键杆投在斜坡上的影
-            drawOval(
-                color = Color.Black,
-                topLeft = Offset(cx - rx * 1.16f, cy - ry * 1.20f),
-                size = Size(rx * 2.32f, ry * 2.56f),
-                alpha = alpha * 0.34f
-            )
-            drawOval(
-                color = INK,
-                topLeft = Offset(cx - rx, cy - ry),
-                size = Size(rx * 2f, ry * 2f),
-                alpha = alpha * (0.90f + 0.10f * down)
-            )
-            // 帽面上半提亮：键面是凹的，靠上那一半朝着台灯
-            drawOval(
-                color = PAPER_WHITE,
-                topLeft = Offset(cx - rx * 0.84f, cy - ry * 0.88f),
-                size = Size(rx * 1.68f, ry * 0.84f),
-                alpha = alpha * (0.14f - 0.07f * down)
-            )
-            // 镀铬边：一圈细白线。全机最亮的东西就该是这种一像素宽的高光
-            drawOval(
-                color = PAPER_WHITE,
-                topLeft = Offset(cx - rx, cy - ry),
-                size = Size(rx * 2f, ry * 2f),
-                alpha = alpha * (0.42f - 0.20f * down),
-                style = Stroke(width = (h * 0.0010f).coerceAtLeast(1f))
-            )
-            // 字母：一小道白。画不出字形就不要假装 —— 一道横杠在这个尺寸下正是字的样子
-            drawRect(
-                color = PAPER_WHITE,
-                topLeft = Offset(cx - rx * 0.28f, cy - ry * 0.08f),
-                size = Size(rx * 0.56f, (h * 0.0012f).coerceAtLeast(1f)),
-                alpha = alpha * (0.60f - 0.26f * down)
-            )
-        }
-    }
-
-    // 空格键：最前那一条，也是唯一一根横杆。先垫一层影，它才是「架起来」的
-    val spaceTop = exitY + h * 0.1720f
-    val spaceW = w * 0.360f
-    drawRoundRect(
-        color = Color.Black,
-        topLeft = Offset(paperCx - spaceW * 0.5f, spaceTop + h * 0.0022f),
-        size = Size(spaceW, h * 0.0105f),
-        cornerRadius = CornerRadius(h * 0.0048f),
-        alpha = alpha * 0.38f
-    )
-    // 同样不能用 mid 铺面：实测那一条是 (235,233,227)，比键帽还白，像贴了张纸条
-    drawRoundRect(
-        color = INK,
-        topLeft = Offset(paperCx - spaceW * 0.5f, spaceTop),
-        size = Size(spaceW, h * 0.0105f),
-        cornerRadius = CornerRadius(h * 0.0048f),
-        alpha = alpha * 0.95f
-    )
-    drawRoundRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(paperCx - spaceW * 0.5f, spaceTop),
-        size = Size(spaceW, h * 0.0105f),
-        cornerRadius = CornerRadius(h * 0.0048f),
-        alpha = alpha * 0.30f,
-        style = Stroke(width = (w * 0.0020f).coerceAtLeast(1f))
-    )
-
-    // ── 前脸 ──
-    // 三个调子里最暗的一块（背光）。从键区下沿一路落到屏幕底：机器「坐在屏幕底下」，
-    // 底边出画才对；落进时间轴后面的那截被轴盖住，属预期
-    drawRect(
-        color = INK,
-        topLeft = Offset(mL, lipTop),
-        size = Size(mW, h - lipTop),
-        alpha = alpha * 0.97f
-    )
-    drawLine(
-        color = PAPER_WHITE,
-        start = Offset(mL, lipTop),
-        end = Offset(mR, lipTop),
-        strokeWidth = (h * 0.0018f).coerceAtLeast(1f),
-        alpha = alpha * 0.15f
-    )
-    // 铭牌：前脸正中一道镀铬窄条。老机器这个位置就是厂牌，一道亮线就够
-    drawRect(
-        color = PAPER_WHITE,
-        topLeft = Offset(paperCx - w * 0.062f, lipTop + h * 0.0022f),
-        size = Size(w * 0.124f, (h * 0.0016f).coerceAtLeast(1f)),
-        alpha = alpha * 0.26f
-    )
-    // 出纸缝 + 两只送纸胶辊。机器投在纸上的那道影子由卡片自己画（见 SwiftieEraCard
-    // 的 feedProgress）—— 背景层在卡片**下面**，画在这里会被纸整块盖掉
-    val seamY = exitY - h * 0.005f
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset(paperL - paperW * 0.012f, seamY - h * 0.002f),
-        size = Size(paperW * 1.024f, h * 0.004f),
-        alpha = alpha * 0.70f
-    )
-    for (side in 0..1) {
-        val rx = paperCx + paperW * (if (side == 0) -0.34f else 0.34f)
-        drawOval(
-            color = INK,
-            topLeft = Offset(rx - w * 0.018f, seamY - h * 0.007f),
-            size = Size(w * 0.036f, h * 0.014f),
-            alpha = alpha
-        )
-        drawOval(
-            color = PAPER_WHITE,
-            topLeft = Offset(rx - w * 0.006f, seamY - h * 0.0046f),
-            size = Size(w * 0.008f, h * 0.005f),
-            alpha = alpha * 0.26f
+        drawTypewriterStub(
+            lines = stubLines,
+            line = line,
+            chars = chars,
+            lineBreak = lineBreak,
+            idle = idle,
+            mid = mid,
+            alpha = alpha,
+            rollerTop = rollerTop,
+            rollerL = rollerL,
+            rollerR = rollerR
         )
     }
 }
 
 /**
- * 滚筒两端的旋钮：椭圆盘 + 一圈刻纹 + 中央轴。
+ * 露头那截纸上正在打的两行字。
  *
- * 刻纹按 [degrees] 转 —— 每打完一行转一格，这是「纸在往上走」的唯一证据。
- * 少了刻纹它就是一个深色椭圆，和滚筒本体分不开。
+ * ## 纸不动、字往上涨 —— 而且只在换行时涨
+ *
+ * 真机的印字点是钉死的，一行打完**回车**才把滚筒推进一行（纸升高一行）。所以：
+ * 打一行当中那截纸一个字都不动，只在换行那 2 个字符的时间里整张往上走一行 ——
+ * 这个「一顿一顿」的走法本身就是打字机的样子，匀速上滑读起来是打印机在吐纸。
+ *
+ * ## 字号、行距、落位全是推出来的
+ *
+ * 字号取「最宽的那一行正好排进纸里」（[STUB_SHEET_SPAN] 留两个边距），再按辊宽封顶
+ * （名字短时不至于撑成一页海报）。行距、打字点、纸的顶边都跟着它换算 ——
+ * 换台设备只有那个字号一个数在变，机器与纸的相对关系一个数都不动。
  */
-private fun DrawScope.knurledKnob(
-    cx: Float,
-    cy: Float,
-    rx: Float,
-    ry: Float,
-    degrees: Float,
+private fun DrawScope.drawTypewriterStub(
+    lines: List<TextLayoutResult>,
+    line: Int,
+    chars: Float,
+    lineBreak: Float,
+    idle: Boolean,
     mid: Color,
-    alpha: Float
+    alpha: Float,
+    rollerTop: Float,
+    rollerL: Float,
+    rollerR: Float
 ) {
-    drawOval(
-        color = INK,
-        topLeft = Offset(cx - rx, cy - ry),
-        size = Size(rx * 2f, ry * 2f),
+    if (lines.isEmpty()) return
+    val rollerW = rollerR - rollerL
+    val sheetL = rollerL + rollerW * 0.055f
+    val sheetR = rollerR - rollerW * 0.055f
+    val sheetW = sheetR - sheetL
+    // 字号：最宽的一行排进纸的 88%，再按辊宽封顶
+    val widest = lines.maxOf { it.size.width }.coerceAtLeast(1)
+    val reference = STUB_REFERENCE.toPx().coerceAtLeast(1f)
+    val fontPx = (sheetW * STUB_SHEET_SPAN / widest * reference).coerceAtMost(rollerW * 0.125f)
+    val textScale = fontPx / reference
+    val pitch = fontPx * STUB_LINE_PITCH
+    // 打字点：露头那截纸最下面那一行的基线，贴着辊顶（再低就被辊子挡住了）
+    val printY = rollerTop - pitch * 0.62f
+    // 纸的顶边跟着「打到第几行」一格一格往上跳，跳完一行就停住
+    val rise = line + lineBreak
+    val sheetTop = printY - pitch * rise - fontPx * 1.15f
+    if (sheetTop >= rollerTop - 1f) return
+
+    // ── 纸 ──
+    drawRect(
+        color = PAPER_WHITE,
+        topLeft = Offset(sheetL, sheetTop),
+        size = Size(sheetW, rollerTop - sheetTop),
         alpha = alpha * 0.94f
     )
-    val step = TAU / KNOB_KNURLS
-    val base = degrees / 360f * TAU
-    for (k in 0 until KNOB_KNURLS) {
-        val a = base + step * k
-        val ca = cos(a)
-        val sa = sin(a)
-        drawLine(
-            color = PAPER_WHITE,
-            start = Offset(cx + ca * rx * 0.66f, cy + sa * ry * 0.66f),
-            end = Offset(cx + ca * rx * 0.94f, cy + sa * ry * 0.94f),
-            strokeWidth = (rx * 0.055f).coerceAtLeast(1f),
-            alpha = alpha * 0.20f
+    // 上缘一道亮线 + 两侧压暗：一截平涂的白条读不出是纸，有了这三笔才有厚度
+    drawRect(
+        color = Color.White,
+        topLeft = Offset(sheetL, sheetTop),
+        size = Size(sheetW, fontPx * 0.06f),
+        alpha = alpha * 0.5f
+    )
+    for (side in 0..1) {
+        drawRect(
+            color = INK,
+            topLeft = Offset(if (side == 0) sheetL else sheetR - sheetW * 0.020f, sheetTop),
+            size = Size(sheetW * 0.020f, rollerTop - sheetTop),
+            alpha = alpha * 0.16f
         )
     }
-    drawOval(
-        color = mid,
-        topLeft = Offset(cx - rx * 0.30f, cy - ry * 0.30f),
-        size = Size(rx * 0.60f, ry * 0.60f),
-        alpha = alpha * 0.60f
-    )
+
+    // ── 字 ──
+    // 左对齐 + 一个左边距：打字机就是从版口左边开始打的，居中反而像排版
+    val textLeft = sheetL + sheetW * STUB_TEXT_MARGIN
+    for (index in 0..line) {
+        val layout = lines[index]
+        // 这一行的基线：当前那行在打字点上，上面几行各高一个行距，换行时整组一起抬
+        val baseline = printY - pitch * (rise - index)
+        if (baseline > rollerTop) continue
+        // 打完了的行全画；正在打的那行按字符裁到 [chars] 处
+        val count = stubCharCount(lines, index)
+        val head = if (index < line) count.toFloat() else chars.coerceIn(0f, count.toFloat())
+        val whole = head.toInt()
+        if (whole <= 0) continue
+        val top = baseline - layout.getLineBaseline(0) * textScale
+        val startX = textLeft + layout.getHorizontalPosition(0, true) * textScale
+        val clipRight = if (head >= count) {
+            sheetR
+        } else {
+            val at = head - whole
+            val fromX = textLeft + layout.getHorizontalPosition(whole, true) * textScale
+            val toX = textLeft + layout.getHorizontalPosition(whole + 1, true) * textScale
+            if (at <= 0f) fromX else fromX + (toX - fromX) * at
+        }
+        clipRect(
+            left = startX,
+            top = top - fontPx * 0.30f,
+            right = clipRight.coerceAtMost(sheetR),
+            bottom = baseline + fontPx * 0.35f
+        ) {
+            withTransform({
+                translate(textLeft, top)
+                scale(scaleX = textScale, scaleY = textScale, pivot = Offset.Zero)
+            }) {
+                drawText(textLayoutResult = layout, color = INK, alpha = alpha * 0.92f)
+            }
+        }
+    }
+    // 打字点：字锤落下的位置在纸的下沿闪一小片暖光（辊子挡住的那条缝里透出来的反光）
+    if (!idle) {
+        val at = chars - chars.toInt()
+        val glow = (1f - at).coerceIn(0f, 1f).let { it * it }
+        if (glow > 0.01f) {
+            drawRect(
+                color = mid,
+                topLeft = Offset(sheetL, rollerTop - fontPx * 0.22f),
+                size = Size(sheetW, fontPx * 0.22f),
+                alpha = alpha * glow * 0.35f
+            )
+        }
+    }
 }
 
-/** 字锤根数。 */
-private const val TYPE_BARS = 11
+/** 前摇那两行字打到哪儿了。见 [stubCursor]。 */
+private class StubCursor(val line: Int, val chars: Float, val lineBreak: Float)
 
 /**
- * 四排键各自的键数。10/10/10/9 —— 真机上排最长、下排最短。
+ * 把「已打的字符数」拆成（第几行、该行已打几个、换行走到几分）。
  *
- * 从 11/11/10/10 收到这里：键要够大才看得出「一圈镀铬边 + 一个字母」，
- * 而键盘区的宽度（0.60w）是定的，减一颗键每颗就宽 10%。
+ * 换行占 [STUB_LINE_BREAK_UNITS] 个字符的时间：回车那一下纸要往上走一行，
+ * 零时间换行会让第二行凭空跳上去。
  */
-private val TYPE_KEY_ROWS = intArrayOf(10, 10, 10, 9)
+private fun stubCursor(typedUnits: Float, lines: List<TextLayoutResult>): StubCursor {
+    if (lines.isEmpty()) return StubCursor(0, 0f, 0f)
+    var walked = 0f
+    for (index in lines.indices) {
+        val count = stubCharCount(lines, index).toFloat()
+        if (typedUnits < walked + count) return StubCursor(index, typedUnits - walked, 0f)
+        walked += count
+        if (index == lines.lastIndex) {
+            return StubCursor(index, count, 0f)
+        }
+        if (typedUnits < walked + STUB_LINE_BREAK_UNITS) {
+            return StubCursor(index, count, (typedUnits - walked) / STUB_LINE_BREAK_UNITS)
+        }
+        walked += STUB_LINE_BREAK_UNITS
+    }
+    val last = lines.lastIndex
+    return StubCursor(last, stubCharCount(lines, last).toFloat(), 0f)
+}
 
 /**
- * 四排键的**近大远小**系数（后 → 前）。
+ * 一整轮前摇要打多少个「字符单位」。行与行之间那两个字符的空当是回车。
  *
- * 键盘是一道朝着看的人倾下来的斜坡，所以越靠前的一排离眼睛越近：键帽更大、整排更宽。
- * 上一轮四排等大等宽地码在同一个 y 间距上，屏幕上读作一块机械键盘 —— 那是「被压缩了」
- * 这条反馈里最主要的一处。每排放大 5%、整排也跟着宽 5%，同一块斜坡上就有了纵深。
- *
- * 幅度不能再大：0.93→1.09 已经是 17% 的差，再拉开前排键就宽到与后排对不上列，
- * 读成两台不同的机器。
+ * 节拍由它均分 [SwiftieTimeline.TTPD_PREROLL_MS]：字符多的名字打得快一点，
+ * 但**总是在前摇结束的那一刻正好打完**，纸紧接着出来。
  */
-private val TYPE_KEY_TIERS = floatArrayOf(0.93f, 0.98f, 1.03f, 1.09f)
-
-/** 旋钮上的刻纹数。 */
-private const val KNOB_KNURLS = 11
-
-/** 一击的时长。95ms ≈ 每秒 10 击，是「打得很顺」的手速。 */
-private const val TYPE_STRIKE_MS = 95L
+private fun stubUnits(lines: List<TextLayoutResult>): Float {
+    if (lines.isEmpty()) return 1f
+    var units = 0f
+    for (index in lines.indices) {
+        units += stubCharCount(lines, index)
+        if (index < lines.lastIndex) units += STUB_LINE_BREAK_UNITS
+    }
+    return units.coerceAtLeast(1f)
+}
 
 /**
- * 一行的时长（含回车横扫）。
+ * 第 [index] 行有几个字符。
  *
- * 刻意等于 `TTPD_PREROLL_MS - 150`：前摇那 1400ms 正好是**第一行打完 + 一次回车**，
- * 纸紧接着出来。之后这个周期照常走下去 —— 机器在整段 11.3s 里一直在打，
- * 打的就是屏幕上正在逐行点亮的那 31 首。
+ * 逐字揭示靠 `TextLayoutResult.getHorizontalPosition` 取**那两个字符自己的边界**
+ * （见 [drawTypewriterStub]），所以这里只需要字符数，不需要知道字宽 ——
+ * 打字机字体是不是等宽都不影响揭示边落在哪里。
  */
-private const val TYPE_LINE_MS = 1_250L
+private fun stubCharCount(lines: List<TextLayoutResult>, index: Int): Int =
+    lines[index].layoutInput.text.length
 
-/** 一行里用于打字的比例，余下的 12%（150ms）是回车横扫。 */
-private const val TYPE_LINE_SPAN = 0.88f
+/*
+ * 底图的基准（都是图片像素，量自 `era_ttpd_typewriter.webp`）。
+ *
+ * 底图是 1536×1024 的 RGBA 渲染图，机身墨迹占 x 66..1438 / y 55..1008。四条横向基准线
+ * 决定整台机器的落位，改底图必须重新量这四个数 —— 机器会整体错位或纸从辊子里穿出来。
+ */
+private const val TTPD_MACHINE_IMAGE_W = 1536f
+private const val TTPD_MACHINE_IMAGE_H = 1024f
+
+/** 压纸杆（那根亮着的金属横杆）的上缘。卡片下缘坐在这一行上。 */
+private const val TTPD_PLATEN_LINE = 184f
+
+/** 压纸辊的顶轮廓。露头那截纸在它上面才露得出来，往下被辊子挡住。 */
+private const val TTPD_ROLLER_TOP = 79f
+
+/** 压纸辊的左右缘（露头那截纸的宽度按它算）。 */
+private const val TTPD_ROLLER_L = 382f
+private const val TTPD_ROLLER_R = 1149f
+
+/** 色带导子（字锤穿过的那只银叉）的中心：每一击在这里闪一下。 */
+private const val TTPD_GUIDE_X = 768f
+private const val TTPD_GUIDE_Y = 244f
+
+/**
+ * 机器宽度 ÷ 纸宽度。
+ *
+ * 压纸辊比纸宽是机器的样子（纸要夹在辊子里），按屏宽定尺寸则会在平板上让卡片比机器还宽
+ * —— 卡片宽度在平板上封顶 480dp，屏更宽时纸不会跟着变宽。
+ */
+private const val TTPD_MACHINE_OVER_PAPER = 1.06f
+
+/** 打字的字号按这条纸宽比例排（两侧各留一点边距）。 */
+private const val STUB_SHEET_SPAN = 0.88f
+
+/** 纸上的左边距：打字机从版口左边开始打。 */
+private const val STUB_TEXT_MARGIN = 0.06f
+
+/** 行距（字号倍数）。打字机的双倍行距还要再宽，这里只比单倍松一点。 */
+private const val STUB_LINE_PITCH = 1.42f
+
+/** 回车占几个字符的时间。 */
+private const val STUB_LINE_BREAK_UNITS = 2f
+
+/** 预排字号。量一次、draw 阶段按 [scale] 缩放到实际字号（与表盘罗马数字同一套路）。 */
+private val STUB_REFERENCE = 100.dp
+
+/**
+ * 色带导子上的那一闪。
+ *
+ * 建在单位方框里、画的时候 withTransform 缩到实际尺寸 —— 与全文件其余渐变同一条规矩：
+ * 按 px 建的话每帧一个原生 Shader。
+ */
+private val GUIDE_FLASH = Brush.radialGradient(
+    colors = listOf(LAMP_CORE, Color.Transparent),
+    center = UNIT_CENTER,
+    radius = 0.5f
+)
 
 // ─────────────────────── 12 · The Life of a Showgirl ───────────────────────
 

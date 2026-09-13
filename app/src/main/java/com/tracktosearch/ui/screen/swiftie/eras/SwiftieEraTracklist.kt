@@ -12,18 +12,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.R
+import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -78,10 +85,12 @@ private val NO_COLLAPSE: () -> Float = { 0f }
 /**
  * 一张专辑的完整曲目列：逐行点亮（Spec §6.2），序列末尾自下而上卷收。
  *
- * 曲目名**不用**时代字体 —— 那些字体按专辑名逐个子集化，拿来画曲目全是豆腐块。
- * 只借该时代的主色。
+ * 曲目名**不借时代字体** —— 那 12 个字库是按专辑名逐个子集化的，只含那几个字，
+ * 拿来画曲目全是豆腐块；TTPD 那张用打字机字体（`era_typewriter`，按 31 首的曲名与
+ * 数字做的子集），是因为页面上真的有一台打字机把这一列打出来（见 [typingRow]）。
  *
- * @param eraIndex 这是第几张，只用来判「哪一行要描金」（见 [gildedRowIndex]）
+ * @param eraIndex 这是第几张。判「哪一行要描金」（见 [gildedRowIndex]）与
+ *   「这一列是不是打出来的」（TTPD）
  * @param elapsedInCard 这张卡片自己的已用毫秒
  * @param textColors 压暗到 AA 的一组文字色，由卡片算好传进来（见 `SwiftieEraContrast`）
  * @param rowHeight 单行行高，由卡片按可用高度与曲目数算好（见 `trackRowHeight`）。
@@ -101,6 +110,14 @@ internal fun SwiftieEraTracklist(
     val lowRam = rememberIsLowRamDevice()
     val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
     val gildedRow = gildedRowIndex(eraIndex)
+    // TTPD 那一张的曲目列是**打字机打的**：字号换 Special Elite（子集化的打字机字体），
+    // 逐行点亮换成「打字头从左往右走过一行」。其余 11 张与压缩前逐像素一致
+    val typed = eraIndex == SwiftieTimeline.TTPD_INDEX
+    val titleFont = if (typed) {
+        FontFamily(Font(R.font.era_typewriter))
+    } else {
+        FontFamily.Default
+    }
 
     // 字号用 Dp.toSp() 折算，**不跟系统字号走**。
     //
@@ -114,14 +131,19 @@ internal fun SwiftieEraTracklist(
     // 16dp 行高换算出 12sp / 11sp，与压缩前逐像素一致；压到 12dp 就是 9sp / 8.25sp
     val density = LocalDensity.current
     val numberWidth = rowHeight * 1.375f
-    val numberStyle = remember(textColors, rowHeight, density) {
+    val numberStyle = remember(textColors, rowHeight, density, titleFont) {
         TextStyle(
+            fontFamily = titleFont,
             fontSize = with(density) { (rowHeight * 0.6875f).toSp() },
             color = textColors.number.copy(alpha = SwiftieEraContrast.NUMBER_ALPHA)
         )
     }
-    val titleStyle = remember(textColors, rowHeight, density) {
-        TextStyle(fontSize = with(density) { (rowHeight * 0.75f).toSp() }, color = textColors.body)
+    val titleStyle = remember(textColors, rowHeight, density, titleFont) {
+        TextStyle(
+            fontFamily = titleFont,
+            fontSize = with(density) { (rowHeight * 0.75f).toSp() },
+            color = textColors.body
+        )
     }
     // derivedStateOf：布尔量不变就不通知读者，所以卷收之前这一列的**布局**一帧都不失效。
     // 直接在 layout 里读 collapseProgress() 会让整段 96 秒每帧重测一遍所有行
@@ -149,20 +171,54 @@ internal fun SwiftieEraTracklist(
                         .coerceIn(0f, 1f)
                 }
             }
+            // 这一行的两个 Text 各自的排版结果：打字头要**逐字**落在字上，
+            // 而按键的落点只有排版结果知道（见 [typingRow]）。
+            // 用普通数组而不是 mutableStateOf —— 它在**绘制**阶段被读，不需要触发重组；
+            // 每次排版都会刷新，draw 一定晚于 layout，读到的就是这一帧的
+            val numberLayout = remember { arrayOfNulls<TextLayoutResult>(1) }
+            val titleLayout = remember { arrayOfNulls<TextLayoutResult>(1) }
+            // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
+            val numberText = String.format(Locale.US, "%02d", index + 1)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .collapsingRow(rowHeight, collapsing, rowCollapse)
-                    // 在 graphicsLayer 里读时钟：每帧只失效 draw，不重组
-                    .graphicsLayer {
-                        val reveal = ((elapsedInCard() - appearAt) / TRACK_FADE_MS)
-                            .coerceIn(0f, 1f)
-                        // alpha 在收起走到 70% 时就归零：高度还在收，字已经看不见了，
-                        // 于是永远看不到「字被行高横切一半」那一帧
-                        val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
-                        alpha = reveal * (1f - shrink)
-                        translationY = (1f - reveal) * 10.dp.toPx()
-                    }
+                    .then(
+                        if (typed) {
+                            // 打字那一张：**没有淡入也没有位移**，整行靠打字头揭示 ——
+                            // alpha 只留给卷收（见下）
+                            Modifier
+                                .graphicsLayer {
+                                    val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
+                                    alpha = 1f - shrink
+                                }
+                                .typingRow(
+                                    progress = {
+                                        ((elapsedInCard() - appearAt).toFloat() / stagger)
+                                            .coerceIn(0f, 1f)
+                                    },
+                                    numberWidth = numberWidth,
+                                    numberChars = numberText.length,
+                                    numberLayout = { numberLayout[0] },
+                                    titleLayout = { titleLayout[0] },
+                                    title = title,
+                                    rowHeight = rowHeight,
+                                    cursor = textColors.number,
+                                    elapsedInCard = elapsedInCard
+                                )
+                        } else {
+                            // 在 graphicsLayer 里读时钟：每帧只失效 draw，不重组
+                            Modifier.graphicsLayer {
+                                val reveal = ((elapsedInCard() - appearAt) / TRACK_FADE_MS)
+                                    .coerceIn(0f, 1f)
+                                // alpha 在收起走到 70% 时就归零：高度还在收，字已经看不见了，
+                                // 于是永远看不到「字被行高横切一半」那一帧
+                                val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
+                                alpha = reveal * (1f - shrink)
+                                translationY = (1f - reveal) * 10.dp.toPx()
+                            }
+                        }
+                    )
                     .then(
                         if (gilded) {
                             Modifier.gildedRow(
@@ -176,20 +232,21 @@ internal fun SwiftieEraTracklist(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
-                    text = String.format(Locale.US, "%02d", index + 1),
+                    text = numberText,
                     style = numberStyle,
                     // 列宽是定死的 rowHeight×1.375，不禁止折行的话
                     // 「01」会在放大档位折成两行、被行高裁掉下半截
                     maxLines = 1,
                     softWrap = false,
+                    onTextLayout = { numberLayout[0] = it },
                     modifier = Modifier.width(numberWidth)
                 )
                 Text(
                     text = title,
                     style = titleStyle,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { titleLayout[0] = it }
                 )
             }
         }
@@ -222,6 +279,120 @@ private fun Modifier.collapsingRow(
         full
     }
     layout(placeable.width, height) { placeable.place(0, 0) }
+}
+
+/** 打字头眨眼的周期。与方块游标（`SwiftieEraMotifs` 信纸上那个）同一档速度。 */
+private const val TYPING_HEAD_BLINK_MS = 420L
+
+/**
+ * 打字头那一格的高度，按行高算。
+ *
+ * 曲名字号是行高的 0.75（见调用处的 `titleStyle`），Special Elite 的大写字高约 0.67 个字号
+ * —— 相乘 ≈ 行高的 0.50。真机上量过：行高 57.5px 时大写顶到基线正好 29px（0.504）。
+ * 这个比值不随密度与系统字号变（字号本身是用 `Dp.toSp()` 折过的），所以能写死。
+ */
+private const val TYPING_HEAD_SPAN = 0.50f
+
+/** 首帧还没有排版结果时，基线按行高估的位置（真机量到的 0.651）。 */
+private const val TYPING_HEAD_FALLBACK_BASELINE = 0.651f
+
+/**
+ * 打字头走过一行。
+ *
+ * ## 为什么不是淡入
+ *
+ * TTPD 这一列是那台打字机打出来的：字从左往右**一个字一个字落上去**，落下的地方压着
+ * 一块方块游标（就是机器上的印字点）。淡入读作「点亮」，与屏幕上正在发生的事对不上。
+ *
+ * 行距 [stagger]（130ms）正好是打字头走到下一行的时间，所以任何一帧**只有一行**
+ * 正在被打 —— 真机也只有一根字锤。揭示就是裁一刀，字形被拦腰截断的那半个字由游标
+ * 压着，看不见切口。
+ *
+ * ## 落点按**字**取，不按行宽均分
+ *
+ * 行是 `fillMaxWidth`，曲名却大多只占半行。按「行宽 × 进度」推游标，短曲名（`loml`）
+ * 打完之后游标还在一路往右滑，滑过的是一块空白 —— 屏幕上读作游标跑丢了。
+ * 所以落点从两个 Text **自己的排版结果**里逐字取（`getHorizontalPosition`）：
+ * 序号那两位取序号的，曲名取曲名的，游标永远停在**下一个字的字格**上。
+ *
+ * 进度也按字取整（`(p * 总字数).toInt()`）：真机一格一格走，被揭示的字因此总是完整的
+ * 一个 —— 切口落在字格边界上，不需要靠游标去盖半个字形。
+ *
+ * 长曲名被 Ellipsis 截断时，只数到**省略号之前**那些字（`getLineEnd(visibleEnd = true)`），
+ * 游标走到省略号就停住，不会继续往行尾滑。
+ *
+ * 游标的高度也一样要**贴着字**：字是垂直居中排的，按行高切一段固定比例会整体栽到基线
+ * 下面去。这里按「大写顶 → 基线」画，基线从排版结果取（见 [TYPING_HEAD_SPAN]）。
+ *
+ * clip 而不是 `graphicsLayer`：`graphicsLayer` 只能整体设 alpha 或做仿射变换，
+ * 而揭示边要停在行里任意位置，只能在绘制时裁。
+ *
+ * @param progress 0f..1f 的打字进度。**在绘制阶段读**（读的是时钟），不引起重组
+ * @param numberWidth 序号列的宽度（定宽格子，见 `numberWidth` 那个局部量）
+ * @param numberChars 序号有几位
+ * @param numberLayout 序号自己的排版结果。序号列是定宽格子而数字只占左边一小截，
+ *   按列宽均分着走会让游标在数字打完之后空滑一段才进曲名
+ * @param titleLayout 曲名的排版结果，给出每个字的落点。首帧可能还没有（见调用处的数组）
+ * @param title 曲目名，排版结果还没到时按它算个大概
+ * @param cursor 游标色。取序号那一档 —— 比正文浅，压在前沿上不抢字
+ */
+private fun Modifier.typingRow(
+    progress: () -> Float,
+    numberWidth: Dp,
+    numberChars: Int,
+    numberLayout: () -> TextLayoutResult?,
+    titleLayout: () -> TextLayoutResult?,
+    title: String,
+    rowHeight: Dp,
+    cursor: Color,
+    elapsedInCard: () -> Long
+): Modifier = drawWithContent {
+    // clipRect 的 block 换过接收者（DrawScope），`drawContent()` 要用显式接收者才调得到
+    val content = this
+    val p = progress()
+    if (p <= 0f) return@drawWithContent
+    if (p >= 1f) {
+        content.drawContent()
+        return@drawWithContent
+    }
+    val numberPx = numberWidth.toPx()
+    val num = numberLayout()
+    val titleResult = titleLayout()
+    // 省略号之前真正排出来的字数。没截断时就是曲目名的全长
+    val titleChars = titleResult?.getLineEnd(0, visibleEnd = true) ?: title.length
+    val total = (numberChars + titleChars).coerceAtLeast(1)
+    val typed = (p * total).toInt().coerceIn(0, total)
+    // 已经落上去 k 个字，裁剪边就停在**第 k 个字的左沿**上（= 游标要落的那一格）。
+    // usePrimaryDirection = false：这一列全是拉丁字母与数字，字格边界不需要按双向文本
+    // 的书写方向去分辨（那一位在这个 Compose 版本上没有默认值，必须显式给）
+    val head = when {
+        typed < numberChars -> num?.getHorizontalPosition(typed, usePrimaryDirection = false)
+            ?: (numberPx * typed / numberChars)
+        else -> numberPx + (
+            titleResult?.getHorizontalPosition(
+                (typed - numberChars).coerceIn(0, titleChars),
+                usePrimaryDirection = false
+            ) ?: ((size.width - numberPx) * ((typed - numberChars).toFloat() / titleChars))
+            )
+    }
+    clipRect(right = head) { content.drawContent() }
+    // 游标：只占行高的一半多一点。齐行高的竖条读起来是「文本插入符」而不是字锤，
+    // 而这台机器上落下来的是一小块方形印字头。
+    //
+    // **高度带是大写顶到基线**，不是行高的一段固定比例：字是垂直居中排的，按行高
+    // 切一段会整体栽到基线下面去（上一版占 0.56、底边压到基线下 7px）。
+    // 基线从排版结果里取（`getLineBaseline`）—— 字号跟着行高走，它也跟着走
+    if ((elapsedInCard() / TYPING_HEAD_BLINK_MS) % 2L != 0L) return@drawWithContent
+    val headW = (rowHeight.toPx() * 0.17f).coerceAtLeast(1f)
+    val headH = rowHeight.toPx() * TYPING_HEAD_SPAN
+    val baseline = titleResult?.let {
+        (size.height - it.size.height) * 0.5f + it.getLineBaseline(0)
+    } ?: (size.height * TYPING_HEAD_FALLBACK_BASELINE)
+    drawRect(
+        color = cursor,
+        topLeft = Offset(head - headW * 0.5f, baseline - headH),
+        size = Size(headW, headH)
+    )
 }
 
 /**

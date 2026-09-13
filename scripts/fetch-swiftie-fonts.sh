@@ -17,6 +17,9 @@ gf apache/permanentmarker/PermanentMarker-Regular.ttf marker.ttf
 gf ofl/unifrakturmaguntia/UnifrakturMaguntia-Book.ttf unifraktur.ttf
 gf ofl/parisienne/Parisienne-Regular.ttf parisienne.ttf
 gf ofl/librecaslondisplay/LibreCaslonDisplay-Regular.ttf caslon.ttf
+# TTPD 那张曲目单是打字机打出来的（见 era_typewriter）：Special Elite 是老式打字机
+# 打出来的活字，正是这一张的语义；Apache-2.0，许可证在 apache/ 下
+gf apache/specialelite/SpecialElite-Regular.ttf specialelite.ttf
 
 # Honey Script SemiBold 不在 Google Fonts 上，来自 dafont（标「100% Free」，
 # 二进制 fsType=0 允许嵌入，无随附许可证文本 —— 详见
@@ -66,6 +69,12 @@ sub imfell      era_imfell          'folklore evermore'
 sub inter       era_midnights       'Midnights'
 sub caslon      era_ttpd            'The Tortured Poets Department'
 sub playfair    era_showgirl        'The Life of a Showgirl'
+# TTPD 那张纸上的字：31 首曲目名 + 前摇打在露头纸上的两行 + 序号列的数字。
+# 曲目名里的撇号是直引号（源码里就是 U+0027），所以字符集里直接写它、不另开 --unicodes
+sub specialelite era_typewriter " !'(),-0123456789?ABCDEFGHIKLMNOPRSTWabcdefghiklmnoprstuvwxy"
+# 信纸上那句 All’s fair in love / and poetry.：弯撇号走 --unicodes，
+# 免得脚本文件的编码影响产物 —— 与 swiftie_script 那行的破折号同一个理由
+sub greatvibes  era_ttpd_letter     'Alls fairin loveand poetry.' --unicodes=U+2019
 
 # 授权文本随字体一起入仓。-f 让 404 直接失败，否则 GitHub 的错误页会被当成授权文本写进仓库。
 # Honey Script 不在这个循环里 —— 它没有许可证文本，随包的是手写的 honeyscript-NOTICE.txt
@@ -73,8 +82,8 @@ for f in pacifico greatvibes bebasneue unifrakturmaguntia parisienne \
          librecaslondisplay imfelldwpica josefinsans inter playfairdisplay; do
   curl -sfL "https://github.com/google/fonts/raw/main/ofl/$f/OFL.txt" -o "$LIC/$f-OFL.txt"
 done
-# Permanent Marker 与 Yellowtail 是 Apache-2.0，不在 ofl/ 下
-for f in permanentmarker yellowtail; do
+# Permanent Marker 与 Yellowtail、Special Elite 是 Apache-2.0，不在 ofl/ 下
+for f in permanentmarker yellowtail specialelite; do
   curl -sfL "https://github.com/google/fonts/raw/main/apache/$f/LICENSE.txt" \
     -o "$LIC/$f-LICENSE.txt"
 done
