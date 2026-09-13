@@ -231,16 +231,25 @@ class MainActivity : AppCompatActivity() {
             StartupTrace.mark("startup.splash_exit")
             provider.remove()
         }
-        // 系统 splash 让位的条件，两种时刻取早者：
+        // 系统 splash 让位的条件，三种时刻：
         //   日签这一页有内容可上屏（stampReady）→ 让位给日签，App 其余工作继续在它背后跑；
         //   主界面真的摆好了（navPlaced）→ 没有日签接场的场合（开关关着、海报没就绪）必须等到
         //     这一刻，且只等到这一刻：不能写成 isReady，也不能写成「导航开始组合」或
-        //     「主题铺好了」，那些时刻主界面都还没布局完，放行只会在屏幕上留一段暖纸空窗。
+        //     「主题铺好了」，那些时刻主界面都还没布局完，放行只会在屏幕上留一段暖纸空窗；
+        //   最短在场时长（MIN_SYSTEM_SPLASH_DURATION_MS）→ 热启动时主界面几百毫秒就摆好了，
+        //     没有这一条场记板会一闪而过。
         // 最后那 10 秒是防呆：启动链任何一环挂死也不该把人永久困在场记板上。
+        // 最短时长必须写在这里而不是去 delay 就绪的那条链（踩过）：那样会把主界面的组合
+        // 一起推后，白白多等一个最短时长的整段。
         val splashHeldFrom = System.currentTimeMillis()
         splashScreen.setKeepOnScreenCondition {
-            (!stampReady && !navPlaced) &&
-                System.currentTimeMillis() - splashHeldFrom < SPLASH_MAX_HOLD_MS
+            val heldMs = System.currentTimeMillis() - splashHeldFrom
+            when {
+                heldMs >= SPLASH_MAX_HOLD_MS -> false
+                stampReady -> false
+                heldMs < MIN_SYSTEM_SPLASH_DURATION_MS -> true
+                else -> !navPlaced
+            }
         }
         super.onCreate(savedInstanceState)
         StartupTrace.mark("activity.super_onCreate.complete")
@@ -307,7 +316,6 @@ class MainActivity : AppCompatActivity() {
         // 跑完置 isReady，日签的跳过提示与退场都以它为条件：用户按下跳过时下面必须是能用的界面。
         authInitializationJob = lifecycleScope.launch {
             StartupTrace.mark("startup.enter")
-            val splashStartTime = System.currentTimeMillis()
             var isAuthorized = false
             var cachedTraktProfile: com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse? = null
             try {
@@ -353,14 +361,6 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 0
-            }
-            // 日签没拿到（开关关着、海报没就绪）时，系统 splash 只能等 App 就绪才散场，
-            // 这里就补回「场记板动画至少演完」的那段最短时长。日签在屏幕上时不补：
-            // 用户已经在看有意义的一页，再压一个延迟等于把「等待」转嫁给它。
-            if (splashQuote == null) {
-                val elapsed = System.currentTimeMillis() - splashStartTime
-                val remaining = MIN_SYSTEM_SPLASH_DURATION_MS - elapsed
-                if (remaining > 0) delay(remaining)
             }
             isReady = true
             StartupTrace.mark("startup.ready")
