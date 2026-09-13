@@ -33,8 +33,11 @@ import com.tracktosearch.ui.screen.swiftie.unitHeartPath
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.hypot
+import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 private const val TAU = 2f * PI.toFloat()
@@ -121,19 +124,6 @@ private class BackdropShapes(lowRam: Boolean) {
             random.nextFloat(),
             0.035f + random.nextFloat() * 0.055f,
             0.10f + random.nextFloat() * 0.26f
-        )
-    }
-
-    /**
-     * folklore 松林：x, 树高（占屏高）, 树宽 三元组。
-     *
-     * 树高压到 0.10–0.26 屏高：林地线在 [HERO_BOTTOM]，再高的树顶会顶出屏幕。
-     */
-    val pines: FloatArray = buildTriples(if (lowRam) 9 else 17, 2020) { random ->
-        floatArrayOf(
-            random.nextFloat(),
-            0.10f + random.nextFloat() * 0.16f,
-            0.05f + random.nextFloat() * 0.05f
         )
     }
 
@@ -252,6 +242,10 @@ fun SwiftieEraBackdropLayer(
     // 循环里反复 rewind 的那一条 Path，与 SwiftieEraMotifs / SwiftieEraParticles 同一条铁律
     val scratch = remember { Path() }
     val numerals = rememberClockNumeralLayouts()
+    // 参考图取墨的枫叶（只有 Red 那张的五片大叶用得上）。两张小 PNG 无条件解码 ——
+    // 这一层拿到的号同 `SwiftieEraParticleLayer`：每帧变的时钟派生 lambda，
+    // 在组合阶段读一次就把整层拖成逐帧重组
+    val maple = rememberMapleBentArt()
     Spacer(
         modifier = modifier.fillMaxSize().drawBehind {
             val from = outgoing().coerceIn(0, skies.lastIndex)
@@ -261,12 +255,12 @@ fun SwiftieEraBackdropLayer(
             val eraMs = eraElapsedMs()
             val card = cardBounds()
             if (mix <= 0f || from == to) {
-                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, maple)
             } else {
-                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, maple)
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
-                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam, maple)
             }
         }
     )
@@ -288,7 +282,8 @@ private fun DrawScope.drawStage(
     path: Path,
     shapes: BackdropShapes,
     numerals: List<TextLayoutResult>,
-    lowRam: Boolean
+    lowRam: Boolean,
+    maple: MapleArt
 ) {
     if (alpha <= 0.01f) return
     val stage = SwiftieErasData.STAGE[index]
@@ -301,7 +296,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.FIREFLY_PORCH -> drawFireflyPorch(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.GOLDEN_CASTLE -> drawGoldenCastle(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, alpha)
-        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(path, top, mid, deep, phase, alpha, lowRam)
+        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(path, top, mid, deep, phase, alpha, lowRam, maple)
         SwiftieEraBackdrop.SKYLINE_POLAROIDS ->
             drawSkylinePolaroids(path, top, mid, deep, phase, alpha, shapes)
         SwiftieEraBackdrop.HALFTONE_THRONE ->
@@ -309,7 +304,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.PASTEL_RAINBOW_HOUSE ->
             drawPastelRainbowHouse(path, top, mid, deep, phase, alpha, eraMs, card)
         SwiftieEraBackdrop.PINE_MOSS_PIANO ->
-            drawPineMossPiano(path, top, mid, deep, phase, alpha, shapes)
+            drawPineMossPiano(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.BRANCH_LANTERNS ->
             drawBranchLanterns(path, top, mid, deep, phase, alpha, lowRam)
         SwiftieEraBackdrop.MIDNIGHT_CLOCK ->
@@ -544,6 +539,253 @@ private fun DrawScope.drawConifer(
         path.close()
         drawPath(path = path, color = color, alpha = alpha)
     }
+}
+
+/**
+ * 一根树干加进 [path]：底端按 [flare] 放宽（树根的喇叭口），往上按 [taper] 收细。
+ *
+ * 少了底端那个喇叭口，画面上就是一根等宽的灰条 ——「树」读不出来（第一版如此）。
+ */
+private fun trunkQuad(
+    path: Path,
+    w: Float,
+    h: Float,
+    x: Float,
+    halfWidth: Float,
+    yBottom: Float,
+    yTop: Float,
+    lean: Float,
+    taper: Float,
+    flare: Float,
+    leftStrip: Boolean = false
+) {
+    val cx = x * w
+    val hb = halfWidth * (1f + flare) * w
+    val ht = halfWidth * taper * w
+    if (leftStrip) {
+        // 左缘那条受光带：光从左上来，杆的左侧最亮。宽度取底端半宽的 0.5 倍（约整根的 20%）
+        val sb = halfWidth * 0.5f * w
+        path.moveTo(cx - hb, yBottom * h)
+        path.lineTo(cx - hb + sb, yBottom * h)
+        path.lineTo(cx + lean * w - ht + sb, yTop * h)
+        path.lineTo(cx + lean * w - ht, yTop * h)
+        path.close()
+        return
+    }
+    path.moveTo(cx - hb, yBottom * h)
+    path.lineTo(cx + hb, yBottom * h)
+    path.lineTo(cx + lean * w + ht, yTop * h)
+    path.lineTo(cx + lean * w - ht, yTop * h)
+    path.close()
+}
+
+/**
+ * 一组远景/中景的细树干，一次填完；给了 [rimColor] 再补一条左缘的受光带。
+ *
+ * [trunks] 是五元组 `x, 半宽w, 脚底y, 顶端y, 歪斜w`。同一层共用**一条 Path** ——
+ * 填充按非零环绕规则求并集，两根交叠的树干不会像两次 `drawPath` 那样叠出更深的色块。
+ *
+ * 受光带的颜色**不能**用 [mid]：杆本身已经压到 deep 一档，比它浅一点点的那档再乘个
+ * 0.15 只差 2/255，屏上什么都没有（离线复刻器量过）。用的是雾色 [top] 低透明度 ——
+ * 雾里透进来的光打在杆的左侧，这个说法和画面对得上。
+ */
+private fun DrawScope.drawTrunkLayer(
+    path: Path,
+    trunks: FloatArray,
+    color: Color,
+    alpha: Float,
+    taper: Float,
+    flare: Float,
+    rimColor: Color? = null,
+    rimAlpha: Float = 0f
+) {
+    if (alpha <= 0.01f) return
+    path.rewind()
+    for (i in 0 until trunks.size / 5) {
+        trunkQuad(
+            path = path,
+            w = size.width,
+            h = size.height,
+            x = trunks[i * 5],
+            halfWidth = trunks[i * 5 + 1],
+            yBottom = trunks[i * 5 + 2],
+            yTop = trunks[i * 5 + 3],
+            lean = trunks[i * 5 + 4],
+            taper = taper,
+            flare = flare
+        )
+    }
+    drawPath(path = path, color = color, alpha = alpha)
+    if (rimColor != null && rimAlpha > 0.01f) {
+        path.rewind()
+        for (i in 0 until trunks.size / 5) {
+            trunkQuad(
+                path = path,
+                w = size.width,
+                h = size.height,
+                x = trunks[i * 5],
+                halfWidth = trunks[i * 5 + 1],
+                yBottom = trunks[i * 5 + 2],
+                yTop = trunks[i * 5 + 3],
+                lean = trunks[i * 5 + 4],
+                taper = taper,
+                flare = flare,
+                leftStrip = true
+            )
+        }
+        drawPath(path = path, color = rimColor, alpha = alpha * rimAlpha)
+    }
+}
+
+/**
+ * 一坨叶：**一条闭合路径**，由调用方一次填完。
+ *
+ * 两件事决定它读作「叶」还是读作「花」，都是前两版在真机上翻车换来的：
+ * ① **不能是一圈等幅等距的圆凸**。花簇（绣球、丁香）的轮廓正是「半径相同、间距相同的
+ *    一圈小圆」—— 第二版给了 30 段等幅小弧，屏幕上就是一束垂下来的花（需求方这轮原话）。
+ *    这里把振幅**调制**起来（`0.030 + 0.060·|sin(1.7θ)|`：有的地方几乎光滑、有的地方一道
+ *    深缺口），相位也抖（`15θ + 0.6·sin(2.7θ)`，凸起间距不再均匀），底形再加 2 次/3 次
+ *    谐波把它拉歪 —— 整圈没有一处是正圆。
+ * ② **下缘不能收成一个尖**。上宽下尖、尖端再挂一小坨，那就是一串垂下来的花。
+ *    叶团是**横着铺开**的（[ry] 只给 0.61 倍垂深、[rx] 放到 1.20 倍枝展）。
+ * 另外留 4 个**尖叶**（窄高斯凸起）挑出轮廓，叶子才有尖角。
+ *
+ * [seed] 决定两件事的相位，同一挂里的两坨要传不同的 seed，否则两坨一模一样。
+ */
+private fun leafBlob(
+    path: Path,
+    cx: Float,
+    cy: Float,
+    rx: Float,
+    ry: Float,
+    seed: Int,
+    tips: Int = 4
+) {
+    val rnd = Random(seed * 1000 + 7)
+    val ph0 = rnd.nextFloat() * TAU
+    val ph1 = rnd.nextFloat() * TAU
+    val ph2 = rnd.nextFloat() * TAU
+    val tipTh = FloatArray(tips) { rnd.nextFloat() * TAU }
+    val tipAmp = FloatArray(tips) { 0.09f + rnd.nextFloat() * 0.10f }
+    val steps = 300
+    for (i in 0 until steps) {
+        val th = TAU * i / steps
+        val base = 1f + 0.16f * cos(2f * th + ph0) + 0.11f * cos(3f * th + ph1)
+        val taper = 1f - 0.15f * (1f - cos(th)) / 2f
+        val amp = 0.030f + 0.060f * abs(sin(1.7f * th + ph2))
+        val rip = 1f + amp * sin(15f * th + 0.6f * sin(2.7f * th + ph2))
+        var r = base * taper * rip
+        for (k in 0 until tips) {
+            val d0 = (th - tipTh[k]) % TAU
+            val d1 = (th - tipTh[k] + TAU) % TAU
+            r += tipAmp[k] * exp(-(d0 * d0) / 0.01125f)
+            r += tipAmp[k] * exp(-(d1 * d1) / 0.01125f)
+        }
+        val px = cx + rx * r * sin(th)
+        val py = cy - ry * r * cos(th)
+        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+    }
+    path.close()
+}
+
+/**
+ * 顶上那几丛叶（[FOLK_SPRAYS]）：一丛 = 两坨叶 + 一条把叶连回枝上的细梢。
+ *
+ * 三条要点：
+ * ① **挂点全部钉在树干上**（见 [FOLK_SPRAYS] 的注释）：叶子长在树上。上一版挂点差不多
+ *    等距地排开，屏幕上就是一排从天花板垂下来的花簇；
+ * ② 叶坨**从画面顶上挂下来**（中心算在 y < 0，只有下半个露出来），不是天上浮着个椭圆；
+ * ③ 第二坨要往**侧后方**错（横向 ±0.55 枝展、纵向不齐），**不在正下方再挂一小坨** ——
+ *    正下方挂小坨加上下缘收尖，那就是「一簇垂下来的花」。
+ *
+ * 远一档的三丛用 [mid] 低透明度、还缩了 0.82/0.86 —— 顶上那排叶子要有厚度。
+ * 同一批的叶坨并进一条 Path 一次填完（NonZero 取并集），细梢再合并成一条路径一次描边。
+ */
+private fun DrawScope.drawFolkloreSprays(path: Path, deep: Color, mid: Color, alpha: Float) {
+    if (alpha <= 0.01f) return
+    val w = size.width
+    val h = size.height
+    for (pass in 0..1) {
+        val far = pass == 0
+        path.rewind()
+        for (i in 0 until FOLK_SPRAYS.size / 5) {
+            if ((i % 2 == 1) != far) continue
+            val x0 = FOLK_SPRAYS[i * 5] * w
+            val lean = FOLK_SPRAYS[i * 5 + 3]
+            val dep = FOLK_SPRAYS[i * 5 + 1] * (if (far) SPR_FAR_DEPTH else 1f)
+            val span = FOLK_SPRAYS[i * 5 + 2] * (if (far) SPR_FAR_SPAN else 1f) * w
+            val rnd = Random((x0.toInt() % 9973) * 977 + 31)
+            for (k in 0 until 2) {
+                val ox = rnd.nextInt(-550, 551) / 1000f * span
+                val oy = (0.15f + rnd.nextFloat() * 0.47f) * dep * (if (k == 0) 1f else 1.35f)
+                val rr = if (k == 0) span else span * (0.42f + rnd.nextFloat() * 0.20f)
+                val dd = if (k == 0) dep else dep * (0.55f + rnd.nextFloat() * 0.25f)
+                leafBlob(
+                    path = path,
+                    cx = x0 + ox + lean * span * 0.4f,
+                    cy = dd * 0.45f * h + oy * h,
+                    rx = rr * 1.20f,
+                    ry = dd * 0.61f * h,
+                    seed = (x0 * 11.3f).toInt() + k * 17 + i * 101
+                )
+            }
+        }
+        drawPath(
+            path = path,
+            color = if (far) mid else deep,
+            alpha = alpha * (if (far) SPR_ALPHA_FAR else SPR_ALPHA_NEAR)
+        )
+    }
+    // 细梢：从画面顶边斜斜地伸进叶坨里。少了它，叶是「挂在空中」的
+    path.rewind()
+    for (i in 0 until FOLK_SPRAYS.size / 5) {
+        val x0 = FOLK_SPRAYS[i * 5] * size.width
+        val lean = FOLK_SPRAYS[i * 5 + 3]
+        val dep = FOLK_SPRAYS[i * 5 + 1] * size.height
+        val span = FOLK_SPRAYS[i * 5 + 2] * size.width
+        path.moveTo(x0, -size.height * 0.01f)
+        path.lineTo(x0 + lean * span * 0.5f, dep * 0.55f)
+        path.lineTo(x0 + lean * span * 0.6f + span * 0.35f, dep * 1.05f)
+    }
+    drawPath(
+        path = path,
+        color = deep,
+        alpha = alpha * 0.85f,
+        style = Stroke(width = size.width * 0.0022f, cap = StrokeCap.Round)
+    )
+}
+
+/**
+ * 一根细梢：从 `(x0, y0)` 到 `(x1, y1)` 的楔形（根粗梢细）。
+ *
+ * 梢要**细**（根半宽 0.0017–0.0026w，即 2.4–3.7px，和参考照片里那些斜斜的细梢一个量级），
+ * 但根必须长在杆上 —— 第一版给了 0.13w 长、根半宽 0.01w 的粗杆，屏幕上是一堆悬在空里的斜棍。
+ */
+private fun branchWedge(
+    path: Path,
+    w: Float,
+    h: Float,
+    x0: Float,
+    y0: Float,
+    x1: Float,
+    y1: Float,
+    w0: Float,
+    w1: Float
+) {
+    val ax = x0 * w
+    val ay = y0 * h
+    val bx = x1 * w
+    val by = y1 * h
+    val dx = bx - ax
+    val dy = by - ay
+    val ln = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+    val nx = -dy / ln
+    val ny = dx / ln
+    path.moveTo(ax + nx * w0 * w, ay + ny * w0 * w)
+    path.lineTo(ax - nx * w0 * w, ay - ny * w0 * w)
+    path.lineTo(bx - nx * w1 * w, by - ny * w1 * w)
+    path.lineTo(bx + nx * w1 * w, by + ny * w1 * w)
+    path.close()
 }
 
 /**
@@ -1464,7 +1706,8 @@ private fun DrawScope.drawKnitAutumn(
     deep: Color,
     phase: Float,
     alpha: Float,
-    lowRam: Boolean
+    lowRam: Boolean,
+    maple: MapleArt
 ) {
     val w = size.width
     val h = size.height
@@ -1627,7 +1870,7 @@ private fun DrawScope.drawKnitAutumn(
         )
     }
 
-    drawKnitMaples(path, mid, deep, alpha)
+    drawKnitMaples(maple, mid, deep, alpha)
 }
 
 /** 织物上缘的基准高度。波浪在它上下各 0.027 屏高内摆。 */
@@ -1660,7 +1903,7 @@ private fun knitBoughY(t: Float): Float =
  *
  * x（占屏宽）, y（占屏高）, 半径（占最小边）, 旋转（度）四元组。
  *
- * 旋转都落在 180° 附近（150–214）：[mapleInto] 建的叶子是**尖瓣朝上、叶柄在下**的，
+ * 旋转都落在 180° 附近（150–214）：位图那片叶子是**尖瓣朝上、叶柄在下**的，
  * 转过来叶柄才朝着枝。五片的角度各差二三十度 —— 同一个角度摆五片是贴图。
  *
  * 尺寸拉开到 0.062–0.150（2.4 倍差）：这是唯一能在一层平面上做出景深的手段，
@@ -1678,15 +1921,17 @@ private val KNIT_MAPLES = floatArrayOf(
 )
 
 /**
- * 五片大枫叶：轮廓 + 描边 + 叶柄 + 主脉与四条支脉。
+ * 五片大枫叶：实心填色 + 墨线（叶缘、叶脉、叶柄全在墨线里）。
  *
- * 叶形直接借 `SwiftieEraParticles` 的 [mapleInto]，**不在这里另画一套** ——
- * L2 层飘落的秋叶用的就是它，同一屏上出现两种枫叶比画得糙更糟。
+ * 叶形来自参考图取墨的两张位图（[MapleArt]）—— 与 L2 层飘落的秋叶、杯套上那片刻线
+ * 是**同一片真叶**（同一份 PNG），这里只是换填色（[mid]）与墨线（[deep]）两个颜色，
+ * 不再是为这一处另画一套叶子。换图前这里是「填色 + 描边 + 掌状脉」三笔，
+ * 现在是「实心图 + 墨线图」两笔：轮廓与叶脉在一张图里，天然重合。
  *
  * 近乎不透明（0.92）：它们是这一张的主体，压在淡粉的上半屏上，
- * 半透明会稀释成几团粉影。叶脉只给 0.42 —— 叶脉是压出来的暗痕，画实了像铁丝。
+ * 半透明会稀释成几团粉影。墨线只给 0.45 —— 叶脉是压出来的暗痕，画实了像铁丝。
  */
-private fun DrawScope.drawKnitMaples(path: Path, mid: Color, deep: Color, alpha: Float) {
+private fun DrawScope.drawKnitMaples(maple: MapleArt, mid: Color, deep: Color, alpha: Float) {
     val w = size.width
     val h = size.height
     val u = size.minDimension
@@ -1696,36 +1941,14 @@ private fun DrawScope.drawKnitMaples(path: Path, mid: Color, deep: Color, alpha:
             translate(KNIT_MAPLES[i * 4] * w, KNIT_MAPLES[i * 4 + 1] * h)
             rotate(KNIT_MAPLES[i * 4 + 3], Offset.Zero)
         }) {
-            // seed 固定、round 走序号：五片的瓣长抖动各不相同，但每帧都是同一片
-            mapleInto(path, half, 2012, i)
-            drawPath(path = path, color = mid, alpha = alpha * 0.92f)
-            drawPath(
-                path = path,
-                color = deep,
-                alpha = alpha * 0.50f,
-                style = Stroke(width = u * 0.003f, join = StrokeJoin.Round)
-            )
-            drawLine(
-                deep,
-                Offset(0f, half * 0.55f),
-                Offset(-half * 0.05f, half * 1.12f),
-                half * 0.050f,
-                StrokeCap.Round,
-                alpha = alpha * 0.72f
-            )
-            for (lobe in 0..4) {
-                val tipA = mapleTipAngle(lobe)
-                val tipR = mapleTipRadius(half, lobe) * 0.86f
-                drawLine(
-                    deep,
-                    Offset(0f, half * 0.55f),
-                    Offset(cos(tipA) * tipR, half * 0.55f + sin(tipA) * tipR),
-                    // 正中那条是主脉，比支脉粗一倍
-                    if (lobe == 2) half * 0.040f else half * 0.024f,
-                    StrokeCap.Round,
-                    alpha = alpha * 0.42f
-                )
-            }
+            // 叶柄末端钉在局部原点下方 `MAPLE_STEM_END_R` half（换图前的落点口径）、
+            // 总高 `MAPLE_SPAN` half —— 五片的落点、角度、大小一处都不用重调。
+            // stemEndFrac：这几片用的是**弯柄**那套（参考图的叶柄本来就往左弯），
+            // 锚点跟着叶柄末端走，五片才不会整体横移
+            val height = MAPLE_SPAN * half
+            val stemEnd = Offset(0f, MAPLE_STEM_END_R * half)
+            drawMapleSolid(maple.solid, height, stemEnd, mid, alpha * 0.92f, maple.stemEndFrac)
+            drawMapleInk(maple.ink, height, stemEnd, deep, alpha * 0.45f, maple.stemEndFrac)
         }
     }
 }
@@ -1901,6 +2124,23 @@ private const val WAVE_SAMPLES = 28
  * 不用另写出入场动画。时间上四段各一个速度（见 [SNAKE_KEY_S]）：进场快、绕圈稳、
  * 抬头时几乎停住、末段甩出去 —— 那个「停住」就是攻击姿态的定格。
  *
+ * ## 两处接缝必须是切线连续的
+ *
+ * 三截曲线在段界处只对上**位置**是不够的：切线一拐折，蛇身立刻读作一条被掰过的管子
+ * ——「转弯时身体变成了折线」说的就是这个，而出圈那一刻正是蛇头抬起、最该好看的一刻。
+ * 所以进场段与出画段都是三次贝塞尔，它们的末端/首端控制点分别落在**椭圆在两个端点上的
+ * 切线**里：
+ *
+ * - 进场段从椭圆最左点的**下方**接上来（末端控制点在正下方），末端切线竖直向上；
+ * - 出画段从最右点**竖直向下**出发（首端控制点在正下方），再往右上兜出去。
+ *
+ * 椭圆在两个端点的切线恰好是竖直的，这条约束与屏幕宽高比无关 —— 换一台比例不同的机器
+ * 也不会重新长出折角。「抬头」因此不再是原地硬折一下，而是顺着绕圈的下半程兜上来：
+ * 颈先沉一下、再抬起来，就是蛇发力前那个 S。
+ *
+ * 段界上的**曲率**仍有跳变（三次贝塞尔对不上椭圆的曲率），但蛇身管径只有 0.017h，
+ * 这点偏差在屏幕上读不出来；切线不一致却是必现的一道折痕。
+ *
  * ## 为什么要分两趟画
  *
  * 「绕」和「压在上面」的差别只有一件事：远侧那半圈必须被王座挡住。所以蛇身按深度切段，
@@ -1932,7 +2172,7 @@ private fun DrawScope.drawHalftoneThrone(
     val sTail = (sHead - SNAKE_LEN).coerceAtLeast(0f)
     val sTip = sHead.coerceAtMost(1f)
     val span = sTip - sTail
-    val maxThick = h * 0.0168f
+    val maxThick = h * SNAKE_THICK
 
     fun sAt(i: Int) = sTail + span * i / SNAKE_SAMPLES
     fun px(s: Float) = snakePointX(s) * w
@@ -1953,10 +2193,19 @@ private fun DrawScope.drawHalftoneThrone(
         return if (len < 0.001f) 1f else e / len
     }
 
-    // 粗细：颈略细 → 前段最粗 → 尾尖收到三成。一条等粗的蛇是根管子
+    // 粗细：颈就是最粗处 → 前 30% 一路等粗 → 之后单调收到尾尖。数见 [SNAKE_NECK] 那一段
     fun thick(s: Float): Float {
         val u = ((sHead - s) / SNAKE_LEN).coerceIn(0f, 1f)
-        val shape = if (u < 0.18f) 0.70f + 0.30f * (u / 0.18f) else 1f - 0.72f * ((u - 0.18f) / 0.82f)
+        val shape = when {
+            u < SNAKE_KNEE -> SNAKE_NECK
+            u < SNAKE_MID_KNEE ->
+                SNAKE_MID + (SNAKE_NECK - SNAKE_MID) *
+                    ((SNAKE_MID_KNEE - u) / (SNAKE_MID_KNEE - SNAKE_KNEE))
+            u < SNAKE_TAIL_KNEE ->
+                SNAKE_TAIL + (SNAKE_MID - SNAKE_TAIL) *
+                    ((SNAKE_TAIL_KNEE - u) / (SNAKE_TAIL_KNEE - SNAKE_MID_KNEE))
+            else -> SNAKE_TIP + (SNAKE_TAIL - SNAKE_TIP) * ((1f - u) / (1f - SNAKE_TAIL_KNEE))
+        }
         return maxThick * shape
     }
 
@@ -2026,8 +2275,8 @@ private fun DrawScope.drawHalftoneThrone(
         }
         path.close()
         drawPath(path = path, color = SNAKE_SCALE, alpha = alpha * 0.44f)
-        // 鳞：每隔 3 个采样横跨蛇身一道向后开口的弧。
-        // **不许画成整圈的圆** —— 第一轮那 26 个 300° 的环读作一串链节或气泡，
+        // 鳞：每隔 6 个采样（= 0.016 的 s，间距与 96 采样时的 3 个相同）横跨蛇身一道向后
+        // 开口的弧。**不许画成整圈的圆** —— 第一轮那 26 个 300° 的环读作一串链节或气泡，
         // 而蛇鳞是一排横跨身体的弯边。
         //
         // 只跨**背侧那一半**（从 -0.92 到 +0.15，不再到 +0.92）：背鳞与下面那排腹鳞
@@ -2048,7 +2297,7 @@ private fun DrawScope.drawHalftoneThrone(
             val by = ax * 0.60f
             path.moveTo(cx + ax * back * 0.92f, cy + ay * back * 0.92f)
             path.quadraticTo(cx + bx, cy + by, cx - ax * back * 0.15f, cy - ay * back * 0.15f)
-            i += 3
+            i += 6
         }
         drawPath(
             path = path,
@@ -2067,7 +2316,7 @@ private fun DrawScope.drawHalftoneThrone(
             val from = 0.94f - 0.52f * fade(s)
             path.moveTo(edgeX(s, side, from), edgeY(s, side, from))
             path.lineTo(edgeX(s, side, 0.94f), edgeY(s, side, 0.94f))
-            i += 2
+            i += 4
         }
         drawPath(
             path = path,
@@ -2113,7 +2362,9 @@ private fun DrawScope.drawHalftoneThrone(
             ux = ux / len,
             uy = uy / len,
             hl = h * 0.052f,
-            hh = thick(sTip) * 1.15f,
+            // 头的半高按**最粗处**折算，不跟着 `thick(sTip)` 走 —— 身细了一档之后
+            // 若还按颈的口径算，头会跟着缩成管子上一个鼓包（[SNAKE_HEAD_HALF] 有推导）
+            hh = maxThick * SNAKE_HEAD_HALF,
             gape = gape,
             phase = phase,
             alpha = alpha
@@ -2280,29 +2531,39 @@ private fun DrawScope.drawSnakeSkull(
         drawPath(path = path, color = Color.Black, alpha = alpha * 0.62f * gape)
     }
 
-    // 下颌：颌线在上、颌底在下
+    // 下颌：颌线在上、颌底在下。
+    //
+    // 后缘收成一个**尖**（`-0.30, 0.10`），不是一道横切口。两件事一起解决：
+    //  1. 描边是沿整条闭合路径走的，横切口会被描出一条亮线横在颈上 ——
+    //     屏幕上就是「头接在身子上」的那道缝。收成尖之后闭合边退化成零长，缝没了。
+    //  2. 尖落在**蛇身里面**，头根因此整块坐在身子的末端里 —— 颈到头是一路胀开的，
+    //     不是「接上去一块」。上一版后缘在 +0.66（横切口），根部 1.87 × maxThick，
+    //     比颈（1.24）粗一半，就是「蛇头尾部厚度厚于蛇身」。
     path.rewind()
-    path.moveTo(gx(-0.10f, 0.02f), gy(-0.10f, 0.02f))
+    path.moveTo(gx(-0.30f, 0.26f), gy(-0.30f, 0.26f))
     path.cubicTo(
-        gx(0.42f, 0.12f), gy(0.42f, 0.12f),
-        gx(0.80f, 0.12f), gy(0.80f, 0.12f),
+        gx(0.24f, 0.10f), gy(0.24f, 0.10f),
+        gx(0.72f, 0.12f), gy(0.72f, 0.12f),
         gx(0.98f, 0.06f), gy(0.98f, 0.06f)
     )
     path.cubicTo(
         gx(0.84f, 0.46f), gy(0.84f, 0.46f),
         gx(0.40f, 0.62f), gy(0.40f, 0.62f),
-        gx(-0.10f, 0.66f), gy(-0.10f, 0.66f)
+        gx(-0.30f, 0.26f), gy(-0.30f, 0.26f)
     )
     path.close()
-    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.90f)
+    // 0.94 与蛇身**同一档**：头根压在身子上，只要亮一档，那道头形的浅色印子
+    // 就比轮廓差出来的那两三像素显眼得多
+    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.94f)
     drawPath(path = path, color = Color.Black, alpha = alpha * 0.22f)
 
-    // 上颅：颈背 → 眉脊隆起 → 吻背下坡 → 吻端 → 上唇线收回颈
+    // 上颅：颈背 → 眉脊隆起 → 吻背下坡 → 吻端 → 上唇线收回颈背。
+    // 起点与终点是同一个点（-0.34, -0.44），同 [下颌] 的收尖，后缘那道边为零长
     path.rewind()
-    path.moveTo(fx(-0.12f, -0.86f), fy(-0.12f, -0.86f))
+    path.moveTo(fx(-0.34f, -0.44f), fy(-0.34f, -0.44f))
     path.cubicTo(
-        fx(0.16f, -1.10f), fy(0.16f, -1.10f),
-        fx(0.50f, -1.00f), fy(0.50f, -1.00f),
+        fx(0.06f, -0.90f), fy(0.06f, -0.90f),
+        fx(0.50f, -1.04f), fy(0.50f, -1.04f),
         fx(0.80f, -0.58f), fy(0.80f, -0.58f)
     )
     path.cubicTo(
@@ -2312,11 +2573,11 @@ private fun DrawScope.drawSnakeSkull(
     )
     path.cubicTo(
         fx(0.84f, 0.22f), fy(0.84f, 0.22f),
-        fx(0.46f, 0.28f), fy(0.46f, 0.28f),
-        fx(-0.12f, 0.18f), fy(-0.12f, 0.18f)
+        fx(0.46f, 0.26f), fy(0.46f, 0.26f),
+        fx(-0.34f, -0.44f), fy(-0.34f, -0.44f)
     )
     path.close()
-    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.97f)
+    drawPath(path = path, color = SNAKE_BODY, alpha = alpha * 0.94f)
     drawPath(
         path = path,
         color = SNAKE_SCALE,
@@ -2325,9 +2586,10 @@ private fun DrawScope.drawSnakeSkull(
     )
 
     // 上唇线：沿上颅下缘单独描一道深线。闭口时上下颌两块正好重合，
-    // 少了这一条整个头是一块无缝的楔子 —— 嘴在哪里看不出来，头就只是个头形
+    // 少了这一条整个头是一块无缝的楔子 —— 嘴在哪里看不出来，头就只是个头形。
+    // 起笔从 0.20 起（不是后缘）：后缘那一段已经在蛇身里了，画出来是一道悬在身上的线
     path.rewind()
-    path.moveTo(fx(-0.12f, 0.18f), fy(-0.12f, 0.18f))
+    path.moveTo(fx(0.20f, 0.24f), fy(0.20f, 0.24f))
     path.cubicTo(
         fx(0.46f, 0.28f), fy(0.46f, 0.28f),
         fx(0.84f, 0.22f), fy(0.84f, 0.22f),
@@ -2356,12 +2618,13 @@ private fun DrawScope.drawSnakeSkull(
         )
     }
 
-    // 眉脊：压在眼睛上方的一道骨棱。蝮蛇的「凶」全在这一条，少了它就是一条温和的水蛇
+    // 眉脊：压在眼睛上方的一道骨棱。蝮蛇的「凶」全在这一条，少了它就是一条温和的水蛇。
+    // 三个数跟着上颅那道眉峰走（峰在 a ≈ 0.4、b ≈ -0.85），高出去两三像素才是「棱」
     path.rewind()
-    path.moveTo(fx(0.14f, -0.86f), fy(0.14f, -0.86f))
+    path.moveTo(fx(0.16f, -0.80f), fy(0.16f, -0.80f))
     path.quadraticTo(
-        fx(0.42f, -1.06f), fy(0.42f, -1.06f),
-        fx(0.68f, -0.72f), fy(0.68f, -0.72f)
+        fx(0.44f, -0.98f), fy(0.44f, -0.98f),
+        fx(0.66f, -0.64f), fy(0.66f, -0.64f)
     )
     drawPath(
         path = path,
@@ -2402,11 +2665,11 @@ private fun DrawScope.drawSnakeSkull(
         alpha = alpha * 0.52f
     )
 
-    // 颅顶三片鳞：向后开口的短弧，跟蛇身的鳞是同一种画法
+    // 颅顶三片鳞：向后开口的短弧，跟蛇身的鳞是同一种画法（起点跟着上颅的轮廓收进 0.76）
     path.rewind()
     for (s in 0..2) {
         val a = 0.20f + s * 0.19f
-        path.moveTo(fx(a, -0.84f), fy(a, -0.84f))
+        path.moveTo(fx(a, -0.76f), fy(a, -0.76f))
         path.quadraticTo(
             fx(a - 0.13f, -0.42f), fy(a - 0.13f, -0.42f),
             fx(a, -0.04f), fy(a, -0.04f)
@@ -2455,14 +2718,81 @@ private val SNAKE_SCALE = Color(0xFF8A857F)
 /**
  * 蛇身在行程曲线上占的长度（`s` 的单位）。
  *
- * 0.52 是「绕圈段占 0.508」推出来的：蛇身刚好比一整段绕圈略长，所以定格那一刻屏幕上是
- * **一圈半缠在王座上、尾巴还从左缘拖着**。再短就只剩半圈（读作搭在扶手上的一条），
- * 再长则头都出画了尾巴还没进过圈。
+ * 0.65 而不是 0.52：这个数同时决定「屏幕上那条蛇有多长」，因为 `s` 是按弧长分的，
+ * 身的可见弧长就是 `0.65 × 全曲线弧长 ≈ 2400px`（1440×3200 上，占屏高四分之三）。
+ * 0.52 那一版只有约 1800px，配上 0.0168 的粗，读出来是一条短粗的绳。
+ * 绕圈段本身是 0.540，所以 0.65 仍然满足「定格时一圈半缠在座上、尾巴还拖着」。
  */
-private const val SNAKE_LEN = 0.52f
+private const val SNAKE_LEN = 0.65f
 
-/** 蛇身采样点数。窗口是滑动的，所以这是「当前可见那一段」的分段数，不是整条曲线的。 */
-private const val SNAKE_SAMPLES = 96
+/**
+ * 蛇身最粗处的**半**管径，按屏高取。
+ *
+ * 0.0168 是第一版那个「短粗」的口径；0.0110 把身细了三分之一。
+ * 细下来还有一层：王座两侧的扶手只有 0.30w 宽，粗管径贴上去会把扶手盖掉。
+ */
+private const val SNAKE_THICK = 0.0110f
+
+/**
+ * 蛇头半高 = 最粗处的半管径 × 这个系数。
+ *
+ * **头不跟身体的比例走**。头的最大高（颅顶 -0.86 到下颌底 +0.70）约 `1.56 × hh`：
+ * 1.18 时是 `1.84 × maxThick` ≈ 65px，比颈（47.9）宽三成半 —— 与真蛇的 1.3–1.8
+ * 同量级。头认得出靠的是**特征**（竖瞳、眉脊、毒牙、分叉舌），不是宽度：
+ * 这一档再往上加，头会肥成一只鞋。
+ *
+ * 头的根部不参与接缝的计算：上颅与下颌的后缘都收成一个尖，尖落在蛇身**里面**
+ * （见 [drawSnakeSkull]），根部没有可量的宽度，颈到头就是蛇身那道锥度一路胀开。
+ * 上一版两条后缘都是横切口、根部合起来 1.87 × maxThick（比颈粗一半），
+ * 屏幕上读作颈上接了块比身还粗的疙瘩，就是「蛇头尾部厚度厚于蛇身」。
+ *
+ * **改这个数要连着 [SNAKE_NECK] 一起改**：头在 `a = 0`（蛇身末端那一点）的外轮廓
+ * 是 `1.16 × hh`，必须与颈一样宽，接缝才看不出来。
+ */
+private const val SNAKE_HEAD_HALF = 1.18f
+
+/**
+ * 粗细沿身的四折线：颈 0.68（**最粗处就是颈**，等粗到 u = 0.30）→ 0.56（u = 0.62）
+ * → 0.40（u = 0.88）→ 尾尖 0.26。
+ *
+ * 被点名过四次，三次都是**前后粗细不对**。
+ *
+ * 第一次是「1.0 一条直线收到 0.16」：可见的那截尾巴正好落在最细处，一路收到 11px，
+ * 读作一根线。第二次是「缓收到 0.30、最后 6% 收成尖 0.08」：尾**尖**反而更细了 ——
+ * 而屏幕上看得到的尾，恰恰就是尾尖本身（它在 s 上是滑动窗口的末端，永远跟着蛇走）。
+ * 第三次是「颈细一档 0.62 → 颈后最粗 1.0」：最粗处落在 u = 0.16，于是
+ * **靠头那截反而比后面细**，整条蛇读作一片叶子 —— 两头尖、中间鼓。
+ *
+ * 所以最粗处放在**颈上**（u = 0）并让前 30% 等粗，之后单调收到尾尖：
+ * 47.9 → 47.9px（前 30%）→ 39 → 28 → 18（尾尖）。真蛇就是这个形状，
+ * 蛇头后面那一截本来就是全身最粗的地方。
+ *
+ * 0.68 同时是**接缝值**：蛇身末端要与蛇头的根部齐平。头根整块收尖、落在蛇身
+ * 里面，头在 `a = 0`（正是蛇身末端那一点）的外轮廓是 `1.16 × hh` ≈ 48px，
+ * 与颈的 47.9px 齐平，屏幕上找不到接缝（见 [SNAKE_HEAD_HALF] 那条约束）。
+ */
+private const val SNAKE_NECK = 0.68f
+
+/** 等粗段一直到这里。真蛇最粗的一截在头后，不在再往后 16% 的地方。 */
+private const val SNAKE_KNEE = 0.30f
+
+private const val SNAKE_MID = 0.56f
+private const val SNAKE_MID_KNEE = 0.62f
+private const val SNAKE_TAIL = 0.40f
+private const val SNAKE_TAIL_KNEE = 0.88f
+private const val SNAKE_TIP = 0.26f
+
+/**
+ * 蛇身采样点数。窗口是滑动的，所以这是「当前可见那一段」的分段数，不是整条曲线的。
+ *
+ * 192 而不是 96：蛇身的折线感有两个来源，除了段界上的切线拐折，还有一个是**采样太稀**。
+ * 第一版那个椭圆极扁（0.176w × 0.032h），两端的曲率半径只有约 41px（1440×3200 上），
+ * 而可见那一段约 1800px 弧长 —— 96 个采样在最弯处一段要转 21°，圈的两端就成了一小段
+ * 一小段的折线。现在圈上最紧处约 110px、可见弧长约 2500px（`SNAKE_LEN` = 0.65），
+ * 192 个采样在最弯处每段转 6.7°，肉眼已经读作圆弧。代价只是每帧多几百个多边形顶点，
+ * 与鳞、腹鳞的绘制调用数无关（那两个按采样**步长**走）。
+ */
+private const val SNAKE_SAMPLES = 192
 
 /** 求切线用的差分步长。太小会在段界处放大浮点误差，太大则弯处的法向偏出去。 */
 private const val SNAKE_DS = 0.0035f
@@ -2470,25 +2800,55 @@ private const val SNAKE_DS = 0.0035f
 /**
  * 行程曲线三段的 `s` 分界。
  *
- * 按各段的**实际弧长**分配，蛇的速度才是均匀的：进场约 785px、绕圈 1.5 圈约 1743px、
- * 抬头出画约 900px，合 3428px（1440×3200 上）。改椭圆半径或出画点都要跟着重算这两个数，
- * 不然蛇会在某一段忽然加速。
+ * 按各段的**实际弧长**分配，蛇的速度才是均匀的：进场约 845px、绕圈（约 1.43 圈）2171px、
+ * 抬头出画约 892px，合 3908px（1440×3200 上按 4 万个采样点累加相邻点距离量的）。
+ * 改椭圆半径、收尾角、进场/出画曲线的控制量或出画点，都要跟着重算这两个数，
+ * 不然蛇会在某一段忽然加速 —— 绕圈那段尤其非线性：半轴动一点，它的弧长就变一截。
  */
-private const val SNAKE_S_ENTER = 0.229f
-private const val SNAKE_S_LOOP = 0.737f
+private const val SNAKE_S_ENTER = 0.216f
+private const val SNAKE_S_LOOP = 0.772f
 
-/** 绕王座那个椭圆：中心、两半轴、起始高度、1.5 圈总共抬多高。 */
+/**
+ * 绕王座那个椭圆：中心、两半轴、起始高度、扫过的角（1.5 圈减去 [SNAKE_LOOP_TRIM]）。
+ *
+ * **这一版的两半轴是「按弯得动」挑的，不是按好看挑的。** 蛇身有半个管径的厚度，
+ * 轨迹的曲率半径只要掉到半管径量级，内侧边缘就会自己叠起来 —— 屏幕上读作一个折角，
+ * 而不是一条急弯。所以先量曲率半径，再挑半径：老椭圆（0.176w × 0.032h，且 1.5 圈
+ * 硬拧到最右点）在两端只有 38px 半径，而那时半管径 27px —— 正好卡在折叠的边缘上。
+ * 0.070 的高半轴 + 提前收尾后，绕圈段最紧处约 110px，是半管径的三倍。
+ *
+ * 高度也受了卡片的约束：这条螺纹最低的那半圈（`b = 1/6`，θ = 1.5π）落在
+ * `CY − RISE/6 + RY`，要压在卡片上沿（0.40h）之上 —— 半轴一大就会钻到卡片背后去。
+ */
 private const val SNAKE_LOOP_CX = 0.500f
-private const val SNAKE_LOOP_RX = 0.176f
-private const val SNAKE_LOOP_RY = 0.032f
-private const val SNAKE_LOOP_CY = 0.348f
-private const val SNAKE_LOOP_RISE = 0.130f
+private const val SNAKE_LOOP_RX = 0.182f
+private const val SNAKE_LOOP_RY = 0.070f
+private const val SNAKE_LOOP_CY = 0.320f
+private const val SNAKE_LOOP_RISE = 0.140f
 
 /**
  * 绕几圈。1.5 而不是整数：从最左（θ = π）起转 1.5 圈正好停在**最右**，
- * 接下来往右上抬头、往右出画一路顺着走。整数圈会停回最左边，出画得先横穿王座。
+ * 接下来往右、斜着出画一路顺着走。整数圈会停回最左边，出画得先横穿王座。
+ * 实际只转 `1.5 圈 − [SNAKE_LOOP_TRIM]`（见那条注释：停最右点的切线出画段接不住）。
  */
 private const val SNAKE_TURNS = 1.5f
+
+/**
+ * 线圈**提前**收尾的角（弧度）。0 就是「正好停在最右点」。
+ *
+ * 停在最右点看着最整齐，但那一点的切线是**竖直向下**的：出画段要从这里接到「往右上走」，
+ * 得原地反折约 163°，贝塞尔在这种反折上会塌成一个半径 10px 的尖 —— 就是上一版颈部
+ * 那道折。提前 0.80rad（约 46°）收尾，蛇身是在椭圆右上角、**斜向下右**离开线圈的，
+ * 出画段顺着这个方向续上去，整条颈部只有一个方向的转向，最紧处从 10px 变成约 150px。
+ *
+ * 收尾点因此落在 `x = CX + RX·cos(46°) ≈ 0.627w`、`y ≈ 0.130h` —— 王座的背板轮廓
+ * 在那个高度只到 0.51w（上缘收成尖顶），所以「远侧 → 近侧」的切换点仍在轮廓之外，
+ * 不会出现身体从背板面上穿出来。
+ */
+private const val SNAKE_LOOP_TRIM = 0.80f
+
+/** `[SNAKE_LOOP_TRIM]` 之后绕圈段实际扫过的角。三个三角函数共用。 */
+private val SNAKE_LOOP_SPAN: Float = SNAKE_TURNS * TAU - SNAKE_LOOP_TRIM
 
 /** reputation 是第 6 张。写成常量是为了让下面那行现算的段长有个名字。 */
 private const val REP_INDEX = 5
@@ -2505,7 +2865,7 @@ private val REP_ERA_MS: Float =
 /**
  * 头位置随本段进度的四段速度（[SNAKE_KEY_P] 是进度、[SNAKE_KEY_S] 是曲线参数）。
  *
- * 四段的速度分别是 1.04 / 1.41 / 0.63 / 2.69（s 每单位进度）—— 故意不平滑：
+ * 四段的速度分别是 0.98 / 1.54 / 0.43 / 3.33（s 每单位进度）—— 故意不平滑：
  * 「游进来 → 缠上去 → **几乎停住立起头** → 一甩出画」，那个停顿就是攻击姿态的定格，
  * 也是这段唯一让人看清蛇头的时刻。匀速走完全程只会读作一条传送带上的绳子。
  */
@@ -2525,55 +2885,77 @@ private fun snakeHeadAt(p: Float): Float {
     return SNAKE_KEY_S[SNAKE_KEY_S.size - 1]
 }
 
-/** 绕圈段的角度。从最左（π）起按 [SNAKE_TURNS] 转。 */
-private fun snakeLoopAngle(b: Float): Float = PI.toFloat() + b * SNAKE_TURNS * TAU
+/** 绕圈段的角度。从最左（π）起按 [SNAKE_LOOP_SPAN] 转（不足 1.5 圈，见 [SNAKE_LOOP_TRIM]）。 */
+private fun snakeLoopAngle(b: Float): Float = PI.toFloat() + b * SNAKE_LOOP_SPAN
 
-/** 一段二次贝塞尔的取值，用在抬头出画那一段。 */
-private fun quadAt(t: Float, p0: Float, p1: Float, p2: Float): Float {
+/**
+ * 线圈末端那一点，也是出画段的**起点**。
+ *
+ * 提前收尾之后它不再等于椭圆最右点（`CX + RX`）—— 两段必须共用这一个值，
+ * 否则接缝上蛇身会断开（`snakePointX/Y` 的出画分支以前直接写 `CX + RX`）。
+ */
+private val SNAKE_LOOP_END_X: Float = SNAKE_LOOP_CX + cos(snakeLoopAngle(1f)) * SNAKE_LOOP_RX
+private val SNAKE_LOOP_END_Y: Float =
+    SNAKE_LOOP_CY - SNAKE_LOOP_RISE + sin(snakeLoopAngle(1f)) * SNAKE_LOOP_RY
+
+/**
+ * 一段三次贝塞尔的取值。进场段与抬头出画那两截都用它：两端的控制点落在椭圆端点的
+ * 切线上，接缝才不拐折（见 [snakePointX] 的说明）。
+ */
+private fun cubicAt(t: Float, p0: Float, p1: Float, p2: Float, p3: Float): Float {
     val inv = 1f - t
-    return inv * inv * p0 + 2f * inv * t * p1 + t * t * p2
+    return inv * inv * inv * p0 + 3f * inv * inv * t * p1 + 3f * inv * t * t * p2 + t * t * t * p3
 }
 
 /**
  * 行程曲线的横坐标（屏宽的比例）。
  *
  * 三段拼起来，**段界处两段的值必须相等**，不然蛇身会在接缝上断开：
- * 进场段末端 = 椭圆最左点，绕圈段末端（1.5 圈）= 椭圆最右点 = 出画段起点。
+ * 进场段末端 = 椭圆最左点，绕圈段末端 = 出画段起点 = [SNAKE_LOOP_END_X]。
+ * 除了位置，**切线也要接上**：进场段末端的控制点压在最左点下方、出画段首端的控制点
+ * 沿线圈末端切线方向拉出去（[SNAKE_EXIT_KICK_X]）—— 见 [drawHalftoneThrone] 的说明。
  * `s` 允许略微超出 `0..1`（求切线要取 `s ± SNAKE_DS`），两头都按同一个式子外推。
  */
 private fun snakePointX(s: Float): Float = when {
-    s <= SNAKE_S_ENTER -> {
-        val a = s / SNAKE_S_ENTER
-        SNAKE_ENTER_X + (SNAKE_LOOP_CX - SNAKE_LOOP_RX - SNAKE_ENTER_X) * a
-    }
+    s <= SNAKE_S_ENTER -> cubicAt(
+        s / SNAKE_S_ENTER,
+        SNAKE_ENTER_X,
+        SNAKE_ENTER_X + SNAKE_ENTER_PULL_X,
+        SNAKE_LOOP_CX - SNAKE_LOOP_RX,
+        SNAKE_LOOP_CX - SNAKE_LOOP_RX
+    )
     s <= SNAKE_S_LOOP -> {
         val b = (s - SNAKE_S_ENTER) / (SNAKE_S_LOOP - SNAKE_S_ENTER)
         SNAKE_LOOP_CX + cos(snakeLoopAngle(b)) * SNAKE_LOOP_RX
     }
-    else -> quadAt(
+    else -> cubicAt(
         (s - SNAKE_S_LOOP) / (1f - SNAKE_S_LOOP),
-        SNAKE_LOOP_CX + SNAKE_LOOP_RX,
-        0.760f,
+        SNAKE_LOOP_END_X,
+        SNAKE_LOOP_END_X + SNAKE_EXIT_KICK_X,
+        SNAKE_EXIT_X - SNAKE_EXIT_PULL,
         SNAKE_EXIT_X
     )
 }
 
 /** 行程曲线的纵坐标（屏高的比例）。见 [snakePointX] 的段界要求。 */
 private fun snakePointY(s: Float): Float = when {
-    s <= SNAKE_S_ENTER -> {
-        val a = s / SNAKE_S_ENTER
-        // 进场那一截给一个整周期的小起伏：末端正好收平接上椭圆，接缝看不出来
-        SNAKE_ENTER_Y + (SNAKE_LOOP_CY - SNAKE_ENTER_Y) * a + sin(a * TAU) * 0.016f
-    }
+    s <= SNAKE_S_ENTER -> cubicAt(
+        s / SNAKE_S_ENTER,
+        SNAKE_ENTER_Y,
+        SNAKE_ENTER_Y + SNAKE_ENTER_PULL_Y,
+        SNAKE_LOOP_CY + SNAKE_ENTER_ARRIVE,
+        SNAKE_LOOP_CY
+    )
     s <= SNAKE_S_LOOP -> {
         val b = (s - SNAKE_S_ENTER) / (SNAKE_S_LOOP - SNAKE_S_ENTER)
         SNAKE_LOOP_CY - b * SNAKE_LOOP_RISE + sin(snakeLoopAngle(b)) * SNAKE_LOOP_RY
     }
-    else -> quadAt(
+    else -> cubicAt(
         (s - SNAKE_S_LOOP) / (1f - SNAKE_S_LOOP),
-        SNAKE_LOOP_CY - SNAKE_LOOP_RISE,
-        0.098f,
-        0.232f
+        SNAKE_LOOP_END_Y,
+        SNAKE_LOOP_END_Y + SNAKE_EXIT_KICK_Y,
+        SNAKE_EXIT_Y - SNAKE_EXIT_PULL * SNAKE_EXIT_SLOPE,
+        SNAKE_EXIT_Y
     )
 }
 
@@ -2593,6 +2975,53 @@ private fun snakeBehind(s: Float): Boolean {
 private const val SNAKE_ENTER_X = -0.22f
 private const val SNAKE_ENTER_Y = 0.360f
 private const val SNAKE_EXIT_X = 1.240f
+
+/**
+ * 出画点的高度。0.150 而不是上一版的 0.232：线圈末端抬到 0.130h 之后，出画点再压到
+ * 0.23h 的话整条颈一路往下沉、头几乎贴着王座扶手；抬高到 0.150h，颈才是「从线圈上
+ * 探出去、末了再往上抬一点」，在屏上的位置与上一版那个立起头的定格几乎重合
+ * （实测定格时刻头在 0.76w、0.19h，上一版约 0.75w、0.19h）。
+ */
+private const val SNAKE_EXIT_Y = 0.150f
+
+/**
+ * 进场段（三次贝塞尔）的三个控制量。
+ *
+ * [SNAKE_ENTER_PULL_X] 是首端控制点的水平牵引：0.30w 让这一截大体是平推进来的，
+ * 只在最后压出一个「沉一下再上来」的弧。[SNAKE_ENTER_ARRIVE] 是末端控制点相对椭圆
+ * 最左点**向下**的距离 —— 就靠它在末端把切线掰成竖直，接上椭圆在那一点的切线。
+ * 少了它（或改小）接缝上就是一道折角：进场是横着来的，绕圈却一上来就往上走。
+ */
+private const val SNAKE_ENTER_PULL_X = 0.300f
+private const val SNAKE_ENTER_PULL_Y = 0.020f
+private const val SNAKE_ENTER_ARRIVE = 0.050f
+
+/**
+ * 出画段（三次贝塞尔）的三个控制量。
+ *
+ * 首端控制点**落在绕圈段末端的切线上**（[SNAKE_EXIT_KICK_X] / [SNAKE_EXIT_KICK_Y]），
+ * 这是这一版的全部要害：提前收尾之后蛇身是斜向下右离开线圈的（约 34°），出画段顺着
+ * 这个方向拉出去，整条颈部只有一个方向的转向。上一版把首端控制点放在「竖直向下」，
+ * 而末端在 0.42w 外、比出圈点还高 0.126h —— 曲线得先下、再上、最后又往下，
+ * 两次反折把贝塞尔压成半径 10px 的尖，就是颈部那道折。
+ *
+ * **两个 kick 常量必须一起改**：它们不是「长度」而是「位移分量」，比例等于线圈末端
+ * 切线的方向（按 1440×3200 折算；与 [SNAKE_S_ENTER] 一样是随半轴/收尾角重算的常数）。
+ * 改 [SNAKE_LOOP_TRIM] 之后要重新算这两个数，否则端点切线又会不一致。
+ */
+private const val SNAKE_EXIT_KICK_X = 0.0875f
+private const val SNAKE_EXIT_KICK_Y = 0.0218f
+
+/**
+ * 末端：从出画点往回 0.42w、向上 0.042h，于是末端切线是「右略偏下 5.7°」——
+ * 头和颈的收尾基本是平着探出去，不再像上一版那样一路往右上抬到 55°。
+ *
+ * 斜率是量出来的，不是挑出来的：0.10 时出画段最紧处约 150px（半管径在颈部约 25px，
+ * 六倍余量）；斜率再往负走（末端越抬越高），曲率会迅速收紧 —— −0.20 时只剩 91px、
+ * −0.30 时 63px，重新回到会看出折角的量级。
+ */
+private const val SNAKE_EXIT_PULL = 0.420f
+private const val SNAKE_EXIT_SLOPE = 0.100f
 
 // ─────────────────────── 7 · Lover ───────────────────────
 
@@ -3163,25 +3592,82 @@ private val MOSS_PATCHES = floatArrayOf(
 )
 
 /**
- * 一大片松林 + 灰雾 + 一台长满苔藓的**立式**钢琴，琴顶架起一块斜板。
+ * 琴盖撑起后与水平面的夹角。
+ *
+ * 拿离线复刻器（`build/egg-shots/fo_piano.py`）比过 35° / 50° / 65° / 78° 四档：
+ * 再小那块板像没掀开，再大它就高过树线、把整个上半屏压住。
+ */
+private const val LID_OPEN_DEGREES = 50f
+
+/**
+ * 琴身的**深度向量**（占屏宽 / 屏高的比例）。只有这一份，琴身、顶面、琴盖、键盘托全按它推。
+ *
+ * 上一版是 `0.100w / -0.042h`：右侧板 144px 宽、后下角比前沿高出 0.042h，那一大块
+ * 平行四边形在屏幕上读作「另贴上来的一块板」，是全图最显眼的「飘」（需求方点名）。
+ * 收到 0.078w / -0.033h 之后侧板 112px 宽、后下角只高 0.033h，琴也从一个「斜四分之三」
+ * 变回参考图里那种近正面的角度 —— 参考剧照里琴是几乎正对着看的人。
+ */
+private const val PIANO_DX_FRACTION = 0.078f
+private const val PIANO_DY_FRACTION = -0.0328f
+
+/**
+ * 琴身整体下沉的屏高比例。
+ *
+ * 原来琴脚压在林地线上（`HERO_BOTTOM - 0.002 = 0.378h`），而卡片顶边在 0.458h ——
+ * 中间那 0.08h 空地上什么都没有，屏幕上是「琴飘在半山腰」。沉 0.045h 之后：琴脚落进
+ * 苔原带里、琴脚到卡片只剩 0.035h，后下角（`bodyB + dy`）也在林地线**以下**。
+ */
+private const val PIANO_SINK = 0.045f
+
+/** 立式琴深约是琴高的 0.6/1.2，再乘上收窄后的深度比例 —— 琴盖抬起量按它折真机像素。 */
+private const val LID_DEPTH_OF_HEIGHT = 0.5f * 0.78f
+
+/**
+ * 一片雾里的松林 + 一台长满苔藓的**立式**钢琴，琴顶架起一块斜板。
  *
  * folklore 的封面就是霉霉一个人置身松林之中 —— 所以这一张**没有房子**。
  * 上一版右边那栋亮着窗的木屋被删了：它把视线全吸过去，而且 Lover 那张已经有一栋屋，
  * 同一件道具两张背景各一次，正是「重复」。腾出来的右半屏全部还给松林。
  *
+ * ## 松林
+ *
+ * 参考 folklore 专辑封面那张雾林（Beth Garrabrant 拍的）与 cardigan MV 的林子 ——
+ * 那张照片的语法就三条：**竖直的细树干**排成节奏；深度全靠**雾**（远处的树干洗完就没了、
+ * 树脚在雾里断掉，不是淡着拖到地上）；树冠是上方的**软叶顶棚**，糊成一片、不勾边。
+ *
+ * 所以这一版把「三角松」整个换掉了。上一版 27 棵山毛榉式三角松（17 棵随机分三层 +
+ * 6 棵塞缝 + 4 棵近景），全是同一个 [drawConifer] 换个尺寸 —— 乱不在多，在**同一个形状
+ * 反复出现**：随机只挪位置与大小，形状一模一样，屏幕上是一片锯齿。现在 16 根，全部手放：
+ * 8 根远景细杆（[FOLK_FAR_TRUNKS]，脚停在雾里）、2 棵雾里的杉（[FOLK_MIST_FIRS]，
+ * 「这是松林」靠它们说但只到 0.17–0.20 档）、4 根中景（[FOLK_MID_TRUNKS]）、
+ * 2 根近景粗杆（[FOLK_NEAR_TRUNKS]，底端的喇叭口是「树」的关键）与
+ * 画框边上的两个杉木楔子（[FOLK_NEAR_PINES]）。
+ *
+ * 顺序：顶棚 → 远层 → 雾 → 雾里的杉 → 中层 → 雾 → 近层。顶棚**最先**画：
+ * 树干要从叶子里穿出来，反过来树干顶在叶子上就成贴纸。
+ *
  * ## 钢琴为什么改成立式、为什么要斜着摆
  *
  * 上一版是**正视的三角钢琴**：一个圆头的琴身加一块平铺的大琴盖，屏幕上读作一只浴缸
- * 加一块板（宽 0.45w、高只有 0.085h，2.4:1）。这一版按**斜四分之三视角**重画，
- * 三个面都露出来：正脸（背光，最暗）、右侧面（更暗，往后收）、顶面（朝上受光，最亮）。
- * 深度向量 `dx / dy` 只有一份，琴身、顶面、琴盖、键盘托全按它推 —— 换角度只动这两个数。
+ * 加一块板（宽 0.45w、高只有 0.085h，2.4:1）。这一版按**近正面的四分之三视角**重画， * 三个面都露出来：正脸（背光，最暗）、右侧面（更暗，往后收）、顶面（朝上受光，最亮）。
+ * 深度向量 [PIANO_DX_FRACTION] / [PIANO_DY_FRACTION] 只有一份，琴身、顶面、琴盖、键盘托
+ * 全按它推 —— 换角度只动这两个数。
  *
  * 立式而不是三角：立柜的高宽比接近 1:1，在 0.38h 的英雄区里立得起来；三角钢琴是趴着的，
  * 在这块横长的区域里只会更扁。而「林子里被遗弃的钢琴」这个意象本身就是立式琴。
  *
- * 琴顶那块板是**掀开撑住的琴盖**：铰在顶面后沿，往后上方倾。板是硬的，所以自由边在投影里
- * 仍然平行于铰线、两端抬一样高 —— 一个平行四边形。**不许让两端抬不一样高**：那读作坡顶，
- * 而坡顶把需求方点名删掉的那栋木屋又读回来了。撑杆立在顶面上，板在顶面上还投一道影。
+ * 琴顶那块板是**掀开撑住的琴盖**：立式琴的顶板铰在**后沿**，掀开时是前边抬起来往后退，
+ * 所以自由边（前边）落在后沿的**左上**（前移量 `cosθ·dx`、抬起量 `sinθ·琴深`）。
+ * 这一点对着参考剧照核过：铰在后沿、自由边在琴的上方偏左，撑杆支在自由边那一侧。
+ * 板是硬的，所以自由边在投影里仍然平行于铰线、两端抬一样高 —— 一个平行四边形。
+ * **不许让两端抬不一样高**：那读作坡顶，而坡顶把需求方点名删掉的那栋木屋又读回来了。
+ * 撑杆立在顶面上，板在顶面上还投一道影。
+ *
+ * ## 落地
+ *
+ * 「琴像浮在画面上」被需求方点了两轮，三处一起改才压住：
+ * 琴身整体下沉（[PIANO_SINK]，后下角落到林地线**以下**）；右侧板不能是一整片均匀的死黑
+ * （读作另贴上来的一块板）；琴脚要有一整片**苔岸**埋住底边那条笔直的棱。
  *
  * ## 苔藓
  *
@@ -3200,12 +3686,12 @@ private fun DrawScope.drawPineMossPiano(
     mid: Color,
     deep: Color,
     phase: Float,
-    alpha: Float,
-    shapes: BackdropShapes
+    alpha: Float
 ) {
     val w = size.width
     val h = size.height
-    // 林地线抬到 HERO_BOTTOM：再往下整台琴就压在卡片背后，等于没画
+    // 林地线 = HERO_BOTTOM。琴身再往下沉（[PIANO_SINK]）也不会被卡片吃掉：
+    // 卡片顶边在 0.458h，琴脚沉到 0.423h 时还剩 0.035h 的余量
     val groundY = h * HERO_BOTTOM
 
     // 林地：一层苔原。folklore 三档底色全是灰（#E8E6E2 / #8C8C8C / #4A4844），
@@ -3217,47 +3703,50 @@ private fun DrawScope.drawPineMossPiano(
         alpha = alpha * 0.30f
     )
 
-    // ── 松林三层 ──
-    // 远层淡且矮、中层实、近层高到出画。三层之间各压一条雾，前后才分得开。
-    // 「一大片」靠的是**密**：17 棵按 i % 2 分两层是上一版的做法，屏幕上数得出棵数；
-    // 这一版三层都铺满全宽，远层再往左右各挪半个间距错开
-    val pines = shapes.pines
-    val count = pines.size / 3
-    for (layer in 0..1) {
-        for (i in 0 until count) {
-            if (i % 2 != layer) continue
-            val cx = pines[i * 3] * w
-            val ph = pines[i * 3 + 1] * h * (if (layer == 0) 0.66f else 1.05f)
-            val pw = pines[i * 3 + 2] * w * (if (layer == 0) 0.74f else 1.02f)
-            drawConifer(
-                path = path,
-                cx = cx,
-                baseY = groundY - (if (layer == 0) h * 0.030f else 0f),
-                height = ph,
-                halfWidth = pw,
-                color = if (layer == 0) mid else deep,
-                alpha = alpha * (if (layer == 0) DISTANT_ALPHA * 1.5f else SILHOUETTE_ALPHA)
-            )
-        }
-        // 远层画完压一条雾，中层的树自然站到它前面
-        if (layer == 0) drawFogBand(0.26f + 0.012f * sin(phase * TAU), 0.11f, top, alpha * DISTANT_ALPHA * 2.2f)
-    }
-    // 远层之间再插一排更小的树：树尖错开半个间距，林子读起来才是连成一片的
-    for (i in 0 until count) {
-        if (i % 3 != 0) continue
-        val cx = (pines[i * 3] + 0.055f) * w
+    // ── 松林 ──
+    // 参考 folklore 专辑封面那张雾林（Beth Garrabrant 拍的）+ cardigan MV 的林子，语法三条：
+    // ①**树干是主体**：十几到二十几根竖直的杆、粗细差三档、一直长出画面顶 ——
+    //    林子不是「一层层的树形」，是一排**杆**；树形（三角松）只在雾里点两下；
+    // ②**深度全靠雾**：远处的杆洗完就没了，脚都落进同一条地平雾里（0.40–0.412h），
+    //    不在半空里齐齐断掉；
+    // ③顶上**不是一条树冠带**（那是云的读法）：顶上是亮雾 + 六挂**疏叶**，
+    //    挂与挂之间露着天，叶子由 40–60px 波长的小弧接成。
+    //
+    // 上一版是 17 棵随机三角松分三层 + 6 棵更小的塞缝 + 4 棵近景大三角，一共 27 棵，
+    // 全是同一个 `drawConifer` 换个尺寸 —— 乱不在多，在**同一个形状反复出现**：
+    // 随机只挪位置和大小，形状一模一样，屏幕上是一片锯齿（需求方原话「松林画的有点乱」）。
+    // 第二版把树形换成了杆 + 软椭圆顶棚，顶棚读成了云、杆淡到看不见（「树看不清，顶部像云朵一样」）。
+    //
+    // 顺序：叶 → 远层 → 雾 → 雾里的杉 → 中层 → 雾 → 近层 → 细梢。
+    // 叶必须**最先**画：树干从叶子里穿出来，反过来树干顶在叶子上就成贴纸
+    drawFolkloreSprays(path, deep, mid, alpha)
+    // 远层的透明度是「树看不清」的主因：原来 0.20 的白杆落在 195 的天空上只差 18/255，
+    // 屏幕上就是没有。0.55 之后远处那排才数得出来，同时仍比中层浅一档
+    drawTrunkLayer(path, FOLK_FAR_TRUNKS, mid, alpha * 0.55f, taper = 0.72f, flare = 0.18f)
+    // 雾做得**宽而软**：窄条带会在屏幕上留下两道水平的白边 ——
+    // 一条 0.24h 高的带子在浅色天空里比树还显眼（离线复刻器第一版就栽在这）
+    drawFogBand(0.24f + 0.006f * sin(phase * TAU), 0.36f, top, alpha * 0.16f)
+    // 雾里的两棵杉：只留剪影的形、不压暗。「这是松林」这句话靠它们说，
+    // 但它们是远景（0.17–0.20 档），不是原来那几棵挡在琴前面的深色大三角
+    for (i in 0 until FOLK_MIST_FIRS.size / 4) {
         drawConifer(
             path = path,
-            cx = if (cx > w) cx - w else cx,
-            baseY = groundY - h * 0.048f,
-            height = pines[i * 3 + 1] * h * 0.48f,
-            halfWidth = pines[i * 3 + 2] * w * 0.60f,
+            cx = FOLK_MIST_FIRS[i * 4] * w,
+            baseY = groundY + h * 0.010f,
+            height = FOLK_MIST_FIRS[i * 4 + 1] * h,
+            halfWidth = FOLK_MIST_FIRS[i * 4 + 2] * w,
             color = mid,
-            alpha = alpha * DISTANT_ALPHA * 1.1f
+            alpha = alpha * FOLK_MIST_FIRS[i * 4 + 3]
         )
     }
-    // 近景那几棵：高到出画、压得最实，填住钢琴右边那一片空（原来是木屋的位置）。
-    // **在钢琴之前画** —— 钢琴是全图最靠前的东西，与它重叠的树该被它挡住
+    drawTrunkLayer(
+        path, FOLK_MID_TRUNKS, deep, alpha * 0.40f, taper = 0.62f, flare = 0.34f,
+        rimColor = top, rimAlpha = 0.09f
+    )
+    drawFogBand(0.33f, 0.22f, top, alpha * 0.13f)
+    // 近景两棵杉木剪影：只露出画框边上的一个楔子（x = -0.062w / 1.062w），
+    // 满了就是原来那三棵挤在右边一团的样子。**在钢琴之前画** ——
+    // 钢琴是全图最靠前的东西，与它重叠的树该被它挡住
     for (i in 0 until FOLK_NEAR_PINES.size / 3) {
         drawConifer(
             path = path,
@@ -3269,6 +3758,34 @@ private fun DrawScope.drawPineMossPiano(
             alpha = alpha * SILHOUETTE_ALPHA * 1.24f
         )
     }
+    drawTrunkLayer(
+        path, FOLK_NEAR_TRUNKS, deep, alpha * 0.58f, taper = 0.58f, flare = 0.50f,
+        rimColor = top, rimAlpha = 0.11f
+    )
+    // 细梢：**在树干之后**画（梢是从杆上长出来的），长在近景杆上那几根压深一档
+    for (pass in 0..1) {
+        val nearPass = pass == 0
+        path.rewind()
+        for (i in 0 until FOLK_BRANCHES.size / 6) {
+            var near = false
+            for (t in 0 until FOLK_NEAR_TRUNKS.size / 5) {
+                if (abs(FOLK_BRANCHES[i * 6] - FOLK_NEAR_TRUNKS[t * 5]) < 0.02f) near = true
+            }
+            if (near != nearPass) continue
+            branchWedge(
+                path = path,
+                w = w,
+                h = h,
+                x0 = FOLK_BRANCHES[i * 6],
+                y0 = FOLK_BRANCHES[i * 6 + 1],
+                x1 = FOLK_BRANCHES[i * 6 + 2],
+                y1 = FOLK_BRANCHES[i * 6 + 3],
+                w0 = FOLK_BRANCHES[i * 6 + 4],
+                w1 = FOLK_BRANCHES[i * 6 + 5]
+            )
+        }
+        drawPath(path = path, color = deep, alpha = alpha * (if (nearPass) 0.44f else 0.24f))
+    }
 
     // ── 立式钢琴（斜四分之三视角）──
     // 一份深度向量推出所有的面：往后一格 = 往右 dx、往上 dy（俯视）。
@@ -3276,37 +3793,76 @@ private fun DrawScope.drawPineMossPiano(
     //
     // 高 0.158h 而不是 0.208h：`0.395w × 0.208h` 在 1440×3200 上是 569×666 像素，
     // **比自己还高**，而真的立式琴宽约 150cm、高约 120cm（宽:高 ≈ 1.25）。
-    // 更要紧的是上一版琴盖自由边的板厚带落在 `0.007h`，整条压进状态栏里；
-    // 现在琴身矮 0.05h、`dy` 收到 0.042h、抬起量收到 0.078h，最高点落在 `0.088h`，
-    // 离系统栏还剩一倍余量
+    // 更要紧的是早期那版琴盖自由边的板厚带落在 `0.007h`，整条压进状态栏里；
+    // 现在琴身矮 0.05h、`dy` 收到 0.033h、抬起量按 0.39×琴高折，板上苔簇最高到 0.175h，
+    // 离系统栏还差着半个屏
     val bodyW = w * 0.395f
     val bodyH = h * 0.158f
     val bodyL = w * 0.075f
     val bodyR = bodyL + bodyW
-    val bodyB = groundY - h * 0.002f
+    // 琴身整体下沉（见 [PIANO_SINK]）：琴脚落进苔原带、离卡片更近，后下角也不再露在天上
+    val bodyB = groundY + h * PIANO_SINK
     val bodyT = bodyB - bodyH
-    val dx = w * 0.100f
-    val dy = -h * 0.042f
+    val dx = w * PIANO_DX_FRACTION
+    val dy = h * PIANO_DY_FRACTION
 
-    // 落地影：往右下摊出去（台灯…这张没有灯，光从左上的天空来）。
-    // 少了它整台琴是贴在苔原上的一张剪纸
-    path.rewind()
-    path.moveTo(bodyL, bodyB)
-    path.lineTo(bodyR, bodyB)
-    path.lineTo(bodyR + dx * 1.20f, bodyB + h * 0.019f)
-    path.lineTo(bodyL + dx * 1.20f, bodyB + h * 0.019f)
-    path.close()
-    drawPath(path = path, color = Color.Black, alpha = alpha * 0.20f)
+    // 落地影：顺着**整个可见底轮廓**（前棱 + 右侧棱）往**右后**摊。
+    //
+    // 方向是要害。等距投影里「往后」就是深度向量 (dx, dy) 本身，光从左前上来 ⇒ 影子往右后走，
+    // 于是影子两条边与箱体两条底边**平行**，接得严丝合缝。上一版只从**前棱**往**右下**摊
+    // （`(dx*reach, +drop)`）：右侧棱底下那一块地反倒是**亮**的，那块平行四边形就浮在亮地上
+    // —— 需求方两轮都点这一处「平行四边形像悬浮一样」。
+    //
+    // 长度要按「地平线以下还剩多少地」砍：箱高 506px、光 45° 时物理上该拖 500px 长，
+    // 但每 1 个深度单位只往上 105px（|dy|），拖满就爬到地平线**以上的天**里去了。
+    // 只摊到 0.95 个深度单位（≈100px，末端停在地平线下 49px），五档嵌套、越远越淡：
+    // 贴着底轮廓那四档叠出 ≈0.38 的暗，往右后散开
+    for (step in 0 until 5) {
+        val reach = floatArrayOf(0.18f, 0.36f, 0.55f, 0.75f, 0.95f)[step]
+        path.rewind()
+        path.moveTo(bodyL, bodyB)
+        path.lineTo(bodyR + dx * reach, bodyB + dy * reach)
+        path.lineTo(bodyR + dx * (reach + 1f), bodyB + dy * (reach + 1f))
+        path.lineTo(bodyL + dx * (reach + 1f), bodyB + dy * (reach + 1f))
+        path.close()
+        drawPath(
+            path = path,
+            color = Color.Black,
+            alpha = alpha * floatArrayOf(0.16f, 0.12f, 0.10f, 0.08f, 0.06f)[step]
+        )
+    }
 
-    // 右侧板：往后收的那个面，全琴最暗（背光又侧对着光）
+    // 右侧板：往后收的那个面，背光又侧对着光，全琴最暗。
+    // **但不能是一整片均匀的死黑** —— 那样屏幕上读作「另贴上来的一块板」，而不是箱体的
+    // 侧面（需求方这轮点名了这块平行四边形）。面本身提亮一档，再沿上→下分三段渐暗
+    // （和落地影同一手法）：面里有了「离光越远越暗」的走向，它才是一个受光的立面。
+    // 后棱再描一道极淡的亮线，箱体那根竖转角才交代得出来
     path.rewind()
     path.moveTo(bodyR, bodyT)
     path.lineTo(bodyR + dx, bodyT + dy)
     path.lineTo(bodyR + dx, bodyB + dy)
     path.lineTo(bodyR, bodyB)
     path.close()
-    drawPath(path = path, color = deep, alpha = alpha)
-    drawPath(path = path, color = Color.Black, alpha = alpha * 0.20f)
+    drawPath(path = path, color = deep, alpha = alpha * 0.94f)
+    for (band in 0 until 3) {
+        val t0 = floatArrayOf(0f, 0.40f, 0.72f)[band]
+        val t1 = floatArrayOf(0.40f, 0.72f, 1f)[band]
+        val strength = floatArrayOf(0.05f, 0.10f, 0.16f)[band]
+        path.rewind()
+        path.moveTo(bodyR, bodyT + bodyH * t0)
+        path.lineTo(bodyR + dx, bodyT + bodyH * t0 + dy)
+        path.lineTo(bodyR + dx, bodyT + bodyH * t1 + dy)
+        path.lineTo(bodyR, bodyT + bodyH * t1)
+        path.close()
+        drawPath(path = path, color = Color.Black, alpha = alpha * strength)
+    }
+    drawLine(
+        color = mid,
+        start = Offset(bodyR + dx, bodyT + dy),
+        end = Offset(bodyR + dx, bodyB + dy),
+        strokeWidth = (w * 0.0030f).coerceAtLeast(1f),
+        alpha = alpha * 0.14f
+    )
 
     // 顶面：唯一朝上的面，最亮。苔藓整块铺在它上面
     path.rewind()
@@ -3364,20 +3920,26 @@ private fun DrawScope.drawPineMossPiano(
     // ── 掀开撑住的琴盖 ──
     // 铰在顶面后沿，往后上方倾。一块硬板绕一根铰转过去，自由边在投影里
     // **仍然平行于铰线**，两端抬一样高 —— 所以这是一个干净的**平行四边形**，
-    // “3D” 全靠位移同时带 x 与 y 分量（往右上，和其余所有面用的是同一份深度向量）。
+    // “3D” 全靠位移同时带 x 与 y 分量（和其余所有面用的是同一份深度向量）。
     //
-    // 上一版故意让右端比左端多抬一截、右端又往右多伸出 0.046w，想要“不平行的立体感”，
+    // 更早的一版故意让右端比左端多抬一截、右端又往右多伸出 0.046w，想要“不平行的立体感”，
     // 结果那正是一块**坡顶**：下沿水平、上沿斜着、右侧还撑出一截检口。
     // 需求方让把房子去掉，而这块“屋顶”把房子又读回来了。硬板不会扭，这条也本就是错的
     val hingeLX = bodyL + dx
     val hingeRX = bodyR + dx
     val hingeY = bodyT + dy
-    // 位移改成「多往右、少往上」：0.030w / -0.056h 那一版几乎是竖直立起来的一大片，
-    // 加上顶沿一排苔藓，屏幕上是一面带脊的坡屋面 —— 又把删掉的房子读回来。
-    // 一块**明显斜向右**的平行四边形才读作板；抬起的高度同时砍掉三分之一，
-    // 让它不再是全图最大的一块面
-    val lidShiftX = w * 0.062f
-    val lidShiftY = -h * 0.037f
+    // 自由边往**左上**抬，不是右上。铰线在顶面**后沿**，掀开就是「把前边抬起来」——
+    // 而“往前”在投影里是 `(-dx, -dy)` 的反向（左下）：抬起量叠上去之后，自由边必然
+    // 落在铰线的左上方。上一版写的是 `+0.062w`（往右上）＝ 把自由边摆到铰线**后面**去了，
+    // 那块板在几何上是在琴背后悬着的一块板 —— 需求方原话「撑起的琴盖角度画错了」，
+    // 而且它跟琴身只共一条线，整台琴也就跟着「像悬浮在画面上一样」。
+    //
+    // 抬起量用**琴深**折算：立式琴深约是琴高的 0.6/1.2 = 一半，`bodyH × 0.5` 像素。
+    // 角度 50° 是拿离线复刻器（`build/egg-shots/fo_piano.py`）比 35/50/65/78 四档定的：
+    // 再小像没掀开，再大那块板就高过树线、把整个上半屏压住
+    val lidRad = LID_OPEN_DEGREES * PI.toFloat() / 180f
+    val lidShiftX = -cos(lidRad) * dx
+    val lidShiftY = cos(lidRad) * abs(dy) - sin(lidRad) * (bodyH * LID_DEPTH_OF_HEIGHT)
     val lidLX = hingeLX + lidShiftX
     val lidLY = hingeY + lidShiftY
     val lidRX = hingeRX + lidShiftX
@@ -3657,18 +4219,98 @@ private fun DrawScope.drawPineMossPiano(
         }
         drawPath(path = path, color = if (pass == 1) MOSS_LIGHT else MOSS, alpha = alpha * (if (pass == 1) 0.34f else 0.44f))
     }
-    // 琴脚下那一圈：苔藓从地上爬上来，琴与地才是长在一起的。
-    // 半径收到 0.010–0.024w、再压扁到 0.34：上一版 0.034w 的正圆排成一列，读作一排绿硬币
-    for (i in 0 until 9) {
-        val f = (i + 0.5f) / 9f
-        val bx = bodyL + (bodyW + dx) * f
-        val r = w * (0.010f + 0.014f * abs(sin(f * 7.1f + 1.7f)))
-        drawOval(
-            color = if (i % 3 == 0) MOSS_LIGHT else MOSS,
-            topLeft = Offset(bx - r, bodyB - r * 0.34f),
-            size = Size(r * 2f, r * 0.68f),
-            alpha = alpha * 0.55f
-        )
+    // 琴脚下的**苔岸**：苔藓从地上爬上来，琴与苔原才是长在一起的。
+    //
+    // 一排跨在底边上的小椭圆（半径 0.010–0.022w）不够 —— 底边那条笔直的棱还在，屏幕上
+    // 只是「脚边有几块苔」，琴依旧像摆上去的（需求方两轮都说还在飘）。要的是**一整片岸**：
+    // 从琴脚爬上来、往两边散成一丛丛，前沿与后沿（比前沿高 |dy|）一起埋掉。
+    // 轮廓收成**枣核**（两端上下两条边收到同一点）—— 两端留竖直切口就是一块绿补丁
+    run {
+        val steps = 40
+        val bankL = bodyL - w * 0.030f
+        val bankSpan = bodyW + dx + w * 0.060f
+        path.rewind()
+        for (i in 0..steps) {
+            val t = i / steps.toFloat()
+            val bell = sin(t * PI.toFloat()).coerceAtLeast(0f)
+            val rise = h * (0.002f + bell.pow(0.6f) *
+                (0.012f + 0.010f * abs(sin(t * 7.3f + 0.4f))))
+            if (i == 0) path.moveTo(bankL, bodyB - rise) else path.lineTo(bankL + bankSpan * t, bodyB - rise)
+        }
+        for (i in steps downTo 0) {
+            val t = i / steps.toFloat()
+            val drop = h * (0.001f + 0.013f * sqrt(sin(t * PI.toFloat()).coerceAtLeast(0f)))
+            path.lineTo(bankL + bankSpan * t, bodyB + drop)
+        }
+        path.close()
+        drawPath(path = path, color = MOSS, alpha = alpha * 0.72f)
+        // 岸边一丛丛：整片单色的岸读作一块绿布。两端也要靠这些丛收掉硬切口
+        for (i in 0 until 17) {
+            val t = (i + 0.5f) / 17f
+            val dome = sin(t * PI.toFloat()).coerceAtLeast(0f).pow(0.45f)
+            val bx = bodyL - w * 0.034f + (bodyW + dx + w * 0.068f) * t
+            val r = w * (0.009f + 0.014f * abs(sin(t * 5.9f + 1.3f))) * (0.40f + 0.60f * dome)
+            val cy = bodyB - h * (0.001f + 0.021f * dome * (0.6f + 0.4f * abs(sin(t * 9.7f))))
+            drawOval(
+                color = if (i % 3 == 1) MOSS_LIGHT else MOSS,
+                topLeft = Offset(bx - r, cy - r * 0.60f),
+                size = Size(r * 2f, r * 1.26f),
+                alpha = alpha * 0.55f
+            )
+        }
+        // 苔岸只埋住**前棱**。可见的底轮廓有**两条**棱，右侧棱那条底下（|dy| = 0.033h ≈ 105px）
+        // 还是光的 —— 那块平行四边形就悬在这一条光带上（需求方这轮的原话）。
+        // 沿侧棱再走一条**苔领**：苔要**跨在棱上**长（圆心落在棱上或往外一点，一半在琴身上、
+        // 一半在外面），齐着棱码一排绿球会读成「一串贴在边上的珠子」；宽度往后收成零
+        // （`1 - t^1.6`），到后下角自然没了，不留一道直切口
+        run {
+            val sideLen = hypot(dx, dy).coerceAtLeast(1f)
+            val nx = abs(dy) / sideLen
+            val ny = abs(dx) / sideLen
+            val n = 26
+            path.rewind()
+            // **第一条必须是 moveTo**：空路径上直接 lineTo，这条子路径从 (0,0) 起头 ——
+            // 屏幕上就是一条从屏幕左上角斜穿到琴脚的绿线（MOSS × 0.62，斜率 0.5）。
+            // 真机截图上量到的线正好过 (0,0) 与 (bodyR, bodyB)，就是这一处
+            path.moveTo(bodyR, bodyB)
+            for (i in 1..n) {
+                val t = i / n.toFloat()
+                path.lineTo(bodyR + dx * t, bodyB + dy * t)
+            }
+            for (i in n downTo 0) {
+                val t = i / n.toFloat()
+                val width = w * (0.013f + 0.014f * abs(sin(t * 5.3f + 0.9f))) *
+                    (1f - t.pow(1.6f)).coerceAtLeast(0f)
+                path.lineTo(bodyR + dx * t + nx * width, bodyB + dy * t + ny * width)
+            }
+            path.close()
+            drawPath(path = path, color = MOSS, alpha = alpha * 0.62f)
+            for (i in 0 until 11) {
+                val t = (i + 0.5f) / 11f
+                val r = w * (0.007f + 0.017f * abs(sin(t * 6.3f + 2.1f))) * (1f - 0.55f * t)
+                val off = r * (0.25f + 0.85f * abs(sin(t * 9.7f + 0.4f)))
+                val cx = bodyR + dx * t + nx * off
+                val cy = bodyB + dy * t + ny * off
+                drawOval(
+                    color = if (i % 3 == 1) MOSS_LIGHT else MOSS,
+                    topLeft = Offset(cx - r, cy - r * 0.62f),
+                    size = Size(r * 2f, r * 1.32f),
+                    alpha = alpha * 0.58f
+                )
+            }
+            // 接触线：整条可见底轮廓（前棱 → 右侧棱）压一道极窄的暗线。
+            // 有这条线，箱体才是**坐在**地上；没有，苔只是散在脚边
+            path.rewind()
+            path.moveTo(bodyL, bodyB)
+            path.lineTo(bodyR, bodyB)
+            path.lineTo(bodyR + dx, bodyB + dy)
+            drawPath(
+                path = path,
+                color = Color.Black,
+                alpha = alpha * 0.30f,
+                style = Stroke(width = w * 0.0040f)
+            )
+        }
     }
     drawFogBand(HERO_BOTTOM + 0.09f, 0.13f, top, alpha * DISTANT_ALPHA * 1.6f)
 }
@@ -3680,11 +4322,97 @@ private fun DrawScope.drawPineMossPiano(
  * 又不能站到钢琴前面去。树高 0.34–0.44h 而林地线在 0.38h —— 树尖顶出屏幕，
  * 「近」就是这么来的。
  */
+/**
+ * folklore 松林：**手放**的树干，不用随机。
+ *
+ * 随机只挪位置和大小、形状一模一样，屏幕上就是一片锯齿（上一版 27 棵三角松，需求方
+ * 原话「画的有点乱」）。这里全部手放，间距刻意不等 —— 有两根挨着成丛，也有一大段空。
+ *
+ * 远层 12 根（[FOLK_FAR_TRUNKS]），脚底一律落进地平雾里（0.40–0.412h），不到地面 ——
+ * 第一版让它们停在 0.29–0.32h，屏幕上就是十几根顶着天的淡竖线、脚在半空里齐齐断掉，
+ * 「树看不清」有一半是这么来的。中层 6 根（[FOLK_MID_TRUNKS]）、近景粗杆 2 根
+ * （[FOLK_NEAR_TRUNKS]）、雾里的杉 2 棵（[FOLK_MIST_FIRS]）、画框边上的两个杉木楔子
+ * （[FOLK_NEAR_PINES]）、细梢 8 根（[FOLK_BRANCHES]）。
+ */
+private val FOLK_FAR_TRUNKS = floatArrayOf(
+    0.028f, 0.0022f, 0.406f, -0.05f, 0.010f,
+    0.072f, 0.0034f, 0.402f, -0.04f, -0.008f,
+    0.128f, 0.0026f, 0.410f, -0.06f, 0.014f,
+    0.196f, 0.0040f, 0.404f, -0.03f, -0.011f,
+    0.252f, 0.0024f, 0.408f, -0.05f, 0.008f,
+    0.318f, 0.0038f, 0.400f, -0.04f, -0.013f,
+    0.396f, 0.0028f, 0.412f, -0.05f, 0.011f,
+    0.468f, 0.0044f, 0.402f, -0.03f, -0.009f,
+    0.560f, 0.0026f, 0.408f, -0.06f, 0.013f,
+    0.660f, 0.0036f, 0.404f, -0.04f, -0.010f,
+    0.858f, 0.0024f, 0.410f, -0.05f, 0.009f,
+    0.928f, 0.0042f, 0.402f, -0.03f, -0.012f
+)
+
+private val FOLK_MID_TRUNKS = floatArrayOf(
+    0.158f, 0.0062f, 0.408f, -0.04f, 0.014f,
+    0.352f, 0.0084f, 0.404f, -0.04f, -0.011f,
+    0.512f, 0.0056f, 0.410f, -0.04f, 0.016f,
+    0.700f, 0.0090f, 0.402f, -0.04f, -0.012f,
+    0.824f, 0.0068f, 0.406f, -0.04f, 0.010f,
+    0.612f, 0.0048f, 0.412f, -0.04f, -0.009f
+)
+
+private val FOLK_NEAR_TRUNKS = floatArrayOf(
+    0.104f, 0.0192f, 0.412f, -0.06f, 0.020f,
+    0.736f, 0.0140f, 0.408f, -0.06f, -0.015f
+)
+
+/**
+ * 雾里那两棵杉：`(x, 树高, 半宽, 强度)`。**只留剪影的形、不压暗** ——
+ * 「这是松林」这句话靠它们说，但它们是远景，不是原来那几棵挡在琴前面的深色大三角。
+ */
+private val FOLK_MIST_FIRS = floatArrayOf(
+    0.285f, 0.30f, 0.070f, 0.20f,
+    0.868f, 0.28f, 0.065f, 0.17f
+)
+
+/**
+ * 顶上的叶丛：`(挂点x, 垂到y, 枝展w, 茎的倾向, 强度)`。
+ *
+ * **挂点全部钉在树干上**（0.104 / 0.252 / 0.318 / 0.468 / 0.700 / 0.858 都在
+ * [FOLK_FAR_TRUNKS] / [FOLK_MID_TRUNKS] / [FOLK_NEAR_TRUNKS] 里）—— 叶子长在树上。
+ * 上一版挂点按 0.03 / 0.23 / 0.42… 差不多等距地排开，屏幕上就是一排从天花板垂下来的
+ * 花簇（需求方这轮原话「树冠画的像垂下来的花簇一样」）。
+ */
+private val FOLK_SPRAYS = floatArrayOf(
+    0.104f, 0.152f, 0.112f, -0.30f, 0.30f,
+    0.252f, 0.086f, 0.076f, 0.24f, 0.23f,
+    0.318f, 0.112f, 0.086f, -0.18f, 0.25f,
+    0.468f, 0.130f, 0.096f, 0.18f, 0.26f,
+    0.700f, 0.146f, 0.106f, 0.28f, 0.28f,
+    0.858f, 0.090f, 0.078f, -0.22f, 0.22f
+)
+
+/** 近一档那三挂（0/2/4 号）的叶团不透明度 */
+private const val SPR_ALPHA_NEAR = 0.30f
+
+/** 远一档那三挂（1/3/5 号）的叶团不透明度与缩放：顶上那排叶子要有厚度 */
+private const val SPR_ALPHA_FAR = 0.185f
+private const val SPR_FAR_DEPTH = 0.82f
+private const val SPR_FAR_SPAN = 0.86f
+
+/** 细梢：`(x, 根y, 末端x, 末端y, 根半宽w, 梢半宽w)`。根都长在杆上 */
+private val FOLK_BRANCHES = floatArrayOf(
+    0.104f, 0.130f, 0.196f, 0.096f, 0.0026f, 0.0011f,
+    0.104f, 0.176f, 0.038f, 0.140f, 0.0022f, 0.0010f,
+    0.104f, 0.232f, 0.182f, 0.198f, 0.0018f, 0.0008f,
+    0.736f, 0.150f, 0.820f, 0.116f, 0.0020f, 0.0009f,
+    0.736f, 0.196f, 0.662f, 0.164f, 0.0017f, 0.0008f,
+    0.352f, 0.156f, 0.284f, 0.128f, 0.0019f, 0.0008f,
+    0.700f, 0.118f, 0.770f, 0.090f, 0.0022f, 0.0009f,
+    0.512f, 0.140f, 0.578f, 0.114f, 0.0018f, 0.0008f
+)
+
+/** 近景杉木剪影：`(x, 树高, 半宽w)`。x 落在画框外 —— 只露出两个楔子当画框 */
 private val FOLK_NEAR_PINES = floatArrayOf(
-    0.018f, 0.40f, 0.112f,
-    0.700f, 0.34f, 0.092f,
-    0.848f, 0.44f, 0.128f,
-    0.978f, 0.37f, 0.104f
+    -0.062f, 0.44f, 0.108f,
+    1.062f, 0.46f, 0.112f
 )
 
 // ─────────────────────── 9 · evermore ───────────────────────

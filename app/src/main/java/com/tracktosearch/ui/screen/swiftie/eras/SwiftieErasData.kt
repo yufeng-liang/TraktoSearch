@@ -17,7 +17,7 @@ enum class SwiftieEraMotif {
     CASTLE_BALCONY,
     /** 3 · Speak Now：剧院帷幕一角（绒面 + 金流苏绳）+ 紫舞裙裙摆 */
     STAGE_CURTAIN,
-    /** 4 · Red：垂下的红围巾 + 一顶 fedora */
+    /** 4 · Red：垂下的红围巾 + 一杯枫糖拿铁（杯套上刻着一片枫叶） */
     RED_SCARF,
     /** 5 · 1989：宝丽来白框 + 一只海鸥 */
     POLAROID,

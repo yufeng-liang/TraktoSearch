@@ -50,8 +50,11 @@ private val NEEDLE_MOSS = Color(0xFF67705C)
  * `SwiftieGlitterHearts` 那套 `travel % 1f` 会让同一个个体每一趟都从**同一个 x、
  * 同一个尺寸**再来一遍。灯箱只闪几秒看不出来，背景层一段要待十秒以上，
  * 第二趟落回第一趟的轨迹上就被看穿了。
+ *
+ * `SwiftieEraMotifs` 也用它铺纸套的软木颗粒（salt 当「第几种属性」用、round 恒 0），
+ * 所以是 internal。
  */
-private fun hash01(seed: Int, round: Int, salt: Int): Float {
+internal fun hash01(seed: Int, round: Int, salt: Int): Float {
     var h = (seed * 0x1b873593) xor (round * 0x27d4eb2d) xor (salt * 0x165667b1)
     h = h xor (h ushr 15)
     h *= 0x2545f491
@@ -247,6 +250,9 @@ fun SwiftieEraParticleLayer(
     val swarms = remember(lowRam) { buildSwarms(lowRam) }
     // 循环里反复 rewind 的那一个 Path。每次迭代 new 一个的话，一帧就是几十个
     val scratch = remember { Path() }
+    // 参考图取墨的枫叶（只有 Red 那十几片飘落秋叶用得上）。两张小 PNG 无条件解码：
+    // 这一层拿到的号是每帧变的时钟派生 lambda，在组合阶段读它们 = 整层逐帧重组
+    val maple = rememberMapleBentArt()
     // 心形只有这一条轮廓（见 SwiftieHeartPath），单位方框内，调用方自己 scale
     val heart = remember { unitHeartPath() }
     // 单位空间的光晕：调用方 scale 到目标半径，于是整层每帧一个 Brush 都不 new。
@@ -269,11 +275,11 @@ fun SwiftieEraParticleLayer(
                 val tp = travelPhase()
                 if (from == to) {
                     // 不在换张中：只画一层。同一群画两遍会叠出半透明重影
-                    drawEraParticles(to, 1f, t, tp, swarms, scratch, heart, glow)
+                    drawEraParticles(to, 1f, t, tp, swarms, scratch, heart, glow, maple)
                     return@drawBehind
                 }
-                if (fade < 1f) drawEraParticles(from, 1f - fade, t, tp, swarms, scratch, heart, glow)
-                if (fade > 0f) drawEraParticles(to, fade, t, tp, swarms, scratch, heart, glow)
+                if (fade < 1f) drawEraParticles(from, 1f - fade, t, tp, swarms, scratch, heart, glow, maple)
+                if (fade > 0f) drawEraParticles(to, fade, t, tp, swarms, scratch, heart, glow, maple)
             }
     )
 }
@@ -293,7 +299,8 @@ private fun DrawScope.drawEraParticles(
     swarms: Swarms,
     scratch: Path,
     heart: Path,
-    glow: Brush
+    glow: Brush,
+    maple: MapleArt
 ) {
     val stage = SwiftieErasData.STAGE.getOrNull(index) ?: return
     val particle = stage.particle ?: return
@@ -310,7 +317,7 @@ private fun DrawScope.drawEraParticles(
             drawGoldFlakes(motes, phase, travelPhase, layerAlpha * 0.78f, scratch, main, lit, deep)
 
         SwiftieEraParticle.AUTUMN_LEAF ->
-            drawAutumnLeaves(motes, phase, travelPhase, layerAlpha * 0.58f, scratch, main, LEAF_BACK, deep)
+            drawAutumnLeaves(motes, phase, travelPhase, layerAlpha * 0.58f, maple, main, LEAF_BACK, deep)
 
         SwiftieEraParticle.SEAGULL ->
             drawSeagulls(motes, phase, travelPhase, layerAlpha * 0.68f, scratch, lit, deep)
@@ -454,52 +461,23 @@ private fun DrawScope.drawGoldFlakes(
 }
 
 /**
- * 枫叶第 `lobe` 瓣（0..4）的方向，弧度，y 向下。相邻两瓣差 35°。
+ * 3 · 枫叶 —— mover：**边落边翻**（与金箔 / 枯叶 / 纸片同一组）。
  *
- * 与 [mapleInto]、[mapleTipRadius] 一起给 `SwiftieEraBackdrop` 的 Red 背景共用 ——
- * 那一张的主体是搭在枯枝上的几片大枫叶，**必须与飘落的这些是同一片叶子**，
- * 各画一套的话同一屏上会出现两种枫叶。
- */
-internal fun mapleTipAngle(lobe: Int): Float = (-160f + lobe * 35f) * PI.toFloat() / 180f
-
-/** 中间那瓣最长、两侧渐短。五瓣等长就成了海星。 */
-internal fun mapleTipRadius(half: Float, lobe: Int): Float =
-    half * (0.62f + 0.38f * sin(lobe / 4f * PI.toFloat()))
-
-/**
- * 叶柄根在 `(0, half * 0.55f)`，五个尖瓣从这里散开，瓣间四个凹口。
+ * 叶形、叶脉、叶柄全部来自参考图取墨的两张位图（见 [MapleArt]）：五瓣的角距、
+ * 每一瓣的圆齿数目与深浅不再由式子生成，逐像素就是参考片 `cup-sleeve-leaf.jpg` 里那片真叶。
+ * 叶柄末端钉在局部原点下方 [MAPLE_STEM_END_R] half 处、总高 [MAPLE_SPAN] half ——
+ * 与换图前程序化叶形的落点口径一致，所以这十几片的尺寸、轨迹一处都没动。
  *
- * 每一瓣的长度**各自**抖一次（不是整片一起缩放）：完全对称的枫叶一看就是画出来的，
- * 而且这样每一趟的轮廓都不一样。
- */
-internal fun mapleInto(path: Path, half: Float, seed: Int, round: Int) {
-    val baseY = half * 0.55f
-    path.rewind()
-    path.moveTo(0f, baseY)
-    for (lobe in 0..4) {
-        val tipR = mapleTipRadius(half, lobe) * (0.90f + hash01(seed, round, 20 + lobe) * 0.20f)
-        val tipA = mapleTipAngle(lobe)
-        path.lineTo(cos(tipA) * tipR, baseY + sin(tipA) * tipR)
-        if (lobe == 4) continue
-        // 凹口落在两瓣正中间，半径压到 0.34，尖瓣才分得开
-        val notchA = (mapleTipAngle(lobe) + mapleTipAngle(lobe + 1)) * 0.5f
-        path.lineTo(cos(notchA) * half * 0.34f, baseY + sin(notchA) * half * 0.34f)
-    }
-    path.close()
-}
-
-/**
- * 3 · 秋叶 —— mover：**斜落带三轴翻转**，翻转频率压到金箔的 1/3。
- *
- * 大片枫叶轮廓 + 主叶脉与四条支脉，正反两面异色（正面主色红、背面 [LEAF_BACK] 橙黄），
- * 翻面时换色。叶脉是这片叶子唯一的「结构」，少了它放大看就是个红色多边形。
+ * 翻面走 `scaleX` 过零（每片快慢由 [Mote.beat] 拉开）。**负号就是背面** ——
+ * 旧版没有负号，翻过去只是压扁又鼓回来、正反同色；现在翻到背面整片是镜像 + 橙黄
+ * （[back]），才读得出「翻了个面」。正反两面共用同一张图，不额外存一份背面图。
  */
 private fun DrawScope.drawAutumnLeaves(
     motes: List<Mote>,
     phase: Float,
     travelPhase: Float,
     alpha: Float,
-    path: Path,
+    maple: MapleArt,
     front: Color,
     back: Color,
     vein: Color
@@ -518,36 +496,18 @@ private fun DrawScope.drawAutumnLeaves(
         val half = mote.size * (0.78f + hash01(mote.seed, round, 3) * 0.44f) * size.minDimension
         val flip = cos((phase * mote.beat + mote.beatOffset) * TAU)
         val faceUp = flip >= 0f
+        val fold = abs(flip).coerceAtLeast(0.08f)
         withTransform({
             translate(cx, cy)
             rotate((phase * mote.twist + mote.bend) * 360f, Offset.Zero)
-            scale(abs(flip).coerceAtLeast(0.08f), 1f, Offset.Zero)
+            scale(if (faceUp) fold else -fold, 1f, Offset.Zero)
         }) {
-            mapleInto(path, half, mote.seed, round)
-            drawPath(path = path, color = if (faceUp) front else back, alpha = a)
-            // 叶柄
-            drawLine(
-                vein,
-                Offset(0f, half * 0.55f),
-                Offset(-half * 0.04f, half * 0.98f),
-                half * 0.055f,
-                StrokeCap.Round,
-                alpha = a * 0.9f
-            )
-            for (lobe in 0..4) {
-                val tipA = mapleTipAngle(lobe)
-                val tipR = mapleTipRadius(half, lobe) * 0.86f
-                drawLine(
-                    vein,
-                    Offset(0f, half * 0.55f),
-                    Offset(cos(tipA) * tipR, half * 0.55f + sin(tipA) * tipR),
-                    // 正中那条是主脉，比支脉粗一倍
-                    if (lobe == 2) half * 0.045f else half * 0.026f,
-                    StrokeCap.Round,
-                    // 背面看到的是叶脉凸起，比正面淡
-                    alpha = a * (if (faceUp) 0.55f else 0.34f)
-                )
-            }
+            val height = MAPLE_SPAN * half
+            val stemEnd = Offset(0f, MAPLE_STEM_END_R * half)
+            drawMapleSolid(maple.solid, height, stemEnd, if (faceUp) front else back, a, maple.stemEndFrac)
+            // 背面的叶脉压一档而不是不画（真叶背面受光弱、脉反而更鼓）——
+            // 就是旧版那个 0.55 / 0.34 的关系
+            drawMapleInk(maple.ink, height, stemEnd, vein, a * (if (faceUp) 0.55f else 0.34f), maple.stemEndFrac)
         }
     }
 }

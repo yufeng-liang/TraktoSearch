@@ -6,10 +6,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -17,12 +20,22 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -118,20 +131,40 @@ fun DrawScope.drawEraMotif(
     lowRam: Boolean,
     columnFade: Float,
     eraElapsedMs: Long,
-    loverAimAngle: Float = LOVER_FALLBACK_AIM_ANGLE
+    loverAimAngle: Float = LOVER_FALLBACK_AIM_ANGLE,
+    /**
+     * 本母题的照片抠图。**只有两个母题用得上**：Red 的红围巾与 evermore 的背影 ——
+     * 其余母题一律传 null，那些函数根本不读这个参数，母题本身照旧画。
+     *
+     * 位图只能在组合阶段读（draw 阶段拿不到 resources），所以由 `SwiftieEraCard` 传进来。
+     */
+    propPhoto: ImageBitmap? = null,
+    /**
+     * 画布上排字用的测量器。**只有 Red 那杯拿铁用得上**（纸套上那行 MAPLE LATTE），
+     * 其余母题一律传 null，那些函数根本不读它。
+     *
+     * 和 [propPhoto] 同一个原因由卡片传进来：文字只能在组合阶段量。
+     */
+    textMeasurer: TextMeasurer? = null,
+    /**
+     * Red 杯套上那片刻线枫叶的**墨线图**（参考图取墨，见 [MapleArt]）。
+     * 只有 Red 传、且只读墨线那一张 —— 压印不填色，实心图没必要解码。
+     * 为 null 时（没传或还没解码完）只跳过这片叶，杯与字照画。
+     */
+    propMapleInk: ImageBitmap? = null
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
         SwiftieEraMotif.PORCH_GUITAR -> drawPorchGuitar(color, phase, alpha)
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
         SwiftieEraMotif.STAGE_CURTAIN -> drawStageCurtain(color, phase, alpha)
-        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha)
+        SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer, propMapleInk)
         SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
         SwiftieEraMotif.LOVER_ARCHER ->
             drawLoverArcher(color, phase, alpha, eraElapsedMs, loverAimAngle)
         SwiftieEraMotif.CARDIGAN_CHAIR -> drawCardiganChair(color, phase, alpha)
-        SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha)
+        SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha, propPhoto)
         SwiftieEraMotif.LIGHTER_STARS -> drawLighterStars(color, phase, alpha)
         SwiftieEraMotif.LETTER_QUILL -> drawLetterQuill(phase, alpha)
         SwiftieEraMotif.VANITY_MIRROR -> drawVanityMirror(color, phase, alpha)
@@ -1086,223 +1119,512 @@ private fun DrawScope.drawDressSilhouette(
 }
 
 /**
- * 4 · Red：**围成一圈**的红围巾（卡片右上角）+ 一顶 fedora（共用的右侧列里）。
+ * 4 · Red：一条红围巾（卡片右上角）+ 一杯枫糖拿铁（共用的右侧列里）。
  *
  * 围巾是 *All Too Well* 的核心意象，所以它在卡片上不是「垂下来的一条」而是
- * **绕成一圈**的 —— 围在脖子上时的样子，一个厚线圈加两条穿过圈的垂端。
- * 直挂的一条与页面背景那根枯枝、以及别张卡片上的垂布（folklore 的开衫、
- * Speak Now 的裙摆）都太像，绕成圈之后一眼就分得出这是围巾。
+ * **绕起来挂着**的样子；直挂的一条与页面背景那根枯枝、以及别张卡片上的垂布
+ * （folklore 的开衫、Speak Now 的裙摆）都太像。
  *
- * 位置在**右上角**（见 [drawCoiledScarf] 的取框）而不是共用的右侧列：那一列
- * 从 0.34h 往下，正是曲目名最长那几行（"We Are Never Ever Getting Back Together"）
- * 伸到的地方。右上角在首行曲目以上，只有日期在它左边。
+ * 画的是**照片抠图**（`era_red_scarf.png`：用户给的素材，裁到外框、抹掉透明区的
+ * 黑 RGB、降到 760 宽），不再用 Canvas 手画。手画那版把罗纹与流苏试到第七种画法，
+ * 在 437px 的道具框里针脚的绒感与 `ALL TOO WELL` 的刺绣各占十几像素，几何化到
+ * 最后只能是一圈带描边的色带；照片自带全部质感，代价只有一张 0.85MB 的 PNG。
+ *
+ * 位置在**右上角**而不是共用的右侧列：那一列从 0.34h 往下，正是曲目名最长那几行
+ * （"We Are Never Ever Getting Back Together"）伸到的地方。照片下缘落在 0.39h，
+ * 纵向压到的只有第 1..4 行那几条短歌名，横向离它们的行尾还差 0.08w ——
+ * 也就是说这张卡上 `columnFade` 其实不会被触发，道具与长歌名在几何上根本不相交。
+ * 照片本身也画在曲目文字**底下**（母题在卡片 `drawBehind` 那一层），
+ * 让位系数仍然乘着，纯粹是与其他 11 张共用同一条通路。
+ *
+ * 那杯拿铁替掉的是一顶 fedora。理由不在「咖啡」，而在**这首歌自己的线索**：
+ * 详见 [drawMapleLatte]。
+ *
+ * 手画稿留在仓库外（`build/egg-shots/red_scarf_handdrawn.kt.txt`，围巾与那顶 fedora
+ * 都在里面），要再改结构时从那儿起。
  */
-private fun DrawScope.drawRedScarf(color: Color, phase: Float, alpha: Float) {
+private fun DrawScope.drawRedScarf(
+    color: Color,
+    phase: Float,
+    alpha: Float,
+    scarf: ImageBitmap?,
+    textMeasurer: TextMeasurer?,
+    mapleInk: ImageBitmap?
+) {
     knitStripeTexture(color, phase)
-    drawCoiledScarf(color, phase, alpha)
+    // 位图读不到时（低配机预解压失败之类）就只剩底纹与那杯拿铁，不画半个围巾
+    if (scarf != null) drawRedScarfPhoto(scarf, phase, alpha)
     val box = propBox()
-    val w = box.width
-    val h = box.height
     translate(left = box.left, top = box.top) {
-        drawFedora(color, alpha, w, h, min(w, h))
+        drawMapleLatte(color, alpha, box.width, box.height, textMeasurer, mapleInk)
     }
 }
 
-/**
- * 绕成一圈的围巾：一个厚线圈 + 圈上的罗纹 + 两条穿过圈垂下来的端头（带流苏）。
- *
- * 圈用**一条很粗的描边椭圆**画，不是两条同心椭圆之间填色：描边天生等宽，
- * 而两条椭圆之间那块在长短轴处的厚度差三成，读出来是一枚戒指而不是一条布。
- *
- * 圈整体逆时针歪 14°，两条垂端长短不一：正着摆的圈加对称的两条端头是个图标，
- * 不是搭在那儿的一件东西。
- */
-private fun DrawScope.drawCoiledScarf(color: Color, phase: Float, alpha: Float) {
-    val cw = size.width
-    val ch = size.height
-    // 右上角那一块：右缘留 0.03 的边距，下缘停在 0.245h —— 首行曲目在 0.26h 起
-    val bw = cw * 0.355f
-    val bh = ch * 0.225f
-    val cx = cw * 0.615f + bw * 0.46f
-    val cy = ch * 0.018f + bh * 0.38f
-    val rx = bw * 0.30f
-    val ry = bh * 0.32f
-    // 管的粗细。圈的内高 = 2·(ry − tube/2)，留得住一个看得见的洞
-    val tube = bh * 0.15f
-    // 呼吸：整圈随相位轻微起伏一格，幅度压在 1.5% —— 卡片上的道具会动，但不该「跳」
-    val breath = 1f + sin(phase * TAU) * 0.015f
+/** 照片的落位：右缘留 0.025w 的边距、上缘从 0.018h 起 —— 旧手绘围巾就挂在右上角这一块。 */
+private const val RED_SCARF_PHOTO_RIGHT = 0.975f
+private const val RED_SCARF_PHOTO_TOP = 0.018f
+private const val RED_SCARF_PHOTO_WIDTH = 0.34f
 
-    // 两条垂端**先画**：它们是从线圈后面穿出来的，圈身要压在它们上面。
-    // 先画圈后画端头（上一版）读作两条搭在圈上的布，「穿过去」那层意思就没了
-    drawCoiledScarfEnds(color, alpha, cx, cy, rx, ry, tube, bh)
-    withTransform({
-        translate(cx, cy)
-        rotate(-14f, Offset.Zero)
-    }) {
-        // 垫白：圈身是半透明的粗描边，不垫这一层两条垂端会从管面里透出来，
-        // 读作画在圈上面而不是穿在圈后面
-        drawOval(
-            color = Color.White,
-            topLeft = Offset(-rx * breath, -ry * breath),
-            size = Size(rx * 2f * breath, ry * 2f * breath),
-            alpha = alpha * PROP_MASK,
-            style = Stroke(width = tube)
-        )
-        drawOval(
-            color = color,
-            topLeft = Offset(-rx * breath, -ry * breath),
-            size = Size(rx * 2f * breath, ry * 2f * breath),
-            alpha = alpha * 0.82f,
-            style = Stroke(width = tube)
-        )
-        // 罗纹：14 道横跨管面的短痕，沿圈等角分布。这是它读作「针织」的全部原因
-        for (i in 0 until 14) {
-            val a = i / 14f * TAU
-            val px = cos(a) * rx * breath
-            val py = sin(a) * ry * breath
-            // 法向按椭圆参数式取，短轴附近才不会歪
-            val nx = cos(a) * ry
-            val ny = sin(a) * rx
-            val len = hypot(nx, ny).coerceAtLeast(0.0001f)
-            val ux = nx / len
-            val uy = ny / len
-            drawLine(
-                color = color,
-                start = Offset(px - ux * tube * 0.46f, py - uy * tube * 0.46f),
-                end = Offset(px + ux * tube * 0.46f, py + uy * tube * 0.46f),
-                strokeWidth = tube * 0.13f,
-                alpha = alpha * 0.5f,
-                cap = StrokeCap.Round
-            )
-        }
-    }
+/**
+ * 照片的显影强度：有效 alpha = 0.35 × 2.2 ≈ 0.77，与 evermore 那张同一档。
+ *
+ * [PROP_ALPHA]（0.35）是给线画道具定的 —— 线画在纸上本来就是「淡彩」，
+ * 照片整块有色，同值读作「褪色到快没了」。再往上就是往纸上贴了一张实心贴纸，
+ * 12 个母题里只有它一个实色，整体会跳。
+ */
+private const val RED_SCARF_PHOTO_GAIN = 2.2f
+
+/**
+ * 把围巾照片贴到卡片右上角：宽度按卡片宽的比例算，高度按素材自己的长宽比跟出来。
+ *
+ * 呼吸：整张照片极轻微地左右摆一下（吊着的一条围巾本来就会晃），幅度压在照片宽的
+ * 1% —— 卡片上的道具会动，但不该「跳」。
+ */
+private fun DrawScope.drawRedScarfPhoto(photo: ImageBitmap, phase: Float, alpha: Float) {
+    val dstW = size.width * RED_SCARF_PHOTO_WIDTH
+    val dstH = dstW * photo.height / photo.width
+    val sway = sin(phase * TAU) * dstW * 0.010f
+    drawImage(
+        image = photo,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(photo.width, photo.height),
+        dstOffset = IntOffset(
+            (size.width * (RED_SCARF_PHOTO_RIGHT - RED_SCARF_PHOTO_WIDTH) + sway).roundToInt(),
+            (size.height * RED_SCARF_PHOTO_TOP).roundToInt()
+        ),
+        dstSize = IntSize(dstW.roundToInt(), dstH.roundToInt()),
+        alpha = (alpha * RED_SCARF_PHOTO_GAIN).coerceAtMost(1f),
+        filterQuality = FilterQuality.High
+    )
+    // 主色罩**不能画**：照片的透明区是整块矩形，罩上去在卡片上留下一个方框
+    // （evermore 那版真机踩过）。照片自己的红本来就与这张卡的主色同源。
 }
 
+/** 杯身口径占道具框宽的比例（道具框 0.32 卡片宽 × 0.47 ≈ 0.15 卡片宽，真机约 194px）。 */
+private const val LATTE_WT = 0.47f
+
+/** 杯轴在道具框里的横向位置。 */
+private const val LATTE_CX = 0.52f
+
+/** 杯底落在道具框下缘 —— 道具框底 = 0.94 卡片高，往下还留着 0.06h 的纸。 */
+private const val LATTE_BASE = 1.00f
+
+// ── 杯体几何。单位一律是「杯身口径」，数值来自参考图逐行测量 ──
+// 参考图 `build/egg-shots/ref-red/cup-sleeve-leaf.jpg`（侧视白杯 + 牛皮纸套 + 刻线枫叶），
+// 复刻器 `build/egg-shots/red_cup.py`。量出来的关键几条：
+//   锥度 底/口 0.74；总高（含盖）/口径 2.09；盖 = 穹顶圆唇 + 收进去的裙边；
+//   纸套高 0.90 口径（占杯高 43%）且紧贴裙边下沿；套上枫叶高 0.855 口径、左偏 0.06。
+private const val CUP_BOTTOM_RATIO = 0.74f
+private const val CUP_TOTAL_RATIO = 2.09f
+private const val LID_SKIRT = 0.24f
+private const val LID_BEVEL = 0.09f
+private const val LID_FLANGE = 0.19f
+private const val LID_H = LID_SKIRT + LID_BEVEL + LID_FLANGE
+
+/** 圆唇最宽处（在唇的下缘）—— 比杯身宽 16%，这一跳是「这是个杯盖」的唯一证据。 */
+private const val FLANGE_W = 1.16f
+private const val FLANGE_TOP_W = 0.94f
+private const val SLEEVE_H = 0.90f
+private const val SLEEVE_GAP = 0.02f
+private const val SLEEVE_PROUD = 0.018f
+/** 杯套上那片刻线枫叶的高度（占杯身口径）。参考图里它几乎占满整条纸套（0.855），
+ *  这里压到 0.55 —— 底下要给那行字腾出半格。 */
+private const val LEAF_H = 0.55f
+
+/** 叶柄末端落在哪个标高（自杯底往上，口径为单位）。纸套是 0.65..1.55，
+ *  叶占上半、字占下半：叶柄止于 0.825，字的字帽顶在 0.77，中间留 0.055 的空。 */
+private const val LEAF_BASE = 0.825f
+
+/** 叶柄根相对杯轴的横向偏移。参考图那片是**正**在套中央的，所以是 0。 */
+private const val LEAF_DX = 0f
+
 /**
- * 穿过线圈垂下来的两条端头，各带流苏。
+ * 纸套上印的那行字。
  *
- * 两条**长短、粗细、撇向都不一样**：等长对称的两条挂在圈下面，整个道具就成了一枚吊坠。
- * 流苏沿端头自己的方向长，不是一律朝下 —— 端头是斜的，流苏垂直往下会脱开。
+ * **Maple Latte 就是 *All Too Well* 的 liner notes 隐藏信息**（专辑内页里那句大写的
+ * 密语之一，当年她被拍到和 Jake 在 Fido Café 喝的就是这个）。所以这行字不是装饰，
+ * 它和卡片右上角那条围巾是**同一首歌的两条线索**：围巾是歌里的实物，拿铁是liner note。
+ * 字母全大写、字距拉开，是外带杯套印刷那一路的写法。
  */
-private fun DrawScope.drawCoiledScarfEnds(
+private const val LATTE_TEXT = "MAPLE LATTE"
+
+/** 字宽目标（占杯身口径）。定死宽度、字号反推 —— 杯身尺寸随卡片走，字号不能写死。 */
+private const val LATTE_TEXT_WIDTH = 0.80f
+
+/** 字的中心标高（自杯底往上，口径为单位）：纸套下半段、枫叶叶柄之下。 */
+private const val LATTE_TEXT_CENTER = 0.725f
+
+/** 量宽度用的探针字号（sp）。只用来取比例，量完按比例再量一次。 */
+private const val LATTE_TEXT_PROBE_SP = 16f
+
+/** 字距（em）。 */
+private const val LATTE_TEXT_SPACING = 0.12f
+
+private const val PANEL_W = 0.86f
+private const val HOLE_DX = 0.20f
+private const val HOLE_W = 0.11f
+
+/**
+ * 椭圆压扁系数（视角约 5.4°）。
+ *
+ * 判据是参考图杯底前缘那道可见的平段只有 55px 宽：2·√(2·R·ry) = 55、R = 63.5
+ * 推出 ry ≈ 6px，即 k = 2·ry/口径 ≈ 0.095。第一版按 0.16 画，杯口那道椭圆弧深得
+ * 像俯视图。
+ */
+private const val CUP_ELLIPSE_K = 0.095f
+
+/**
+ * 白纸杯的显影倍率：有效 alpha = 0.35 × 1.65 ≈ 0.58。
+ *
+ * [PROP_MASK]（0.78）是「垫白」用的 —— 它的活是把后续的颜色顶到接近纸色以上，
+ * 不是拿来当可见的白色。真机上量过 1989 那张的宝丽来白框（同样是白物件）：
+ * 比卡片纸亮 Δ30，反解出白色这一层要 ~0.58。
+ */
+private const val LATTE_WHITE_GAIN = 1.65f
+
+/**
+ * 一杯枫糖拿铁：白纸杯 + 牛皮纸套（套上一片刻线枫叶）+ 白盖 + 一缕热气。
+ *
+ * 选它的理由不在「咖啡」而在**这张卡自己的线索**：*All Too Well* 的 liner notes
+ * 隐藏信息就是 **Maple Latte**（当年被拍到与 Jake 在 Fido Café 喝枫糖拿铁）。围巾是那首歌
+ * 里的实物、杯套上这片枫叶接的是同一首歌的另一条密语；而 Red 这个时代的三个公认符号
+ * 正是「枫叶 / 围巾 / 枫糖拿铁」—— 前两个已经分别在背景与卡上，这是缺的那一个。
+ *
+ * 它替掉的是一顶 fedora。那顶帽子并非随手画的：2012 原版封面就是她低头、脸被一顶
+ * **宽檐帽**的阴影遮住（TV 版才换成酒红丝绒渔夫帽 + 1932 敞篷车）。
+ *
+ * 结构对着实拍照片量过（口径 1.0）：盖是**穹顶圆唇 + 收进去的裙边**（不是三段等宽硬板），
+ * 纸套高 0.90 口径并紧贴裙边下沿，套上那片刻线枫叶高 0.855 口径、**不居中**（左偏 0.06）。
+ * 叶形与叶脉来自**参考图取墨**的墨线位图（[MapleArt]，与背景那五片、飘落的秋叶同一片真叶）——
+ * 同一屏上出现两种枫叶比画得糙更糟。压印只有线、不填色，所以只读 [rememberMapleInkArt] 那一张；
+ * 而且杯套上这片刻线用的是**直柄**那版（背景那套的叶柄按参考图是往左弯的，
+ * 杯套垂直空间窄、柄歪着不好看 —— 用户 2026-09-12 定：杯子的柄保持竖直）。
+ *
+ * 纸套上还有一行 **MAPLE LATTE**（见 [LATTE_TEXT]），字号按纸套宽度反推。
+ * 它要一个 [TextMeasurer]：位图与文字都只能在组合阶段取，所以由 `SwiftieEraCard` 传进来；
+ * 为 null 时（没有测量器）只跳过这行字，杯与叶照画。
+ *
+ * 明暗：白纸杯的立体感全靠**右侧三段压暗 + 左缘一条高光**，都 `clipPath` 在剪影内。
+ * 杯子每帧重画，所以只建一次 Path 反复 rewind，不给 GC 添抖动（同本文件其余母题）。
+ */
+private fun DrawScope.drawMapleLatte(
     color: Color,
     alpha: Float,
-    cx: Float,
-    cy: Float,
-    rx: Float,
-    ry: Float,
-    tube: Float,
-    bh: Float
+    w: Float,
+    h: Float,
+    textMeasurer: TextMeasurer?,
+    mapleInk: ImageBitmap?
 ) {
-    for (e in 0..1) {
-        val sx = cx - rx * (0.45f - e * 0.40f)
-        val sy = cy + ry * (0.70f + e * 0.24f)
-        val ex = sx - bh * (0.10f - e * 0.16f)
-        val ey = sy + bh * (0.34f + e * 0.16f)
-        val width = tube * (0.86f - e * 0.14f)
-        drawLine(
-            color = color,
-            start = Offset(sx, sy),
-            end = Offset(ex, ey),
-            strokeWidth = width,
-            cap = StrokeCap.Round,
-            alpha = alpha * 0.80f
-        )
-        val dLen = hypot(ex - sx, ey - sy).coerceAtLeast(0.0001f)
-        val dxu = (ex - sx) / dLen
-        val dyu = (ey - sy) / dLen
-        // 法向：端头是斜的，罗纹与流苏都得按它自己的方向摆
-        val nxu = -dyu
-        val nyu = dxu
-        for (r in 1..3) {
-            val t = r / 4f
-            val mx = sx + (ex - sx) * t
-            val my = sy + (ey - sy) * t
-            drawLine(
-                color = color,
-                start = Offset(mx - nxu * width * 0.44f, my - nyu * width * 0.44f),
-                end = Offset(mx + nxu * width * 0.44f, my + nyu * width * 0.44f),
-                strokeWidth = width * 0.14f,
-                alpha = alpha * 0.5f,
-                cap = StrokeCap.Round
-            )
+    val wt = w * LATTE_WT
+    val axis = w * LATTE_CX
+    val baseY = h * LATTE_BASE
+    // 尺寸一律以「口径」为单位，画的时候才乘 wt：横向 ax() 自杯轴、纵向 ay() 自杯底往上。
+    // 单位与像素混着传是这套图最容易栽的坑 —— 复刻器上就栽过一次（每个横向尺寸被 wt 再乘一遍，
+    // 纸套横贯整张卡）。传进来的数只有两种写法：裸小数 = 单位，带 wt = 像素。
+    fun ax(u: Float) = axis + u * wt
+    fun ay(u: Float) = baseY - u * wt
+
+    val bodyTop = CUP_TOTAL_RATIO - LID_H
+    val skirtTop = bodyTop + LID_SKIRT
+    val flangeBot = skirtTop + LID_BEVEL
+    // 顶面那道前弧本身要占掉 flangeTopHalf * k 的高度，所以把它从总高里扣掉：
+    // CUP_TOTAL_RATIO 量的是「含盖最高那一点」，不是盖沿的圆心
+    val flangeTopHalf = FLANGE_TOP_W * 0.5f
+    val flangeTop = CUP_TOTAL_RATIO - flangeTopHalf * CUP_ELLIPSE_K
+    val sleeveTop = bodyTop - SLEEVE_GAP
+    val sleeveBot = sleeveTop - SLEEVE_H
+    // 杯身在标高 u 处的宽度（单位）
+    fun widthAt(u: Float): Float =
+        CUP_BOTTOM_RATIO + (1f - CUP_BOTTOM_RATIO) * (u / bodyTop).coerceIn(0f, 1f)
+
+    /**
+     * 纸套的软木颗粒。参考图那条套子是**颗粒面**（软木/再生纸），不是平色牛皮纸。
+     *
+     * 颗粒位置全部由序号哈希出来（**不是每帧 Random**）：逐帧变的话静帧纹理就是一片
+     * 噪点在跳。颗粒沿「该标高处的半宽」铺开，跟着杯身的锥度收；按深浅分三批合进
+     * 三条 Path，一共只出三次绘制调用（同本文件成排小件的写法）。
+     */
+    fun sleeveGrain(a: Float, uTop: Float, uBot: Float) {
+        val dark = Path()
+        val light = Path()
+        val fine = Path()
+        for (i in 0 until SLEEVE_GRAIN) {
+            val gu = hash01(SLEEVE_GRAIN_SEED, 0, i)
+            val gv = hash01(SLEEVE_GRAIN_SEED, 1, i)
+            val gt = hash01(SLEEVE_GRAIN_SEED, 2, i)
+            val v = uBot + (uTop - uBot) * gv
+            val halfW = (widthAt(v) + SLEEVE_PROUD * 2f) * 0.5f * wt
+            val x = axis + (gu - 0.5f) * 2f * halfW * 0.96f
+            val y = ay(v)
+            val r = wt * (0.0026f + gt * 0.0085f)
+            val target = when {
+                gt < 0.34f -> dark
+                gt < 0.72f -> light
+                else -> fine
+            }
+            target.addOval(Rect(x - r, y - r * 0.75f, x + r, y + r * 0.75f))
         }
-        for (f in 0 until 4) {
-            val spread = (f - 1.5f) / 1.5f
-            val fxp = ex + nxu * width * 0.44f * spread
-            val fyp = ey + nyu * width * 0.44f * spread
-            val len = bh * (0.055f + abs(spread) * 0.018f)
-            drawLine(
-                color = color,
-                start = Offset(fxp, fyp),
-                // 末端再往外撇一点，四根才不是一把梳子
-                end = Offset(fxp + (dxu + nxu * spread * 0.35f) * len, fyp + dyu * len),
-                strokeWidth = width * 0.16f,
-                alpha = alpha * 0.9f,
-                cap = StrokeCap.Round
+        drawPath(dark, PROP_KRAFT_DARK, alpha = a * 0.48f)
+        drawPath(light, PROP_KRAFT_LIGHT, alpha = a * 0.58f)
+        drawPath(fine, PROP_KRAFT_DARK, alpha = a * 0.30f)
+    }
+
+    val path = Path()
+
+    // 圆环的前缘：视线在环上方，前缘一律往下鼓 k·半宽（k 由参考图 55px 的平底弧反推）
+    fun Path.ringFront(u: Float, width: Float, backwards: Boolean = false) {
+        val endX = if (backwards) -width * 0.5f else width * 0.5f
+        quadraticTo(ax(0f), ay(u - width * 0.5f * CUP_ELLIPSE_K), ax(endX), ay(u))
+    }
+
+    // 一条「圆环带」：上下两条前弧 + 两条侧边（唇下投影、纸套都用它）
+    fun Path.ringBand(uTop: Float, wTop: Float, uBot: Float, wBot: Float) {
+        rewind()
+        moveTo(ax(-wTop * 0.5f), ay(uTop))
+        ringFront(uTop, wTop)
+        lineTo(ax(wBot * 0.5f), ay(uBot))
+        ringFront(uBot, wBot, backwards = true)
+        close()
+    }
+
+    // ── 剪影：底前弧 → 右侧锥度 → 裙边 → 圆唇（从最宽处收到顶面）→ 顶面弧 → 左侧下来 ──
+    val flangeHalf = FLANGE_W * 0.5f
+    path.rewind()
+    path.moveTo(ax(-CUP_BOTTOM_RATIO * 0.5f), ay(0f))
+    path.ringFront(0f, CUP_BOTTOM_RATIO)
+    path.lineTo(ax(0.5f), ay(bodyTop))
+    path.lineTo(ax(0.5f), ay(skirtTop))
+    // 圆唇：**蘑菇形**，三段都是曲线。上一版从裙边到最宽处画直线、顶面又是一段直坡，
+    // 整只盖读成一个尖角六边形（真机 2026-09-12 一眼就看出来了）—— 圆唇之所以叫圆唇，
+    // 就是这条侧面是个外凸的肚子：裙边 → 最宽处（切线竖直）→ 收进顶沿
+    path.cubicTo(
+        ax(flangeHalf * 0.92f), ay(flangeBot + 0.02f),
+        ax(flangeHalf), ay(flangeBot + 0.06f),
+        ax(flangeHalf), ay(flangeBot + (flangeTop - flangeBot) * 0.45f)
+    )
+    path.cubicTo(
+        ax(flangeHalf), ay(flangeTop - 0.05f),
+        ax(flangeTopHalf + 0.055f), ay(flangeTop - 0.012f),
+        ax(flangeTopHalf), ay(flangeTop)
+    )
+    // 顶面：一道**上凸**的弧。省掉它杯盖读成一段管子；凸向搞反则盖顶凹成一个碗
+    path.quadraticTo(
+        ax(0f), ay(CUP_TOTAL_RATIO),
+        ax(-flangeTopHalf), ay(flangeTop)
+    )
+    path.cubicTo(
+        ax(-(flangeTopHalf + 0.055f)), ay(flangeTop - 0.012f),
+        ax(-flangeHalf), ay(flangeTop - 0.05f),
+        ax(-flangeHalf), ay(flangeBot + (flangeTop - flangeBot) * 0.45f)
+    )
+    path.cubicTo(
+        ax(-flangeHalf), ay(flangeBot + 0.06f),
+        ax(-flangeHalf * 0.92f), ay(flangeBot + 0.02f),
+        ax(-flangeHalf), ay(flangeBot)
+    )
+    path.lineTo(ax(-0.5f), ay(skirtTop))
+    path.lineTo(ax(-0.5f), ay(bodyTop))
+    path.lineTo(ax(-CUP_BOTTOM_RATIO * 0.5f), ay(0f))
+    path.close()
+
+    val silhouette = Path().apply { addPath(path) }
+    drawPath(silhouette, Color.White, alpha = alpha * LATTE_WHITE_GAIN)
+
+    // ── 圆柱的明暗：右侧三段压暗 + 左缘一条高光。参考图右缘暗约 40/255 ──
+    clipPath(silhouette) {
+        val bandLeft = floatArrayOf(0.04f, 0.30f, 0.52f)
+        val bandAlpha = floatArrayOf(0.26f, 0.22f, 0.20f)
+        for (i in 0..2) {
+            path.rewind()
+            path.moveTo(ax(bandLeft[i]), ay(0f))
+            path.lineTo(ax(0.72f), ay(0f))
+            path.lineTo(ax(0.72f), ay(CUP_TOTAL_RATIO))
+            path.lineTo(ax(bandLeft[i]), ay(CUP_TOTAL_RATIO))
+            path.close()
+            drawPath(path, color, alpha = alpha * bandAlpha[i])
+        }
+        path.rewind()
+        path.moveTo(ax(-0.44f), ay(0f))
+        path.lineTo(ax(-0.28f), ay(0f))
+        path.lineTo(ax(-0.30f), ay(bodyTop))
+        path.lineTo(ax(-0.46f), ay(bodyTop))
+        path.close()
+        drawPath(path, Color.White, alpha = alpha * 1.30f)
+    }
+
+    // ── 唇下的投影：外翻 16% 的唇压在杯身上必然留一道暗带。没有它这个盖是「贴」上去的 ──
+    for (i in 0..2) {
+        path.ringBand(
+            flangeBot - 0.055f * i, 1f - 0.02f * i,
+            flangeBot - 0.055f * (i + 1), 1f - 0.02f * (i + 1)
+        )
+        drawPath(path, color, alpha = alpha * (0.30f - i * 0.08f))
+    }
+    // 凹面内圈（参考图盖顶那一圈看得见的台阶）
+    val panelW = FLANGE_TOP_W * PANEL_W * wt
+    drawOval(
+        color = PROP_KRAFT_EDGE,
+        topLeft = Offset(ax(-PANEL_W * 0.5f), ay(flangeTop - 0.006f) - panelW * 0.5f * CUP_ELLIPSE_K),
+        size = Size(panelW, panelW * CUP_ELLIPSE_K * 2f),
+        alpha = alpha * 0.80f,
+        style = Stroke(width = wt * 0.005f)
+    )
+
+    // ── 轮廓：剪影一圈 ──
+    drawPath(
+        path = silhouette, color = color, alpha = alpha * 1.55f,
+        style = Stroke(width = wt * 0.0085f, join = StrokeJoin.Round)
+    )
+    // 唇的下缘：盖与杯身的分界
+    path.rewind()
+    path.moveTo(ax(-flangeHalf), ay(flangeBot))
+    path.ringFront(flangeBot, FLANGE_W)
+    drawPath(
+        path, color, alpha = alpha * 0.90f,
+        style = Stroke(width = wt * 0.005f)
+    )
+
+    // 吸口 + 从口里透出来的一点咖啡（参考图那只是能看见的）。画在轮廓之后、盖的台阶之内
+    val holeW = HOLE_W * wt
+    val holeX = ax(HOLE_DX)
+    val holeY = ay(flangeTop - 0.010f)
+    drawOval(
+        color = Color.White,
+        topLeft = Offset(holeX - holeW * 0.5f, holeY - holeW * 0.5f * CUP_ELLIPSE_K),
+        size = Size(holeW, holeW * CUP_ELLIPSE_K * 1.4f),
+        alpha = alpha * 1.10f
+    )
+    drawOval(
+        color = PROP_COFFEE,
+        topLeft = Offset(holeX - holeW * 0.40f, holeY - holeW * 0.40f * CUP_ELLIPSE_K * 1.1f),
+        size = Size(holeW * 0.80f, holeW * 0.80f * CUP_ELLIPSE_K * 1.1f),
+        alpha = alpha * 2.00f
+    )
+
+    // ── 牛皮纸套：比杯身外凸 1.8%（实测），所以画在轮廓之后 —— 它自己的边就是这一段的杯沿 ──
+    val sleeveBulge = SLEEVE_PROUD * 2f
+    val sleeveWTop = widthAt(sleeveTop) + sleeveBulge
+    val sleeveWBot = widthAt(sleeveBot) + sleeveBulge
+    path.ringBand(sleeveTop, sleeveWTop, sleeveBot, sleeveWBot)
+    // 两遍：一遍 0.51 的覆盖率太透，杯身那三段压暗会从套子底下透出来（真机上一道竖带）
+    drawPath(path, PROP_KRAFT, alpha = alpha * 1.45f)
+    drawPath(path, PROP_KRAFT, alpha = alpha * 1.10f)
+    // 软木颗粒（参考图那条套子是颗粒面，不是平色牛皮纸）。**必须剪进套子**：
+    // 颗粒是按矩形撒的，不剪就会洒到杯身上去
+    clipPath(path) { sleeveGrain(alpha, sleeveTop, sleeveBot) }
+    // 上缘受光、下缘积暗：参考图套子上沿一道亮线、下沿一段发暗
+    drawPath(
+        path, PROP_KRAFT_LIGHT, alpha = alpha * 0.75f,
+        style = Stroke(width = wt * 0.010f)
+    )
+    val shade = Path()
+    shade.addRect(
+        Rect(
+            ax(-sleeveWBot * 0.5f), ay(sleeveBot),
+            ax(sleeveWBot * 0.5f), ay(sleeveBot + SLEEVE_H * 0.16f)
+        )
+    )
+    drawPath(shade, PROP_KRAFT_DARK, alpha = alpha * 0.55f)
+    // 套子自己的边线（上下两道厚度 + 两侧立边）
+    path.ringBand(sleeveTop, sleeveWTop, sleeveBot, sleeveWBot)
+    drawPath(
+        path, PROP_KRAFT_EDGE, alpha = alpha * 0.95f,
+        style = Stroke(width = wt * 0.007f)
+    )
+
+    // ── 套上的刻线枫叶（压印，不填色）+ 那行 liner note 密语 ──
+    // 取墨位图的锚点就是**叶柄末端**（资产的底边中点），落位直接给 `ay(LEAF_BASE)`。
+    // 换图前这里要算两个 half（先按 1.30 反推叶身半高、再乘 0.85 才落到叶柄末端），
+    // 那一步正是当年「整片叶子连叶柄吊到纸套外、穿字而过」与「落到 y = -4917」两次事故所在；
+    // 「叶柄末端在资产的哪个位置」现在烘在 PNG 里，这一层算术没有了
+    drawMapleInk(
+        line = mapleInk,
+        height = LEAF_H * wt,
+        stemEnd = Offset(ax(LEAF_DX), ay(LEAF_BASE)),
+        // 咖啡色刻线（不是时代主色）：这是纸套上的印刷，见 [PROP_ENGRAVE]。
+        // 线宽烘在墨线图里（照片那条刻线折到设备尺度约 1.8px），不再给 strokeWidth
+        color = PROP_ENGRAVE,
+        alpha = alpha * 1.85f
+    )
+    if (textMeasurer != null) {
+        val inkAlpha = (alpha * 1.85f).coerceAtMost(1f)
+        fun styleOf(sizeSp: Float) = TextStyle(
+            color = PROP_ENGRAVE.copy(alpha = inkAlpha),
+            fontSize = sizeSp.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = LATTE_TEXT_SPACING.em
+        )
+        // 先按探针字号量一遍，按目标宽度求出字号再量 —— 纸套宽度随卡片走，
+        // 字号只能反推。两次 measure 都吃 TextMeasurer 的缓存，每帧不重排
+        val probe = textMeasurer.measure(AnnotatedString(LATTE_TEXT), styleOf(LATTE_TEXT_PROBE_SP))
+        val fitted = if (probe.size.width > 0) {
+            LATTE_TEXT_PROBE_SP * (LATTE_TEXT_WIDTH * wt) / probe.size.width
+        } else {
+            LATTE_TEXT_PROBE_SP
+        }
+        val layout = textMeasurer.measure(AnnotatedString(LATTE_TEXT), styleOf(fitted))
+        drawText(
+            textLayoutResult = layout,
+            topLeft = Offset(
+                axis - layout.size.width * 0.5f,
+                ay(LATTE_TEXT_CENTER) - layout.size.height * 0.5f
+            )
+        )
+    }
+
+    // ── 热气：吸口升起的两缕，各三段、越往上越淡（热饮在静帧里全靠它）──
+    for (s in 0..1) {
+        val sx = ax(HOLE_DX + (if (s == 0) 0.02f else -0.07f))
+        for (seg in 0..2) {
+            val t0 = seg / 3f
+            path.rewind()
+            for (i in 0..6) {
+                val t = t0 + i / 18f
+                val px = sx + sin(t * 2.6f + s * 2.1f) * wt * 0.075f * (0.4f + t)
+                val py = holeY - t * wt * 0.30f
+                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            // 白热气在粉色纸面上极跳：线要细、要短、要淡。第一版 0.46 口径高、0.020 宽、
+            // 不透明度还乘了 1.15，真机上就是杯口窜起一团白火
+            drawPath(
+                path = path,
+                color = Color.White,
+                alpha = alpha * 0.62f * (1f - t0) * (if (s == 0) 0.85f else 0.55f),
+                style = Stroke(width = wt * 0.011f, cap = StrokeCap.Round)
             )
         }
     }
 }
 
+/** 牛皮纸（杯套）。道具材质色，不吃时代主色 —— Red 是红、Showgirl 是橙，纸套不该跟着变。 */
+private val PROP_KRAFT = Color(0xFFC08850)
+
+/** 牛皮纸的暗色：刻线、下缘积暗、套子上下缘那道厚度线。 */
+private val PROP_KRAFT_EDGE = Color(0xFF9C6034)
+
+/** 颗粒的深粒。比 [PROP_KRAFT_EDGE] 浅一档 —— 硬边线要比颗粒重，否则整条套子糊成一团。 */
+private val PROP_KRAFT_DARK = Color(0xFFAA6E3C)
+
+/** 牛皮纸的亮色：颗粒的亮粒、上缘受光。 */
+private val PROP_KRAFT_LIGHT = Color(0xFFD8A46C)
+
+/** 软木颗粒的颗数。参考图那条套子上百来颗可见的深浅粒。 */
+private const val SLEEVE_GRAIN = 380
+
+/** 颗粒的哈希种子。**换这个数每次装机看到的颗粒都不同**，定一个就别再动。 */
+private const val SLEEVE_GRAIN_SEED = 7717
+
+/** 杯里的咖啡：吸口那一点棕色。 */
+private val PROP_COFFEE = Color(0xFF6C4226)
+
 /**
- * 一顶 fedora：帽檐（椭圆）+ 帽冠 + 帽带 + 冠顶折痕。
+ * 纸套上那片刻线枫叶与那行字的墨色：**咖啡色**，不吃时代主色。
  *
- * 折痕是 fedora 与圆顶帽的唯一区别，省掉它画出来就是一顶礼帽。
+ * 参考图上那片叶子就是压印的深棕刻线（实测 (79,49,32)），用户要的也是这个 ——
+ * 它不是「Red 时代的一张红色线画」，而是**一杯枫糖拿铁纸套上的印刷**：
+ * 套子是牛皮纸色、字与叶是咖啡色的刻痕，整件东西才读成实物。
  */
-private fun DrawScope.drawFedora(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
-    val cx = w * 0.62f
-    val brimY = h * 0.86f
-    val brimW = w * 0.62f
-    val brimH = h * 0.095f
-    drawOval(
-        color, Offset(cx - brimW / 2f, brimY - brimH / 2f), Size(brimW, brimH),
-        alpha = alpha * 0.85f
-    )
-    // 前檐上翻：沿椭圆下半描一条深弧
-    drawArc(
-        color = color,
-        startAngle = 20f,
-        sweepAngle = 140f,
-        useCenter = false,
-        topLeft = Offset(cx - brimW / 2f, brimY - brimH / 2f),
-        size = Size(brimW, brimH),
-        alpha = alpha * 1.4f,
-        style = Stroke(width = u * 0.008f)
-    )
-    val crownHalf = brimW * 0.30f
-    val crownTop = brimY - h * 0.185f
-    val crown = Path()
-    crown.moveTo(cx - crownHalf, brimY)
-    crown.cubicTo(
-        cx - crownHalf * 1.04f, crownTop + h * 0.05f,
-        cx - crownHalf * 0.88f, crownTop,
-        cx - crownHalf * 0.34f, crownTop
-    )
-    crown.lineTo(cx + crownHalf * 0.34f, crownTop)
-    crown.cubicTo(
-        cx + crownHalf * 0.88f, crownTop,
-        cx + crownHalf * 1.04f, crownTop + h * 0.05f,
-        cx + crownHalf, brimY
-    )
-    crown.close()
-    // 垫白：帽檐是整只椭圆，帽冠压在它中段上。不垫这一层，檐的后缘会横穿冠面 ——
-    // 一顶能看透的帽子
-    drawPath(crown, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(crown, color, alpha = alpha)
-    drawRect(
-        color, Offset(cx - crownHalf * 0.99f, brimY - h * 0.058f),
-        Size(crownHalf * 1.98f, h * 0.030f), alpha = alpha * 1.7f
-    )
-    val crease = Path()
-    crease.moveTo(cx - crownHalf * 0.30f, crownTop + h * 0.004f)
-    crease.quadraticTo(cx, crownTop + h * 0.045f, cx + crownHalf * 0.30f, crownTop + h * 0.004f)
-    crease.moveTo(cx - crownHalf * 0.72f, crownTop + h * 0.030f)
-    crease.lineTo(cx - crownHalf * 0.60f, crownTop + h * 0.075f)
-    crease.moveTo(cx + crownHalf * 0.72f, crownTop + h * 0.030f)
-    crease.lineTo(cx + crownHalf * 0.60f, crownTop + h * 0.075f)
-    drawPath(crease, Color.White, alpha = alpha * 1.5f, style = Stroke(width = u * 0.009f))
-}
+private val PROP_ENGRAVE = Color(0xFF5C3A21)
 
 /** 5 · 1989：宝丽来白框 + 一只海鸥。轻微倾斜，像随手摆上去的。 */
 private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float) {
@@ -1391,17 +1713,21 @@ private fun DrawScope.drawSeagull(color: Color, phase: Float, alpha: Float, w: F
     )
 }
 
-/** 6 · reputation：盘起来的蛇（昂头做攻击姿态）+ 一枚蛇戒。 */
+/** 6 · reputation：盘起来的蛇（昂头做攻击姿态）+ 一枚蛇戒（在卡片右上角）。 */
 private fun DrawScope.drawCoiledSnake(color: Color, phase: Float, lowRam: Boolean, alpha: Float) {
     halftoneTexture(color, phase, lowRam)
     val box = propBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
     translate(left = box.left, top = box.top) {
-        drawSnakeCoil(color, phase, lowRam, alpha, w, h, u)
-        drawSnakeRing(color, alpha, w, h, u)
+        drawSnakeCoil(color, phase, lowRam, alpha, box.width, box.height, min(box.width, box.height))
     }
+    // 戒指挪出道具框、上到卡片右上角：留在框里就得跟盘蛇分那 32% 卡宽，
+    // 被压到 20dp 见方，蛇头细节一个也画不下。口径与 Lover 那只蝴蝶一致（见 [drawSnakeRing]）
+    drawSnakeRing(
+        color = color,
+        alpha = alpha,
+        center = Offset(size.width * 0.800f, 52.dp.toPx()),
+        radius = box.width * 0.26f
+    )
 }
 
 /**
@@ -1442,9 +1768,9 @@ private fun DrawScope.drawSnakeCoil(
     // 尾尖：从最下那圈的**左**侧甩出来一小截，**在盘之前画**，根部由盘的下缘压住。
     // 少了这一截，最下面那圈是一个闭合的环，读作一只轮胎。
     //
-    // 在左边而不是右边：[drawSnakeRing] 那枚蛇形戒指钉在 `(0.80w, 0.930h)`，
-    // 半径 `0.088u` —— 上一版的右侧尾尖末端落在 `(0.78w, 0.876h)`，正好压进戒指的外圈，
-    // 截出来两件道具糊成一件。左下角整片是空的。
+    // 在**左**侧：盘蛇自己的重心偏右（三圈 + 立起来的颈与头都在右半边），左下角整片是空的，
+    // 尾巴甩到那边正好补上。上一版甩在右边，末端落在 `(0.78w, 0.876h)` ——
+    // 那里当年正压着戒指的外圈（戒指现已挪去卡片右上角），两件道具糊成一件。
     //
     // 起点 y 取 `0.768h` 不是随手挑的：那是最下那圈在 `x = 0.22w` 处下缘带子的中心
     // （椭圆上 `dx = -0.722` 对应 `dy = 0.048h`）。三圈都只是**描边**、内部是空的，
@@ -1802,52 +2128,224 @@ private fun DrawScope.drawSnakeHead(
 }
 
 /**
- * 蛇戒：指环 + 环顶盘着的一只小蛇头。
+ * 蛇戒：蛇身盘成一枚戒指，头在缺口上咬住自己的尾尖。
  *
- * 指环故意画成**开口的两段弧**（缺口在环顶），蛇头咬在缺口上 ——
- * 闭合的圆环加一个头会读成「戒指上粘了个东西」。
+ * ## 位置
+ *
+ * 钉在卡片**右上角**（`0.80w`、52dp，半径 `0.26 × 道具框宽`，约 27dp），和 Lover 那只
+ * 蝴蝶同一套口径：横向按卡宽比例、竖向按 dp —— 竖锚点若按卡高比例，31 首的 TTPD 与
+ * 11 首的 reputation 会把它放在两个高度（顶上那条标题带是 `CARD_CHROME_HEIGHT` 的 dp 预算）。
+ * 上一版它缩在道具框的右下角（半径 `0.088u` ≈ 10dp、20dp 见方，还被点名「太小」）：
+ * 道具框整块要让给盘蛇，戒指塞在角上只剩一个圆点。
+ *
+ * ## 环不是一个等宽的圆
+ *
+ * 蛇身从尾尖到颈一路变粗（`0.060r → 0.190r`），所以环是「外缘 + 内缘两条弧夹出来的
+ * 多边形」，不是 Stroke：描边整圈只能一个线宽，那就又成了一枚普通金属环，蛇身的锥度
+ * 全丢。环顶留 34° 缺口，蛇头**按缺口那道弦**接出去 —— 头长取弦长、方向取弦的倾角，
+ * 头尖就正好落在尾尖上，缺口由头这段接上，整枚戒指读作闭环。
+ *
+ * 缺口与管径是按「头占环径几成」定的：弦长 `2r·sin(gap/2)`，0.60 弧度下头长 0.59r，
+ * 约占环径三成 —— 真戒指上那颗蛇头就是这个量级；0.82 弧度那一版头长 0.80r，
+ * 装上去是一颗鱼头把环吞了一半，吻尖还从环的外缘戳出去。
+ *
+ * 细节：外缘一道亮边（受光）、内缘一道反光、环身 13 片鳞、头按盘蛇那颗头的语言画
+ * （颅 + 下颌 + 口腔 + 两颗毒牙 + 金瞳、竖瞳），只是尺寸缩到五分之一。
+ * 白卡上「亮」等于色少，所以这几笔都是白的。
+ *
+ * @param center 环心（卡片坐标）
+ * @param radius 环身中心线的半径，管径、头、鳞的尺寸都从它派生
  */
-private fun DrawScope.drawSnakeRing(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
-    // 挪到右下角、并收小一档：新的那盘蛇底圈铺到 0.82h、右到 0.89w，
-    // 戒指原来的位置（0.74w / 0.88h、半径 0.115u）正压在盘的右下沿上
-    val center = Offset(w * 0.80f, h * 0.930f)
-    val radius = u * 0.088f
-    val band = Stroke(width = u * 0.021f)
-    drawArc(
-        color = color,
-        startAngle = -60f,
-        sweepAngle = 200f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius, center.y - radius),
-        size = Size(radius * 2f, radius * 2f),
-        alpha = alpha * 1.5f,
-        style = band
-    )
-    drawArc(
-        color = color,
-        startAngle = 160f,
-        sweepAngle = 70f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius, center.y - radius),
-        size = Size(radius * 2f, radius * 2f),
-        alpha = alpha * 1.1f,
-        style = Stroke(width = u * 0.018f)
-    )
-    // 环顶的蛇头：一个水滴 + 一只眼
-    val headCenter = Offset(center.x + radius * 0.52f, center.y - radius * 0.86f)
-    val headPath = Path()
-    headPath.moveTo(headCenter.x - u * 0.030f, headCenter.y + u * 0.022f)
-    headPath.quadraticTo(
-        headCenter.x - u * 0.034f, headCenter.y - u * 0.030f,
-        headCenter.x + u * 0.014f, headCenter.y - u * 0.034f
-    )
-    headPath.quadraticTo(
-        headCenter.x + u * 0.048f, headCenter.y - u * 0.020f,
-        headCenter.x + u * 0.020f, headCenter.y + u * 0.026f
-    )
-    headPath.close()
-    drawPath(headPath, color, alpha = alpha * 1.8f)
-    drawCircle(Color.White, u * 0.008f, Offset(headCenter.x + u * 0.008f, headCenter.y - u * 0.012f), alpha = alpha * 2.4f)
+private fun DrawScope.drawSnakeRing(color: Color, alpha: Float, center: Offset, radius: Float) {
+    // 角度从正上（12 点）起、顺时针为正：蛇身从尾尖（缺口右沿）顺时针盘满一圈到环顶的颈
+    val gap = 0.60f
+    val span = TAU - gap
+    val tailHalf = radius * 0.060f
+    val neckHalf = radius * 0.190f
+    val steps = 36
+
+    // 管径沿身：尾尖细、颈部粗。smoothstep 起收，缺口两侧才不露折点
+    fun halfAt(t: Float) = tailHalf + (neckHalf - tailHalf) * (t * t * (3f - 2f * t))
+    fun at(t: Float, k: Float): Offset {
+        val a = gap + t * span
+        val r = radius + halfAt(t) * k
+        return Offset(center.x + sin(a) * r, center.y - cos(a) * r)
+    }
+
+    // 环身本体 + 外缘亮边 + 内缘反光：三条带子共用同一组采样点，一次走完
+    val band = Path()
+    val ridge = Path()
+    val gloss = Path()
+    for (i in 0..steps) {
+        val t = i / steps.toFloat()
+        val o = at(t, 1f)
+        val ro = at(t, 0.98f)
+        val go = at(t, -0.98f)
+        if (i == 0) {
+            band.moveTo(o.x, o.y)
+            ridge.moveTo(ro.x, ro.y)
+            gloss.moveTo(go.x, go.y)
+        } else {
+            band.lineTo(o.x, o.y)
+            ridge.lineTo(ro.x, ro.y)
+            gloss.lineTo(go.x, go.y)
+        }
+    }
+    for (i in steps downTo 0) {
+        val t = i / steps.toFloat()
+        val p = at(t, -1f)
+        val ri = at(t, 0.56f)
+        val gi = at(t, -0.62f)
+        band.lineTo(p.x, p.y)
+        ridge.lineTo(ri.x, ri.y)
+        gloss.lineTo(gi.x, gi.y)
+    }
+    band.close()
+    ridge.close()
+    gloss.close()
+    drawPath(band, Color.White, alpha = alpha * PROP_MASK)
+    drawPath(band, color, alpha = alpha * 0.92f)
+    drawPath(ridge, Color.White, alpha = alpha * 1.25f)
+    drawPath(gloss, Color.White, alpha = alpha * 0.70f)
+
+    // 鳞：横跨管径的短弧，自由边朝尾（控制点沿切向反着推），所以是叠着的。
+    // 细的那一端不排鳞（`t < 0.20`，正是缺口右沿那一小截）：按角度均分的话，
+    // 到了细端每一片都跟管径差不多长，读作一串挂在环上的白刺
+    val scales = Path()
+    val pieces = 11
+    for (k in 1..pieces) {
+        val t = k / (pieces + 1f)
+        if (t < 0.20f) continue
+        val a = gap + t * span
+        val hw = halfAt(t)
+        val o = at(t, 0.88f)
+        val n = at(t, -0.88f)
+        scales.moveTo(o.x, o.y)
+        scales.quadraticTo(
+            (o.x + n.x) * 0.5f - cos(a) * hw * 0.55f,
+            (o.y + n.y) * 0.5f - sin(a) * hw * 0.55f,
+            n.x, n.y
+        )
+    }
+    // 鳞用主色加深（不是白）：卡片上道具的有效 alpha 只有 0.32（`PROP_ALPHA`），
+    // 环身合出来是一层浅灰，压在上面的白线跟它只差一档，缩到 27dp 就什么也看不见了。
+    // 与盘蛇身上那套鳞同一个写法 —— 浅底上「可见」等于色多
+    drawPath(scales, color, alpha = alpha * 1.35f, style = Stroke(width = radius * 0.017f))
+
+    // ── 头 ──
+    // 颈在环顶、切向朝右（顺时针），而缺口那道弦从颈往右下斜 `gap / 2` ——
+    // 头沿着弦长出去，头尖才落在尾尖上
+    val hx = center.x
+    val hy = center.y - radius
+    val tilt = gap * 0.5f * (180f / PI.toFloat())
+    rotate(degrees = tilt, pivot = Offset(hx, hy)) {
+        val hl = 2f * radius * sin(gap * 0.5f)
+        val hw = radius * 0.22f
+        fun fx(a: Float) = hx + a * hl
+        fun fy(b: Float) = hy + b * hw
+        // 张口 0.18 固定，口正好夹住尾尖那一段（0.15r 高）。这是**咬住**的那一帧 ——
+        // 盘蛇那颗头张到 0.62 是攻击姿态，戒指这枚缩到五分之一，大张的颌在这个尺寸上
+        // 只读作一块多出来的肉。卡片是定格的一张图（低配机上相位恒为 0），
+        // 开合动画在这里本来也看不见
+        val gape = 0.18f
+        val hx0 = fx(0.20f)
+        val hy0 = fy(0.26f)
+        val jux = cos(gape)
+        val juy = sin(gape)
+        fun jx(a: Float, b: Float) = hx0 + jux * a * hl - juy * b * hw
+        fun jy(a: Float, b: Float) = hy0 + juy * a * hl + jux * b * hw
+
+        // 口腔：上下颌之间那一块。比环上任何一处都重 —— 那是个洞
+        val mouth = Path()
+        mouth.moveTo(hx0, hy0)
+        mouth.lineTo(fx(1.00f), fy(0.06f))
+        mouth.lineTo(jx(0.97f, -0.06f), jy(0.97f, -0.06f))
+        mouth.close()
+        drawPath(mouth, Color.White, alpha = alpha * PROP_MASK)
+        drawPath(mouth, color, alpha = alpha * 2.1f)
+
+        // 下颌：铰在 (0.20, 0.26)，舌尖朝前收
+        val jaw = Path()
+        jaw.moveTo(jx(-0.10f, -0.06f), jy(-0.10f, -0.06f))
+        jaw.cubicTo(
+            jx(0.44f, 0.04f), jy(0.44f, 0.04f),
+            jx(0.78f, 0.06f), jy(0.78f, 0.06f),
+            jx(0.98f, 0.00f), jy(0.98f, 0.00f)
+        )
+        jaw.cubicTo(
+            jx(0.84f, 0.34f), jy(0.84f, 0.34f),
+            jx(0.40f, 0.48f), jy(0.40f, 0.48f),
+            jx(-0.10f, 0.52f), jy(-0.10f, 0.52f)
+        )
+        jaw.close()
+        drawPath(jaw, Color.White, alpha = alpha * PROP_MASK)
+        drawPath(jaw, color, alpha = alpha * 1.10f)
+
+        // 上颅：颈背 → 眉脊隆起 → 吻背下坡 → 吻端 → 上唇线收回颈
+        val skull = Path()
+        skull.moveTo(fx(-0.12f), fy(-0.82f))
+        skull.cubicTo(
+            fx(0.14f), fy(-1.08f),
+            fx(0.48f), fy(-0.98f),
+            fx(0.78f), fy(-0.54f)
+        )
+        skull.cubicTo(
+            fx(0.94f), fy(-0.34f),
+            fx(1.02f), fy(-0.12f),
+            fx(1.00f), fy(0.06f)
+        )
+        skull.cubicTo(
+            fx(0.80f), fy(0.22f),
+            fx(0.42f), fy(0.26f),
+            fx(-0.12f), fy(0.18f)
+        )
+        skull.close()
+        drawPath(skull, Color.White, alpha = alpha * PROP_MASK)
+        drawPath(skull, color, alpha = alpha * 1.20f)
+
+        // 毒牙：两颗，从上颌垂进口腔
+        val fangs = Path()
+        repeat(2) { k ->
+            val a = 0.86f - k * 0.12f
+            fangs.moveTo(fx(a), fy(0.10f))
+            fangs.lineTo(fx(a - 0.06f), fy(0.42f))
+        }
+        drawPath(
+            fangs, Color.White,
+            alpha = alpha * 2.4f,
+            style = Stroke(width = radius * 0.026f, cap = StrokeCap.Round)
+        )
+
+        // 眉脊：压在眼上方的一道骨棱，蝮蛇的「凶」全在这一条
+        val brow = Path()
+        brow.moveTo(fx(0.14f), fy(-0.80f))
+        brow.quadraticTo(fx(0.42f), fy(-1.00f), fx(0.66f), fy(-0.62f))
+        drawPath(
+            brow, color,
+            alpha = alpha * 2.2f,
+            style = Stroke(width = radius * 0.024f, cap = StrokeCap.Round)
+        )
+
+        // 眼：金瞳 + 竖梭形瞳孔（两段二次曲线拼的，画椭圆的话跟着头转会横过来）
+        val eyeA = 0.40f
+        val eyeB = -0.34f
+        val eyeR = radius * 0.10f
+        drawCircle(PROP_GOLD, eyeR, Offset(fx(eyeA), fy(eyeB)), alpha = alpha * 2.6f)
+        val pupil = Path()
+        pupil.moveTo(fx(eyeA), fy(eyeB) - eyeR * 0.88f)
+        pupil.quadraticTo(
+            fx(eyeA + 0.032f), fy(eyeB),
+            fx(eyeA), fy(eyeB) + eyeR * 0.88f
+        )
+        pupil.quadraticTo(
+            fx(eyeA - 0.032f), fy(eyeB),
+            fx(eyeA), fy(eyeB) - eyeR * 0.88f
+        )
+        drawPath(pupil, color, alpha = alpha * 2.6f)
+
+        // 鼻孔
+        drawCircle(color, radius * 0.028f, Offset(fx(0.88f), fy(-0.26f)), alpha = alpha * 2.0f)
+    }
 }
 
 /**
@@ -1975,16 +2473,40 @@ private fun DrawScope.drawCardiganChair(color: Color, phase: Float, alpha: Float
             CornerRadius(u * 0.036f), alpha = alpha * 0.9f
         )
         drawRect(color, Offset(w * 0.14f, h * 0.86f), Size(w * 0.70f, u * 0.040f), alpha = alpha * 0.6f)
-        drawCardigan(color, alpha, w, h, u)
+        // 松枝在**开衫之前**：枝梢探到衣摆底下就停住了（见 [drawPineSprig]），
+        // 露出来的那一截正好停在衣摆边缘上，读作「塞在衣服背后」。上一版画在最后，
+        // 枝子从衣摆前面横着穿过去 —— 需求方原话「松针挡在衣服前面很突兀」。
         drawPineSprig(color, alpha, w, h, u)
+        drawCardigan(color, alpha, w, h, u)
     }
 }
+
+/**
+ * 开衫上身这两遍色的倍率（相对 [PROP_ALPHA]），衣身与袖子同一套。
+ *
+ * 一遍 `0.35` 只能把垫白后的 248 拉回 222 —— 与纸同色；两遍到 `0.49` 才是 195。
+ * 数字是离线复刻器（`build/egg-shots/fo_card.py`）按真机纸色算出来的，不是拍脑袋。
+ */
+private const val CARDIGAN_FIRST_LAYER = 1.00f
+private const val CARDIGAN_SECOND_LAYER = 0.63f
 
 /**
  * 一件开衫：两片前襟 + V 领 + 一排扣子 + 两只垂下的袖子 + 针织罗纹。
  *
  * 罗纹靠 `clipPath` 卡在衣身里 —— 不裁的话那几十条竖线会糊到椅子和卡片上，
  * 一眼就露出是「画上去的纹理」而不是毛线。
+ *
+ * ## 衣身为什么要**上两遍色**
+ *
+ * 垫白（[PROP_MASK]）把衣身顶到 248，而卡片纸只有 222 上下 —— 一遍色最多把 248 拉回
+ * 222，**与纸逐像素同色**。真机量出来的正是这个：衣身 Δ0、椅子 Δ-20，于是整件衣服
+ * 只剩领口那道折线、一排扣子和几十条罗纹浮在纸上，衣身本身是块空洞（需求方原话
+ * 「衣服和卡片融为一体了」）。第二遍把衣身压到 195（Δ-27），比椅子这个背景结构更实，
+ * 衣服才成了主体。
+ *
+ * 两遍合起来的遮盖力 `(1-0.78)(1-0.49) ≈ 0.11`，与原来一遍垫白 `0.22` 同一档，
+ * 立柱与顶横档仍旧透不出来；把垫白调薄换成一遍厚色（`0.72×白 + 1.65×色`）也能压到
+ * 同样的深，但遮盖力掉到 0.16，椅背会变成一道幽灵线横在衣服上。
  */
 private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
     val top = h * 0.20f
@@ -1999,17 +2521,46 @@ private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Floa
     // 垫白：椅子先画（注释见 [drawCardiganChair]），但两者都是半透明的 ——
     // 不垫这一层，两根立柱与顶横档会整条穿过衣身，「挂在椅背上」变成「印在椅子上」
     drawPath(body, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(body, color, alpha = alpha * 0.7f)
+    drawPath(body, color, alpha = alpha * CARDIGAN_FIRST_LAYER)
+    drawPath(body, color, alpha = alpha * CARDIGAN_SECOND_LAYER)
     clipPath(body) {
         val ribs = Path()
         var x = w * 0.18f
         while (x < w * 0.78f) {
-            ribs.moveTo(x, top - h * 0.02f)
+            // V 领那个三角形里是**衣服里面**，不该有罗纹：竖纹只长在两片前襟上。
+            // 每条竖线改从领口斜边上起头 —— 起头点正好落在领子描边的中线上，
+            // 而领子是后画的、又比衣身深，于是竖纹看上去是从领子底下钻出来的。
+            // 不这么裁的话，那几十条竖线会一路顶到肩线，领口里糊成一片（需求方
+            // 原话「v领所在三角形区域去掉衣服的竖纹，表示竖纹只在衣服外面有」）。
+            val lean = abs(x - w * 0.49f)
+            val from = if (lean < w * 0.19f) {
+                h * 0.40f - h * 0.20f * (lean / (w * 0.19f))
+            } else {
+                top - h * 0.02f
+            }
+            ribs.moveTo(x, from)
             ribs.lineTo(x + u * 0.022f, bottom + h * 0.08f)
             x += u * 0.044f
         }
         drawPath(ribs, color, alpha = alpha * 0.5f, style = Stroke(width = u * 0.011f))
     }
+    // 袖子排在**领口之前**：袖山（`w 0.38 → 0.31` 那一段肩）压在 V 领两条臂的上半截上，
+    // 袖子后画就把领口切掉一段，V 读成「左右各一段斜线」而不是一件开衫的领子
+    // （需求方原话「v领被左右两只袖子盖住了」）。真衣服上领贴边本来也在袖山之上。
+    val sleeve = Path()
+    sleeve.moveTo(w * 0.31f, h * 0.22f)
+    sleeve.cubicTo(w * 0.18f, h * 0.36f, w * 0.11f, h * 0.54f, w * 0.12f, h * 0.70f)
+    sleeve.lineTo(w * 0.23f, h * 0.71f)
+    sleeve.cubicTo(w * 0.23f, h * 0.54f, w * 0.27f, h * 0.38f, w * 0.38f, h * 0.26f)
+    sleeve.close()
+    val cuff = Path()
+    repeat(3) { index ->
+        val y = h * (0.655f + index * 0.019f)
+        cuff.moveTo(w * 0.12f, y)
+        cuff.lineTo(w * 0.23f, y)
+    }
+    cardiganSleeve(sleeve, cuff, color, alpha, u)
+    scale(-1f, 1f, pivot = Offset(w * 0.49f, 0f)) { cardiganSleeve(sleeve, cuff, color, alpha, u) }
     // V 领：加粗描一条折线就够，领子本来就是双层布，本该比衣身深
     val collar = Path()
     collar.moveTo(w * 0.30f, top)
@@ -2025,26 +2576,13 @@ private fun DrawScope.drawCardigan(color: Color, alpha: Float, w: Float, h: Floa
         drawCircle(color, u * 0.024f, Offset(w * 0.49f, cy), alpha = alpha * 1.9f)
         drawCircle(Color.White, u * 0.009f, Offset(w * 0.49f, cy), alpha = alpha * 1.8f)
     }
-    val sleeve = Path()
-    sleeve.moveTo(w * 0.31f, h * 0.22f)
-    sleeve.cubicTo(w * 0.18f, h * 0.36f, w * 0.11f, h * 0.54f, w * 0.12f, h * 0.70f)
-    sleeve.lineTo(w * 0.23f, h * 0.71f)
-    sleeve.cubicTo(w * 0.23f, h * 0.54f, w * 0.27f, h * 0.38f, w * 0.38f, h * 0.26f)
-    sleeve.close()
-    val cuff = Path()
-    repeat(3) { index ->
-        val y = h * (0.655f + index * 0.019f)
-        cuff.moveTo(w * 0.12f, y)
-        cuff.lineTo(w * 0.23f, y)
-    }
-    cardiganSleeve(sleeve, cuff, color, alpha, u)
-    scale(-1f, 1f, pivot = Offset(w * 0.49f, 0f)) { cardiganSleeve(sleeve, cuff, color, alpha, u) }
 }
 
 /** 一只袖子 + 袖口罗纹。右袖是左袖的镜像，几何只写一遍。 */
 private fun DrawScope.cardiganSleeve(sleeve: Path, cuff: Path, color: Color, alpha: Float, u: Float) {
     drawPath(sleeve, Color.White, alpha = alpha * PROP_MASK)
     drawPath(sleeve, color, alpha = alpha * 0.85f)
+    drawPath(sleeve, color, alpha = alpha * CARDIGAN_SECOND_LAYER)
     drawPath(cuff, color, alpha = alpha * 1.3f, style = Stroke(width = u * 0.008f))
 }
 
@@ -2053,12 +2591,17 @@ private fun DrawScope.cardiganSleeve(sleeve: Path, cuff: Path, color: Color, alp
  *
  * 针叶全部合进一条 Path 一次描完，而且**越靠枝梢越短** ——
  * 等长的针叶排出来是一把梳子。
+ *
+ * 枝梢停在 `(0.30w, 0.76h)` —— 再往上就伸进开衫的衣摆里了。它画在开衫**之前**
+ * （见 [drawCardiganChair]），所以探进衣摆的那一小截被衣服盖掉，露出来的枝子正好
+ * 收在衣摆边缘上，读作「塞在衣服背后」。上一版梢头到 `(0.34w, 0.70h)` 又画在最后，
+ * 整枝从衣摆前面横穿过去，需求方原话「松针挡在衣服前面很突兀」。
  */
 private fun DrawScope.drawPineSprig(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
     val fromX = w * 0.04f
     val fromY = h * 0.98f
-    val toX = w * 0.34f
-    val toY = h * 0.70f
+    val toX = w * 0.30f
+    val toY = h * 0.76f
     drawLine(color, Offset(fromX, fromY), Offset(toX, toY), u * 0.014f, alpha = alpha * 1.3f)
     val needles = Path()
     repeat(8) { index ->
@@ -2074,253 +2617,60 @@ private fun DrawScope.drawPineSprig(color: Color, alpha: Float, w: Float, h: Flo
     drawPath(needles, color, alpha = alpha * 1.1f, style = Stroke(width = u * 0.006f))
 }
 
-/** 9 · evermore：霉霉的背影 —— 法式辫 + 格纹呢大衣。照封面原图复刻。 */
-private fun DrawScope.drawBraidPlaid(color: Color, phase: Float, lowRam: Boolean, alpha: Float) {
-    branchTexture(color, phase, lowRam)
-    val box = propBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
-    translate(left = box.left, top = box.top) {
-        drawBackView(color, phase, alpha, w, h, u)
-    }
-}
-
 /**
- * 背影：后脑与收进辫子的头发 → 合身段呢大衣 → 垂在后背左侧的法式辫。
+ * 9 · evermore：站在那儿的背影 —— 从颅顶编下来的法式辫 + 格纹呢大衣。
  *
- * *evermore* 的封面就是这一张，这一版按 800×800 原图逐像素量过比例：
+ * 画的是**照片抠图**（`era_evermore_back.png`：1254² 原图裁到外框、抹掉抠图彩边、
+ * 降到 720 宽），不再用 Canvas 手画。手画那版把辫花试到第七种画法都读不「像」——
+ * 道具框只有 413px 宽，头发的「编」与呢子的格纹各占几像素，几何化到最后只能是一堆
+ * 带描边的色块；而照片自带全部质感，代价只有一张 0.8MB 的 PNG。
  *
- * 1. **一颗后脑**。头（含发）宽约为 0.53S（S = 颅顶到外撇缝），两侧头发收进辫子。
- * 2. **一件两段式呢大衣**。合身段从头底一直垂到 1.0S、宽 0.67S（原图 y 185–460 那条
- *    暗色柱），下摆从 1.0S 处**外撇**成 A 字、垂到 1.85S 出框 —— 外撇缝上有一整道
- *    横向亮带（原图 y 457–495），是这件外套最亮的特征。格子间距 0.32S。
- * 3. **一条法式辫**。挂在后背**偏左**（中心比身体中线偏左 0.25S —— 原图头心在
- *    x 420、辫柱在 x 315），从颈后垂到外撇缝就结束，粗细几乎不变（0.13S 上下）。
- *    之前那一版辫子居中、垂进下摆 0.93S，整张读作「帽子挂在口袋上」。
- *
- * ## 辫花为什么是「一叠朝下的弧」
- *
- * 从背后看一条辫子的真实结构是**一叠嵌套的 V**：每一道辫花横跨整个柱宽、中间往下坠，
- * 相邻两道重叠一半。辫花画成**填充的带**而不是描边的线：柱宽要能逐道微调，
- * 一条描边只有一个线宽。
+ * 手画稿与对照脚本留在仓库外（`build/egg-shots/ev_back.py` 等），要再改结构时从那儿起。
  */
-private fun DrawScope.drawBackView(
+@Suppress("UNUSED_PARAMETER")
+private fun DrawScope.drawBraidPlaid(
     color: Color,
     phase: Float,
+    lowRam: Boolean,
     alpha: Float,
-    w: Float,
-    h: Float,
-    u: Float
+    back: ImageBitmap?
 ) {
-    val cx = w * 0.50f
-    val crownY = h * 0.100f
-    val headCy = h * 0.155f
-    val headRx = w * 0.250f
-    val napeY = h * 0.215f
-    val napeHalf = w * 0.150f
-    // 外撇缝：合身段转 A 字下摆的那道横缝（原图最亮的一条带）
-    val seamY = h * 0.720f
-    val torsoHalf = w * 0.320f
-    val flareHalf = w * 0.950f
-    // 辫子挂点：后背中线偏左 0.25S（原图实测头心 x 420、辫柱 x 315）
-    val braidCx0 = cx - w * 0.240f
-
-    // 某个高度上发块的半宽：耳际最宽，往上往下都收
-    val hairHalf = { y: Float ->
-        val s = ((y - headCy) / (napeY - headCy)).coerceIn(-1.35f, 1f)
-        if (s >= 0f) headRx - (headRx - napeHalf) * s * s else headRx * (1f - 0.60f * s * s)
-    }
-
-    // ── 头发 ──
-    val hair = Path()
-    hair.moveTo(cx - headRx, headCy)
-    hair.cubicTo(
-        cx - headRx, headCy - h * 0.083f,
-        cx + headRx, headCy - h * 0.083f,
-        cx + headRx, headCy
+    branchTexture(color, phase, lowRam)
+    if (back == null) return
+    val box = propBox()
+    // 按框宽铺满、底边压在框底：**横向不出框**。上一版按「原图铺满一列」缩，
+    // 下摆横着溢出一列 100px，屏幕上读作「一个比头大近三倍的裙摆」（需求方原话）。
+    val dstW = box.width
+    val dstH = dstW * back.height / back.width
+    // 呼吸：整张照片极轻微地左右摆一下，卡片才不是一张贴上去的静物
+    val sway = sin(phase * TAU) * box.width * 0.012f
+    val dstLeft = box.left + sway
+    val dstTop = box.bottom - dstH
+    drawImage(
+        image = back,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(back.width, back.height),
+        dstOffset = IntOffset(dstLeft.roundToInt(), dstTop.roundToInt()),
+        dstSize = IntSize(dstW.roundToInt(), dstH.roundToInt()),
+        alpha = (alpha * EVERMORE_PHOTO_GAIN).coerceAtMost(1f),
+        filterQuality = FilterQuality.High
     )
-    hair.cubicTo(
-        cx + headRx, headCy + h * 0.048f,
-        cx + headRx * 0.80f, napeY - h * 0.020f,
-        cx + napeHalf, napeY
-    )
-    hair.cubicTo(
-        cx + napeHalf * 0.42f, napeY + h * 0.016f,
-        cx - napeHalf * 0.42f, napeY + h * 0.016f,
-        cx - napeHalf, napeY
-    )
-    hair.cubicTo(
-        cx - headRx * 0.80f, napeY - h * 0.020f,
-        cx - headRx, headCy + h * 0.048f,
-        cx - headRx, headCy
-    )
-    hair.close()
-    drawPath(hair, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(hair, color, alpha = alpha * 1.05f)
-    drawPath(hair, color, alpha = alpha * 1.70f, style = Stroke(width = u * 0.007f))
-
-    // 耳朵：封面上露在发外。填充比头发浅一档 —— 皮肤不是头发
-    for (side in 0..1) {
-        val dir = if (side == 0) -1f else 1f
-        val ex = cx + dir * headRx * 0.96f
-        val ey = headCy + h * 0.038f
-        val ear = Path()
-        ear.moveTo(ex - dir * u * 0.006f, ey - h * 0.026f)
-        ear.cubicTo(
-            ex + dir * u * 0.032f, ey - h * 0.023f,
-            ex + dir * u * 0.028f, ey + h * 0.018f,
-            ex - dir * u * 0.004f, ey + h * 0.024f
-        )
-        ear.close()
-        drawPath(ear, Color.White, alpha = alpha * PROP_MASK)
-        drawPath(ear, color, alpha = alpha * 0.55f)
-        drawPath(ear, color, alpha = alpha * 1.25f, style = Stroke(width = u * 0.006f))
-    }
-
-    // 把两侧头发收进辫子的那一批发缕。辫子挂在后背偏左，发缕整体朝**左下**的
-    // 挂点收，而不是往正中 —— 原图上头发是从颅顶往左侧那条辫柱里拧进去的
-    val sweeps = Path()
-    repeat(12) { index ->
-        val t = (index / 2) / 5f
-        val dir = if (index % 2 == 0) -1f else 1f
-        val y0 = napeY - (napeY - (headCy - h * 0.085f)) * t
-        val hw = hairHalf(y0)
-        // 终点一律偏向辫子挂点那一侧：左侧的发缕几乎竖直下去，右侧的斜穿过后脑
-        val endX = braidCx0 + dir * hw * (0.30f + 0.20f * t)
-        val rise = h * (0.060f - 0.038f * t)
-        sweeps.moveTo(cx + dir * hw * 0.95f, y0)
-        sweeps.quadraticTo(
-            (cx + dir * hw * 0.95f + endX) / 2f, y0 - rise * 0.9f,
-            endX, y0 - rise
-        )
-    }
-    drawPath(sweeps, color, alpha = alpha * 1.35f, style = Stroke(width = u * 0.0055f))
-    // ── 格纹呢大衣：合身段 + A 字下摆 ──
-    // 原图是两段式：合身段（宽 0.67S）从颈后直垂到外撇缝，下摆从缝上**外撇**出框。
-    // 上一版肩部直接外扩到出框，整块读作一只梯形口袋 —— 那件外套上半身是合身的。
-    // 一整条剪影：格纹连着穿过合身段与下摆，分两块画交界处必然错纹
-    val coat = Path()
-    coat.moveTo(cx - torsoHalf, napeY)
-    coat.quadraticTo(cx, napeY - h * 0.018f, cx + torsoHalf, napeY)
-    coat.lineTo(cx + torsoHalf, seamY)
-    coat.quadraticTo(
-        cx + w * 0.72f, seamY + h * 0.14f,
-        cx + flareHalf, h * 1.04f
-    )
-    coat.lineTo(cx - flareHalf, h * 1.04f)
-    coat.quadraticTo(
-        cx - w * 0.72f, seamY + h * 0.14f,
-        cx - torsoHalf, seamY
-    )
-    coat.close()
-    drawPath(coat, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(coat, color, alpha = alpha * 0.62f)
-    // 格纹间距 0.32S ≈ 0.31u，一个循环三条宽窄不同的带（宽深带 + 窄深带 + 亮细条）。
-    // 深格不另调色（纵横两条带子叠起来自然深一档），亮条用白 —— 那是封面上锈橙的那几道
-    clipPath(coat) {
-        val span = flareHalf * 2f
-        val left = cx - flareHalf
-        val pitch = u * 0.310f
-        var x = left - pitch * 0.35f
-        while (x < cx + flareHalf) {
-            drawRect(color, Offset(x, napeY), Size(u * 0.132f, h * 0.84f), alpha = alpha * 0.46f)
-            drawRect(color, Offset(x + u * 0.170f, napeY), Size(u * 0.052f, h * 0.84f), alpha = alpha * 0.30f)
-            drawRect(
-                Color.White, Offset(x + u * 0.246f, napeY), Size(u * 0.030f, h * 0.84f),
-                alpha = alpha * 0.34f
-            )
-            x += pitch
-        }
-        var y = napeY - u * 0.105f
-        while (y < h * 1.06f) {
-            drawRect(color, Offset(left, y), Size(span, u * 0.132f), alpha = alpha * 0.46f)
-            drawRect(color, Offset(left, y + u * 0.170f), Size(span, u * 0.052f), alpha = alpha * 0.30f)
-            drawRect(
-                Color.White, Offset(left, y + u * 0.246f), Size(span, u * 0.030f),
-                alpha = alpha * 0.34f
-            )
-            y += pitch
-        }
-        // 外撇缝亮带：原图 y 457–495 那道整宽的横向亮带，是这件外套最亮的特征，
-        // 也是「合身段转下摆」的读法来源。少了它两段的分界就没了
-        drawRect(
-            Color.White,
-            Offset(cx - flareHalf, seamY),
-            Size(flareHalf * 2f, h * 0.048f),
-            alpha = alpha * 0.30f
-        )
-        drawLine(
-            color = color,
-            start = Offset(cx - flareHalf, seamY),
-            end = Offset(cx + flareHalf, seamY),
-            strokeWidth = u * 0.008f,
-            alpha = alpha * 1.30f
-        )
-    }
-
-    // ── 法式辫 ──
-    // 挂在后背偏左（braidCx0），从颈后垂到外撇缝为止，粗细几乎不变（原图 32→40px）。
-    // 之前那一版从颅顶编起、居中、垂进下摆 0.93S —— 三处都不像
-    val braidTop = napeY + h * 0.010f
-    val braidTip = seamY + h * 0.020f
-    val swing = sin(phase * TAU) * u * 0.010f
-    val braidUnder = Path()
-    val braid = Path()
-    val creases = Path()
-    val gloss = Path()
-    var by = braidTop
-    var tipX = braidCx0
-    var guard = 0
-    while (by < braidTip && guard < 64) {
-        val f = ((by - braidTop) / (braidTip - braidTop)).coerceIn(0f, 1f)
-        // 等粗微收：0.058w → 0.046w。原图辫柱两端的宽度差不到三成，
-        // 强锥形会把辫子读成胡萝卜
-        val half = w * (0.058f - 0.012f * f)
-        val pitch = half * 1.06f
-        val bx = braidCx0 - w * 0.022f * f + swing * f * f
-        val dip = pitch * 1.70f
-        band(braidUnder, bx, by, half * 1.02f, dip, pitch * 1.02f)
-        band(braid, bx, by, half, dip, pitch * 0.96f)
-        band(creases, bx, by + pitch * 0.50f, half * 0.64f, dip * 0.86f, pitch * 0.15f)
-        band(gloss, bx - half * 0.30f, by + pitch * 0.20f, half * 0.34f, dip * 0.55f, pitch * 0.11f)
-        tipX = bx
-        by += pitch
-        guard++
-    }
-    drawPath(braidUnder, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(braid, color, alpha = alpha * 0.72f)
-    drawPath(creases, color, alpha = alpha * 2.20f)
-    drawPath(gloss, Color.White, alpha = alpha * 0.20f)
-
-    // 散开的发尾：辫子末端没有发圈，直接散成一撮
-    val ends = Path()
-    repeat(5) { index ->
-        val spread = (index - 2) / 2f
-        ends.moveTo(tipX + spread * u * 0.007f, braidTip - h * 0.004f)
-        ends.quadraticTo(
-            tipX + spread * u * 0.026f, braidTip + h * 0.020f,
-            tipX + spread * u * 0.046f, braidTip + h * 0.042f
-        )
-    }
-    drawPath(ends, color, alpha = alpha * 1.05f, style = Stroke(width = u * 0.0055f, cap = StrokeCap.Round))
+    // 主色罩**不能画**：照片的透明区是整块矩形，罩上去在卡片上留下一个方框
+    // （真机 era9 那一版就带着这个框）。照片自己的暖棕与卡片主色本来就同源。
 }
 
 /**
- * 往 [path] 里加一道**朝下的弧带**：外弧从 (cx−half, cy−th/2) 坠到 cy+dip−th/2 再回升，
- * 内弧反向回来，闭合成一条等厚的带。
+ * 照片的显影强度：有效 alpha = 0.35 × 2.2 ≈ 0.77。
  *
- * 辫花不用描边而用填充，就是为了让宽度能逐道收窄 —— 一条 Path 只有一个线宽。
+ * [PROP_ALPHA]（0.35）是给线画道具定的 —— 线画道具在纸上本来就是「淡彩」，
+ * 而照片整块有色，同值读作「褪色到快没了」。1.5（= 0.525）需求方看过仍嫌淡，
+ * 定在 2.2：照片的细节（发丝、格纹）都在，纸还透气；再往上就是一张实心贴纸，
+ * 12 个母题里只有它一个实色，整体会跳。
+ *
+ * 这张卡**不存在压文字的问题**：evermore 的歌名最长 19 字（`LONG_TITLE_CHARS` 是 28），
+ * `columnFade` 恒为 1，右列本来也没有文字横穿。
  */
-private fun band(path: Path, cx: Float, cy: Float, half: Float, dip: Float, th: Float) {
-    val up = cy - th * 0.5f
-    val down = cy + th * 0.5f
-    path.moveTo(cx - half, up)
-    path.quadraticTo(cx, up + dip, cx + half, up)
-    path.lineTo(cx + half, down)
-    path.quadraticTo(cx, down + dip, cx - half, down)
-    path.close()
-}
+private const val EVERMORE_PHOTO_GAIN = 2.2f
 
 /** 10 · Midnights：一只打火机（风罩栅格 + 拨轮 + 呼吸的火苗）+ 几颗四芒星。 */
 private fun DrawScope.drawLighterStars(color: Color, phase: Float, alpha: Float) {

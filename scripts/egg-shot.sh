@@ -8,6 +8,11 @@
 #   预览包与正式包是两个 applicationId，装上去不会顶掉设备里那份 3.6.0 的数据。
 #   设备还要处于解锁状态：锁屏挡在前面时抓回来的就是锁屏。
 #
+#   install 任务在某些机器上会以「Failed to install on any devices」失败（2026-09-11
+#   在 23116PN5BC 上遇到），打包本身是成功的，直接顶上：
+#     ./gradlew :app:assembleEggpreview && \
+#       adb install -r app/build/outputs/apk/eggpreview/app-eggpreview.apk
+#
 # 用法: scripts/egg-shot.sh <ms|eraN|globeN> [输出文件]
 #   ms      直接给毫秒                scripts/egg-shot.sh 120400
 #   eraN    第 N 张专辑卡片（1..12）  scripts/egg-shot.sh era7
@@ -80,7 +85,10 @@ if [ "$COUNT" -gt 1 ] && [ -z "${ANDROID_SERIAL:-}" ]; then
 $DEVICES"
 fi
 
-adb shell pm list packages | tr -d '\r' | grep -qx "package:$PKG" \
+# 用 `pm path` 而不是 `pm list packages`：HyperOS 上 `pm list packages` 会返回空列表
+# （2026-09-11 在 23116PN5BC 上实测，包明明装着、`pm path` 也有输出），
+# 拿它做检查会一直报「设备上没装」。`pm path` 装了退出码 0、没装非 0。
+adb shell pm path "$PKG" >/dev/null 2>&1 \
   || die "设备上没装 $PKG，先跑 ./gradlew installEggpreview（arm64 真机）"
 
 # 开发机常把动画时长缩放调成 0 图个跳转快，而彩蛋会因此走「减少动效」的静态终态，
