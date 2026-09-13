@@ -62,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
@@ -72,6 +73,7 @@ import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
@@ -432,32 +434,57 @@ private fun CarouselPage(
                 // 页切了四角而影子还是方的，四个角上就会露出方影的直角
                 .shadow(20.dp, RoundedCornerShape(corner), clip = false)
         ) {
-            when (sheet) {
-                is DailyStampSheet.Line -> {
-                    val picture = remember(sheet.card.date) { Picture() }
-                    DisposableEffect(sheet.card.date) {
-                        pictures[sheet.card.date] = picture
-                        onDispose { pictures.remove(sheet.card.date) }
+            // 转动中的卡片按纹理合成：三维变换下如果让 HWUI 每帧重画卡面（整页的底纹、
+            // 齿孔、文字、印章），一帧的绘制与 GPU 开销就是滑动里最重的那一项；先画进一块
+            // 离屏缓冲，之后每帧只剩一次贴图采样。静止那张不套（Auto）——它没有动画在跑，
+            // 套上只是白白多一份缓冲。
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    compositingStrategy = if (abs(turn()) > 0f) {
+                        CompositingStrategy.Offscreen
+                    } else {
+                        CompositingStrategy.Auto
                     }
-                    RecordedDailyStampCard(
-                        picture = picture,
-                        card = sheet.card,
-                        palette = palette,
-                        brand = brand,
-                        onPosterClick = onPosterClick,
-                    )
                 }
+            ) {
+                when (sheet) {
+                    is DailyStampSheet.Line -> {
+                        val picture = remember(sheet.card.date) { Picture() }
+                        DisposableEffect(sheet.card.date) {
+                            pictures[sheet.card.date] = picture
+                            onDispose { pictures.remove(sheet.card.date) }
+                        }
+                        RecordedDailyStampCard(
+                            picture = picture,
+                            card = sheet.card,
+                            palette = palette,
+                            brand = brand,
+                            onPosterClick = onPosterClick,
+                        )
+                    }
 
-                is DailyStampSheet.Latent -> LatentCard(latent = sheet, palette = palette)
+                    is DailyStampSheet.Latent -> LatentCard(latent = sheet, palette = palette)
+                }
             }
             // 侧卡压暗的那层纱，见 [SIDE_VEIL]。画在卡面之上、录进 Picture 的那一页之外，
-            // 所以导出的图里没有它——正中间那张的 away 是 0，这一层本来就是透明的。
+            // 所以导出的图里没有它——正中间那张的 amount 是 0，这一笔根本不画。
+            //
+            // 只画一个半透明的圆角矩形，不套图层：整层 alpha 会让每张侧卡多出一次离屏合成，
+            // 而这一笔本身就是一个矩形，直接带 alpha 画下去更省。
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .graphicsLayer { alpha = lerp(0f, SIDE_VEIL, abs(turn())) }
-                    .clip(RoundedCornerShape(corner))
-                    .background(veil)
+                    .drawBehind {
+                        val amount = lerp(0f, SIDE_VEIL, abs(turn()))
+                        if (amount > 0f) {
+                            val radius = corner.toPx()
+                            drawRoundRect(
+                                color = veil,
+                                cornerRadius = CornerRadius(radius, radius),
+                                alpha = amount,
+                            )
+                        }
+                    }
             )
         }
     }
