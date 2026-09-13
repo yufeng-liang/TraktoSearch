@@ -16,4 +16,15 @@
         <!-- 启动完成后立即切换到的主题 -->
         <item name="postSplashScreenTheme">@style/Theme.TraktoSearch</item>
     </style>
+    <!-- 开屏日签开着的场合走这一档：静态图标、不写动画时长。
+         日签数据一就绪系统 splash 立刻散场（等的是 stampReady，见 MainActivity），
+         合板动画那时候通常没演完——半截动画像卡住，而那段等待本来就该交给日签。
+         背景与品牌条两档共用，差别只有图标这一处。 -->
+    <style name="Theme.App.Starting.SplashQuote">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_clapper</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding_image</item>
+        <item name="postSplashScreenTheme">@style/Theme.TraktoSearch</item>
+    </style>
 </resources>
