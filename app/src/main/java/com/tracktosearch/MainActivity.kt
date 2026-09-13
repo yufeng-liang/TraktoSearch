@@ -119,6 +119,14 @@ class MainActivity : AppCompatActivity() {
          * 一帧给 Compose 提交新的组合。与场记板动画那个 720 无关，这里只是让日签先占住画面。
          */
         private const val NAV_DEFER_MS = 32L
+
+        /**
+         * 系统 splash 最多被按在屏幕上多久，单位毫秒。
+         *
+         * 只在启动链挂死这种极端情况下生效：正常路径日签或主界面几百毫秒内就绪，
+         * 这个上限永远不会到。它保证的是「任何情况下都能到界面」。
+         */
+        private const val SPLASH_MAX_HOLD_MS = 10_000L
     }
 
     @Inject
@@ -177,8 +185,19 @@ class MainActivity : AppCompatActivity() {
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
     private var authInitializationJob: Job? = null
-    @Volatile
-    private var startupContentReadyForDraw = false
+    /**
+     * 主界面导航树真的画出来了没有。
+     *
+     * 系统 splash 的放行条件之一，而且必须是「画出来」而不是「组合了 / 布局完了」：
+     * 后两者都只保证下一帧会带上主界面，而系统 splash 的 pre-draw 条件在那一刻就解除了，
+     * 于是放行的那一帧还是空的——关掉日签的场合就是「合板动画 → 白屏 → 主界面」。
+     * 标记时机见 [installStartupFirstDrawTrace]。
+     */
+    private var navPlaced by mutableStateOf(false)
+
+    /** 主界面导航树的组合门：日签先上屏、导航后一帧跟上，见 onCreate 第四段。 */
+    private var navComposed by mutableStateOf(false)
+
     private var startupFirstContentDrawLogged = false
     private var initialResumeHandled = false
 
@@ -189,19 +208,25 @@ class MainActivity : AppCompatActivity() {
         // 动画正好把那段时间用掉）。主题必须在 super.onCreate 之前换掉，见 chooseSplashTheme。
         setTheme(chooseSplashTheme())
         var isReady by mutableStateOf(false)
-        // 日签层的门：日签数据（开关 + 台词 + 海报）备齐就开。它比 isReady 早得多，
-        // 系统 splash 随之散场，App 其余启动工作在这块日签背后继续跑。
+        // 日签层的门：日签数据（开关 + 台词 + 海报）备齐就开。
+        // 它要的就这么多：台词与海报一到手，这一页就是完整的，主界面在它背后继续加载。
         var stampReady by mutableStateOf(false)
+        // 主界面导航树真的画出来了没有（字段声明在下面，见 navPlaced 的说明）。
         // 通过 Compose 状态控制 Splash 的结束条件
         val splashScreen = installSplashScreen()
         StartupTrace.mark("activity.splash_installed")
-        // 系统 splash 等「日签上屏」或「App 就绪」的早者：日签开着且数据齐了就让位给日签，
-        // 拿不到日签（开关关着、海报没就绪）时才继续等 App 就绪——那种情况下必须等到底，
-        // 否则散场之后底下还没有可看的画面。
-        //
-        // 注意不是「等 isReady」：等它会把日签数据就绪之后那段（默认标签页读盘、会话态收尾，
-        // 实测小米 14 Pro 上约 280ms）也算进系统 splash，用户就要多盯着一块没有内容的暖纸底。
-        splashScreen.setKeepOnScreenCondition { !stampReady && !isReady }
+        // 系统 splash 让位的条件，两种时刻取早者：
+        //   日签数据齐了（stampReady）→ 让位给日签，App 其余工作继续在它背后跑；
+        //   主界面真的画出来了（navPlaced）→ 没有日签接场的场合（开关关着、海报没就绪），
+        //     必须等到这一刻。不能写成 isReady，也不能写成「导航开始组合」或「主题铺好了」：
+        //     那些时刻导航树都还没上屏，放行只会露出一帧空背景
+        //     ——关掉日签的场合就是「合板动画 → 空白 → 主界面」。
+        // 最后那 10 秒是防呆：启动链任何一环挂死也不该把人永久困在场记板上。
+        val splashHeldFrom = System.currentTimeMillis()
+        splashScreen.setKeepOnScreenCondition {
+            (!stampReady && !navPlaced) &&
+                System.currentTimeMillis() - splashHeldFrom < SPLASH_MAX_HOLD_MS
+        }
         super.onCreate(savedInstanceState)
         StartupTrace.mark("activity.super_onCreate.complete")
         enableEdgeToEdge(
@@ -229,8 +254,6 @@ class MainActivity : AppCompatActivity() {
         // 开屏台词。它在「日签数据就绪」之前准备好，日签上屏与系统 splash 散场都等这个状态。
         var splashQuote by mutableStateOf<com.tracktosearch.ui.screen.splash.SplashQuoteUi?>(null)
         var splashQuoteDone by mutableStateOf(false)
-        // 主界面导航树的组合门。日签先上屏、导航后一帧跟上，见下面 navComposeJob。
-        var navVisible by mutableStateOf(false)
         val opensSearchFromWidget = SearchNavigator.isOpenSearchIntent(intent)
         val notificationOpensWatchlist = intent?.getStringExtra("navigate_to") in setOf(
             "douban_sync",
@@ -323,32 +346,14 @@ class MainActivity : AppCompatActivity() {
                 if (remaining > 0) delay(remaining)
             }
             isReady = true
-            startupContentReadyForDraw = true
             StartupTrace.mark("startup.ready")
         }
 
-        // 第四段：主界面导航树的组合门。
-        //
-        // 实测（小米 14 Pro，debug 包）首次组合把整棵导航树一起建出来的代价约 700-800ms：
-        // 日签数据 750ms 就绪，首帧却要等到 1.5s 之后，中间这段全花在「还没人看得见的主界面」上。
-        // 这一层本来就要在日签背后继续加载，所以把它的组合推迟到日签首帧之后：
-        // 系统 splash 一散场屏幕上就已经是完整的一页日签，而不是一个白屏接着主界面。
-        //
-        // 推迟的量是两帧。这里必须用时间而不是 withFrameNanos：lifecycleScope 的上下文里
-        // 没有 Compose 的 MonotonicFrameClock，直接调会抛 IllegalStateException 把 App 打死
-        // （踩过一次）。16ms 一帧的余量给系统 splash 的 pre-draw 放行加一次组合提交。
-        // 用户碰不到这段空窗：跳过提示要等 isReady，而 isReady 之后才开始这段推迟。
-        lifecycleScope.launch {
-            stampJob.join()
-            authInitializationJob?.join()
-            delay(NAV_DEFER_MS)
-            navVisible = true
-            StartupTrace.mark("startup.nav_visible")
-        }
         // 第三段：日签背后继续跑的启动工作。它们都不参与首屏——想看列表由 WatchlistScreen
         // 进入后自行加载，海报预取与连接校验都属于「以后」的事，不该和日签抢主线程与带宽。
         // 必须在 isReady 之前就位的只有语言与默认标签页两件，见上面两段。
-        lifecycleScope.launch {            authInitializationJob?.join()
+        lifecycleScope.launch {
+            authInitializationJob?.join()
             val authState = authManager.authState.value
             val isAuthorized = authState.hasGatewayAccess()
             // 触感档位：一次 DataStore 读，必须落在用户能点之前 ——
@@ -434,6 +439,28 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 第四段：主界面导航树的组合门。
+        //
+        // 实测（小米 14 Pro，debug 包）首次组合把整棵导航树建出来的代价约 700-800ms：
+        // 日签数据 750ms 就绪，首帧却要等到 1.5s 之后，中间这段全花在「还没人看得见的主界面」上。
+        // 这一层本来就要在日签背后继续加载，所以把它的组合推迟到日签首帧之后：
+        // 系统 splash 一散场屏幕上就已经是完整的一页日签，而不是一个白屏接着主界面。
+        //
+        // 关掉开屏日签时这一层就是「第一屏」本身，系统的 keep 条件于是在等它（见上面
+        // setKeepOnScreenCondition）：合板动画散场那一刻，主界面已经组合好了。
+        //
+        // 推迟的量是两帧。这里必须用时间而不是 withFrameNanos：lifecycleScope 的上下文里
+        // 没有 Compose 的 MonotonicFrameClock，直接调会抛 IllegalStateException 把 App 打死
+        // （踩过一次）。16ms 一帧的余量给系统 splash 的 pre-draw 放行加一次组合提交。
+        // 用户碰不到这段空窗：跳过提示要等 isReady，而 isReady 之后才开始这段推迟。
+        lifecycleScope.launch {
+            stampJob.join()
+            authInitializationJob?.join()
+            delay(NAV_DEFER_MS)
+            navComposed = true
+            StartupTrace.mark("startup.nav_visible")
+        }
+
         handleIntent(intent)
 
         // 配置状态栏点击滚动到顶部
@@ -461,8 +488,8 @@ class MainActivity : AppCompatActivity() {
                     // 是 AppNavigation 的兄弟节点，也要能读到。
                     LocalAppHaptics provides appHapticsProvider,
                 ) {
-                // Splash 完成后展示主导航（navVisible 推迟两帧，见上面第四段的说明）
-                if (navVisible) {
+                // Splash 完成后展示主导航（navComposed 推迟两帧，见上面第四段的说明）
+                if (navComposed) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
                         com.tracktosearch.ui.navigation.AuthStateHolder(
@@ -574,13 +601,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 首帧绘制探针：主界面真的画出来的那一刻，同时做两件事——
+     * 记一条启动跟踪，以及解除系统 splash 的第二道放行条件（[navPlaced]）。
+     *
+     * 「真的画出来」这个时刻没有别的可靠信号：组合完成、布局完成都只保证「下一帧会带上」，
+     * 而系统 splash 的 pre-draw 条件在那一刻就解除了，放行的那一帧仍然是空的。
+     * 关掉开屏日签时这一条就是「合板动画 → 白屏 → 主界面」的全部原因。
+     */
     private fun installStartupFirstDrawTrace() {
         val observer = window.decorView.viewTreeObserver
         val listener = object : ViewTreeObserver.OnDrawListener {
             override fun onDraw() {
-                if (!startupContentReadyForDraw || startupFirstContentDrawLogged) return
-                startupFirstContentDrawLogged = true
-                StartupTrace.mark("activity.first_content_draw")
+                // 导航树组合之前画出来的第一帧只是 Compose 的空根，不算「首帧内容」——
+                // 那个标记和系统 splash 的放行都要等导航树真正画出来那一帧。
+                if (!navComposed) return
+                if (!startupFirstContentDrawLogged) {
+                    startupFirstContentDrawLogged = true
+                    StartupTrace.mark("activity.first_content_draw")
+                }
+                navPlaced = true
                 if (observer.isAlive) observer.removeOnDrawListener(this)
             }
         }

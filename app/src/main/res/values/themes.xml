@@ -4,8 +4,13 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
-        <!-- 跟随主题：亮色模式白底、暗色模式跟随 colorBackground 深色，避免启动白屏闪烁 -->
-        <item name="android:windowBackground">?android:attr/colorBackground</item>
+        <!-- 窗口底色用开屏那张暖纸色，不用 ?colorBackground。
+             它不是给人看的墙面，而是「系统 splash 已让位、App 的首帧还没画出来」那一瞬的填空：
+             那个瞬间在关掉开屏日签的场合真实存在一帧（放行条件解除到主界面绘制之间），
+             用 ?colorBackground 就是一闪白。纸色与前后两屏都接得上，看不见。
+             正常运行时它被 Compose 内容的底色盖住，所以只在这一瞬起作用。
+             深色档由 values-night/colors.xml 覆盖同一个 @color/splash_background。 -->
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 
     <!-- Android 12 以下的启动页主题：直接使用 App 主题，不显示系统 splash -->
