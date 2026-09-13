@@ -432,7 +432,10 @@ private fun CarouselPage(
                 )
                 // 圆角跟着页内那道裁切走（见 StampPage 的 corner）：阴影是这一页的，
                 // 页切了四角而影子还是方的，四个角上就会露出方影的直角
-                .shadow(20.dp, RoundedCornerShape(corner), clip = false)
+                //
+                // 20dp 那档在一片压暗的浮层上看不出差别，却要三张卡各自每帧现算一遍
+                // 落影（见 [StampCardShadow]）——降一档，观感不变而这一笔小一圈。
+                .shadow(StampCardShadow, RoundedCornerShape(corner), clip = false)
         ) {
             // 转动中的卡片按纹理合成：三维变换下如果让 HWUI 每帧重画卡面（整页的底纹、
             // 齿孔、文字、印章），一帧的绘制与 GPU 开销就是滑动里最重的那一项；先画进一块
@@ -495,6 +498,11 @@ private fun CarouselPage(
  *
  * Picture 只供保存/分享使用，不能再回放成屏幕内容：异步图片的绘制节点不会可靠进入它，
  * 结果就是卡纸和文字都有、海报开窗却一直空着。
+ *
+ * 翻页那一小段也不是没试过改成重放这份录制（省掉活那棵树的重排与绘制准备）：实测是负
+ * 收益。上一层的离屏纹理已经把静止这张卡的每帧成本压到近乎为零，重放省不到东西；而每次
+ * 「活的 ↔ 重放」换一次内容，包着它的那块纹理就要重栅格化一遍，翻一次页两回，比省下来的
+ * 还多。同一台机器上开关 A/B 打平（±0.7ms），单独一段里还慢 2.6ms。
  */
 @Composable
 private fun RecordedDailyStampCard(
@@ -1271,6 +1279,16 @@ private val LATENT_SEAL_SIZE: Dp = SealSizes.Card.width
  * 开屏不跟——它铺满整屏，圆角落在屏幕外，只会给状态栏那一带留四个缺口。
  */
 internal val StampCardCorner: Dp = 24.dp
+
+/**
+ * 卡片浮在浮层上落多深的影。
+ *
+ * 原先 20dp：影子的半径已经比卡片四角（[StampCardCorner] 缩进槽里之后约 15dp）还大，
+ * 再往上加只是让边缘更散，而这一圈本来就压在一片暗底上——肉眼看不出 14dp 与 20dp 的
+ * 分别，但三张卡每帧都要各自现算一遍这团落影（转动时卡片是三维变换，HWUI 不会把影
+ * 缓存下来直接用），省下来的正是滑动里最贵的那一项里的一份。
+ */
+private val StampCardShadow: Dp = 14.dp
 
 /** 卡片起落用的缓动：快进慢出，像一张纸被托起来 */
 private val CardEasing = CubicBezierEasing(0.2f, 0.75f, 0.28f, 1f)
