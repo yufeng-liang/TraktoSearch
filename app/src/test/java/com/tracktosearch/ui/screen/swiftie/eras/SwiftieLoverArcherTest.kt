@@ -79,8 +79,10 @@ class SwiftieLoverArcherTest {
             geometry.targetTip.x - heartCenter.x,
             geometry.targetTip.y - heartCenter.y
         )
-        assertThat(targetOffset).isWithin(0.01f).of(
-            swiftieLoverStuckLength(box) * 0.10f
+        // 插深（STUCK_DEPTH × 箭长）：太小箭镞整颗叠在心面（读作贴纸），
+        // 太大箭尖与心的尖瓣脱开。0.36 是「镞身露到心外、尾羽收在心下缘」那一档。
+        assertThat(targetOffset).isWithin(0.001f).of(
+            swiftieLoverStuckLength(box) * 0.36f
         )
     }
 

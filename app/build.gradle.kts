@@ -177,6 +177,19 @@ android {
             versionNameSuffix = "-egg"
             matchingFallbacks += listOf("debug")
         }
+        // Lover 时代专项优化的预览包，与 eggpreview 同一套思路（点开即彩蛋、可拨时刻定格）。
+        //
+        // 为什么再开一个而不是复用 eggpreview：Lover 与 folklore 两边在各自的工作树里
+        // 并行改同一批舞台代码，装机身份必须分开 —— 同一个包名会互相覆盖安装，
+        // 一方刚截完图另一方就把它顶掉，还分不清屏幕上那份是谁的产物。
+        // 包名 com.tracktosearch.loverpreview 与 folklore 那套 eggpreview 并存于同一台设备，
+        // 两边各自刷新、各自截图，桌面图标也一眼分得开（见 app/src/loverpreview/res）。
+        create("loverpreview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".loverpreview"
+            versionNameSuffix = "-lover"
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {
