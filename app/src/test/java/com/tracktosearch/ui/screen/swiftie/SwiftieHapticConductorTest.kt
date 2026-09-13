@@ -86,7 +86,7 @@ class SwiftieHapticConductorTest {
         val conductor = recorder.conductor()
         conductor.onFrame(elapsedMs = 200L, seekEpoch = 0, muted = false)
         // 用户在扩散段还没走完就把轴线拖到签名段末尾。跨过去的两段包络一段都不许起 ——
-        // 补发一段 7300ms 的签名包络，手上会在完全不相干的画面上震七秒
+        // 补发一段 4700ms 的签名包络，手上会在完全不相干的画面上震五秒
         assertThat(conductor.onFrame(elapsedMs = 106_000L, seekEpoch = 1, muted = false)).isEmpty()
         assertThat(recorder.envelopes).isEmpty()
         assertThat(recorder.performed).isEmpty()
@@ -178,26 +178,20 @@ class SwiftieHapticConductorTest {
     fun suppressionIsPerEnvelopeNotGlobal() {
         val recorder = Recorder(envelopeAccepted = true)
         val conductor = recorder.conductor()
-        // 走到手链段。三记落地与余震包络落在同一帧里（包络只比末记落地晚一格），
-        // 但落地不是余震的替身，包络被接下也不许把它们一起吞掉
-        conductor.onFrame(elapsedMs = SwiftieTimeline.BRACELET_START, seekEpoch = 0, muted = false)
-        recorder.performed.clear()
-        recorder.envelopes.clear()
-        val landing = conductor.onFrame(
-            elapsedMs = SwiftieTimeline.BRACELET_START + SwiftieTimeline.BRACELET_MS,
+        // 一帧从 0 跨到扩散段走完：上升包络、它自己的替身、还有铺满全屏那一记全在这段里。
+        // 包络被接下只吞掉**自己的替身**，铺满那一记是另一件事，不许跟着一起消失
+        val dispatched = conductor.onFrame(
+            elapsedMs = SwiftieTimeline.ERAS_INTRO_START,
             seekEpoch = 0,
             muted = false,
         )
-        assertThat(landing.map { it.kind }).contains(SwiftieHapticCueKind.BRACELET_DROP)
-        assertThat(landing.map { it.kind }).contains(SwiftieHapticCueKind.BRACELET_SWAY)
-        // 余震的三记替身才是被吞掉的那些
-        assertThat(landing.map { it.kind })
-            .doesNotContain(SwiftieHapticCueKind.BRACELET_SWAY_TICK)
-        assertThat(recorder.performed).containsExactly(
-            HapticSemantic.DRAG_START,
-            HapticSemantic.GESTURE_END,
-            HapticSemantic.SCROLL_EDGE,
-        ).inOrder()
+        assertThat(dispatched.map { it.kind }).contains(SwiftieHapticCueKind.DIFFUSION_RISE)
+        assertThat(dispatched.map { it.kind })
+            .doesNotContain(SwiftieHapticCueKind.DIFFUSION_RISE_TICK)
+        assertThat(dispatched.map { it.kind }).contains(SwiftieHapticCueKind.DIFFUSION_FILL)
+        // 真正响出来的只有铺满那一记 confirm()
+        assertThat(recorder.performed).containsExactly(HapticSemantic.CONFIRM)
+        assertThat(recorder.envelopes).hasSize(1)
     }
 
     // ------------------------------------------------------------------------
@@ -251,25 +245,25 @@ class SwiftieHapticConductorTest {
         val recorder = Recorder(envelopeAccepted = false)
         val score = SwiftieHapticScore()
         val dispatched = recorder.conductor(score).runWholeSequence()
-        // 没人接包络，所以谱子上每一条都该露面：53 记离散 + 5 段包络。
+        // 没人接包络，所以谱子上每一条都该露面：47 记离散 + 4 段包络。
         // 离散那个数跟着 SwiftieSignaturePath 的笔数走（现在 12 笔，'i' 上那一点单独算
         // 一笔），重新子集化字形导致笔数变化时这三条用例的数字都要跟着改
         assertThat(dispatched).containsExactlyElementsIn(score.cues).inOrder()
-        assertThat(recorder.performed).hasSize(53)
-        assertThat(recorder.envelopes).hasSize(5)
+        assertThat(recorder.performed).hasSize(47)
+        assertThat(recorder.envelopes).hasSize(4)
     }
 
     @Test
-    fun workingEnvelopesSilenceAllEighteenStandIns() {
+    fun workingEnvelopesSilenceEveryStandIn() {
         val recorder = Recorder(envelopeAccepted = true)
         val score = SwiftieHapticScore()
         val dispatched = recorder.conductor(score).runWholeSequence()
         val standIns = score.cues.count { it.kind.standInFor != null }
-        // 1 扩散 + 12 笔画 + 1 闪光 + 3 余震 + 2 绽放
-        assertThat(standIns).isEqualTo(19)
+        // 1 扩散 + 12 笔画 + 1 闪光 + 2 绽放
+        assertThat(standIns).isEqualTo(16)
         assertThat(dispatched).hasSize(score.cues.size - standIns)
-        assertThat(recorder.performed).hasSize(53 - standIns)
-        assertThat(recorder.envelopes).hasSize(5)
+        assertThat(recorder.performed).hasSize(47 - standIns)
+        assertThat(recorder.envelopes).hasSize(4)
     }
 
     @Test
@@ -285,16 +279,17 @@ class SwiftieHapticConductorTest {
     }
 
     @Test
-    fun reducedMotionRunSkipsTheDenseRowsAtDispatchTimeToo() {
+    fun reducedMotionRunMatchesTheDefaultOneBecauseNothingIsDenseRightNow() {
         val recorder = Recorder(envelopeAccepted = false)
         val score = SwiftieHapticScore(reducedMotion = true)
         val dispatched = recorder.conductor(score).runWholeSequence()
-        // 余震整段消失，「标尺出现了」那一记留着 —— 它是结构性路标，不是密集事件
-        assertThat(dispatched.map { it.kind }).doesNotContain(SwiftieHapticCueKind.BRACELET_SWAY)
-        assertThat(dispatched.map { it.kind })
-            .doesNotContain(SwiftieHapticCueKind.BRACELET_SWAY_TICK)
+        // 手链的落地与余震一起删掉之后，密集事件这一类空了（见 SwiftieHapticCueKind.dense），
+        // 两档谱子今天一模一样。哪天又出现密集事件，这条会先红 ——
+        // 那时要做的就是把它登记进 dense，并按两档各验一遍
+        assertThat(score.cues).containsExactlyElementsIn(SwiftieHapticScore().cues).inOrder()
+        // 「标尺出现了」那一记留着 —— 它是结构性路标，不是密集事件
         assertThat(dispatched.map { it.kind }).contains(SwiftieHapticCueKind.AXIS_TICK)
-        assertThat(recorder.performed).hasSize(50)
+        assertThat(recorder.performed).hasSize(47)
         assertThat(recorder.envelopes).hasSize(4)
     }
 }
