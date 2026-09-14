@@ -678,13 +678,10 @@ fun AppNavigation(
             NavHost(
                 navController = navController,
                 startDestination = currentStartDest,
-                // 全局默认转场：统一 220ms 纯 fade（返回 pop 缩短为 120ms）。
+                // 全局默认转场：统一 220ms 纯 fade（返回 pop 为 300ms，见下）。
                 // 原默认 700ms fadeIn/fadeOut 转场期间新旧两页同时组合，各页全屏 hazeSource
                 // 与多个 blur 节点同时渲染导致切换掉帧；纯 fade 无水平偏移，时长缩短为 220ms
                 // 可减少转场重叠开销，且与详情页共享元素 spring 动画对齐，避免违和。
-                // 返回是真机采样的最重窗口：pop 再缩到 120ms，减少新旧页双组合的重叠帧数，
-                // 海报回缩由 SharedTransitionLayout 独立接管，不依赖页面 fade 时长。
-                // 共享元素(海报)由 SharedTransitionLayout 独立接管，不依赖 NavHost 的 slide。
                 enterTransition = { fadeIn(animationSpec = tween(220)) },
                 // 去容器变形页时不给来源页叠淡出：目标页第一帧就不透明地盖住它，这层全屏 alpha
                 // 白画一遍。返回方向见下面的 popEnterTransition，那一侧是真的会看出问题。
@@ -696,17 +693,24 @@ fun AppNavigation(
                 // 从容器变形页返回时不给目标页叠淡入：整页收回成卡片的动画由 SharedTransitionLayout
                 // 接管，目标页应当立即完整可见。再叠 120ms 淡入就是两层半透明相叠，收缩中的整页
                 // 与列表页互相穿透，观感上像列表卡片里残留着上一页的内容。
+                // pop 的 300ms 不是观感偏好，是共享元素动画的播放窗口，别再往回收：
+                // NavHost 的过渡进度（共享元素边界动画按进度 seek）由「两页进出时长」与
+                // 「sizeTransform 时长」共同决定，实测两者必须同步放宽——任一侧留 120ms，
+                // 进度窗口就塌回 120ms。窗口窄于目标页首帧耗时时（详情页从人物页返回，
+                // 首帧实测 145~190ms：组合 + 多次测量），进度会在返回后的第二帧一步到 1，
+                // 共享元素的 bounds spring 被直接 seek 到终点，用户看到的就是「没有回缩动画」。
+                // 300ms 给首帧留约两倍余量。改小前先跑 build/qa/person-return 的往返录屏。
                 popEnterTransition = {
                     if (Routes.routeId(initialState.destination.route) in Routes.ContainerMorphRouteIds)
                         EnterTransition.None
-                    else fadeIn(animationSpec = tween(120))
+                    else fadeIn(animationSpec = tween(300))
                 },
-                popExitTransition = { fadeOut(animationSpec = tween(120)) },
-                // 默认 SizeTransform 用 StiffnessMediumLow 弹簧，尺寸动画要 2~3 秒才判停，
-                // 转场状态在 fade 结束后仍长时间 running，期间每帧重录含 Mesh 的背景层，
-                // 返回段白烧 GPU。两页都全屏、尺寸不变，尺寸动画用 120ms 线性结束，
-                // 让转场状态与 fade 同步收尾；共享元素海报由 SharedTransitionLayout 独立接管。
-                sizeTransform = { SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> tween<IntSize>(120) }) }
+                popExitTransition = { fadeOut(animationSpec = tween(300)) },
+                // 尺寸动画本身无视觉效果（两页都全屏、尺寸不变），但它的时长同样卡着过渡进度，
+                // 所以与 pop 一起放宽到 300ms（留 120ms 会让共享元素动画重新变回一帧到位）。
+                // 也不能用默认的 StiffnessMediumLow 弹簧：尺寸动画要 2~3 秒才判停，
+                // 转场状态在视觉结束后仍长时间 running，期间每帧重录含 Mesh 的背景层，白烧 GPU。
+                sizeTransform = { SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> tween<IntSize>(300) }) }
             ) {
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
