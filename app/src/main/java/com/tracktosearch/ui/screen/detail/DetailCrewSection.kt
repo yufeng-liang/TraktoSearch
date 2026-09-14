@@ -51,8 +51,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
 import androidx.core.graphics.drawable.toBitmap
+import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
@@ -212,7 +215,10 @@ internal fun CastCard(
                         animatedVisibilityScope = animatedVisibilityScope,
                     )
                     .fillMaxSize()
-                SubcomposeAsyncImage(
+                // 不用 SubcomposeAsyncImage：每张卡一棵子组合，演职员一屏 5~6 张叠起来是
+                // 返回帧测量阶段最大的一笔开销（实测见 commit）。加载/失败态改成状态覆盖层，
+                // 视觉与原来的 loading/error 槽一致。
+                val painter = rememberAsyncImagePainter(
                     model = remember(profileUrl) {
                         ImageRequest.Builder(context)
                             .data(profileUrl)
@@ -238,28 +244,32 @@ internal fun CastCard(
                             )
                             .build()
                     },
-                    contentDescription = name,
-                    contentScale = ContentScale.Crop,
-                    modifier = imageModifier,
-                    loading = {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                        }
-                    },
-                    error = {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                Icons.Rounded.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
                 )
+                val imageState = painter.state
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Image(
+                        painter = painter,
+                        contentDescription = name,
+                        contentScale = ContentScale.Crop,
+                        modifier = imageModifier,
+                    )
+                    when (imageState) {
+                        // Empty 是「请求还没开始」的过渡态，与原 SubcomposeAsyncImage 一样按加载中呈现，
+                        // 否则首帧会先空一格再出转圈
+                        is AsyncImagePainter.State.Empty,
+                        is AsyncImagePainter.State.Loading -> CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        is AsyncImagePainter.State.Error -> Icon(
+                            Icons.Rounded.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        else -> Unit
+                    }
+                }
             } else {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
