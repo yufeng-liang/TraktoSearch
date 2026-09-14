@@ -135,6 +135,7 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.aiFeaturesEnabled
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
+import com.tracktosearch.ui.screen.ai.AiSpriteInterruptReason
 import com.tracktosearch.ui.screen.ai.AiSpriteInterruptRequest
 import com.tracktosearch.ui.screen.ai.AiSpriteMotion
 import com.tracktosearch.ui.screen.ai.AiSpriteViewModel
@@ -1186,30 +1187,24 @@ fun DetailScreen(
             //
             // 一个精灵两条来路：加入看单的庆祝插画（showWatchlistScene）与 AI 助手探头。
             // 庆祝优先——用户刚做完标记动作，先放完完整插画再回到助手，两者同时可见会互相盖住。
-            val recommendationsTabVisible = uiState.sectionVisible.recommendations &&
-                selectedTab == recommendationsTabIndex
-            // 面板打开时精灵跟到面板边上；推荐 tab 上贴着 Tab 行探头；其余时间蹲在头部
-            val assistantAnchor = when {
-                detailAiState.panelVisible -> AiSpriteAnchor.DetailPanel
-                recommendationsTabVisible -> AiSpriteAnchor.RecommendationsTab
-                else -> AiSpriteAnchor.DetailHeader
-            }
-            val assistantBounds = when (assistantAnchor) {
-                AiSpriteAnchor.RecommendationsTab -> detailTabBounds
-                AiSpriteAnchor.DetailPanel -> detailAiPanelBounds
-                else -> detailHeaderBounds
-            }
-            val assistantWantsSprite = spriteArtAvailable &&
-                (detailAiState.spriteVisible || detailAiState.panelVisible)
-            AiSpriteMotion(
+            //
+            // 三个边界状态用 lambda 传进去、不在此处就地读：它们由 onGloballyPositioned 在首次
+            // 布局时写入，就地读会让那次写入失效到详情页整页（含 LazyColumn 首屏内容），
+            // 返回帧上这几趟重组正好吃掉共享元素动画的帧。读下沉后，边界就位只重组那一层覆盖物。
+            DetailSpriteLayer(
                 characterId = spriteState.activatedCharacterId.orEmpty(),
-                anchor = if (showWatchlistScene) AiSpriteAnchor.DetailHeader else assistantAnchor,
-                anchorBounds = if (showWatchlistScene) detailHeaderBounds else assistantBounds,
-                visible = if (showWatchlistScene) {
-                    spriteArtAvailable && detailHeaderBounds != null
-                } else {
-                    assistantWantsSprite && assistantBounds != null
-                },
+                spriteArtAvailable = spriteArtAvailable,
+                spriteVisible = detailAiState.spriteVisible,
+                panelVisible = detailAiState.panelVisible,
+                recommendationsTabVisible = uiState.sectionVisible.recommendations &&
+                    selectedTab == recommendationsTabIndex,
+                showWatchlistScene = showWatchlistScene,
+                headerBounds = { detailHeaderBounds },
+                tabBounds = { detailTabBounds },
+                panelBounds = { detailAiPanelBounds },
+                interruptRevision = detailAiState.interruptRevision,
+                interruptReason = detailAiState.interruptReason,
+                sceneDrawableRes = sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes,
                 onClick = {
                     // 庆祝插画只是插画，点它不打开面板
                     if (!showWatchlistScene) detailAiViewModel.onSpriteClick()
@@ -1217,23 +1212,6 @@ fun DetailScreen(
                 onFinished = {
                     if (showWatchlistScene) showWatchlistScene = false
                     else detailAiViewModel.onSpriteFinished()
-                },
-                modifier = Modifier.zIndex(5f),
-                sceneRes = if (showWatchlistScene) {
-                    sceneArtFor(AiSceneEvent.DETAIL_WATCHLIST_ADDED).drawableRes
-                } else {
-                    null
-                },
-                // 加入看单的庆祝插画，不该变成盖在详情页上的可点区域
-                interactive = !showWatchlistScene,
-                // 庆祝期间不受面板中断请求影响，否则刚标记完就被上一次会话的中断打回去
-                interruptRequest = if (showWatchlistScene) {
-                    null
-                } else {
-                    AiSpriteInterruptRequest(
-                        revision = detailAiState.interruptRevision,
-                        reason = detailAiState.interruptReason
-                    )
                 }
             )
 
@@ -1514,6 +1492,70 @@ fun DetailScreen(
 }
 
 // ==================== 搜索状态 ====================
+
+/**
+ * AI 精灵层：加入看单的庆祝插画与助手探头共用同一个精灵节点。
+ *
+ * 单独拆成一个 composable 是有意的——[headerBounds] / [tabBounds] / [panelBounds] 由
+ * `onGloballyPositioned` 在首次布局时写入，若在详情页主体里就地读，那次写入会失效到整页
+ * （连带 LazyColumn 首屏内容重组），而返回帧上这一、两趟重组正好吃掉共享元素动画的帧。
+ * 收进这里之后，边界就位只重组这一层覆盖物。
+ */
+@Composable
+private fun DetailSpriteLayer(
+    characterId: String,
+    spriteArtAvailable: Boolean,
+    spriteVisible: Boolean,
+    panelVisible: Boolean,
+    recommendationsTabVisible: Boolean,
+    showWatchlistScene: Boolean,
+    headerBounds: () -> Rect?,
+    tabBounds: () -> Rect?,
+    panelBounds: () -> Rect?,
+    interruptRevision: Long,
+    interruptReason: AiSpriteInterruptReason,
+    sceneDrawableRes: Int,
+    onClick: () -> Unit,
+    onFinished: () -> Unit,
+) {
+    val header = headerBounds()
+    val tab = tabBounds()
+    val panel = panelBounds()
+    // 面板打开时精灵跟到面板边上；推荐 tab 上贴着 Tab 行探头；其余时间蹲在头部
+    val anchor = when {
+        panelVisible -> AiSpriteAnchor.DetailPanel
+        recommendationsTabVisible -> AiSpriteAnchor.RecommendationsTab
+        else -> AiSpriteAnchor.DetailHeader
+    }
+    val bounds = when (anchor) {
+        AiSpriteAnchor.RecommendationsTab -> tab
+        AiSpriteAnchor.DetailPanel -> panel
+        else -> header
+    }
+    val wantsSprite = spriteArtAvailable && (spriteVisible || panelVisible)
+    AiSpriteMotion(
+        characterId = characterId,
+        anchor = if (showWatchlistScene) AiSpriteAnchor.DetailHeader else anchor,
+        anchorBounds = if (showWatchlistScene) header else bounds,
+        visible = if (showWatchlistScene) {
+            spriteArtAvailable && header != null
+        } else {
+            wantsSprite && bounds != null
+        },
+        onClick = onClick,
+        onFinished = onFinished,
+        modifier = Modifier.zIndex(5f),
+        sceneRes = if (showWatchlistScene) sceneDrawableRes else null,
+        // 加入看单的庆祝插画，不该变成盖在详情页上的可点区域
+        interactive = !showWatchlistScene,
+        // 庆祝期间不受面板中断请求影响，否则刚标记完就被上一次会话的中断打回去
+        interruptRequest = if (showWatchlistScene) {
+            null
+        } else {
+            AiSpriteInterruptRequest(revision = interruptRevision, reason = interruptReason)
+        }
+    )
+}
 
 /**
  * 资源搜索中状态。
