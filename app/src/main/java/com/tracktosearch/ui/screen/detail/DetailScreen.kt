@@ -437,7 +437,9 @@ fun DetailScreen(
     // backdropBounds 按 backdrops 下标记横向栏剧照；点击回调读取对应矩形作查看器转场起点
     val posterBounds = rememberOpenImageBounds()
     val backdropBounds = rememberOpenImageBounds()
-    var contentReady by remember { mutableStateOf(false) }
+    // 返回时必须沿用已显示状态：重放正文淡入会在返回帧触发一次整页重组，
+    // 把共享头像回缩动画的帧挤掉，用户看到的就是"没有转场"。
+    var contentReady by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(uiState.posterDominantColor) {
         if (contentReady) return@LaunchedEffect // 已就绪则不重复触发淡入(#26)
         delay(if (uiState.posterDominantColor != null) 80 else 400)
