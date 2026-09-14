@@ -32,7 +32,7 @@ export interface Env {
 }
 
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const requestId = generateRequestId();
         try {
             if (request.method === 'OPTIONS') return applySecurityHeaders(handleCors());
@@ -69,11 +69,7 @@ export default {
                     const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
                     const url = new URL(request.url);
                     console.warn(`[AUTH_FAIL] ${err.code} status=${err.statusCode} ip=${clientIp} path=${url.pathname} method=${request.method} requestId=${requestId}`);
-                    try {
-                        const counterKey = `auth_fail:${clientIp}:${url.pathname}`;
-                        const current = parseInt(await env.KV.get(counterKey) || '0', 10);
-                        await env.KV.put(counterKey, String(current + 1), { expirationTtl: 3600 });
-                    } catch { /* KV 写入失败不影响响应 */ }
+                    recordAuthFailure(env, ctx, `auth_fail:${clientIp}:${url.pathname}`);
                 }
                 return applySecurityHeaders(addCorsHeaders(errorResponse(err, requestId)));
             }
@@ -94,6 +90,35 @@ export default {
         }
     },
 };
+
+/**
+ * 鉴权失败计数窗口：同一 (IP, 路径) 在窗口内的失败先在 isolate 内累加，
+ * 窗口到期后由下一次失败一次性写回，把「每次 401/403 一读一写」降到每分钟一次。
+ * 与 auth-worker 使用同一策略；isolate 回收时少量计数会丢失，安全告警可接受。
+ */
+const AUTH_FAIL_FLUSH_WINDOW_MS = 60 * 1000;
+const authFailBuffer = new Map<string, { pending: number; lastFlushMs: number }>();
+
+function recordAuthFailure(env: Env, ctx: ExecutionContext, counterKey: string): void {
+    const nowMs = Date.now();
+    // 键基数由请求方 IP/路径组合决定，超过上限整体丢弃，避免 isolate 内存无界增长
+    if (authFailBuffer.size > 500) authFailBuffer.clear();
+    const entry = authFailBuffer.get(counterKey) ?? { pending: 0, lastFlushMs: 0 };
+    entry.pending += 1;
+    authFailBuffer.set(counterKey, entry);
+    // lastFlushMs 初始为 0，首次失败立即写入，保证异常访问能被立刻看到
+    if (nowMs - entry.lastFlushMs < AUTH_FAIL_FLUSH_WINDOW_MS) return;
+
+    const delta = entry.pending;
+    entry.pending = 0;
+    entry.lastFlushMs = nowMs;
+    ctx.waitUntil((async () => {
+        try {
+            const current = parseInt(await env.KV.get(counterKey) || '0', 10);
+            await env.KV.put(counterKey, String(current + delta), { expirationTtl: 3600 });
+        } catch { /* KV 写入失败不影响响应 */ }
+    })());
+}
 
 function handleCors(): Response {
     return new Response(null, {
