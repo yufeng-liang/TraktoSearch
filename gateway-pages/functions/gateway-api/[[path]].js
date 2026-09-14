@@ -178,9 +178,9 @@ export async function onRequest(context) {
  */
 function getPublicCachePlan(request, path) {
     if (request.method !== 'GET') return null;
-    // TMDB 账号态端点靠查询串里的 session_id / guest_session_id 标识身份，
+    // TMDB 账号态端点靠 session_id / guest_session_id 标识身份（查询串或路径段），
     // 这类响应属于单个用户，绝不能写进所有人共享的边缘缓存（App 不使用这些端点）。
-    if (hasUserScopedQuery(request.url)) return null;
+    if (hasUserScopedQuery(request.url) || hasUserScopedPath(path)) return null;
 
     if (path.startsWith('/api/tmdb/')) return { ttlSeconds: 600 };
     if (path.startsWith('/api/douban/')) return { ttlSeconds: 300 };
@@ -204,6 +204,11 @@ function getPublicCachePlan(request, path) {
 function hasUserScopedQuery(rawUrl) {
     const params = new URL(rawUrl).searchParams;
     return params.has('session_id') || params.has('guest_session_id');
+}
+
+/** 判断路径本身是否含用户级凭据段，如 /api/tmdb/guest_session/{id}/rated/movies。 */
+function hasUserScopedPath(path) {
+    return /^\/api\/tmdb\/(?:guest_session|account)\//.test(path);
 }
 
 /** 构造公开缓存 key：只保留路径与查询串，剥离所有凭据类请求头。 */

@@ -169,6 +169,8 @@ test('never caches endpoints that carry per-user data', async () => {
             // 查询串里的 session_id / guest_session_id 代表个人账号态数据
             '/gateway-api/api/tmdb/account/favorite/movies?session_id=abc',
             '/gateway-api/api/tmdb/guest_session/xyz/rated/movies?guest_session_id=def',
+            '/gateway-api/api/tmdb/guest_session/xyz/rated/movies',
+            '/gateway-api/api/tmdb/account/xyz/lists',
         ];
 
         for (const path of privatePaths) {
