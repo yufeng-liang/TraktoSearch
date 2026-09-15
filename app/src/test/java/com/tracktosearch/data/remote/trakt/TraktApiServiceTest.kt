@@ -68,4 +68,29 @@ class TraktApiServiceTest {
         assertThat(request.requestUrl?.encodedPath).isEqualTo("/api/trakt/users/yuhu")
         assertThat(request.requestUrl?.queryParameter("extended")).isEqualTo("full")
     }
+
+    @Test
+    fun getLastActivities_usesSyncEndpointAndParsesWatchlistedAt() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "movies": {"watchlisted_at": "2026-09-01T00:00:00.000Z"},
+                      "shows": {"watchlisted_at": "2026-08-01T00:00:00.000Z"},
+                      "episodes": {"watched_at": "2026-01-01T00:00:00.000Z"},
+                      "lists": {"updated_at": "2026-01-01T00:00:00.000Z"}
+                    }
+                    """.trimIndent()
+                )
+        )
+
+        val result = api.getLastActivities()
+
+        assertThat(result.body()?.movies?.watchlistedAt).isEqualTo("2026-09-01T00:00:00.000Z")
+        assertThat(result.body()?.shows?.watchlistedAt).isEqualTo("2026-08-01T00:00:00.000Z")
+        val request = server.takeRequest()
+        assertThat(request.requestUrl?.encodedPath).isEqualTo("/api/trakt/sync/last_activities")
+    }
 }

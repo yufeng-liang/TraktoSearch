@@ -69,6 +69,30 @@ data class TraktWatchlistShowItem(
     val show: TraktShow = TraktShow()
 )
 
+/**
+ * Trakt `/sync/last_activities` 中单个类型的活动时间。
+ *
+ * 只保留 Watchlist 增量同步需要的 `watchlisted_at`，其余字段由 Json 的 ignoreUnknownKeys 忽略。
+ * 接口在某些类型上可能返回 null（从无活动），所以用可空字符串承接，null 与空串都视为「无活动时间」。
+ */
+@Serializable
+data class TraktLastActivityType(
+    @kotlinx.serialization.SerialName("watchlisted_at")
+    val watchlistedAt: String? = null
+)
+
+/**
+ * Trakt `/sync/last_activities` 响应。
+ *
+ * 用于判断 Watchlist 是否变化：时间戳未变化时跳过对应的列表请求，
+ * 只刷新发生变化的类型，避免每次进页面都全量拉取两个列表。
+ */
+@Serializable
+data class TraktLastActivities(
+    val movies: TraktLastActivityType = TraktLastActivityType(),
+    val shows: TraktLastActivityType = TraktLastActivityType()
+)
+
 @Serializable
 data class TraktSyncRequest(
     val movies: List<TraktSyncItem>? = null,

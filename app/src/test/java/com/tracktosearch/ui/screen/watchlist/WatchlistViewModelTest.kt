@@ -37,6 +37,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collect
@@ -132,6 +133,17 @@ class WatchlistViewModelTest {
         coEvery { offlineCacheManager.getMediaItems(any()) } returns emptyList()
         every { traktRepository.getLocallyWatchedOnlyTraktIds(any()) } returns emptySet()
         every { traktRepository.getLocallyWatchlistOnlyTraktIds(any()) } returns emptySet()
+
+        // 默认判定为「活动时间有变化，需要拉取」；单个用例再按需覆盖为跳过
+        coEvery { traktRepository.resolveWatchlistRefreshPlan(any()) } returns
+            TraktRepository.WatchlistRefreshPlan(
+                shouldRefreshMovies = true,
+                shouldRefreshShows = true,
+                activitiesAvailable = true,
+                moviesWatchlistedAt = "2024-01-01T00:00:00Z",
+                showsWatchlistedAt = "2024-01-01T00:00:00Z"
+            )
+        every { tmdbRepository.currentLanguageTag() } returns "zh-CN"
 
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(emptyList<TraktWatchlistMovieItem>() to 1)
@@ -793,7 +805,8 @@ class WatchlistViewModelTest {
         val first = makeWatchlistMovie(1, title = "Movie One", tmdb = 101).copy(
             movie = makeWatchlistMovie(1, title = "Movie One", tmdb = 101).movie.copy(
                 genres = listOf("Drama", "Sci-Fi"),
-                images = TraktImages(poster = listOf("https://media.trakt.tv/poster-one.webp"))
+                // Trakt 实际返回不带协议的路径，Coil 需要补全后的完整 URL
+                images = TraktImages(poster = listOf("media.trakt.tv/poster-one.webp"))
             )
         )
         val second = makeWatchlistMovie(2, title = "Movie Two", tmdb = 102).copy(
@@ -803,7 +816,6 @@ class WatchlistViewModelTest {
         )
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(listOf(first, second) to 1)
-        assertThat(first.movie.images.poster).containsExactly("https://media.trakt.tv/poster-one.webp")
 
         viewModel.loadMovies()
         advanceUntilIdle()
@@ -883,6 +895,279 @@ class WatchlistViewModelTest {
         assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(2)
         coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
     }
+
+    // ==================== Watchlist 增量同步 ====================
+
+    @Test
+    fun `活动时间未变化时跳过列表请求并保留列表与分页`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Old Movie")) to 2)
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(1)
+        val pageBeforeRevalidate = viewModel.uiState.value.moviePage
+
+        coEvery { traktRepository.resolveWatchlistRefreshPlan(any()) } returns
+            TraktRepository.WatchlistRefreshPlan(
+                shouldRefreshMovies = false,
+                shouldRefreshShows = false,
+                activitiesAvailable = true
+            )
+        viewModel.refreshIfLoaded(silent = true)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(1)
+        assertThat(viewModel.uiState.value.moviePage).isEqualTo(pageBeforeRevalidate)
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+    }
+
+    @Test
+    fun `跳过列表请求时用持久化总数恢复计数与分页`() = runTest {
+        // 重启后离线快照只有首页数据、服务端总数已持久化：计数与分页起点都要恢复
+        val cachedItems = List(3) { index ->
+            MediaItemEntity(
+                traktId = index + 1, tmdbId = 0, type = OfflineCacheManager.TYPE_WATCHLIST_MOVIE,
+                title = "Cached $index", displayTitle = "Cached $index", year = 2020,
+                genres = "", posterUrl = null, imdbId = "", traktRating = 0.0,
+                listedAt = "2024-01-0${index + 1}"
+            )
+        }
+        coEvery { offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) } returns cachedItems
+        coEvery { traktRepository.savedWatchlistTotal(MediaType.MOVIE) } returns 290
+        coEvery { traktRepository.resolveWatchlistRefreshPlan(any()) } returns
+            TraktRepository.WatchlistRefreshPlan(
+                shouldRefreshMovies = false,
+                shouldRefreshShows = false,
+                activitiesAvailable = true
+            )
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.movies).hasSize(3)
+        assertThat(state.movieTotalCount).isEqualTo(290)
+        assertThat(state.hasMoreMovies).isTrue()
+        assertThat(state.moviePage).isEqualTo(2)
+        coVerify(exactly = 0) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+
+        // 翻页从第 2 页开始，不会把快照首页当分页起点重复拉取
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(4, title = "Page 2 Movie")) to 2)
+        viewModel.loadMoreMovies()
+        advanceUntilIdle()
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(2, 200, false) }
+    }
+
+    @Test
+    fun `仅电影活动变化时只请求电影列表`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1)) to 1)
+        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistShow(9)) to 1)
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        viewModel.loadShows()
+        advanceUntilIdle()
+
+        coEvery { traktRepository.resolveWatchlistRefreshPlan(any()) } returns
+            TraktRepository.WatchlistRefreshPlan(
+                shouldRefreshMovies = true,
+                shouldRefreshShows = false,
+                activitiesAvailable = true
+            )
+        viewModel.refreshIfLoaded(silent = true)
+        advanceUntilIdle()
+
+        // 电影：首次加载 + 活动变化后刷新；剧集：只有首次加载
+        coVerify(exactly = 2) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+        coVerify(exactly = 1) { traktRepository.getShowWatchlist(any(), any(), any()) }
+    }
+
+    @Test
+    fun `下拉刷新保持强制拉取语义`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1)) to 1)
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        coEvery { traktRepository.resolveWatchlistRefreshPlan(any()) } returns
+            TraktRepository.WatchlistRefreshPlan(
+                shouldRefreshMovies = false,
+                shouldRefreshShows = false,
+                activitiesAvailable = true
+            )
+        viewModel.pullToRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+    }
+
+    // ==================== 可见条目中文标题预取 ====================
+
+    @Test
+    fun `可见条目预取中文标题只更新标题并写离线快照`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", tmdb = 27205)) to 1)
+        every { tmdbRepository.peekMovieLocalizedTitle(27205) } returns null
+        coEvery { tmdbRepository.enrichMovie(27205, "Inception", 2023) } returns movieEnrichment("盗梦空间")
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.single().displayTitle).isEqualTo("Inception")
+
+        viewModel.onVisibleWatchlistItemsChanged(viewModel.uiState.value.movies)
+        advanceUntilIdle()
+
+        val item = viewModel.uiState.value.movies.single()
+        assertThat(item.displayTitle).isEqualTo("盗梦空间")
+        // 只改标题：Trakt 直出的年份与海报不被 TMDB 富化结果覆盖
+        assertThat(item.year).isEqualTo(2023)
+        assertThat(item.posterUrl).isNull()
+        coVerify(exactly = 1) {
+            offlineCacheManager.saveMediaItem(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, any())
+        }
+    }
+
+    @Test
+    fun `可见剧集预取中文标题`() = runTest {
+        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistShow(9, title = "Breaking Bad", tmdb = 1396)) to 1)
+        every { tmdbRepository.peekTvLocalizedTitle(1396) } returns null
+        coEvery { tmdbRepository.enrichTv(1396, "Breaking Bad", 2023) } returns tvEnrichment("绝命毒师")
+
+        viewModel.loadShows()
+        advanceUntilIdle()
+        viewModel.onVisibleWatchlistItemsChanged(viewModel.uiState.value.shows)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.shows.single().displayTitle).isEqualTo("绝命毒师")
+        coVerify(exactly = 1) {
+            offlineCacheManager.saveMediaItem(OfflineCacheManager.TYPE_WATCHLIST_SHOW, any())
+        }
+    }
+
+    @Test
+    fun `已有非空展示标题的条目不请求TMDB也不被覆盖`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", tmdb = 27205)) to 1)
+        // 列表加载时已有本地化/豆瓣展示标题，当前显示的不再是 Trakt 原始标题
+        every { tmdbRepository.peekMovieLocalizedTitle(27205) } returns "盗梦空间"
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } returns movieEnrichment("新标题")
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        val item = viewModel.uiState.value.movies.single()
+        assertThat(item.displayTitle).isEqualTo("盗梦空间")
+
+        viewModel.onVisibleWatchlistItemsChanged(listOf(item))
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.single().displayTitle).isEqualTo("盗梦空间")
+        coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
+        coVerify(exactly = 0) { offlineCacheManager.saveMediaItem(any(), any()) }
+    }
+
+    @Test
+    fun `只预取通知的可见条目`() = runTest {
+        val visible = makeWatchlistMovie(1, title = "Visible", tmdb = 101)
+        val offscreen = makeWatchlistMovie(2, title = "Offscreen", tmdb = 202)
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(visible, offscreen) to 1)
+        every { tmdbRepository.peekMovieLocalizedTitle(any()) } returns null
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } returns movieEnrichment("本地化标题")
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        viewModel.onVisibleWatchlistItemsChanged(
+            listOf(viewModel.uiState.value.movies.first { it.traktId == 1 })
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { tmdbRepository.enrichMovie(101, any(), any()) }
+        coVerify(exactly = 0) { tmdbRepository.enrichMovie(202, any(), any()) }
+    }
+
+    @Test
+    fun `同一条目重复可见只请求一次本地化`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", tmdb = 27205)) to 1)
+        every { tmdbRepository.peekMovieLocalizedTitle(27205) } returns null
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } returns movieEnrichment("盗梦空间")
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        val visible = viewModel.uiState.value.movies
+        repeat(3) {
+            viewModel.onVisibleWatchlistItemsChanged(visible)
+            advanceUntilIdle()
+        }
+
+        coVerify(exactly = 1) { tmdbRepository.enrichMovie(27205, any(), any()) }
+    }
+
+    @Test
+    fun `可见标题预取并发不超过三`() = runTest {
+        val movies = (1..6).map { index ->
+            makeWatchlistMovie(index, title = "Movie $index", tmdb = 100 + index)
+        }
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(movies to 1)
+        every { tmdbRepository.peekMovieLocalizedTitle(any()) } returns null
+        var running = 0
+        var maxRunning = 0
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } coAnswers {
+            running++
+            maxRunning = maxOf(maxRunning, running)
+            delay(50)
+            running--
+            movieEnrichment("本地化标题")
+        }
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        viewModel.onVisibleWatchlistItemsChanged(viewModel.uiState.value.movies)
+        advanceUntilIdle()
+
+        assertThat(maxRunning).isAtMost(3)
+        assertThat(maxRunning).isAtLeast(2)
+    }
+
+    @Test
+    fun `预取失败保留Trakt原标题且不写快照`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", tmdb = 27205)) to 1)
+        every { tmdbRepository.peekMovieLocalizedTitle(27205) } returns null
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } throws IOException("network down")
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        viewModel.onVisibleWatchlistItemsChanged(viewModel.uiState.value.movies)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.single().displayTitle).isEqualTo("Inception")
+        coVerify(exactly = 0) { offlineCacheManager.saveMediaItem(any(), any()) }
+    }
+
+    private fun movieEnrichment(title: String) = TmdbRepository.MovieEnrichment(
+        posterUrl = "https://image.tmdb.org/t/p/w342/poster.webp",
+        chineseTitle = title,
+        originalTitle = "Inception",
+        overview = "overview",
+        genres = "Sci-Fi",
+        year = 2010,
+        rating = 8.8
+    )
+
+    private fun tvEnrichment(title: String) = TmdbRepository.TvEnrichment(
+        posterUrl = "https://image.tmdb.org/t/p/w342/tv.webp",
+        chineseTitle = title,
+        originalTitle = "Breaking Bad",
+        overview = "overview",
+        genres = "Drama",
+        year = 2008,
+        rating = 8.9
+    )
 
     private fun makeDoubanItem(
         doubanId: String,

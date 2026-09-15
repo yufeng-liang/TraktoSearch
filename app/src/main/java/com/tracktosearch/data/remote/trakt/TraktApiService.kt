@@ -33,6 +33,13 @@ interface TraktApiService {
     @POST("sync/watchlist/remove")
     suspend fun removeFromWatchlist(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
 
+    /**
+     * 账号级活动时间。官方建议本地缓存时间戳，未变化时跳过对应同步请求。
+     * 参考 https://docs.trakt.tv/reference/getsynclastactivities
+     */
+    @GET("sync/last_activities")
+    suspend fun getLastActivities(): Response<TraktLastActivities>
+
     @GET("sync/history")
     suspend fun getMovieHistory(
         @Query("type") type: String = "movies",

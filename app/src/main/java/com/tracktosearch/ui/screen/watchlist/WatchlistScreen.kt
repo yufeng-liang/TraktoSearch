@@ -227,6 +227,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -649,6 +650,32 @@ fun WatchlistScreen(
                 1 -> viewModel.loadMoreShows()
             }
         }
+    }
+
+    // Watchlist 模式下只对本屏实际可见的条目补中文标题：Trakt 直出标题先显示，命中缓存或 TMDB
+    // 返回后再就地更新，避免为了首屏中文名恢复列表全量 N+1。
+    // 用 rememberUpdatedState 读取最新列表，列表内容变化时不必重启 snapshotFlow。
+    val latestItemsForTitlePrefetch by rememberUpdatedState(currentItems)
+    LaunchedEffect(selectedMode, selectedTab, currentGridState, isCurrentTab) {
+        if (!isCurrentTab || selectedMode != 0 || selectedTab !in 0..1) return@LaunchedEffect
+        snapshotFlow {
+            currentGridState.layoutInfo.visibleItemsInfo
+                .mapNotNull { info ->
+                    latestItemsForTitlePrefetch.getOrNull(info.index)
+                        ?.let { "${it.selectionKey}|${it.displayTitle}" }
+                }
+                .distinct()
+        }
+            .distinctUntilChanged()
+            .collect { visibleSignatures ->
+                if (visibleSignatures.isEmpty()) return@collect
+                // 签名里带 displayTitle：下拉刷新替换标题后也能重新触发本地化，
+                // 只按 selectionKey 去重会漏掉「同一条目、标题被换掉」的情况。
+                val visibleItems = latestItemsForTitlePrefetch.filter { item ->
+                    "${item.selectionKey}|${item.displayTitle}" in visibleSignatures
+                }
+                viewModel.onVisibleWatchlistItemsChanged(visibleItems)
+            }
     }
 
     // 下拉刷新：数据返回后触发 EMPHASIS 弹性入场动画

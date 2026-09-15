@@ -64,8 +64,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Named
 
@@ -198,6 +201,9 @@ private const val DOUBAN_STATUS_ITEMS_TTL_MS = 2_000L
 /** 已看历史剩余分页的并发上限：并发拉取但不把网关一次性打满。 */
 private const val HISTORY_PAGE_CONCURRENCY = 4
 
+/** 可见条目中文标题预取的并发上限：只补首屏可见项，避免恢复列表全量 N+1。 */
+private const val VISIBLE_TITLE_PREFETCH_CONCURRENCY = 3
+
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
@@ -241,6 +247,10 @@ class WatchlistViewModel @Inject constructor(
     private val loadedTraktShows = mutableListOf<MediaUiItem>()
     private val loadedTraktHistoryMovies = mutableListOf<MediaUiItem>()
     private val loadedTraktHistoryShows = mutableListOf<MediaUiItem>()
+    /** 可见条目中文标题预取的并发闸门（最多 3 个 TMDB 请求同时进行） */
+    private val visibleTitlePrefetchSemaphore = Semaphore(VISIBLE_TITLE_PREFETCH_CONCURRENCY)
+    /** 本会话已发起过本地化预取的条目 key（mediaType:tmdbId:语言），滚动往返不重复请求 */
+    private val prefetchedTitleKeys = ConcurrentHashMap.newKeySet<String>()
 
     /** 同步完成事件（UI 监听后自动弹出 DoubanSyncDialog 显示结果） */
     private val _syncCompleteEvent = MutableSharedFlow<Unit>()
@@ -455,7 +465,7 @@ class WatchlistViewModel @Inject constructor(
                         )
                     }
                     // 同步完成后统一刷新，覆盖仅写入本地最低限度快照但 successCount 为 0 的条目
-                    refreshIfLoaded(silent = true)
+                    refreshIfLoaded(silent = true, forceRefresh = true)
                     refreshDoubanEmptyState()
                     _syncCompleteEvent.emit(Unit)
                     val completedProgress = progress
@@ -560,18 +570,19 @@ class WatchlistViewModel @Inject constructor(
         forceReload: Boolean = false,
         silent: Boolean = false,
         loadAllPages: Boolean = false,
-        loadMore: Boolean = false
+        loadMore: Boolean = false,
+        revalidate: Boolean = false
     ) {
         if (loadMore && (!_uiState.value.moviesLoaded || !_uiState.value.hasMoreMovies)) return
-        if (!forceReload && !loadMore && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {
+        if (!forceReload && !revalidate && !loadMore && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {
             return
         }
         if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
-        val page = _uiState.value.moviePage
         loadMoviesJob = viewModelScope.launch {
+            val sessionMode = sessionModeManager.sessionMode.first()
             // 访客模式（GUEST）：未连 trakt 未登豆瓣，不展示任何 watchlist 数据，
             // 直接清空并跳过网络与缓存读取，避免读到旧登录态遗留的离线缓存。
-            if (sessionModeManager.sessionMode.first() == SessionMode.GUEST) {
+            if (sessionMode == SessionMode.GUEST) {
                 _uiState.update {
                     it.copy(
                         isLoadingMovies = false,
@@ -585,12 +596,39 @@ class WatchlistViewModel @Inject constructor(
                 return@launch
             }
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
-            if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+            if (sessionMode == SessionMode.DOUBAN) {
                 loadMoviesFromDouban(forceReload, silent)
                 return@launch
             }
-            if (sessionModeManager.sessionMode.first() == SessionMode.TRAKT && isDoubanLoggedIn()) {
-                loadMoviesWithDouban(forceReload, silent, loadAllPages, page)
+            // 增量刷新命中变化时从第一页重建列表，避免沿用刷新前的页码
+            val page = if (revalidate) 1 else _uiState.value.moviePage
+            // Watchlist 增量同步：只有首页拉取才查活动时间，未变化时不发列表请求，保留当前列表与离线快照。
+            // 活动接口失败会返回「需要刷新」，等同原有逻辑；翻页补页（loadMore / loadAllPages）不参与判断。
+            val plan = if (loadMore || page > 1) null
+            else traktRepository.resolveWatchlistRefreshPlan(forceReload)
+            if (plan != null && !forceReload && !plan.shouldRefreshMovies) {
+                hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
+                // 本地完全没有数据时不用旧基线跳过：离线快照可能已被清空，回退到列表请求更安全
+                if (_uiState.value.moviesLoaded || _uiState.value.movies.isNotEmpty()) {
+                    // 快照只存首页：用持久化的服务端总数恢复计数，并把分页起点挪到第 2 页，
+                    // 否则跳过列表请求后电影会永远停在快照里的 200 条。
+                    val savedTotal = traktRepository.savedWatchlistTotal(MediaType.MOVIE)
+                    _uiState.update { state ->
+                        val hasMore = savedTotal != null && savedTotal > state.movies.size
+                        state.copy(
+                            isLoadingMovies = false,
+                            moviesLoaded = true,
+                            moviesError = null,
+                            movieTotalCount = savedTotal ?: state.movieTotalCount,
+                            hasMoreMovies = hasMore,
+                            moviePage = if (hasMore) 2 else state.moviePage
+                        )
+                    }
+                    return@launch
+                }
+            }
+            if (sessionMode == SessionMode.TRAKT && isDoubanLoggedIn()) {
+                loadMoviesWithDouban(forceReload, silent, loadAllPages, page, plan)
                 return@launch
             }
             _uiState.value = _uiState.value.copy(
@@ -600,6 +638,8 @@ class WatchlistViewModel @Inject constructor(
             if (!loadMore) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
+                // 首页拉取成功即认为与服务端活动时间对齐；失败不写基线，下次仍会重试
+                if (page == 1 && plan != null) traktRepository.markMovieWatchlistSynced(plan)
                 val totalCount = traktRepository.getMovieWatchlistTotalCount(page, 200) ?: rawItems.size
                 // 过滤掉本地已标记已看但不在想看缓存中的电影（处理标记已看后 Trakt API 最终一致性延迟）
                 val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)
@@ -680,17 +720,18 @@ class WatchlistViewModel @Inject constructor(
         forceReload: Boolean = false,
         silent: Boolean = false,
         loadAllPages: Boolean = false,
-        loadMore: Boolean = false
+        loadMore: Boolean = false,
+        revalidate: Boolean = false
     ) {
         if (loadMore && (!_uiState.value.showsLoaded || !_uiState.value.hasMoreShows)) return
-        if (!forceReload && !loadMore && _uiState.value.showsLoaded && _uiState.value.shows.isNotEmpty()) {
+        if (!forceReload && !revalidate && !loadMore && _uiState.value.showsLoaded && _uiState.value.shows.isNotEmpty()) {
             return
         }
         if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
-        val page = _uiState.value.showPage
         loadShowsJob = viewModelScope.launch {
+            val sessionMode = sessionModeManager.sessionMode.first()
             // 访客模式（GUEST）：清空跳过，不展示旧缓存，参考 loadMovies。
-            if (sessionModeManager.sessionMode.first() == SessionMode.GUEST) {
+            if (sessionMode == SessionMode.GUEST) {
                 _uiState.update {
                     it.copy(
                         isLoadingShows = false,
@@ -704,12 +745,37 @@ class WatchlistViewModel @Inject constructor(
                 return@launch
             }
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
-            if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+            if (sessionMode == SessionMode.DOUBAN) {
                 loadShowsFromDouban(forceReload, silent)
                 return@launch
             }
-            if (sessionModeManager.sessionMode.first() == SessionMode.TRAKT && isDoubanLoggedIn()) {
-                loadShowsWithDouban(forceReload, silent, loadAllPages, page)
+            // 增量刷新命中变化时从第一页重建列表，避免沿用刷新前的页码
+            val page = if (revalidate) 1 else _uiState.value.showPage
+            // Watchlist 增量同步：只有首页拉取才查活动时间，未变化时不发列表请求，保留当前列表与离线快照。
+            val plan = if (loadMore || page > 1) null
+            else traktRepository.resolveWatchlistRefreshPlan(forceReload)
+            if (plan != null && !forceReload && !plan.shouldRefreshShows) {
+                hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
+                // 本地完全没有数据时不用旧基线跳过：离线快照可能已被清空，回退到列表请求更安全
+                if (_uiState.value.showsLoaded || _uiState.value.shows.isNotEmpty()) {
+                    // 同电影：快照只有首页，用持久化总数恢复计数与分页起点
+                    val savedTotal = traktRepository.savedWatchlistTotal(MediaType.SHOW)
+                    _uiState.update { state ->
+                        val hasMore = savedTotal != null && savedTotal > state.shows.size
+                        state.copy(
+                            isLoadingShows = false,
+                            showsLoaded = true,
+                            showsError = null,
+                            showTotalCount = savedTotal ?: state.showTotalCount,
+                            hasMoreShows = hasMore,
+                            showPage = if (hasMore) 2 else state.showPage
+                        )
+                    }
+                    return@launch
+                }
+            }
+            if (sessionMode == SessionMode.TRAKT && isDoubanLoggedIn()) {
+                loadShowsWithDouban(forceReload, silent, loadAllPages, page, plan)
                 return@launch
             }
             _uiState.value = _uiState.value.copy(
@@ -719,6 +785,8 @@ class WatchlistViewModel @Inject constructor(
             if (!loadMore) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
+                // 首页拉取成功即认为与服务端活动时间对齐；失败不写基线，下次仍会重试
+                if (page == 1 && plan != null) traktRepository.markShowWatchlistSynced(plan)
                 val totalCount = traktRepository.getShowWatchlistTotalCount(page, 200) ?: rawItems.size
                 // 过滤掉本地已标记已看但不在想看缓存中的剧集（处理标记已看后 Trakt API 最终一致性延迟）
                 val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.SHOW)
@@ -1029,7 +1097,8 @@ class WatchlistViewModel @Inject constructor(
         forceReload: Boolean,
         silent: Boolean,
         loadAllPages: Boolean,
-        page: Int
+        page: Int,
+        plan: TraktRepository.WatchlistRefreshPlan?
     ) {
         _uiState.value = _uiState.value.copy(
             isLoadingMovies = if (page > 1 || !silent) true else _uiState.value.isLoadingMovies,
@@ -1041,6 +1110,8 @@ class WatchlistViewModel @Inject constructor(
             traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload)
         }
         result.onSuccess { (rawItems, totalPages) ->
+            // 首页拉取成功即认为与服务端活动时间对齐；失败不写基线，下次仍会重试
+            if (page == 1 && plan != null) traktRepository.markMovieWatchlistSynced(plan)
             val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)
             val items = if (locallyWatchedIds.isNotEmpty()) {
                 rawItems.filter { it.movie.ids.trakt !in locallyWatchedIds }
@@ -1093,7 +1164,8 @@ class WatchlistViewModel @Inject constructor(
         forceReload: Boolean,
         silent: Boolean,
         loadAllPages: Boolean,
-        page: Int
+        page: Int,
+        plan: TraktRepository.WatchlistRefreshPlan?
     ) {
         _uiState.value = _uiState.value.copy(
             isLoadingShows = if (page > 1 || !silent) true else _uiState.value.isLoadingShows,
@@ -1105,6 +1177,8 @@ class WatchlistViewModel @Inject constructor(
             traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload)
         }
         result.onSuccess { (rawItems, totalPages) ->
+            // 首页拉取成功即认为与服务端活动时间对齐；失败不写基线，下次仍会重试
+            if (page == 1 && plan != null) traktRepository.markShowWatchlistSynced(plan)
             val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.SHOW)
             val items = if (locallyWatchedIds.isNotEmpty()) {
                 rawItems.filter { it.show.ids.trakt !in locallyWatchedIds }
@@ -1571,6 +1645,13 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Trakt 图片字段返回的是不带协议的路径（如 media.trakt.tv/images/...），
+     * 直接交给 Coil 会按相对地址处理而加载失败，这里统一补全 HTTPS 前缀。
+     */
+    private fun toFullTraktImageUrl(raw: String): String =
+        if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "https://$raw"
+
     private fun mapWatchlistMovie(
         item: TraktWatchlistMovieItem,
         cached: MediaUiItem?
@@ -1584,7 +1665,9 @@ class WatchlistViewModel @Inject constructor(
             title
         }
         val genres = movie.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
-        val posterUrl = movie.images.poster.firstOrNull()?.takeIf { it.isNotBlank() }
+        val posterUrl = movie.images.poster.firstOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::toFullTraktImageUrl)
             ?: movie.posterPath?.takeIf { it.isNotBlank() }
             ?: cached?.posterUrl
         return MediaUiItem(
@@ -1615,7 +1698,9 @@ class WatchlistViewModel @Inject constructor(
             title
         }
         val genres = show.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
-        val posterUrl = show.images.poster.firstOrNull()?.takeIf { it.isNotBlank() }
+        val posterUrl = show.images.poster.firstOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::toFullTraktImageUrl)
             ?: show.posterPath?.takeIf { it.isNotBlank() }
             ?: cached?.posterUrl
         return MediaUiItem(
@@ -1707,7 +1792,8 @@ class WatchlistViewModel @Inject constructor(
         val anyLoaded = state.moviesLoaded || state.showsLoaded || state.othersLoaded ||
             state.historyMoviesLoaded || state.historyShowsLoaded || state.historyOthersLoaded
         if (anyLoaded) {
-            refreshIfLoaded(silent = false)
+            // 用户明确触发的下拉刷新保留强制拉取语义，不做活动时间判断
+            refreshIfLoaded(silent = false, forceRefresh = true)
         } else {
             refresh()
         }
@@ -1749,19 +1835,27 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
-    /** 页面恢复可见时调用：如果之前已加载过，则后台静默刷新，不重置已有数据避免重复拉取 */
-    fun refreshIfLoaded(silent: Boolean = false) {
+    /**
+     * 页面恢复可见 / 下拉刷新。
+     *
+     * 默认走增量同步：先查一次 Trakt 活动时间，只拉取发生变化的那一类列表；
+     * 未变化时不动列表、不重置分页，也不触发无意义重组。
+     * [forceRefresh] = true（下拉刷新）时保留强制拉取语义。
+     */
+    fun refreshIfLoaded(silent: Boolean = false, forceRefresh: Boolean = false) {
         val state = _uiState.value
         if (state.moviesLoaded || state.showsLoaded || state.othersLoaded) {
-            // 只重置分页，保留已有数据避免 UI 闪烁和重复拉取
-            _uiState.value = state.copy(
-                moviePage = 1,
-                showPage = 1,
-                hasMoreMovies = true,
-                hasMoreShows = true
-            )
-            loadMovies(forceReload = true, silent = silent)
-            loadShows(forceReload = true, silent = silent)
+            if (forceRefresh) {
+                // 只重置分页，保留已有数据避免 UI 闪烁和重复拉取
+                _uiState.value = state.copy(
+                    moviePage = 1,
+                    showPage = 1,
+                    hasMoreMovies = true,
+                    hasMoreShows = true
+                )
+            }
+            loadMovies(forceReload = forceRefresh, silent = silent, revalidate = !forceRefresh)
+            loadShows(forceReload = forceRefresh, silent = silent, revalidate = !forceRefresh)
             loadOthers(forceReload = true, silent = silent)
         }
         if (state.historyMoviesLoaded || state.historyShowsLoaded || state.historyOthersLoaded) {
@@ -1784,6 +1878,108 @@ class WatchlistViewModel @Inject constructor(
             loadMovies(forceReload = true, silent = true, loadAllPages = true)
             loadShows(forceReload = true, silent = true, loadAllPages = true)
             loadOthers(forceReload = true, silent = true)
+        }
+    }
+
+    /**
+     * 通知当前实际可见的 Watchlist 条目，做限量中文标题预取。
+     *
+     * 列表先用 Trakt 直出的原始标题秒出，这里只对真正出现在屏幕上的条目补本地化：
+     * - 已有本地化标题缓存：零请求直接补显示（例如详情页刚补过中文名）；
+     * - 未命中缓存：请求 TMDB，并发不超过 [VISIBLE_TITLE_PREFETCH_CONCURRENCY]，
+     *   同一 (类型, tmdbId, 语言) 在本会话只请求一次；
+     * - 只写回 displayTitle 与离线快照，海报/评分/类型/年份继续用 Trakt 直出的值；
+     * - 已有非空豆瓣展示标题的条目不覆盖。
+     *
+     * 失败时保留 Trakt 原标题，不影响列表显示。
+     */
+    fun onVisibleWatchlistItemsChanged(items: List<MediaUiItem>) {
+        if (items.isEmpty()) return
+        val language = tmdbRepository.currentLanguageTag()
+        items.forEach { item ->
+            val isMovie = when (item.mediaType) {
+                WatchlistMediaType.MOVIE -> true
+                WatchlistMediaType.SHOW -> false
+                WatchlistMediaType.OTHER -> return@forEach
+            }
+            // 纯豆瓣条目（无 Trakt 主键）不参与 Trakt 直出条目的本地化与快照写入
+            if (item.traktId <= 0 || item.tmdbId <= 0) return@forEach
+            // 当前展示的已不是 Trakt 原始标题（豆瓣标题或此前本地化结果）时不覆盖
+            if (item.displayTitle.isNotBlank() && !item.displayTitle.equals(item.title, ignoreCase = true)) {
+                return@forEach
+            }
+            val cachedTitle = if (isMovie) {
+                tmdbRepository.peekMovieLocalizedTitle(item.tmdbId)
+            } else {
+                tmdbRepository.peekTvLocalizedTitle(item.tmdbId)
+            }
+            if (!cachedTitle.isNullOrBlank()) {
+                viewModelScope.launch { applyVisibleLocalizedTitle(item, cachedTitle) }
+                return@forEach
+            }
+            val dedupKey = "${item.mediaType.name}:${item.tmdbId}:$language"
+            if (!prefetchedTitleKeys.add(dedupKey)) return@forEach
+            viewModelScope.launch {
+                visibleTitlePrefetchSemaphore.withPermit {
+                    val localizedTitle = try {
+                        if (isMovie) {
+                            tmdbRepository.enrichMovie(item.tmdbId, item.title, item.year).chineseTitle
+                        } else {
+                            tmdbRepository.enrichTv(item.tmdbId, item.title, item.year).chineseTitle
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (!localizedTitle.isNullOrBlank()) {
+                        applyVisibleLocalizedTitle(item, localizedTitle)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 把本地化标题写回当前列表条目与离线快照；只改 displayTitle，其余字段保持 Trakt 直出值。 */
+    private suspend fun applyVisibleLocalizedTitle(item: MediaUiItem, localizedTitle: String) {
+        val title = localizedTitle.trim()
+        if (title.isEmpty() || title.equals(item.title.trim(), ignoreCase = true)) return
+        val isMovie = when (item.mediaType) {
+            WatchlistMediaType.MOVIE -> true
+            WatchlistMediaType.SHOW -> false
+            WatchlistMediaType.OTHER -> return
+        }
+        val cacheType = if (isMovie) {
+            OfflineCacheManager.TYPE_WATCHLIST_MOVIE
+        } else {
+            OfflineCacheManager.TYPE_WATCHLIST_SHOW
+        }
+        _uiState.update { state ->
+            val currentItems = if (isMovie) state.movies else state.shows
+            var changed = false
+            val updatedItems = currentItems.map { entry ->
+                if (entry.selectionKey != item.selectionKey) return@map entry
+                // 本条已换成别的标题（豆瓣标题 / 已本地化）时不再覆盖
+                if (entry.displayTitle.isNotBlank() && !entry.displayTitle.equals(entry.title, ignoreCase = true)) {
+                    return@map entry
+                }
+                if (entry.displayTitle == title) return@map entry
+                changed = true
+                entry.copy(displayTitle = title)
+            }
+            if (!changed) state
+            else if (isMovie) state.copy(movies = updatedItems)
+            else state.copy(shows = updatedItems)
+        }
+        val updatedItem = (if (isMovie) _uiState.value.movies else _uiState.value.shows)
+            .firstOrNull { it.selectionKey == item.selectionKey } ?: return
+        if (updatedItem.displayTitle != title) return
+        try {
+            offlineCacheManager.saveMediaItem(cacheType, updatedItem.toMediaItemEntity(cacheType))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 离线快照写入失败不影响列表显示，下次成功加载会整表覆盖
         }
     }
 

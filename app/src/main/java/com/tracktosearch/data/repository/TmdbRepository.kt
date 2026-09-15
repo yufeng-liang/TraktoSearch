@@ -105,6 +105,13 @@ class TmdbRepository @Inject constructor(
 
     private fun getTmdbLanguage(): String = getTmdbLocale().language
 
+    /**
+     * 当前 TMDB 语言标签（如 zh-CN）。
+     *
+     * 列表页按 (媒体类型, tmdbId, 语言) 去重本地化请求时使用，语言切换后允许重新请求。
+     */
+    fun currentLanguageTag(): String = getTmdbLanguage()
+
     /** 构造带语言后缀的缓存 key，避免切换语言后命中旧语言缓存；格式保持兼容。 */
     private fun langKey(id: Any): String = "${id}_${getTmdbLanguage()}"
 
