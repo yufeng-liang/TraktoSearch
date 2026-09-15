@@ -11,6 +11,7 @@ import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
+import com.tracktosearch.data.remote.trakt.dto.TraktImages
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
@@ -788,50 +789,33 @@ class WatchlistViewModelTest {
     }
 
     @Test
-    fun loadMovies_publishesOnlyPlaceholderAndFinalEnrichedList() = runTest {
+    fun loadMovies_直接使用Trakt图片且不触发TMDB富化() = runTest {
+        val first = makeWatchlistMovie(1, title = "Movie One", tmdb = 101).copy(
+            movie = makeWatchlistMovie(1, title = "Movie One", tmdb = 101).movie.copy(
+                genres = listOf("Drama", "Sci-Fi"),
+                images = TraktImages(poster = listOf("https://media.trakt.tv/poster-one.webp"))
+            )
+        )
+        val second = makeWatchlistMovie(2, title = "Movie Two", tmdb = 102).copy(
+            movie = makeWatchlistMovie(2, title = "Movie Two", tmdb = 102).movie.copy(
+                images = TraktImages(poster = listOf("https://media.trakt.tv/poster-two.webp"))
+            )
+        )
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
-            Result.success(
-                listOf(
-                    makeWatchlistMovie(1, title = "Movie One", tmdb = 101),
-                    makeWatchlistMovie(2, title = "Movie Two", tmdb = 102)
-                ) to 1
-            )
-        coEvery { tmdbRepository.enrichMovie(101, "Movie One", 2023) } returns
-            TmdbRepository.MovieEnrichment(
-                posterUrl = "https://image.tmdb.org/t/p/w500/one.jpg",
-                chineseTitle = "Movie One",
-                overview = "",
-                genres = "",
-                year = 2023,
-                rating = 8.0
-            )
-        coEvery { tmdbRepository.enrichMovie(102, "Movie Two", 2023) } returns
-            TmdbRepository.MovieEnrichment(
-                posterUrl = "https://image.tmdb.org/t/p/w500/two.jpg",
-                chineseTitle = "Movie Two",
-                overview = "",
-                genres = "",
-                year = 2023,
-                rating = 8.0
-            )
-
-        val states = mutableListOf<WatchlistUiState>()
-        val collectJob = launch {
-            viewModel.uiState.collect { states.add(it) }
-        }
-        advanceUntilIdle()
+            Result.success(listOf(first, second) to 1)
+        assertThat(first.movie.images.poster).containsExactly("https://media.trakt.tv/poster-one.webp")
 
         viewModel.loadMovies()
         advanceUntilIdle()
-        collectJob.cancel()
 
-        val statesWithEnrichedMovies = states.filter { state ->
-            state.movies.any { movie -> movie.posterUrl != null }
-        }
-        assertThat(statesWithEnrichedMovies).hasSize(1)
-        val finalMovies = statesWithEnrichedMovies.single().movies
-        assertThat(finalMovies).hasSize(2)
-        assertThat(finalMovies.all { it.posterUrl != null }).isTrue()
+        val movies = viewModel.uiState.value.movies
+        assertThat(movies).hasSize(2)
+        assertThat(movies.map { it.posterUrl }).containsExactly(
+            "https://media.trakt.tv/poster-one.webp",
+            "https://media.trakt.tv/poster-two.webp"
+        ).inOrder()
+        assertThat(movies[0].genres).isEqualTo("Drama · Sci-Fi")
+        coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
     }
 
     @Test

@@ -631,17 +631,12 @@ class WatchlistViewModel @Inject constructor(
                 if (!silent && _uiState.value.movies.isEmpty()) {
                     _uiState.update { it.copy(movies = placeholderList) }
                 }
-                val deferredItems = items.map { item ->
-                    async {
-                        enrichMediaItem(
-                            traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
-                            title = item.movie.title, year = item.movie.year,
-                            imdbId = item.movie.ids.imdb, rating = item.movie.rating,
-                            listedAt = item.listed_at, isMovie = true
-                        )
-                    }
+                // Watchlist 直接使用 Trakt full,images，列表阶段不再逐条请求 TMDB。
+                val uiItems = items.map { item ->
+                    mapWatchlistMovie(item, _uiState.value.movies.firstOrNull { cached ->
+                        cached.traktId == item.movie.ids.trakt
+                    })
                 }
-                val uiItems = deferredItems.awaitAll()
                 // 写入离线缓存（仅首页）：在 moviePage 递增前判断，确保首页加载必缓存
                 if (page == 1) {
                     val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) }
@@ -758,17 +753,12 @@ class WatchlistViewModel @Inject constructor(
                 if (!silent && _uiState.value.shows.isEmpty()) {
                     _uiState.update { it.copy(shows = placeholderList) }
                 }
-                val deferredItems = items.map { item ->
-                    async {
-                        enrichMediaItem(
-                            traktId = item.show.ids.trakt, tmdbId = item.show.ids.tmdb,
-                            title = item.show.title, year = item.show.year,
-                            imdbId = item.show.ids.imdb, rating = item.show.rating,
-                            listedAt = item.listed_at, isMovie = false
-                        )
-                    }
+                // Watchlist 直接使用 Trakt full,images，列表阶段不再逐条请求 TMDB。
+                val uiItems = items.map { item ->
+                    mapWatchlistShow(item, _uiState.value.shows.firstOrNull { cached ->
+                        cached.traktId == item.show.ids.trakt
+                    })
                 }
-                val uiItems = deferredItems.awaitAll().map { it.copy(mediaType = WatchlistMediaType.SHOW) }
                 // 写入离线缓存（仅首页）：在 showPage 递增前判断，确保首页加载必缓存
                 if (page == 1) {
                     val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_SHOW) }
@@ -1057,23 +1047,11 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 rawItems
             }
-            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
-            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
-            val uiItems = coroutineScope {
-                    items.map { item ->
-                        async {
-                            enrichMediaItem(
-                                traktId = item.movie.ids.trakt,
-                                tmdbId = item.movie.ids.tmdb,
-                                title = item.movie.title,
-                                year = item.movie.year,
-                                imdbId = item.movie.ids.imdb,
-                                rating = item.movie.rating,
-                                listedAt = item.listed_at,
-                                isMovie = true
-                            ).copy(mediaType = WatchlistMediaType.MOVIE)
-                        }
-                    }.awaitAll()
+            // Watchlist 直接使用 Trakt full,images，列表阶段不再逐条请求 TMDB。
+            val uiItems = items.map { item ->
+                mapWatchlistMovie(item, _uiState.value.movies.firstOrNull { cached ->
+                    cached.traktId == item.movie.ids.trakt
+                })
             }
             replaceLoadedTraktItems(loadedTraktMovies, uiItems)
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
@@ -1133,23 +1111,11 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 rawItems
             }
-            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
-            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
-            val uiItems = coroutineScope {
-                    items.map { item ->
-                        async {
-                            enrichMediaItem(
-                                traktId = item.show.ids.trakt,
-                                tmdbId = item.show.ids.tmdb,
-                                title = item.show.title,
-                                year = item.show.year,
-                                imdbId = item.show.ids.imdb,
-                                rating = item.show.rating,
-                                listedAt = item.listed_at,
-                                isMovie = false
-                            ).copy(mediaType = WatchlistMediaType.SHOW)
-                        }
-                    }.awaitAll()
+            // Watchlist 直接使用 Trakt full,images，列表阶段不再逐条请求 TMDB。
+            val uiItems = items.map { item ->
+                mapWatchlistShow(item, _uiState.value.shows.firstOrNull { cached ->
+                    cached.traktId == item.show.ids.trakt
+                })
             }
             replaceLoadedTraktItems(loadedTraktShows, uiItems)
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
@@ -1603,6 +1569,68 @@ class WatchlistViewModel @Inject constructor(
                 imdbId = imdbId, traktRating = rating, listedAt = listedAt
             )
         }
+    }
+
+    private fun mapWatchlistMovie(
+        item: TraktWatchlistMovieItem,
+        cached: MediaUiItem?
+    ): MediaUiItem {
+        val movie = item.movie
+        val tmdbId = movie.ids.tmdb
+        val title = movie.title.trim().ifEmpty { cached?.title.orEmpty() }
+        val displayTitle = if (tmdbId > 0) {
+            tmdbRepository.peekMovieLocalizedTitle(tmdbId)?.takeIf { it.isNotBlank() } ?: title
+        } else {
+            title
+        }
+        val genres = movie.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
+        val posterUrl = movie.images.poster.firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: movie.posterPath?.takeIf { it.isNotBlank() }
+            ?: cached?.posterUrl
+        return MediaUiItem(
+            traktId = movie.ids.trakt,
+            tmdbId = tmdbId,
+            title = title,
+            displayTitle = displayTitle,
+            year = movie.year.takeIf { it > 0 } ?: cached?.year,
+            genres = genres,
+            posterUrl = posterUrl,
+            imdbId = movie.ids.imdb,
+            traktRating = movie.rating,
+            listedAt = item.listed_at,
+            mediaType = WatchlistMediaType.MOVIE
+        )
+    }
+
+    private fun mapWatchlistShow(
+        item: TraktWatchlistShowItem,
+        cached: MediaUiItem?
+    ): MediaUiItem {
+        val show = item.show
+        val tmdbId = show.ids.tmdb
+        val title = show.title.trim().ifEmpty { cached?.title.orEmpty() }
+        val displayTitle = if (tmdbId > 0) {
+            tmdbRepository.peekTvLocalizedTitle(tmdbId)?.takeIf { it.isNotBlank() } ?: title
+        } else {
+            title
+        }
+        val genres = show.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
+        val posterUrl = show.images.poster.firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: show.posterPath?.takeIf { it.isNotBlank() }
+            ?: cached?.posterUrl
+        return MediaUiItem(
+            traktId = show.ids.trakt,
+            tmdbId = tmdbId,
+            title = title,
+            displayTitle = displayTitle,
+            year = show.year.takeIf { it > 0 } ?: cached?.year,
+            genres = genres,
+            posterUrl = posterUrl,
+            imdbId = show.ids.imdb,
+            traktRating = show.rating,
+            listedAt = item.listed_at,
+            mediaType = WatchlistMediaType.SHOW
+        )
     }
 
     private fun createPlaceholder(

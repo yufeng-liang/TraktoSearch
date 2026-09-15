@@ -31,7 +31,8 @@ data class TraktMovie(
     val runtime: Int = 0,
     val genres: List<String> = emptyList(),
     @kotlinx.serialization.SerialName("poster_path")
-    val posterPath: String? = null
+    val posterPath: String? = null,
+    val images: TraktImages = TraktImages()
 )
 
 @Serializable
@@ -50,7 +51,8 @@ data class TraktShow(
     @kotlinx.serialization.SerialName("aired_episodes")
     val airedEpisodes: Int = 0,
     @kotlinx.serialization.SerialName("poster_path")
-    val posterPath: String? = null
+    val posterPath: String? = null,
+    val images: TraktImages = TraktImages()
 )
 
 @Serializable

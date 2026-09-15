@@ -856,12 +856,12 @@ class TraktRepository @Inject constructor(
 
     suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
-        val cacheKey = "p${page}_$limit"
+        val cacheKey = "watchlist_v2_full_images_p${page}_$limit"
         return runCatching {
             val result = movieWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
                 val response = traktApiService.getWatchlist(
                     type = "movies",
-                    extended = "full",
+                    extended = "full,images",
                     page = page,
                     limit = limit
                 )
@@ -883,12 +883,12 @@ class TraktRepository @Inject constructor(
 
     suspend fun getShowWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
-        val cacheKey = "p${page}_$limit"
+        val cacheKey = "watchlist_v2_full_images_p${page}_$limit"
         return runCatching {
             val result = showWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
                 val response = traktApiService.getShowWatchlist(
                     type = "shows",
-                    extended = "full",
+                    extended = "full,images",
                     page = page,
                     limit = limit
                 )
@@ -910,11 +910,11 @@ class TraktRepository @Inject constructor(
 
     /** 返回最近一次成功获取的电影 watchlist 服务端总条数。 */
     fun getMovieWatchlistTotalCount(page: Int = 1, limit: Int = 50): Int? =
-        movieWatchlistTotalCountCache.get("p${page}_$limit")
+        movieWatchlistTotalCountCache.get("watchlist_v2_full_images_p${page}_$limit")
 
     /** 返回最近一次成功获取的电视剧 watchlist 服务端总条数。 */
     fun getShowWatchlistTotalCount(page: Int = 1, limit: Int = 50): Int? =
-        showWatchlistTotalCountCache.get("p${page}_$limit")
+        showWatchlistTotalCountCache.get("watchlist_v2_full_images_p${page}_$limit")
 
     suspend fun getMovieHistory(page: Int = 1, limit: Int = 200, extended: String = "full"): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         return try {

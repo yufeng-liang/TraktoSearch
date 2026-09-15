@@ -295,8 +295,9 @@ class TmdbRepository @Inject constructor(
         val key = langKey(tmdbId)
         val detail = movieDetailCache.get(key) ?: return null
         val country = getTmdbCountry()
-        val localizedTitle = detail.title.trim().takeIf { it.isNotEmpty() }
-            ?: movieAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, country) }
+        val localizedTitle = detail.title.trim().takeIf {
+            shouldUseLocalizedDetailTitle(it, originalTitle, detail.original_title)
+        } ?: movieAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, country) }
             ?: movieTitleCache.get(key)?.trim()?.takeIf { cachedTitle ->
                 cachedTitle.isNotEmpty() &&
                     !cachedTitle.equals(originalTitle.trim(), ignoreCase = true) &&
@@ -304,6 +305,13 @@ class TmdbRepository @Inject constructor(
             }
             ?: return null
         return buildMovieEnrichment(detail, localizedTitle, year)
+    }
+
+    /** 同步读取已缓存的电影本地化标题，不读盘、不挂起、不发网络。 */
+    fun peekMovieLocalizedTitle(tmdbId: Int): String? {
+        val key = langKey(tmdbId)
+        return movieTitleCache.get(key)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: movieAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, getTmdbCountry()) }
     }
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
@@ -373,8 +381,9 @@ class TmdbRepository @Inject constructor(
         val key = langKey(tmdbId)
         val detail = tvDetailCache.get(key) ?: return null
         val country = getTmdbCountry()
-        val localizedTitle = detail.name.trim().takeIf { it.isNotEmpty() }
-            ?: tvAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, country) }
+        val localizedTitle = detail.name.trim().takeIf {
+            shouldUseLocalizedDetailTitle(it, originalName, detail.original_name)
+        } ?: tvAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, country) }
             ?: tvTitleCache.get(key)?.trim()?.takeIf { cachedTitle ->
                 cachedTitle.isNotEmpty() &&
                     !cachedTitle.equals(originalName.trim(), ignoreCase = true) &&
@@ -382,6 +391,13 @@ class TmdbRepository @Inject constructor(
             }
             ?: return null
         return buildTvEnrichment(detail, localizedTitle, year)
+    }
+
+    /** 同步读取已缓存的剧集本地化标题，不读盘、不挂起、不发网络。 */
+    fun peekTvLocalizedTitle(tmdbId: Int): String? {
+        val key = langKey(tmdbId)
+        return tvTitleCache.get(key)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: tvAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, getTmdbCountry()) }
     }
 
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
@@ -436,8 +452,8 @@ class TmdbRepository @Inject constructor(
     }
 
     private suspend fun resolveMovieChineseTitle(tmdbId: Int, originalTitle: String, detail: TmdbMovieDetail): String {
-        // TMDB 已按当前 language 本地化 title 字段，非空就直接用。
-        if (detail.title.isNotBlank()) {
+        // 英文界面直接使用详情标题；其他语言下，若 TMDB 只回了原始英文标题，继续查地区别名。
+        if (detail.title.isNotBlank() && shouldUseLocalizedDetailTitle(detail.title, originalTitle, detail.original_title)) {
             return detail.title.trim()
         }
         // 别名持久化缓存：按当前 country 取对应地区标题，跨 App 重启复用。
@@ -464,8 +480,8 @@ class TmdbRepository @Inject constructor(
     }
 
     private suspend fun resolveTvChineseTitle(tmdbId: Int, originalName: String, detail: TmdbTvDetail): String {
-        // TMDB 已按当前 language 本地化 name 字段，非空就直接用。
-        if (detail.name.isNotBlank()) {
+        // 英文界面直接使用详情名称；其他语言下，若 TMDB 只回了原始英文名称，继续查地区别名。
+        if (detail.name.isNotBlank() && shouldUseLocalizedDetailTitle(detail.name, originalName, detail.original_name)) {
             return detail.name.trim()
         }
         // 别名持久化缓存：按当前 country 取对应地区标题，跨 App 重启复用。
@@ -489,6 +505,18 @@ class TmdbRepository @Inject constructor(
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             originalName
         }
+    }
+
+    private fun shouldUseLocalizedDetailTitle(
+        title: String,
+        requestedOriginalTitle: String,
+        detailOriginalTitle: String
+    ): Boolean {
+        val normalizedTitle = title.trim()
+        if (normalizedTitle.isEmpty()) return false
+        if (getTmdbLanguage().startsWith("en", ignoreCase = true)) return true
+        return !normalizedTitle.equals(requestedOriginalTitle.trim(), ignoreCase = true) &&
+            !normalizedTitle.equals(detailOriginalTitle.trim(), ignoreCase = true)
     }
 
     private fun fallbackMovie(originalTitle: String, year: Int?) = MovieEnrichment(

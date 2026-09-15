@@ -8,7 +8,7 @@ interface TraktApiService {
     @GET("sync/watchlist/{type}/added/desc")
     suspend fun getWatchlist(
         @Path("type") type: String,
-        @Query("extended") extended: String = "full",
+        @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50
     ): Response<List<TraktWatchlistMovieItem>>
@@ -16,7 +16,7 @@ interface TraktApiService {
     @GET("sync/watchlist/{type}/added/desc")
     suspend fun getShowWatchlist(
         @Path("type") type: String = "shows",
-        @Query("extended") extended: String = "full",
+        @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50
     ): Response<List<TraktWatchlistShowItem>>
