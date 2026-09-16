@@ -139,6 +139,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -196,6 +197,8 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.localizedGenreLine
+import com.tracktosearch.ui.component.localizedGenreName
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
@@ -723,10 +726,18 @@ fun WatchlistScreen(
                 .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
                 .pointerInput(isSearchExpanded) {
                     if (!isSearchExpanded) return@pointerInput
+                    // 搜索框展开时：点击框外只收起搜索框，并把这次手势吃掉，
+                    // 不再透传给下层卡片（否则点空白会顺带打开详情页）。
+                    // 判定放在 Initial 阶段、按下即决断：等抬起时卡片已经消费了事件，
+                    // waitForUpOrCancellation 会返回 null，收起逻辑永远不会执行。
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val up = waitForUpOrCancellation()
-                        if (up != null && currentSearchBoundsInRootLocal?.contains(down.position) != true) {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val isInsideSearch = currentSearchBoundsInRootLocal?.contains(down.position) == true
+                        if (isInsideSearch) return@awaitEachGesture
+                        // 抬起也一并消费掉，避免列表把它当点击处理
+                        val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                        if (up != null) {
+                            up.consume()
                             collapseSearch()
                         }
                     }
@@ -2135,7 +2146,7 @@ private fun WatchlistPosterCard(
         )
         if (item.genres.isNotEmpty()) {
             Text(
-                text = item.genres,
+                text = localizedGenreLine(item.genres),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
@@ -2256,7 +2267,8 @@ private fun WatchlistFilterSheet(
                             }
                             onGenresChange(newSet)
                         },
-                        label = genre
+                        // 展示用本地化文案，选中/过滤仍用原始英文 key
+                        label = localizedGenreName(genre)
                     )
                 }
             }

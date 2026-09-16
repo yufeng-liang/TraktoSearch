@@ -1368,6 +1368,9 @@
     <string name="genre_biography">伝記</string>
     <string name="genre_noir">フィルムノワール</string>
     <string name="genre_game_show">ゲーム番組</string>
+    <string name="genre_suspense">サスペンス</string>
+    <string name="genre_donghua">中国アニメ</string>
+    <string name="genre_holiday">ホリデー</string>
     <string name="genre_other">その他</string>
 
     <!-- Content Descriptions (Badge) -->

@@ -1471,6 +1471,9 @@ Config:
     <string name="genre_biography">Biography</string>
     <string name="genre_noir">Film Noir</string>
     <string name="genre_game_show">Game Show</string>
+    <string name="genre_suspense">Suspense</string>
+    <string name="genre_donghua">Donghua</string>
+    <string name="genre_holiday">Holiday</string>
     <string name="genre_other">Other</string>
 
     <!-- Content Descriptions (Badge) -->
