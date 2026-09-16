@@ -224,6 +224,65 @@ test('剧集 alternative_titles.results 映射为 ALTERNATIVE，且详情标题�
     assert.equal(body.data.items[0].titleSource, 'ALTERNATIVE');
 });
 
+test('电影摘要的国家/地区按请求 locale 输出本地化译名，不直接用 TMDB 英文名', async () => {
+    installFetch(async () => jsonResponse(movieDetail({
+        production_countries: [
+            { iso_3166_1: 'DE', name: 'Germany' },
+            { iso_3166_1: 'US', name: 'United States of America' },
+        ],
+    })));
+    const env = createEnv(fetch);
+
+    const zh = await handleMediaSummaries(
+        new Request('https://worker.test/api/media/summaries?locale=zh-CN&ids=movie:550'),
+        env,
+    );
+    const zhBody = await zh.json();
+    // 之前这里返回的是 TMDB 原样透传的 ['Germany','United States of America']，
+    // 中文界面详情页因此显示英文国名。
+    assert.deepEqual(zhBody.data.items[0].countries, ['德国', '美国']);
+
+    const en = await handleMediaSummaries(
+        new Request('https://worker.test/api/media/summaries?locale=en-US&ids=movie:550'),
+        env,
+    );
+    const enBody = await en.json();
+    assert.deepEqual(enBody.data.items[0].countries, ['Germany', 'United States']);
+});
+
+test('剧集 origin_country 国家代码同样按 locale 本地化', async () => {
+    installFetch(async () => jsonResponse(tvDetail({
+        name: 'Breaking Bad',
+        origin_country: ['US', 'GB'],
+        production_countries: undefined,
+    })));
+    const env = createEnv(fetch);
+    const response = await handleMediaSummaries(
+        new Request('https://worker.test/api/media/summaries?locale=ja-JP&ids=tv:1396'),
+        env,
+    );
+    const body = await response.json();
+
+    assert.deepEqual(body.data.items[0].countries, ['アメリカ合衆国', 'イギリス']);
+});
+
+test('国家代码缺失或非法时回退到 TMDB 原值而不是输出空字符串', async () => {
+    installFetch(async () => jsonResponse(movieDetail({
+        production_countries: [
+            { name: 'Narnia' },
+            { iso_3166_1: 'ZZZ', name: 'Unknownland' },
+        ],
+    })));
+    const env = createEnv(fetch);
+    const response = await handleMediaSummaries(
+        new Request('https://worker.test/api/media/summaries?locale=zh-CN&ids=movie:550'),
+        env,
+    );
+    const body = await response.json();
+
+    assert.deepEqual(body.data.items[0].countries, ['Narnia', 'Unknownland']);
+});
+
 test('批量摘要去重、非法格式、超过 20 条与部分失败都不返回整批 500', async () => {
     installFetch(async (url) => {
         const parsed = new URL(url);
@@ -313,7 +372,7 @@ test('过期摘要先返回旧值，后台刷新只允许一个租约回源', as
     });
     const env = createEnv(fetch);
     const now = Date.now();
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -356,7 +415,7 @@ test('详情接口从 R2 manifest 读取已有 section，不重复访问 TMDB', 
     });
     const env = createEnv(fetch);
     const now = Date.now();
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -378,7 +437,7 @@ test('详情接口从 R2 manifest 读取已有 section，不重复访问 TMDB', 
         volatile_refreshed_at: now,
     });
     const objectKey = 'v1/movie/550/zh-CN/credits.json';
-    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:credits', {
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:4:credits', {
         object_key: objectKey,
         refreshed_at: now,
     });
@@ -434,7 +493,7 @@ test('已有摘要和部分 section 时，缺失 section 回源失败仍返回�
     installFetch(async () => jsonResponse({}, 500));
     const env = createEnv(fetch);
     const now = Date.now();
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -456,7 +515,7 @@ test('已有摘要和部分 section 时，缺失 section 回源失败仍返回�
         volatile_refreshed_at: now,
     });
     const objectKey = 'v1/movie/550/zh-CN/images.json';
-    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:images', {
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:4:images', {
         object_key: objectKey,
         refreshed_at: now,
     });
@@ -478,7 +537,7 @@ test('已有摘要和部分 section 时，缺失 section 回源失败仍返回�
     // 失败不能把空数组写成长期缓存；否则 30 天内都会稳定显示“无预告片”。
     assert.equal(env.MEDIA_CACHE.objects.has('v1/movie/550/zh-CN/videos.json'), false);
     assert.equal(
-        env.MEDIA_DB.manifest.has('movie:550:zh-CN:3:videos'),
+        env.MEDIA_DB.manifest.has('movie:550:zh-CN:4:videos'),
         false,
     );
 });
@@ -488,7 +547,7 @@ test('摘要缺失但 R2 已有 section 时返回部分 bundle，不把可用缓
     const env = createEnv(fetch);
     const now = Date.now();
     const objectKey = 'v1/movie/550/zh-CN/images.json';
-    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:images', {
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:4:images', {
         object_key: objectKey,
         refreshed_at: now,
     });
@@ -545,7 +604,7 @@ test('详情已有摘要时回源不替换稳定标题字段', async () => {
     });
     const env = createEnv(fetch);
     const now = Date.now();
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -586,7 +645,7 @@ test('详情 section 刷新保留原摘要时间戳，不提前续期 24 小时 
         credits: { cast: [], crew: [] },
     })));
     const env = createEnv(fetch);
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -614,7 +673,7 @@ test('详情 section 刷新保留原摘要时间戳，不提前续期 24 小时 
         env,
     );
 
-    const saved = env.MEDIA_DB.summary.get('movie:550:zh-CN:3');
+    const saved = env.MEDIA_DB.summary.get('movie:550:zh-CN:4');
     assert.equal(saved.title_refreshed_at, oldTitleRefreshedAt);
     assert.equal(saved.volatile_refreshed_at, oldVolatileRefreshedAt);
 });
@@ -639,13 +698,13 @@ test('详情 section 后台刷新不重写摘要稳定字段', async () => {
         collectionId: null,
         titleSource: 'DETAIL',
     });
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: oldPayload,
         title_refreshed_at: Date.now() - 2 * 24 * 60 * 60 * 1000,
         volatile_refreshed_at: Date.now() - 2 * 24 * 60 * 60 * 1000,
     });
     const objectKey = 'v1/movie/550/zh-CN/credits.json';
-    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:credits', {
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:4:credits', {
         object_key: objectKey,
         refreshed_at: Date.now() - 400 * 24 * 60 * 60 * 1000,
     });
@@ -664,7 +723,7 @@ test('详情 section 后台刷新不重写摘要稳定字段', async () => {
     );
     await Promise.all(tasks);
 
-    assert.equal(env.MEDIA_DB.summary.get('movie:550:zh-CN:3').payload_json, oldPayload);
+    assert.equal(env.MEDIA_DB.summary.get('movie:550:zh-CN:4').payload_json, oldPayload);
 });
 
 test('collection 请求失败不写负缓存，后续请求仍会重试', async () => {
@@ -687,7 +746,7 @@ test('collection 请求失败不写负缓存，后续请求仍会重试', async 
     assert.equal(first.status, 200);
     assert.equal(firstBody.data.collection, null);
     assert.equal(first.headers.get('X-Media-Partial'), 'true');
-    assert.equal(env.MEDIA_DB.manifest.has('movie:550:zh-CN:3:collection'), false);
+    assert.equal(env.MEDIA_DB.manifest.has('movie:550:zh-CN:4:collection'), false);
 
     const second = await handleMediaDetail(request, env);
     assert.equal(second.headers.get('X-Media-Partial'), 'true');
@@ -702,7 +761,7 @@ test('过期空 collection 刷新会写回负缓存并推进 TTL', async () => {
     });
     const env = createEnv(fetch);
     const now = Date.now();
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -724,7 +783,7 @@ test('过期空 collection 刷新会写回负缓存并推进 TTL', async () => {
         volatile_refreshed_at: now,
     });
     const objectKey = 'v1/movie/550/zh-CN/collection.json';
-    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:collection', {
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:4:collection', {
         object_key: objectKey,
         refreshed_at: Date.now() - 400 * 24 * 60 * 60 * 1000,
     });
@@ -738,7 +797,7 @@ test('过期空 collection 刷新会写回负缓存并推进 TTL', async () => {
     );
     await Promise.all(tasks);
 
-    const manifest = env.MEDIA_DB.manifest.get('movie:550:zh-CN:3:collection');
+    const manifest = env.MEDIA_DB.manifest.get('movie:550:zh-CN:4:collection');
     assert.equal(fetchCount, 1);
     assert.ok(manifest.refreshed_at > now - 1000);
 });
@@ -751,7 +810,7 @@ test('摘要后台刷新推进 volatile TTL，不因旧时间戳反复回源', a
         return jsonResponse(movieDetail({ vote_average: 9.1 }));
     });
     const env = createEnv(fetch);
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -777,7 +836,7 @@ test('摘要后台刷新推进 volatile TTL，不因旧时间戳反复回源', a
 
     await handleMediaSummaries(request, env, ctx);
     await Promise.all(tasks);
-    const saved = env.MEDIA_DB.summary.get('movie:550:zh-CN:3');
+    const saved = env.MEDIA_DB.summary.get('movie:550:zh-CN:4');
     assert.equal(saved.title_refreshed_at, oldAt);
     assert.ok(saved.volatile_refreshed_at > oldAt);
 
@@ -800,7 +859,7 @@ test('同一影片不同 section 的过期刷新互不吞掉', async () => {
     });
     const env = createEnv(fetch);
     const now = Date.now();
-    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:4', {
         payload_json: JSON.stringify({
             mediaType: 'movie',
             tmdbId: 550,
@@ -823,7 +882,7 @@ test('同一影片不同 section 的过期刷新互不吞掉', async () => {
     });
     for (const section of ['credits', 'videos']) {
         const objectKey = `v1/movie/550/zh-CN/${section}.json`;
-        env.MEDIA_DB.manifest.set(`movie:550:zh-CN:3:${section}`, {
+        env.MEDIA_DB.manifest.set(`movie:550:zh-CN:4:${section}`, {
             object_key: objectKey,
             refreshed_at: oldAt,
         });

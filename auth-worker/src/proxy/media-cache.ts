@@ -9,8 +9,9 @@ import { buildTmdbAuth } from './tmdb-token.ts';
 
 const TMDB_BASE_URL = 'https://api.tmdb.org/3';
 const TMDB_USER_AGENT = 'TrackToSearch/3.0';
+// v4: countries 由 TMDB 英文名改为按 locale 本地化译名，隔离 v3 中写死的英文国名。
 // v3: videos 请求补 include_video_language，彻底隔离 v2 中可能已写入的空 videos 记录。
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_SUMMARY_IDS = 20;
 const SUMMARY_CONCURRENCY = 4;
 const VOLATILE_SUMMARY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -538,11 +539,7 @@ function mapMediaSummary(
     const runtime = mediaType === 'movie'
         ? numberOrNull(raw.runtime)
         : firstRuntime(raw.episode_run_time);
-    const countries = Array.isArray(raw.production_countries)
-        ? raw.production_countries
-            .map((country) => stringOrEmpty((country as Record<string, unknown>).name))
-            .filter(Boolean)
-        : arrayOfStrings(raw.origin_country);
+    const countries = normalizeCountryNames(raw, locale);
     const externalIds = isRecord(raw.external_ids) ? raw.external_ids : {};
     const collection = isRecord(raw.belongs_to_collection) ? raw.belongs_to_collection : null;
     const releaseDate = mediaType === 'movie'
@@ -777,6 +774,52 @@ function parseSections(raw: string | null): MediaSection[] {
         }
     }
     return result;
+}
+
+/**
+ * 把 TMDB 的制片国家/地区归一化成当前请求 locale 的译名。
+ *
+ * TMDB 详情接口的 `production_countries[].name` 不随 `language` 参数本地化，
+ * 中文请求同样拿回 "Germany" / "United States of America"。这里改用 ISO 3166-1
+ * 代码配 `Intl.DisplayNames` 生成译名；缺代码或代码非法时退回 TMDB 原值，
+ * 保证不会因为认不出而把已有信息抹成空。
+ */
+function normalizeCountryNames(raw: RawMediaDetail, locale: string): string[] {
+    const display = createRegionDisplayNames(locale);
+    const fromProduction = Array.isArray(raw.production_countries)
+        ? raw.production_countries.map((country) => {
+            const record = country as Record<string, unknown>;
+            return localizeRegion(stringOrEmpty(record.iso_3166_1), stringOrEmpty(record.name), display);
+        })
+        : [];
+    const source = fromProduction.length > 0
+        ? fromProduction
+        : arrayOfStrings(raw.origin_country).map((code) => localizeRegion(code, '', display));
+    return source.filter(Boolean);
+}
+
+/** 单国代码优先取本地化译名，取不到则保留 TMDB 原值，最后才退回代码本身。 */
+function localizeRegion(code: string, fallback: string, display: Intl.DisplayNames | null): string {
+    const region = code.trim().toUpperCase();
+    if (display && /^[A-Z]{2}$/.test(region)) {
+        try {
+            const localized = display.of(region);
+            // DisplayNames 对无法识别的代码可能原样回传代码或返回 undefined，两种都不算有效译名。
+            if (localized && localized !== region) return localized;
+        } catch {
+            // 非法代码会让 DisplayNames 抛 RangeError；这里降级到原值，不能让整批摘要失败。
+        }
+    }
+    return fallback || region;
+}
+
+/** 构造地区显示名解析器；运行时不支持时返回 null，由调用方回退 TMDB 原值。 */
+function createRegionDisplayNames(locale: string): Intl.DisplayNames | null {
+    try {
+        return new Intl.DisplayNames([locale], { type: 'region' });
+    } catch {
+        return null;
+    }
 }
 
 function normalizeLocale(raw: string | null): string {
