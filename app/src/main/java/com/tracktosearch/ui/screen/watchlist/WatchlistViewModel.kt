@@ -27,6 +27,10 @@ import com.tracktosearch.data.repository.DoubanWatchlistStatus
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.TmdbRepository
+import com.tracktosearch.data.repository.MediaKey
+import com.tracktosearch.data.repository.MediaMetadataRepository
+import com.tracktosearch.data.repository.MediaSummary
+import com.tracktosearch.data.repository.TitleSource
 import com.tracktosearch.data.repository.TraktWatchlistRecord
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.WatchlistMediaType
@@ -64,8 +68,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -201,13 +203,11 @@ private const val DOUBAN_STATUS_ITEMS_TTL_MS = 2_000L
 /** 已看历史剩余分页的并发上限：并发拉取但不把网关一次性打满。 */
 private const val HISTORY_PAGE_CONCURRENCY = 4
 
-/** 可见条目中文标题预取的并发上限：只补首屏可见项，避免恢复列表全量 N+1。 */
-private const val VISIBLE_TITLE_PREFETCH_CONCURRENCY = 3
-
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
+    private val mediaMetadataRepository: MediaMetadataRepository,
     private val offlineCacheManager: OfflineCacheManager,
     private val doubanSyncManager: DoubanSyncManager,
     private val doubanAuthStorage: DoubanAuthStorage,
@@ -250,10 +250,8 @@ class WatchlistViewModel @Inject constructor(
     private val loadedTraktShows = mutableListOf<MediaUiItem>()
     private val loadedTraktHistoryMovies = mutableListOf<MediaUiItem>()
     private val loadedTraktHistoryShows = mutableListOf<MediaUiItem>()
-    /** 可见条目中文标题预取的并发闸门（最多 3 个 TMDB 请求同时进行） */
-    private val visibleTitlePrefetchSemaphore = Semaphore(VISIBLE_TITLE_PREFETCH_CONCURRENCY)
-    /** 本会话已发起过本地化预取的条目 key（mediaType:tmdbId:语言），滚动往返不重复请求 */
-    private val prefetchedTitleKeys = ConcurrentHashMap.newKeySet<String>()
+    /** 本会话已发起过元数据摘要补全的条目 key，滚动往返不重复请求。 */
+    private val prefetchedMetadataKeys = ConcurrentHashMap.newKeySet<String>()
 
     /** 同步完成事件（UI 监听后自动弹出 DoubanSyncDialog 显示结果） */
     private val _syncCompleteEvent = MutableSharedFlow<Unit>()
@@ -985,17 +983,17 @@ class WatchlistViewModel @Inject constructor(
                 // 过滤掉本地已取消已看的电影（处理取消已看后 Trakt API 最终一致性延迟）
                 val locallyRemovedIds = traktRepository.getLocallyWatchlistOnlyTraktIds(MediaType.MOVIE)
                 val filteredItems = if (locallyRemovedIds.isNotEmpty()) dedupedItems.filter { it.movie.ids.trakt !in locallyRemovedIds } else dedupedItems
-                val deferredItems = filteredItems.map { item ->
-                    async {
-                        enrichMediaItem(
-                            traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
-                            title = item.movie.title, year = item.movie.year,
-                            imdbId = item.movie.ids.imdb, rating = item.movie.rating,
-                            listedAt = item.listed_at, isMovie = true
-                        )
+                val summaries = fetchSummaryMap(
+                    filteredItems.mapNotNull { item ->
+                        item.movie.ids.tmdb.takeIf { it > 0 }?.let { MediaKey("movie", it, tmdbRepository.currentLanguageTag()) }
                     }
+                )
+                val uiItems = filteredItems.map { item ->
+                    applySummaryToMovie(
+                        item,
+                        summaries[MediaKey("movie", item.movie.ids.tmdb, tmdbRepository.currentLanguageTag())]
+                    )
                 }
-                val uiItems = deferredItems.awaitAll()
                 _uiState.update { state ->
                     state.copy(
                         historyMovies = uiItems,
@@ -1066,17 +1064,17 @@ class WatchlistViewModel @Inject constructor(
                 // 过滤掉本地已取消已看的剧集（处理取消已看后 Trakt API 最终一致性延迟）
                 val locallyRemovedIds = traktRepository.getLocallyWatchlistOnlyTraktIds(MediaType.SHOW)
                 val filteredItems = if (locallyRemovedIds.isNotEmpty()) dedupedItems.filter { it.show.ids.trakt !in locallyRemovedIds } else dedupedItems
-                val deferredItems = filteredItems.map { item ->
-                    async {
-                        enrichMediaItem(
-                            traktId = item.show.ids.trakt, tmdbId = item.show.ids.tmdb,
-                            title = item.show.title, year = item.show.year,
-                            imdbId = item.show.ids.imdb, rating = item.show.rating,
-                            listedAt = item.listed_at, isMovie = false
-                        )
+                val summaries = fetchSummaryMap(
+                    filteredItems.mapNotNull { item ->
+                        item.show.ids.tmdb.takeIf { it > 0 }?.let { MediaKey("tv", it, tmdbRepository.currentLanguageTag()) }
                     }
+                )
+                val uiItems = filteredItems.map { item ->
+                    applySummaryToShow(
+                        item,
+                        summaries[MediaKey("tv", item.show.ids.tmdb, tmdbRepository.currentLanguageTag())]
+                    )
                 }
-                val uiItems = deferredItems.awaitAll().map { it.copy(mediaType = WatchlistMediaType.SHOW) }
                 _uiState.update { state ->
                     state.copy(
                         historyShows = uiItems,
@@ -1289,23 +1287,17 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 dedupedItems
             }
-            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
-            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
-            val uiItems = coroutineScope {
-                    items.map { item ->
-                        async {
-                            enrichMediaItem(
-                                traktId = item.movie.ids.trakt,
-                                tmdbId = item.movie.ids.tmdb,
-                                title = item.movie.title,
-                                year = item.movie.year,
-                                imdbId = item.movie.ids.imdb,
-                                rating = item.movie.rating,
-                                listedAt = item.listed_at,
-                                isMovie = true
-                            ).copy(mediaType = WatchlistMediaType.MOVIE)
-                        }
-                    }.awaitAll()
+            // 历史列表只走一次批量摘要；失败回退 Trakt 原文，不逐条回源 TMDB。
+            val summaries = fetchSummaryMap(
+                items.mapNotNull { item ->
+                    item.movie.ids.tmdb.takeIf { it > 0 }?.let { MediaKey("movie", it, tmdbRepository.currentLanguageTag()) }
+                }
+            )
+            val uiItems = items.map { item ->
+                applySummaryToMovie(
+                    item,
+                    summaries[MediaKey("movie", item.movie.ids.tmdb, tmdbRepository.currentLanguageTag())]
+                ).copy(mediaType = WatchlistMediaType.MOVIE)
             }
             replaceLoadedTraktItems(loadedTraktHistoryMovies, uiItems)
             val doubanItems = getDoubanWatchlistItems("collect", forceReload)
@@ -1352,23 +1344,17 @@ class WatchlistViewModel @Inject constructor(
             } else {
                 dedupedItems
             }
-            // 并发 enrich 保持结果顺序（map+awaitAll）：async 并发触发网络/缓存 suspend 即可获得并发收益，
-            // 在调用方上下文执行（runTest 调度器可确定性推进，避免真实线程池导致测试竞态；网络请求自行切换 IO）
-            val uiItems = coroutineScope {
-                    items.map { item ->
-                        async {
-                            enrichMediaItem(
-                                traktId = item.show.ids.trakt,
-                                tmdbId = item.show.ids.tmdb,
-                                title = item.show.title,
-                                year = item.show.year,
-                                imdbId = item.show.ids.imdb,
-                                rating = item.show.rating,
-                                listedAt = item.listed_at,
-                                isMovie = false
-                            ).copy(mediaType = WatchlistMediaType.SHOW)
-                        }
-                    }.awaitAll()
+            // 历史列表只走一次批量摘要；失败回退 Trakt 原文，不逐条回源 TMDB。
+            val summaries = fetchSummaryMap(
+                items.mapNotNull { item ->
+                    item.show.ids.tmdb.takeIf { it > 0 }?.let { MediaKey("tv", it, tmdbRepository.currentLanguageTag()) }
+                }
+            )
+            val uiItems = items.map { item ->
+                applySummaryToShow(
+                    item,
+                    summaries[MediaKey("tv", item.show.ids.tmdb, tmdbRepository.currentLanguageTag())]
+                ).copy(mediaType = WatchlistMediaType.SHOW)
             }
             replaceLoadedTraktItems(loadedTraktHistoryShows, uiItems)
             val doubanItems = getDoubanWatchlistItems("collect", forceReload)
@@ -1742,11 +1728,8 @@ class WatchlistViewModel @Inject constructor(
         val movie = item.movie
         val tmdbId = movie.ids.tmdb
         val title = movie.title.trim().ifEmpty { cached?.title.orEmpty() }
-        val displayTitle = if (tmdbId > 0) {
-            tmdbRepository.peekMovieLocalizedTitle(tmdbId)?.takeIf { it.isNotBlank() } ?: title
-        } else {
-            title
-        }
+        // 标题统一只由共享摘要决定；旧 TMDB 富化缓存不再抢占列表标题。
+        val displayTitle = title
         val genres = movie.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
         val posterUrl = movie.images.poster.firstOrNull()
             ?.takeIf { it.isNotBlank() }
@@ -1768,6 +1751,27 @@ class WatchlistViewModel @Inject constructor(
         )
     }
 
+    /** 用共享摘要补列表标题/海报/类型；Trakt 已有非空值优先，摘要只填空。 */
+    private fun applySummaryToMovie(
+        item: TraktWatchlistMovieItem,
+        summary: MediaSummary?
+    ): MediaUiItem {
+        val base = mapWatchlistMovie(item, null)
+        if (summary == null) return base
+        val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
+            base.displayTitle
+        } else {
+            summary.title.ifBlank { base.displayTitle }
+        }
+        return base.copy(
+            displayTitle = resolvedTitle,
+            year = base.year ?: summary.year,
+            genres = base.genres.ifBlank { summary.genres.joinToString(" · ") },
+            posterUrl = base.posterUrl
+                ?: summary.posterPath?.let { com.tracktosearch.data.remote.tmdb.TmdbImageUrls.W342 + it }
+        )
+    }
+
     private fun mapWatchlistShow(
         item: TraktWatchlistShowItem,
         cached: MediaUiItem?
@@ -1775,11 +1779,8 @@ class WatchlistViewModel @Inject constructor(
         val show = item.show
         val tmdbId = show.ids.tmdb
         val title = show.title.trim().ifEmpty { cached?.title.orEmpty() }
-        val displayTitle = if (tmdbId > 0) {
-            tmdbRepository.peekTvLocalizedTitle(tmdbId)?.takeIf { it.isNotBlank() } ?: title
-        } else {
-            title
-        }
+        // 标题统一只由共享摘要决定；旧 TMDB 富化缓存不再抢占列表标题。
+        val displayTitle = title
         val genres = show.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
         val posterUrl = show.images.poster.firstOrNull()
             ?.takeIf { it.isNotBlank() }
@@ -1798,6 +1799,27 @@ class WatchlistViewModel @Inject constructor(
             traktRating = show.rating,
             listedAt = item.listed_at,
             mediaType = WatchlistMediaType.SHOW
+        )
+    }
+
+    /** 用共享摘要补列表标题/海报/类型；Trakt 已有非空值优先，摘要只填空。 */
+    private fun applySummaryToShow(
+        item: TraktWatchlistShowItem,
+        summary: MediaSummary?
+    ): MediaUiItem {
+        val base = mapWatchlistShow(item, null)
+        if (summary == null) return base
+        val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
+            base.displayTitle
+        } else {
+            summary.title.ifBlank { base.displayTitle }
+        }
+        return base.copy(
+            displayTitle = resolvedTitle,
+            year = base.year ?: summary.year,
+            genres = base.genres.ifBlank { summary.genres.joinToString(" · ") },
+            posterUrl = base.posterUrl
+                ?: summary.posterPath?.let { com.tracktosearch.data.remote.tmdb.TmdbImageUrls.W342 + it }
         )
     }
 
@@ -1973,9 +1995,9 @@ class WatchlistViewModel @Inject constructor(
      *
      * 列表先用 Trakt 直出的原始标题秒出，这里只对真正出现在屏幕上的条目补本地化：
      * - 已有本地化标题缓存：零请求直接补显示（例如详情页刚补过中文名）；
-     * - 未命中缓存：请求 TMDB，并发不超过 [VISIBLE_TITLE_PREFETCH_CONCURRENCY]，
-     *   同一 (类型, tmdbId, 语言) 在本会话只请求一次；
-     * - 只写回 displayTitle 与离线快照，海报/评分/类型/年份继续用 Trakt 直出的值；
+     * - 未命中缓存：合并成一次 `/api/media/summaries` 批量请求，每批最多 20 条；
+     * - 同一 (类型, tmdbId, 语言) 在本会话只请求一次，绝不恢复逐条 TMDB 请求；
+     * - 标题只补 Trakt 原始标题，海报/类型/年份只填空，不覆盖已显示值；
      * - 已有非空豆瓣展示标题的条目不覆盖。
      *
      * 失败时保留 Trakt 原标题，不影响列表显示。
@@ -1983,54 +2005,68 @@ class WatchlistViewModel @Inject constructor(
     fun onVisibleWatchlistItemsChanged(items: List<MediaUiItem>) {
         if (items.isEmpty()) return
         val language = tmdbRepository.currentLanguageTag()
-        items.forEach { item ->
-            val isMovie = when (item.mediaType) {
-                WatchlistMediaType.MOVIE -> true
-                WatchlistMediaType.SHOW -> false
-                WatchlistMediaType.OTHER -> return@forEach
+        val candidates = items.mapNotNull { item ->
+            val mediaType = when (item.mediaType) {
+                WatchlistMediaType.MOVIE -> "movie"
+                WatchlistMediaType.SHOW -> "tv"
+                WatchlistMediaType.OTHER -> return@mapNotNull null
             }
-            // 纯豆瓣条目（无 Trakt 主键）不参与 Trakt 直出条目的本地化与快照写入
-            if (item.traktId <= 0 || item.tmdbId <= 0) return@forEach
-            // 当前展示的已不是 Trakt 原始标题（豆瓣标题或此前本地化结果）时不覆盖
+            if (item.traktId <= 0 || item.tmdbId <= 0) return@mapNotNull null
+            // 已显示非 Trakt 原始标题时不再覆盖，避免豆瓣标题或已本地化标题被回写。
             if (item.displayTitle.isNotBlank() && !item.displayTitle.equals(item.title, ignoreCase = true)) {
-                return@forEach
+                return@mapNotNull null
             }
-            val cachedTitle = if (isMovie) {
-                tmdbRepository.peekMovieLocalizedTitle(item.tmdbId)
-            } else {
-                tmdbRepository.peekTvLocalizedTitle(item.tmdbId)
+            val key = MediaKey(mediaType, item.tmdbId, language)
+            if (!prefetchedMetadataKeys.add(key.cacheKey())) return@mapNotNull null
+            key to item
+        }
+        if (candidates.isEmpty()) return
+        viewModelScope.launch {
+            val summaries = try {
+                mediaMetadataRepository.getSummaries(candidates.map { it.first })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
             }
-            if (!cachedTitle.isNullOrBlank()) {
-                viewModelScope.launch { applyVisibleLocalizedTitle(item, cachedTitle) }
-                return@forEach
-            }
-            val dedupKey = "${item.mediaType.name}:${item.tmdbId}:$language"
-            if (!prefetchedTitleKeys.add(dedupKey)) return@forEach
-            viewModelScope.launch {
-                visibleTitlePrefetchSemaphore.withPermit {
-                    val localizedTitle = try {
-                        if (isMovie) {
-                            tmdbRepository.enrichMovie(item.tmdbId, item.title, item.year).chineseTitle
-                        } else {
-                            tmdbRepository.enrichTv(item.tmdbId, item.title, item.year).chineseTitle
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        null
-                    }
-                    if (!localizedTitle.isNullOrBlank()) {
-                        applyVisibleLocalizedTitle(item, localizedTitle)
-                    }
-                }
+            summaries.forEach { summary ->
+                val item = candidates.firstOrNull {
+                    it.first.mediaType == summary.mediaType &&
+                        it.first.tmdbId == summary.tmdbId &&
+                        it.first.locale == summary.locale
+                }?.second ?: return@forEach
+                applyVisibleMetadata(item, summary)
             }
         }
     }
 
-    /** 把本地化标题写回当前列表条目与离线快照；只改 displayTitle，其余字段保持 Trakt 直出值。 */
-    private suspend fun applyVisibleLocalizedTitle(item: MediaUiItem, localizedTitle: String) {
-        val title = localizedTitle.trim()
-        if (title.isEmpty() || title.equals(item.title.trim(), ignoreCase = true)) return
+    /**
+     * 批量取共享摘要。
+     *
+     * 历史/豆瓣合并路径只允许一次批量请求，失败时返回空映射，由调用方回退 Trakt 原文，
+     * 不在这里按条目回退 TMDB，避免重新引入 N+1。
+     */
+    private suspend fun fetchSummaryMap(keys: List<MediaKey>): Map<MediaKey, MediaSummary> {
+        if (keys.isEmpty()) return emptyMap()
+        return try {
+            mediaMetadataRepository.getSummaries(keys)
+                .associateBy { summary ->
+                    MediaKey(summary.mediaType, summary.tmdbId, summary.locale)
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    /** 把共享摘要写回当前列表条目与离线快照；标题、海报和类型只补空缺，不覆盖已经显示的值。 */
+    private suspend fun applyVisibleMetadata(item: MediaUiItem, summary: MediaSummary) {
+        val title = if (summary.titleSource == TitleSource.NONE) {
+            ""
+        } else {
+            summary.title.trim()
+        }
         val isMovie = when (item.mediaType) {
             WatchlistMediaType.MOVIE -> true
             WatchlistMediaType.SHOW -> false
@@ -2050,9 +2086,26 @@ class WatchlistViewModel @Inject constructor(
                 if (entry.displayTitle.isNotBlank() && !entry.displayTitle.equals(entry.title, ignoreCase = true)) {
                     return@map entry
                 }
-                if (entry.displayTitle == title) return@map entry
+                val nextTitle = title.takeIf {
+                    it.isNotEmpty() && !it.equals(entry.title, ignoreCase = true)
+                } ?: entry.displayTitle
+                val nextPoster = entry.posterUrl
+                    ?: summary.posterPath?.let { com.tracktosearch.data.remote.tmdb.TmdbImageUrls.W342 + it }
+                val nextGenres = entry.genres.ifBlank { summary.genres.joinToString(" · ") }
+                val nextYear = entry.year ?: summary.year
+                if (
+                    nextTitle == entry.displayTitle &&
+                    nextPoster == entry.posterUrl &&
+                    nextGenres == entry.genres &&
+                    nextYear == entry.year
+                ) return@map entry
                 changed = true
-                entry.copy(displayTitle = title)
+                entry.copy(
+                    displayTitle = nextTitle,
+                    posterUrl = nextPoster,
+                    genres = nextGenres,
+                    year = nextYear
+                )
             }
             if (!changed) state
             else if (isMovie) state.copy(movies = updatedItems)
@@ -2060,7 +2113,6 @@ class WatchlistViewModel @Inject constructor(
         }
         val updatedItem = (if (isMovie) _uiState.value.movies else _uiState.value.shows)
             .firstOrNull { it.selectionKey == item.selectionKey } ?: return
-        if (updatedItem.displayTitle != title) return
         try {
             offlineCacheManager.saveMediaItem(cacheType, updatedItem.toMediaItemEntity(cacheType))
         } catch (e: CancellationException) {

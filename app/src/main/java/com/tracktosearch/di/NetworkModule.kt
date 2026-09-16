@@ -16,6 +16,7 @@ import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
+import com.tracktosearch.data.remote.media.MediaMetadataApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
@@ -217,6 +218,20 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(TmdbApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMediaMetadataApiService(
+        @Named("tmdb") okHttpClient: OkHttpClient,
+        json: Json
+    ): MediaMetadataApiService {
+        return Retrofit.Builder()
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/media/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(MediaMetadataApiService::class.java)
     }
 
     @Provides

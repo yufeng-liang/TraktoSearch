@@ -16,6 +16,7 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.MediaMetadataRepository
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
@@ -67,6 +68,7 @@ class DetailViewModelTest {
 
     // 14个 mock 依赖
     private lateinit var tmdbRepository: TmdbRepository
+    private lateinit var mediaMetadataRepository: MediaMetadataRepository
     private lateinit var traktRepository: TraktRepository
     private lateinit var resourceRepository: ResourceRepository
     private lateinit var ratingsRepository: RatingsRepository
@@ -97,6 +99,7 @@ class DetailViewModelTest {
 
         // 2. 创建所有 mock
         tmdbRepository = mockk(relaxed = true)
+        mediaMetadataRepository = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
         resourceRepository = mockk(relaxed = true)
         ratingsRepository = mockk(relaxed = true)
@@ -130,12 +133,13 @@ class DetailViewModelTest {
         coEvery {
             doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
         } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
+        coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns emptyList()
 
         // 4. resourceRepository.filterItems 默认返回空列表
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
-            tmdbRepository, traktRepository, resourceRepository, ratingsRepository,
+            tmdbRepository, mediaMetadataRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,

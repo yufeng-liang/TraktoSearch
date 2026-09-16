@@ -4,8 +4,8 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [MediaItemEntity::class, MediaDetailEntity::class, NotificationRecordEntity::class, DoubanSyncedItem::class, DoubanSyncFailureEntity::class, DoubanSyncPendingItemEntity::class, DoubanSyncRollbackEntity::class, DoubanConsistencyCheckRunEntity::class, DoubanConsistencyCheckTaskEntity::class, DoubanConsistencyConflictEntity::class, UserReviewEntity::class, MarkActionRecordEntity::class, DailyStampEntity::class, AiProfileSettingsEntity::class, AiProfileMediaEntity::class, AiProfileMediaSourceEntity::class, AiProfileBehaviorDailyEntity::class, AiProfileOutboxEntity::class, AiProfileSnapshotEntity::class],
-    version = 18,
+    entities = [MediaItemEntity::class, MediaDetailEntity::class, NotificationRecordEntity::class, DoubanSyncedItem::class, DoubanSyncFailureEntity::class, DoubanSyncPendingItemEntity::class, DoubanSyncRollbackEntity::class, DoubanConsistencyCheckRunEntity::class, DoubanConsistencyCheckTaskEntity::class, DoubanConsistencyConflictEntity::class, UserReviewEntity::class, MarkActionRecordEntity::class, DailyStampEntity::class, AiProfileSettingsEntity::class, AiProfileMediaEntity::class, AiProfileMediaSourceEntity::class, AiProfileBehaviorDailyEntity::class, AiProfileOutboxEntity::class, AiProfileSnapshotEntity::class, MediaMetadataEntity::class],
+    version = 19,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,4 +21,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun markActionRecordDao(): MarkActionRecordDao
     abstract fun dailyStampDao(): DailyStampDao
     abstract fun aiProfileDao(): AiProfileDao
+    abstract fun mediaMetadataDao(): MediaMetadataDao
 }

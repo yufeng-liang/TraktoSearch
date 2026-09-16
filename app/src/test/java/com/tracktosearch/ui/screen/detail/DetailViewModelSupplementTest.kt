@@ -23,6 +23,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReviewsResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.MediaMetadataRepository
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.ResourceQuery
@@ -74,6 +75,7 @@ class DetailViewModelSupplementTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var tmdbRepository: TmdbRepository
+    private lateinit var mediaMetadataRepository: MediaMetadataRepository
     private lateinit var traktRepository: TraktRepository
     private lateinit var resourceRepository: ResourceRepository
     private lateinit var ratingsRepository: RatingsRepository
@@ -103,6 +105,7 @@ class DetailViewModelSupplementTest {
         cache.clear()
 
         tmdbRepository = mockk(relaxed = true)
+        mediaMetadataRepository = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
         resourceRepository = mockk(relaxed = true)
         ratingsRepository = mockk(relaxed = true)
@@ -133,10 +136,11 @@ class DetailViewModelSupplementTest {
         coEvery {
             doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
         } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
+        coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns emptyList()
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
-            tmdbRepository, traktRepository, resourceRepository, ratingsRepository,
+            tmdbRepository, mediaMetadataRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,

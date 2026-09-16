@@ -18,6 +18,9 @@ import com.tracktosearch.data.remote.douban.DoubanRexxarPhoto
 import com.tracktosearch.data.remote.douban.DoubanRexxarPhotoPage
 import com.tracktosearch.data.remote.douban.DoubanRexxarRepository
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.MediaMetadataRepository
+import com.tracktosearch.data.repository.MediaSummary
+import com.tracktosearch.data.repository.TitleSource
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
@@ -57,6 +60,7 @@ class DetailViewModelDoubanTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var tmdbRepository: TmdbRepository
+    private lateinit var mediaMetadataRepository: MediaMetadataRepository
     private lateinit var traktRepository: TraktRepository
     private lateinit var resourceRepository: ResourceRepository
     private lateinit var ratingsRepository: RatingsRepository
@@ -86,6 +90,7 @@ class DetailViewModelDoubanTest {
         DetailSeedStore.clear()
 
         tmdbRepository = mockk(relaxed = true)
+        mediaMetadataRepository = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
         resourceRepository = mockk(relaxed = true)
         ratingsRepository = mockk(relaxed = true)
@@ -120,9 +125,12 @@ class DetailViewModelDoubanTest {
         coEvery {
             doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
         } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
+        every { mediaMetadataRepository.peekSummaryLocal(any()) } returns null
+        coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
             tmdbRepository,
+            mediaMetadataRepository,
             traktRepository,
             resourceRepository,
             ratingsRepository,
@@ -652,5 +660,47 @@ class DetailViewModelDoubanTest {
         assertThat(state.runtime).isEqualTo(100)
         assertThat(state.status).isEqualTo("Released")
         assertThat(state.displayTitle).isEqualTo("种子标题")
+    }
+
+    @Test
+    fun metadataSummaryNoneTitleFallsBackToTraktAndKeepsOverview() = runTest {
+        coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns listOf(
+            MediaSummary(
+                mediaType = "movie",
+                tmdbId = 557,
+                locale = "zh-CN",
+                title = "Original only",
+                originalTitle = "Original only",
+                overview = "摘要简介",
+                posterPath = null,
+                year = 2025,
+                genres = listOf("剧情"),
+                voteAverage = 7.0,
+                runtime = 100,
+                countries = listOf("中国"),
+                status = "Released",
+                imdbId = "tt-none",
+                collectionId = null,
+                titleSource = TitleSource.NONE
+            )
+        )
+        coEvery { doubanSyncedItemDao.getByImdbId(any()) } returns null
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery { doubanRepository.findDoubanId(any(), any(), any(), any()) } returns null
+        coEvery { traktRepository.getRelatedMovies(any()) } returns Result.success(emptyList())
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 557,
+            title = "Trakt 标题",
+            mediaType = MediaType.MOVIE,
+            imdbId = "tt-none"
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.displayTitle).isEqualTo("Trakt 标题")
+        assertThat(state.overview).isEqualTo("摘要简介")
+        assertThat(state.year).isEqualTo(2025)
     }
 }

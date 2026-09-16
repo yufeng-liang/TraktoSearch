@@ -30,8 +30,10 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
+import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionPart
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
+import com.tracktosearch.data.remote.tmdb.dto.TmdbImage
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
@@ -45,6 +47,12 @@ import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
+import com.tracktosearch.data.repository.MediaMetadataRepository
+import com.tracktosearch.data.repository.MediaSummary
+import com.tracktosearch.data.repository.MediaKey
+import com.tracktosearch.data.repository.MediaDetailBundle
+import com.tracktosearch.data.repository.MediaCollection
+import com.tracktosearch.data.repository.TitleSource
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionMode
@@ -308,6 +316,7 @@ private data class DoubanDetailSupplement(
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
+    private val mediaMetadataRepository: MediaMetadataRepository,
     private val traktRepository: TraktRepository,
     private val resourceRepository: ResourceRepository,
     private val ratingsRepository: RatingsRepository,
@@ -657,7 +666,9 @@ class DetailViewModel @Inject constructor(
         val seed = peekDetailSeed(tmdbId, mediaType, title, year)
         // 发现页等栏目的海报来自 TMDB 列表接口，不写详情缓存，peek 必然落空，靠卡片暂存兜底
         val cardSeed = if (seed?.posterUrl == null || year == null) DetailSeedStore.peek(tmdbId) else null
-        val seededPoster = seed?.posterUrl ?: seedPosterUrl ?: cardSeed?.posterUrl
+        // 列表卡片已经显示的 Trakt 海报优先；摘要海报只在首帧没有卡片海报时兜底，
+        // 避免进入详情第一帧就把用户刚看到的同一张卡片海报换成另一张图。
+        val seededPoster = seedPosterUrl ?: seed?.posterUrl ?: cardSeed?.posterUrl
         val seededYear = year ?: cardSeed?.year
         _uiState.value = DetailUiState(
             isLoading = true,
@@ -864,7 +875,10 @@ class DetailViewModel @Inject constructor(
             delayedLoadJob = viewModelScope.launch {
                 delay(1500)
                 if (visibility.recommendations) fetchRecommendations()
-                if (currentMediaType == MediaType.MOVIE && collectionId > 0) fetchCollection(collectionId)
+            }
+            // 系列信息不再延迟，避免 1.5s 后头部高度和系列标签再变化。
+            if (currentMediaType == MediaType.MOVIE && collectionId > 0) {
+                fetchCollection(collectionId)
             }
 
             // 预查 doubanId（异步，不阻塞 UI），用于用户标记时同步豆瓣
@@ -974,7 +988,10 @@ class DetailViewModel @Inject constructor(
                         ?: photo.smallUrl?.takeIf { it.isNotBlank() }
                 }.distinct().take(20)
                 if (urls.isNotEmpty() && currentDetailCacheKey == expectedKey && currentDoubanId == doubanId) {
-                    _uiState.value = _uiState.value.copy(backdrops = urls, videosError = false)
+                    val current = _uiState.value.backdrops
+                    // 剧照只追加不替换：来源异步返回顺序不构成排序依据，后到图片不能把首张挤走。
+                    val merged = (current + urls).distinct().take(40)
+                    _uiState.value = _uiState.value.copy(backdrops = merged, videosError = false)
                 }
             }
             // 豆瓣 rexxar 剧照请求失败(区别于空结果)且当前无任何视频/截图数据时置错误标志供 UI 重试；
@@ -1600,7 +1617,12 @@ class DetailViewModel @Inject constructor(
         if (currentTmdbId <= 0) return
         viewModelScope.launch {
             try {
-                val credits = tmdbRepository.getCredits(currentTmdbId, currentMediaType)
+                val bundle = mediaMetadataRepository.getDetail(
+                    currentMediaMetadataKey() ?: return@launch,
+                    setOf("credits")
+                )
+                val credits = bundle?.credits
+                    ?: tmdbRepository.getCredits(currentTmdbId, currentMediaType)
                 credits?.let {
                     // 按职位优先级排序：导演 > 编剧 > 制片人，去重
                     val priorityOrder = mapOf("Director" to 0, "Writer" to 1, "Producer" to 2, "Screenplay" to 1)
@@ -1632,16 +1654,27 @@ class DetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoadingVideosImages = true)
         viewModelScope.launch {
             try {
+                val bundle = mediaMetadataRepository.getDetail(
+                    currentMediaMetadataKey() ?: return@launch,
+                    setOf("videos", "images")
+                )
                 val videosDeferred = async {
-                    when (currentMediaType) {
-                        MediaType.MOVIE -> tmdbRepository.getMovieVideos(currentTmdbId)
-                        MediaType.SHOW -> tmdbRepository.getTvVideos(currentTmdbId)
-                        MediaType.PERSON -> emptyList()
-                        MediaType.DISK -> emptyList()
-                    }
+                    bundle?.videos ?: when (currentMediaType) {
+                            MediaType.MOVIE -> tmdbRepository.getMovieVideos(currentTmdbId)
+                            MediaType.SHOW -> tmdbRepository.getTvVideos(currentTmdbId)
+                            MediaType.PERSON -> emptyList()
+                            MediaType.DISK -> emptyList()
+                        }
                 }
                 val imagesDeferred = async {
-                    when (currentMediaType) {
+                    bundle?.images?.map { image ->
+                        TmdbImage(
+                            file_path = image.filePath,
+                            width = image.width ?: 0,
+                            height = image.height ?: 0,
+                            iso_639_1 = image.iso6391
+                        )
+                    } ?: when (currentMediaType) {
                         MediaType.MOVIE -> tmdbRepository.getMovieImages(currentTmdbId)
                         MediaType.SHOW -> tmdbRepository.getTvImages(currentTmdbId)
                         MediaType.PERSON -> emptyList()
@@ -1705,14 +1738,10 @@ class DetailViewModel @Inject constructor(
                     .filter { url -> backdropUrls.none { it.contains(url.substringAfterLast("/").substringBefore(".")) } }
                 backdropUrls.addAll(traktFanartUrls)
 
-                val currentDoubanBackdrops = _uiState.value.backdrops
                 _uiState.value = _uiState.value.copy(
                     videos = allVideos,
-                    backdrops = if (currentDoubanId != null && currentDoubanBackdrops.isNotEmpty()) {
-                        currentDoubanBackdrops
-                    } else {
-                        backdropUrls.take(20)
-                    },
+                    // TMDB/Trakt 与豆瓣并行返回，统一按“已有顺序优先、后到只追加”合并。
+                    backdrops = (_uiState.value.backdrops + backdropUrls).distinct().take(40),
                     isLoadingVideosImages = false,
                     videosError = false
                 )
@@ -3547,6 +3576,40 @@ class DetailViewModel @Inject constructor(
         title: String,
         year: Int?
     ): PreparedEnrichment? = runCatching {
+        val locale = tmdbRepository.currentLanguageTag()
+        val metadataKey = when (mediaType) {
+            MediaType.MOVIE -> MediaKey("movie", tmdbId, locale)
+            MediaType.SHOW -> MediaKey("tv", tmdbId, locale)
+            MediaType.PERSON, MediaType.DISK -> null
+        }
+        if (metadataKey != null) {
+            val summary = mediaMetadataRepository.getSummaries(listOf(metadataKey)).firstOrNull()
+            if (summary != null) {
+                val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
+                    title
+                } else {
+                    summary.title.ifBlank { title }
+                }
+                return@runCatching PreparedEnrichment(
+                    data = EnrichmentData(
+                        chineseTitle = resolvedTitle,
+                        originalTitle = summary.originalTitle,
+                        overview = summary.overview,
+                        genres = summary.genres.joinToString(" · "),
+                        posterUrl = summary.posterPath?.let { com.tracktosearch.data.remote.tmdb.TmdbImageUrls.W342 + it },
+                        year = summary.year ?: year,
+                        rating = summary.voteAverage ?: 0.0,
+                        runtime = summary.runtime,
+                        releaseDate = summary.year?.toString().orEmpty(),
+                        country = summary.countries.joinToString(" · "),
+                        status = summary.status
+                    ),
+                    rating = summary.voteAverage ?: 0.0,
+                    collectionId = summary.collectionId ?: 0,
+                    imdbId = summary.imdbId
+                )
+            }
+        }
         when (mediaType) {
             MediaType.MOVIE -> {
                 val e = tmdbRepository.enrichMovie(tmdbId, title, year)
@@ -3610,6 +3673,32 @@ class DetailViewModel @Inject constructor(
         year: Int?
     ): DetailSeed? {
         if (tmdbId <= 0) return null
+        val metadataKey = when (mediaType) {
+            MediaType.MOVIE -> MediaKey("movie", tmdbId, tmdbRepository.currentLanguageTag())
+            MediaType.SHOW -> MediaKey("tv", tmdbId, tmdbRepository.currentLanguageTag())
+            MediaType.PERSON, MediaType.DISK -> null
+        }
+        if (metadataKey != null) {
+            val summary = mediaMetadataRepository.peekSummaryLocal(metadataKey)
+            if (summary != null && summary.hasDisplayMetadata()) {
+                val displayTitle = if (summary.titleSource == TitleSource.NONE) {
+                    title
+                } else {
+                    summary.title.ifBlank { title }
+                }
+                return buildSeed(
+                    posterUrl = summary.posterPath?.let { TmdbImageUrls.W342 + it },
+                    chineseTitle = displayTitle,
+                    originalTitle = summary.originalTitle,
+                    genres = summary.genres.joinToString(" · "),
+                    releaseDate = summary.year?.toString().orEmpty(),
+                    country = summary.countries.joinToString(" · "),
+                    runtime = summary.runtime,
+                    status = summary.status,
+                    routeTitle = title
+                )
+            }
+        }
         return when (mediaType) {
             MediaType.MOVIE -> tmdbRepository.peekMovieEnrichment(tmdbId, title, year)?.let {
                 buildSeed(
@@ -3640,6 +3729,26 @@ class DetailViewModel @Inject constructor(
             MediaType.PERSON, MediaType.DISK -> null
         }
     }
+
+    /**
+     * 摘要是否含有可用于详情首帧的字段。
+     *
+     * 服务端异常、旧版本数据或 mock 都可能给出“对象存在但内容全空”的摘要；
+     * 这类值不能压过真实 TMDB 种子，否则首帧海报/日期会被空值覆盖。
+     */
+    private fun MediaSummary.hasDisplayMetadata(): Boolean =
+        title.isNotBlank() ||
+            originalTitle.isNotBlank() ||
+            overview.isNotBlank() ||
+            !posterPath.isNullOrBlank() ||
+            year != null ||
+            genres.isNotEmpty() ||
+            voteAverage != null ||
+            runtime != null ||
+            countries.isNotEmpty() ||
+            status.isNotBlank() ||
+            imdbId != null ||
+            collectionId != null
 
     /**
      * 组装种子。原名的取舍与 loadDetail 里的完整逻辑保持一致：
@@ -3708,11 +3817,27 @@ class DetailViewModel @Inject constructor(
     /** 获取系列信息 */
     private fun fetchCollection(collectionId: Int) {
         viewModelScope.launch {
-            val collection = tmdbRepository.getCollection(collectionId)
+            val bundle = mediaMetadataRepository.getDetail(
+                currentMediaMetadataKey() ?: return@launch,
+                setOf("collection")
+            )
+            val collection = bundle?.collection?.toTmdbCollection()
+                ?: tmdbRepository.getCollection(collectionId)
             if (collection != null) {
                 _uiState.value = _uiState.value.copy(collectionInfo = collection)
             }
         }
+    }
+
+    /** 详情页当前媒体对应的服务端共享缓存 key；人物/磁盘等无 TMDB 类型返回 null。 */
+    private fun currentMediaMetadataKey(): MediaKey? {
+        if (currentTmdbId <= 0) return null
+        val mediaType = when (currentMediaType) {
+            MediaType.MOVIE -> "movie"
+            MediaType.SHOW -> "tv"
+            MediaType.PERSON, MediaType.DISK -> return null
+        }
+        return MediaKey(mediaType, currentTmdbId, tmdbRepository.currentLanguageTag())
     }
 
     // 用 synchronized 包 markResourceViewed 读-改-写，避免快速多次点击丢状态（#12）
@@ -3836,6 +3961,25 @@ private fun DoubanRexxarShortComment.toTraktComment(): TraktComment {
         source = DOUBAN_COMMENT_SOURCE
     )
 }
+
+/** 把共享缓存里的系列模型适配为现有详情头部使用的 TMDB 模型。 */
+private fun MediaCollection.toTmdbCollection(): TmdbCollectionResponse = TmdbCollectionResponse(
+    id = id,
+    name = name,
+    overview = overview,
+    poster_path = posterPath,
+    backdrop_path = backdropPath,
+    parts = parts.map { part ->
+        TmdbCollectionPart(
+            id = part.tmdbId,
+            title = part.title,
+            original_title = part.originalTitle,
+            poster_path = part.posterPath,
+            release_date = part.releaseDate.orEmpty(),
+            vote_average = part.voteAverage ?: 0.0
+        )
+    }
+)
 
 /** 将 TMDB Review 转换为统一的 TraktComment 格式 */
 private fun TmdbReview.toTraktComment(): TraktComment {
