@@ -1084,6 +1084,51 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `旧链路遗留的别名标题会被共享摘要校正`() = runTest {
+        // 冷启动快照里可能是旧版本写下的 TMDB 别名「急速天劫」，
+        // 共享摘要里的 TMDB 详情标题是「空中营救」，列表必须收敛到同一片名。
+        val staleSnapshot = MediaItemEntity(
+            traktId = 1,
+            tmdbId = 225574,
+            type = OfflineCacheManager.TYPE_WATCHLIST_MOVIE,
+            title = "Non-Stop",
+            displayTitle = "急速天劫",
+            year = 2014,
+            genres = "",
+            posterUrl = "https://img.example/stale.jpg",
+            imdbId = "tt2024469",
+            traktRating = 8.0,
+            listedAt = "2024-01-01T00:00:00Z"
+        )
+        coEvery { offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) } returns
+            listOf(staleSnapshot)
+        // 真机冷启动常见路径：增量活动时间未变化，直接沿用离线快照、不发列表请求
+        coEvery { traktRepository.resolveWatchlistRefreshPlan(any()) } returns
+            TraktRepository.WatchlistRefreshPlan(
+                shouldRefreshMovies = false,
+                shouldRefreshShows = false,
+                activitiesAvailable = true
+            )
+        coEvery { traktRepository.savedWatchlistTotal(MediaType.MOVIE) } returns 1
+        coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns listOf(
+            mediaSummary("movie", 225574, title = "空中营救")
+        )
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.single().displayTitle).isEqualTo("急速天劫")
+
+        viewModel.onVisibleWatchlistItemsChanged(viewModel.uiState.value.movies)
+        advanceUntilIdle()
+
+        val item = viewModel.uiState.value.movies.single()
+        assertThat(item.displayTitle).isEqualTo("空中营救")
+        assertThat(item.posterUrl).isEqualTo("https://img.example/stale.jpg")
+        coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
+        coVerify(exactly = 0) { traktRepository.getMovieWatchlist(any(), any(), any()) }
+    }
+
+    @Test
     fun `只预取通知的可见条目`() = runTest {
         val visible = makeWatchlistMovie(1, title = "Visible", tmdb = 101)
         val offscreen = makeWatchlistMovie(2, title = "Offscreen", tmdb = 202)

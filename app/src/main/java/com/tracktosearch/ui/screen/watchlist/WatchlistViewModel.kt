@@ -2012,8 +2012,11 @@ class WatchlistViewModel @Inject constructor(
                 WatchlistMediaType.OTHER -> return@mapNotNull null
             }
             if (item.traktId <= 0 || item.tmdbId <= 0) return@mapNotNull null
-            // 已显示非 Trakt 原始标题时不再覆盖，避免豆瓣标题或已本地化标题被回写。
-            if (item.displayTitle.isNotBlank() && !item.displayTitle.equals(item.title, ignoreCase = true)) {
+            // 纯豆瓣承载条目(无 TMDB 映射)没有共享摘要可校正，保留本地标题；
+            // 其余条目的 displayTitle 只作为摘要注意力缺失时的兜底。
+            // 旧链路缓存的别名标题(如「急速天劫」)必须允许被共享摘要的
+            // TMDB 详情标题覆盖，否则列表与详情会永久显示两个不同片名。
+            if (item.traktId <= 0 && item.doubanId != null) {
                 return@mapNotNull null
             }
             val key = MediaKey(mediaType, item.tmdbId, language)
@@ -2091,8 +2094,8 @@ class WatchlistViewModel @Inject constructor(
             var changed = false
             val updatedItems = currentItems.map { entry ->
                 if (entry.selectionKey != item.selectionKey) return@map entry
-                // 本条已换成别的标题（豆瓣标题 / 已本地化）时不再覆盖
-                if (entry.displayTitle.isNotBlank() && !entry.displayTitle.equals(entry.title, ignoreCase = true)) {
+                // 纯豆瓣承载条目(无 Trakt/TMDB 映射)保留自身标题，避免被 TMDB 摘要覆盖。
+                if (entry.traktId <= 0 && entry.doubanId != null) {
                     return@map entry
                 }
                 val nextTitle = title.takeIf {
