@@ -64,6 +64,12 @@ export async function onRequest(context) {
             if (cached) {
                 const headers = new Headers(cached.headers);
                 headers.set('X-Gateway-Cache', 'HIT');
+                // 边缘命中后，响应里保存的 X-Media-Cache 只是首次回源时的值；
+                // 明确覆盖为 EDGE，避免把旧 MISS/D1 当成当前请求的真实缓存状态。
+                headers.set('X-Media-Cache', 'EDGE');
+                if (!headers.has('X-Media-Partial')) {
+                    headers.set('X-Media-Partial', 'false');
+                }
                 // 缓存条目里存的是边缘 TTL；回给客户端时仍按「客户端不缓存」处理（App 有自建缓存层）
                 headers.set('Cache-Control', 'public, max-age=0');
                 return new Response(cached.body, {
@@ -140,7 +146,11 @@ export async function onRequest(context) {
             headers: responseHeaders,
         });
 
-        if (cache && cacheKey && cachePlan && upstream.status === 200) {
+        // 只有存在真实回源失败时才跳过共享边缘缓存；纯缓存混合命中不算 partial。
+        const mediaPartial = upstreamPath.startsWith('/api/media/') &&
+            response.headers.get('X-Media-Partial') === 'true';
+        const canCacheUpstream = cachePlan && upstream.status === 200 && !mediaPartial;
+        if (cache && cacheKey && cachePlan && canCacheUpstream) {
             // 写入边缘缓存的条目单独覆盖 TTL：Workers Cache API 的 put() 只识别
             // Cache-Control（不识别 CDN-Cache-Control），且 max-age=0 / no-store 的响应会被拒绝写入。
             // 因此条目用 cachePlan 的 TTL，回给客户端的头仍保持 max-age=0。
@@ -183,6 +193,8 @@ function getPublicCachePlan(request, path) {
     if (hasUserScopedQuery(request.url) || hasUserScopedPath(path)) return null;
 
     if (path.startsWith('/api/tmdb/')) return { ttlSeconds: 600 };
+    if (path === '/api/media/summaries') return { ttlSeconds: 3600 };
+    if (path === '/api/media/detail') return { ttlSeconds: 21600 };
     if (path.startsWith('/api/douban/')) return { ttlSeconds: 300 };
     if (path.startsWith('/api/omdb/')) return { ttlSeconds: 600 };
 

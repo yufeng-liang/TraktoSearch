@@ -20,6 +20,14 @@ binding = "DB"
 database_name = "auth-db"
 database_id = "f8db6c43-7fbe-4747-a7b7-364a5ea09d30"
 
+# 公开影视元数据共享缓存：摘要/索引走独立 D1，避免和认证库争用单线程写入。
+[[d1_databases]]
+binding = "MEDIA_DB"
+database_name = "media-db"
+database_id = "a8654585-b15a-4d90-8cb8-7b6a917aac87"
+# media-db 只使用独立媒体迁移目录，避免默认读取 auth-worker/migrations 下的认证表结构。
+migrations_dir = "migrations/media"
+
 # KV 缓存（限流/撤销短缓存/激活挑战）
 [[kv_namespaces]]
 binding = "KV"
@@ -75,6 +83,11 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 [[r2_buckets]]
 binding = "AI_AUDIO_CACHE"
 bucket_name = "tracktosearch-ai-audio"
+
+# 公开影视元数据大块 section（演职员/视频/剧照/相似推荐/系列）。
+[[r2_buckets]]
+binding = "MEDIA_CACHE"
+bucket_name = "tracktosearch-media-cache"
 
 [vars]
 ENVIRONMENT = "production"

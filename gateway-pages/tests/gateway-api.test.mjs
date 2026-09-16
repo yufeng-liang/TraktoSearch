@@ -216,6 +216,117 @@ test('does not share cache between different query parameters', async () => {
     }
 });
 
+test('caches normalized media metadata endpoints with dedicated public TTLs', async () => {
+    const calls = [];
+    const entries = new Map();
+    const originalCaches = globalThis.caches;
+    globalThis.caches = {
+        default: {
+            async match(request) {
+                return entries.get(request.url);
+            },
+            async put(request, response) {
+                entries.set(request.url, response);
+            },
+        },
+    };
+
+    try {
+        const env = { AUTH_WORKER: serviceBinding(calls, { data: { ok: true } }) };
+        await onRequest(contextFor('/gateway-api/api/media/summaries?locale=zh-CN&ids=movie:550', {}, env));
+        await onRequest(contextFor('/gateway-api/api/media/detail?type=movie&id=550&locale=zh-CN&sections=credits', {}, env));
+
+        assert.equal(calls.length, 2);
+        const summaryEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/media/summaries?locale=zh-CN&ids=movie:550');
+        const detailEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/media/detail?type=movie&id=550&locale=zh-CN&sections=credits');
+        assert.equal(summaryEntry.headers.get('Cache-Control'), 'public, max-age=3600');
+        assert.equal(detailEntry.headers.get('Cache-Control'), 'public, max-age=21600');
+    } finally {
+        globalThis.caches = originalCaches;
+    }
+});
+
+test('does not edge-cache partial normalized media responses', async () => {
+    const calls = [];
+    const entries = new Map();
+    const originalCaches = globalThis.caches;
+    globalThis.caches = {
+        default: {
+            async match(request) {
+                return entries.get(request.url);
+            },
+            async put(request, response) {
+                entries.set(request.url, response);
+            },
+        },
+    };
+
+    try {
+        const partialBinding = {
+            fetch: async (request) => {
+                calls.push(request);
+                return new Response(JSON.stringify({
+                    code: 'SUCCESS',
+                    data: { items: [], missing: ['movie:550'], partial: true },
+                }), {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Media-Cache': 'D1',
+                        'X-Media-Partial': 'true',
+                    },
+                });
+            },
+        };
+        const response = await onRequest(contextFor(
+            '/gateway-api/api/media/summaries?locale=zh-CN&ids=movie:550',
+            {},
+            { AUTH_WORKER: partialBinding },
+        ));
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 1);
+        assert.equal(entries.size, 0);
+    } finally {
+        globalThis.caches = originalCaches;
+    }
+});
+
+test('edge cache hit exposes X-Media-Cache EDGE instead of stale upstream header', async () => {
+    const originalCaches = globalThis.caches;
+    const entries = new Map();
+    globalThis.caches = {
+        default: {
+            async match(request) {
+                return entries.get(request.url);
+            },
+            async put(request, response) {
+                entries.set(request.url, response);
+            },
+        },
+    };
+
+    try {
+        const response = await onRequest(contextFor(
+            '/gateway-api/api/media/summaries?locale=zh-CN&ids=movie:550',
+            {},
+            { AUTH_WORKER: serviceBinding([], { data: { ok: true } }) },
+        ));
+        const cachedResponse = await onRequest(contextFor(
+            '/gateway-api/api/media/summaries?locale=zh-CN&ids=movie:550',
+            {},
+            { AUTH_WORKER: serviceBinding([], { data: { ok: true } }) },
+        ));
+
+        assert.equal(response.headers.get('X-Gateway-Cache'), 'MISS');
+        assert.equal(cachedResponse.headers.get('X-Gateway-Cache'), 'HIT');
+        assert.equal(cachedResponse.headers.get('X-Media-Cache'), 'EDGE');
+        assert.equal(cachedResponse.headers.get('X-Media-Partial'), 'false');
+    } finally {
+        globalThis.caches = originalCaches;
+    }
+});
+
 test('returns a clear unavailable response when the selected service binding is missing', async () => {
     const response = await onRequest(contextFor('/gateway-api/api/auth/check'));
 

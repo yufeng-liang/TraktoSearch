@@ -27,6 +27,7 @@ import {
     updateFriend,
 } from './admin/admin';
 import { handleTmdbProxy } from './proxy/tmdb';
+import { handleMediaDetail, handleMediaSummaries } from './proxy/media-cache';
 import { handleTraktProxy, handleTraktOAuth, handleTraktPublicProxy } from './proxy/trakt';
 import { isTraktPublicPath } from './proxy/trakt-token';
 import { handleDoubanProxy } from './proxy/douban';
@@ -50,6 +51,7 @@ import { handleAiAudio } from './ai/tts';
 export interface Env {
     [key: string]: unknown;
     DB: D1Database;
+    MEDIA_DB: D1Database;
     KV: KVNamespace;
     CRASH_LOGS: KVNamespace;
     DOUBAN_WORKER: Fetcher;
@@ -91,6 +93,8 @@ export interface Env {
     AI_AUDIO_CACHE?: R2Bucket;
     // 可选概念插图专用 R2 绑定；未配置时代码复用 AI_AUDIO_CACHE。
     AI_IMAGE_CACHE?: R2Bucket;
+    // 公开影视元数据大块 section 的共享缓存。
+    MEDIA_CACHE: R2Bucket;
 }
 
 export default {
@@ -278,6 +282,13 @@ async function handleAuthApi(
     // TMDB —— 电影/剧集元数据、搜索、海报等全为公开数据
     if (path.startsWith('/api/tmdb/') && request.method === 'GET') {
         return handleTmdbProxy(request, env, path);
+    }
+    // 归一化影视元数据：批量摘要与按需详情扩展，跨用户共享 D1/R2 持久化缓存。
+    if (path === '/api/media/summaries' && request.method === 'GET') {
+        return handleMediaSummaries(request, env, ctx);
+    }
+    if (path === '/api/media/detail' && request.method === 'GET') {
+        return handleMediaDetail(request, env, ctx);
     }
     // OMDb —— 评分等公开数据
     if (path.startsWith('/api/omdb/') && request.method === 'GET') {
