@@ -23,6 +23,8 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReviewsResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.MediaKey
+import com.tracktosearch.data.repository.MediaDetailBundle
 import com.tracktosearch.data.repository.MediaMetadataRepository
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
@@ -40,6 +42,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -939,6 +942,91 @@ class DetailViewModelSupplementTest {
         val cachedState = DetailUiState(watchlistAddedRevision = 7L)
 
         assertThat(cachedState.withoutTransientSceneState().watchlistAddedRevision).isEqualTo(0L)
+    }
+
+    @Test
+    fun 快速切页时旧详情的演职员响应不回写当前详情() = runTest {
+        val releaseFirstCredits = CompletableDeferred<Unit>()
+        val firstCredits = com.tracktosearch.data.remote.tmdb.dto.TmdbCreditsResponse(
+            cast = listOf(
+                com.tracktosearch.data.remote.tmdb.dto.TmdbCast(
+                    id = 1,
+                    name = "第一部影片演员",
+                    character = "旧角色",
+                    profile_path = null,
+                    order = 0
+                )
+            ),
+            crew = emptyList()
+        )
+        val secondCredits = com.tracktosearch.data.remote.tmdb.dto.TmdbCreditsResponse(
+            cast = listOf(
+                com.tracktosearch.data.remote.tmdb.dto.TmdbCast(
+                    id = 2,
+                    name = "第二部影片演员",
+                    character = "新角色",
+                    profile_path = null,
+                    order = 0
+                )
+            ),
+            crew = emptyList()
+        )
+        every { tmdbRepository.currentLanguageTag() } returns "zh-CN"
+        // relaxed mock 对泛型集合返回 null 强转会抛 ClassCastException，显式给出空结果
+        coEvery { traktRepository.getVideos(any(), any()) } returns Result.success(emptyList())
+        coEvery { traktRepository.getImages(any(), any()) } returns
+            Result.success(com.tracktosearch.data.remote.trakt.dto.TraktImages())
+        coEvery { traktRepository.getRelatedMovies(any(), any()) } returns Result.success(emptyList())
+        coEvery { tmdbRepository.getSimilarMovies(any()) } returns emptyList()
+        coEvery { tmdbRepository.getMovieVideos(any()) } returns emptyList()
+        coEvery { tmdbRepository.getMovieImages(any()) } returns emptyList()
+        every { mediaMetadataRepository.peekSummaryLocal(any()) } returns null
+        coEvery { mediaMetadataRepository.getCachedSummary(any()) } returns null
+        coEvery { mediaMetadataRepository.getDetail(any(), any(), any()) } coAnswers {
+            val key = firstArg<MediaKey>()
+            when (key.tmdbId) {
+                101 -> {
+                    releaseFirstCredits.await()
+                    MediaDetailBundle(credits = firstCredits)
+                }
+                202 -> MediaDetailBundle(credits = secondCredits)
+                else -> null
+            }
+        }
+
+        // 第一部详情：演职员请求挂起，模拟网络慢
+        viewModel.loadDetail(
+            traktId = 1,
+            tmdbId = 101,
+            title = "第一部",
+            mediaType = MediaType.MOVIE
+        )
+        advanceUntilIdle()
+        val staleDetailKey = getPrivateField("currentDetailCacheKey")
+
+        // 用户立刻切到第二部
+        viewModel.loadDetail(
+            traktId = 2,
+            tmdbId = 202,
+            title = "第二部",
+            mediaType = MediaType.MOVIE
+        )
+        advanceUntilIdle()
+        assertThat(getPrivateField("currentDetailCacheKey")).isNotEqualTo(staleDetailKey)
+        assertThat(viewModel.uiState.value.cast.map { it.name }).containsExactly("第二部影片演员")
+
+        // 旧请求此刻才返回，必须被丢弃
+        releaseFirstCredits.complete(Unit)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.cast.map { it.name }).containsExactly("第二部影片演员")
+        assertThat(viewModel.uiState.value.cast.map { it.name }).doesNotContain("第一部影片演员")
+    }
+
+    private fun getPrivateField(fieldName: String): Any? {
+        val field = DetailViewModel::class.java.getDeclaredField(fieldName)
+        field.isAccessible = true
+        return field.get(viewModel)
     }
 
     private fun setupDoubanBackedTraktDetail(userRating: Int? = null) {
