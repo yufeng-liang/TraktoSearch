@@ -103,6 +103,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.glassSceneForContent
+import com.tracktosearch.ui.component.localizedGenreName
 import com.tracktosearch.ui.component.backdropSource
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
@@ -859,42 +860,7 @@ private fun SectionCard(
     StatsSectionCard(title = title, content = content)
 }
 
-@Composable
-internal fun localizedGenreName(genre: String): String = when (genre) {
-    "action" -> stringResource(R.string.genre_action)
-    "adventure" -> stringResource(R.string.genre_adventure)
-    "animation" -> stringResource(R.string.genre_animation)
-    "anime" -> stringResource(R.string.genre_anime)
-    "comedy" -> stringResource(R.string.genre_comedy)
-    "crime" -> stringResource(R.string.genre_crime)
-    "documentary" -> stringResource(R.string.genre_documentary)
-    "drama" -> stringResource(R.string.genre_drama)
-    "fantasy" -> stringResource(R.string.genre_fantasy)
-    "history" -> stringResource(R.string.genre_history)
-    "horror" -> stringResource(R.string.genre_horror)
-    "music" -> stringResource(R.string.genre_music)
-    "musical" -> stringResource(R.string.genre_musical)
-    "mystery" -> stringResource(R.string.genre_mystery)
-    "romance" -> stringResource(R.string.genre_romance)
-    "science-fiction", "science_fiction", "sci-fi", "scifi" -> stringResource(R.string.genre_scifi)
-    "sport" -> stringResource(R.string.genre_sport)
-    "thriller" -> stringResource(R.string.genre_thriller)
-    "war" -> stringResource(R.string.genre_war)
-    "western" -> stringResource(R.string.genre_western)
-    "family" -> stringResource(R.string.genre_family)
-    "children", "kids" -> stringResource(R.string.genre_kids)
-    "news" -> stringResource(R.string.genre_news)
-    "reality" -> stringResource(R.string.genre_reality)
-    "soap" -> stringResource(R.string.genre_soap)
-    "talk", "talk_show" -> stringResource(R.string.genre_talk)
-    "espionage", "spy" -> stringResource(R.string.genre_spy)
-    "superhero" -> stringResource(R.string.genre_superhero)
-    "biography" -> stringResource(R.string.genre_biography)
-    "film-noir", "film_noir", "noir" -> stringResource(R.string.genre_noir)
-    "game-show", "game_show" -> stringResource(R.string.genre_game_show)
-    "other" -> stringResource(R.string.genre_other)
-    else -> genre.replaceFirstChar { it.uppercase() }
-}
+// localizedGenreName 已抽到 ui.component.GenreLabels，与看单筛选弹窗共用同一套翻译
 
 /** 饼图/图例配色：统一走 8 色暖调分析色板，与词云、类型排行同一套 */
 private const val PIE_MAX_SLICES = ANALYTICS_PALETTE_SIZE

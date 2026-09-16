@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.localizedGenreName
 
 /**
  * Hero 的四段文案：标签 / 大数字 / 单位 / 一句话。
