@@ -17,6 +17,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktSyncResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.repository.BatchRemovalProgress
 import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.DoubanBatchRemovalManager
@@ -123,6 +124,7 @@ class WatchlistViewModelTest {
         every { doubanBatchRemovalManager.progress } returns batchRemovalProgressFlow
         every { sessionModeManager.isDoubanMode } returns MutableStateFlow(false)
         every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
+        every { sessionModeManager.traktConnectionState } returns MutableStateFlow(TraktConnectionState.DISCONNECTED)
         // 默认覆盖 Trakt 看单用例；访客模式由专门用例显式设置，避免测试夹具跳过实际加载路径。
         every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.TRAKT)
         every { doubanAuthStorage.isLoggedIn } returns MutableStateFlow(false)

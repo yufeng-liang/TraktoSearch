@@ -227,6 +227,9 @@ class WatchlistViewModel @Inject constructor(
     val isDoubanMode: StateFlow<Boolean> = sessionModeManager.isDoubanMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val traktConnectionState: StateFlow<com.tracktosearch.data.remote.trakt.TraktConnectionState> =
+        sessionModeManager.traktConnectionState
+
     val isTraktConnected: StateFlow<Boolean> = sessionModeManager.traktConnected
     val isDoubanLoggedInFlow: StateFlow<Boolean> = doubanAuthStorage.isLoggedIn
 
@@ -631,10 +634,12 @@ class WatchlistViewModel @Inject constructor(
                 loadMoviesWithDouban(forceReload, silent, loadAllPages, page, plan)
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(
-                isLoadingMovies = if (loadMore || !silent) true else _uiState.value.isLoadingMovies,
-                moviesError = if (silent) _uiState.value.moviesError else null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    isLoadingMovies = if (loadMore || !silent) true else state.isLoadingMovies,
+                    moviesError = if (silent) state.moviesError else null
+                )
+            }
             if (!loadMore) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
@@ -649,12 +654,14 @@ class WatchlistViewModel @Inject constructor(
                     val newSignature = items.map { it.movie.ids.trakt to it.listed_at }
                     val oldSignature = _uiState.value.movies.map { it.traktId to it.listedAt }
                     if (newSignature == oldSignature) {
-                        _uiState.value = _uiState.value.copy(
-                            movieTotalCount = totalCount,
-                            isLoadingMovies = false,
-                            hasMoreMovies = _uiState.value.moviePage < totalPages,
-                            moviePage = page + 1
-                        )
+                        _uiState.update { state ->
+                            state.copy(
+                                movieTotalCount = totalCount,
+                                isLoadingMovies = false,
+                                hasMoreMovies = state.moviePage < totalPages,
+                                moviePage = page + 1
+                            )
+                        }
                         if (loadAllPages && page < totalPages) {
                             loadMovies(forceReload = true, silent = true, loadAllPages = true)
                         }
@@ -687,15 +694,17 @@ class WatchlistViewModel @Inject constructor(
                 } else {
                     (_uiState.value.movies + uiItems).distinctBy { it.selectionKey }
                 }.sortedWith(watchlistListedAtComparator())
-                _uiState.value = _uiState.value.copy(
-                    movies = mergedMovies,
-                    movieTotalCount = totalCount,
-                    isLoadingMovies = false,
-                    moviesLoaded = true,
-                    hasMoreMovies = page < totalPages,
-                    moviesError = null,
-                    moviePage = page + 1
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        movies = mergedMovies,
+                        movieTotalCount = totalCount,
+                        isLoadingMovies = false,
+                        moviesLoaded = true,
+                        hasMoreMovies = page < totalPages,
+                        moviesError = null,
+                        moviePage = page + 1
+                    )
+                }
                 applyPendingWatchlistMutations(MediaType.MOVIE)
                 if (loadAllPages && page < totalPages) {
                     loadMovies(forceReload = true, silent = true, loadAllPages = true)
@@ -703,15 +712,17 @@ class WatchlistViewModel @Inject constructor(
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
-                _uiState.value = _uiState.value.copy(
-                    isLoadingMovies = false,
-                    moviesLoaded = true,
-                    movies = if (loadMore) _uiState.value.movies
-                    else if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() }
-                    else _uiState.value.movies,
-                    movieTotalCount = _uiState.value.movieTotalCount ?: cached.size.takeIf { it > 0 },
-                    moviesError = if (loadMore || cached.isEmpty()) e.toUserMessage(context, R.string.error_load_failed) else null
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        isLoadingMovies = false,
+                        moviesLoaded = true,
+                        movies = if (loadMore) state.movies
+                        else if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() }
+                        else state.movies,
+                        movieTotalCount = state.movieTotalCount ?: cached.size.takeIf { it > 0 },
+                        moviesError = if (loadMore || cached.isEmpty()) e.toUserMessage(context, R.string.error_load_failed) else null
+                    )
+                }
             }
         }
     }
@@ -778,10 +789,12 @@ class WatchlistViewModel @Inject constructor(
                 loadShowsWithDouban(forceReload, silent, loadAllPages, page, plan)
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(
-                isLoadingShows = if (loadMore || !silent) true else _uiState.value.isLoadingShows,
-                showsError = if (silent) _uiState.value.showsError else null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    isLoadingShows = if (loadMore || !silent) true else state.isLoadingShows,
+                    showsError = if (silent) state.showsError else null
+                )
+            }
             if (!loadMore) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
@@ -796,12 +809,14 @@ class WatchlistViewModel @Inject constructor(
                     val newSignature = items.map { it.show.ids.trakt to it.listed_at }
                     val oldSignature = _uiState.value.shows.map { it.traktId to it.listedAt }
                     if (newSignature == oldSignature) {
-                        _uiState.value = _uiState.value.copy(
-                            showTotalCount = totalCount,
-                            isLoadingShows = false,
-                            hasMoreShows = _uiState.value.showPage < totalPages,
-                            showPage = page + 1
-                        )
+                        _uiState.update { state ->
+                            state.copy(
+                                showTotalCount = totalCount,
+                                isLoadingShows = false,
+                                hasMoreShows = state.showPage < totalPages,
+                                showPage = page + 1
+                            )
+                        }
                         if (loadAllPages && page < totalPages) {
                             loadShows(forceReload = true, silent = true, loadAllPages = true)
                         }
@@ -837,15 +852,17 @@ class WatchlistViewModel @Inject constructor(
                 } else {
                     (_uiState.value.shows + uiItems).distinctBy { it.selectionKey }
                 }.sortedWith(watchlistListedAtComparator())
-                _uiState.value = _uiState.value.copy(
-                    shows = mergedShows,
-                    showTotalCount = totalCount,
-                    isLoadingShows = false,
-                    showsLoaded = true,
-                    hasMoreShows = page < totalPages,
-                    showsError = null,
-                    showPage = page + 1
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        shows = mergedShows,
+                        showTotalCount = totalCount,
+                        isLoadingShows = false,
+                        showsLoaded = true,
+                        hasMoreShows = page < totalPages,
+                        showsError = null,
+                        showPage = page + 1
+                    )
+                }
                 applyPendingWatchlistMutations(MediaType.SHOW)
                 if (loadAllPages && page < totalPages) {
                     loadShows(forceReload = true, silent = true, loadAllPages = true)
@@ -853,15 +870,17 @@ class WatchlistViewModel @Inject constructor(
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
-                _uiState.value = _uiState.value.copy(
-                    isLoadingShows = false,
-                    showsLoaded = true,
-                    shows = if (loadMore) _uiState.value.shows
-                    else if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() }
-                    else _uiState.value.shows,
-                    showTotalCount = _uiState.value.showTotalCount ?: cached.size.takeIf { it > 0 },
-                    showsError = if (loadMore || cached.isEmpty()) e.toUserMessage(context, R.string.error_load_failed) else null
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        isLoadingShows = false,
+                        showsLoaded = true,
+                        shows = if (loadMore) state.shows
+                        else if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() }
+                        else state.shows,
+                        showTotalCount = state.showTotalCount ?: cached.size.takeIf { it > 0 },
+                        showsError = if (loadMore || cached.isEmpty()) e.toUserMessage(context, R.string.error_load_failed) else null
+                    )
+                }
             }
         }
     }
@@ -881,14 +900,16 @@ class WatchlistViewModel @Inject constructor(
                 }
                 else -> Unit
             }
-            _uiState.value = _uiState.value.copy(
-                othersError = if (silent) _uiState.value.othersError else null,
-                others = emptyList(),
-                othersLoaded = true,
-                otherTotalCount = 0,
-                hasMoreOthers = false,
-                isLoadingOthers = false
-            )
+            _uiState.update { state ->
+                state.copy(
+                    othersError = if (silent) state.othersError else null,
+                    others = emptyList(),
+                    othersLoaded = true,
+                    otherTotalCount = 0,
+                    hasMoreOthers = false,
+                    isLoadingOthers = false
+                )
+            }
         }
     }
 
@@ -945,17 +966,19 @@ class WatchlistViewModel @Inject constructor(
                 loadHistoryMoviesWithDouban(forceReload)
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(
-                isLoadingHistoryMovies = true,
-                historyMoviesError = null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    isLoadingHistoryMovies = true,
+                    historyMoviesError = null
+                )
+            }
             hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_MOVIE)
             val result = fetchAllHistoryPages<TraktWatchlistMovieItem> { page ->
                 traktRepository.getMovieHistory(page = page, limit = 200)
             }
             result.onSuccess { items ->
                 if (forceReload) {
-                    _uiState.value = _uiState.value.copy(historyMovies = emptyList())
+                    _uiState.update { it.copy(historyMovies = emptyList()) }
                 }
                 // 历史记录可能包含同一部电影的多次观看，按 traktId 去重
                 val dedupedItems = items.distinctBy { it.movie.ids.trakt }
@@ -973,23 +996,27 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
-                _uiState.value = _uiState.value.copy(
-                    historyMovies = uiItems,
-                    isLoadingHistoryMovies = false,
-                    historyMoviesLoaded = true
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        historyMovies = uiItems,
+                        isLoadingHistoryMovies = false,
+                        historyMoviesLoaded = true
+                    )
+                }
                 // 写入离线缓存
                 val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_MOVIE) }
                 offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_HISTORY_MOVIE, entities)
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_HISTORY_MOVIE)
-                _uiState.value = _uiState.value.copy(
-                    isLoadingHistoryMovies = false,
-                    historyMoviesLoaded = true,
-                    historyMovies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyMovies,
-                    historyMoviesError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        isLoadingHistoryMovies = false,
+                        historyMoviesLoaded = true,
+                        historyMovies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else state.historyMovies,
+                        historyMoviesError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
+                    )
+                }
             }
         }
     }
@@ -1021,17 +1048,19 @@ class WatchlistViewModel @Inject constructor(
                 loadHistoryShowsWithDouban(forceReload)
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(
-                isLoadingHistoryShows = true,
-                historyShowsError = null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    isLoadingHistoryShows = true,
+                    historyShowsError = null
+                )
+            }
             hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_SHOW)
             val result = fetchAllHistoryPages<TraktWatchlistShowItem> { page ->
                 traktRepository.getShowHistory(page = page, limit = 200)
             }
             result.onSuccess { items ->
                 if (forceReload) {
-                    _uiState.value = _uiState.value.copy(historyShows = emptyList())
+                    _uiState.update { it.copy(historyShows = emptyList()) }
                 }
                 val dedupedItems = items.distinctBy { it.show.ids.trakt }
                 // 过滤掉本地已取消已看的剧集（处理取消已看后 Trakt API 最终一致性延迟）
@@ -1048,23 +1077,27 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll().map { it.copy(mediaType = WatchlistMediaType.SHOW) }
-                _uiState.value = _uiState.value.copy(
-                    historyShows = uiItems,
-                    isLoadingHistoryShows = false,
-                    historyShowsLoaded = true
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        historyShows = uiItems,
+                        isLoadingHistoryShows = false,
+                        historyShowsLoaded = true
+                    )
+                }
                 // 写入离线缓存
                 val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_SHOW) }
                 offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_HISTORY_SHOW, entities)
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_HISTORY_SHOW)
-                _uiState.value = _uiState.value.copy(
-                    isLoadingHistoryShows = false,
-                    historyShowsLoaded = true,
-                    historyShows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyShows,
-                    historyShowsError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
-                )
+                _uiState.update { state ->
+                    state.copy(
+                        isLoadingHistoryShows = false,
+                        historyShowsLoaded = true,
+                        historyShows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else state.historyShows,
+                        historyShowsError = if (cached.isNotEmpty()) null else e.toUserMessage(context, R.string.error_load_failed)
+                    )
+                }
             }
         }
     }
@@ -1084,12 +1117,14 @@ class WatchlistViewModel @Inject constructor(
                 }
                 else -> Unit
             }
-            _uiState.value = _uiState.value.copy(
-                historyOthersError = null,
-                historyOthers = emptyList(),
-                historyOthersLoaded = true,
-                isLoadingHistoryOthers = false
-            )
+            _uiState.update { state ->
+                state.copy(
+                    historyOthersError = null,
+                    historyOthers = emptyList(),
+                    historyOthersLoaded = true,
+                    isLoadingHistoryOthers = false
+                )
+            }
         }
     }
 
@@ -1100,10 +1135,12 @@ class WatchlistViewModel @Inject constructor(
         page: Int,
         plan: TraktRepository.WatchlistRefreshPlan?
     ) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingMovies = if (page > 1 || !silent) true else _uiState.value.isLoadingMovies,
-            moviesError = if (page > 1 || !silent) null else _uiState.value.moviesError
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingMovies = if (page > 1 || !silent) true else state.isLoadingMovies,
+                moviesError = if (page > 1 || !silent) null else state.moviesError
+            )
+        }
         if (page == 1) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
         if (forceReload && page == 1) loadedTraktMovies.clear()
         val result = retryIO(maxRetries) {
@@ -1128,15 +1165,17 @@ class WatchlistViewModel @Inject constructor(
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
             val merged = mergeWatchlistItems(loadedTraktMovies, doubanItems, WatchlistMediaType.MOVIE)
             val totalCount = traktRepository.getMovieWatchlistTotalCount(page, 200) ?: rawItems.size
-            _uiState.value = _uiState.value.copy(
-                movies = merged,
-                movieTotalCount = unionCount(totalCount, loadedTraktMovies, doubanItems),
-                isLoadingMovies = false,
-                moviesLoaded = true,
-                hasMoreMovies = page < totalPages,
-                moviePage = page + 1,
-                moviesError = null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    movies = merged,
+                    movieTotalCount = unionCount(totalCount, loadedTraktMovies, doubanItems),
+                    isLoadingMovies = false,
+                    moviesLoaded = true,
+                    hasMoreMovies = page < totalPages,
+                    moviePage = page + 1,
+                    moviesError = null
+                )
+            }
             // 想看列表首页成功后写离线缓存：豆瓣合并路径原先不落盘，导致冷启动只能白屏等网络
             if (page == 1) {
                 offlineCacheManager.saveMediaItems(
@@ -1150,13 +1189,15 @@ class WatchlistViewModel @Inject constructor(
         }.onFailure { error ->
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
             val merged = mergeWatchlistItems(loadedTraktMovies, doubanItems, WatchlistMediaType.MOVIE)
-            _uiState.value = _uiState.value.copy(
-                movies = if (merged.isNotEmpty()) merged else _uiState.value.movies,
-                movieTotalCount = merged.size.takeIf { it > 0 } ?: _uiState.value.movieTotalCount,
-                isLoadingMovies = false,
-                moviesLoaded = true,
-                moviesError = if (page > 1 || merged.isEmpty()) error.toUserMessage(context, R.string.error_load_failed) else null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    movies = if (merged.isNotEmpty()) merged else state.movies,
+                    movieTotalCount = merged.size.takeIf { it > 0 } ?: state.movieTotalCount,
+                    isLoadingMovies = false,
+                    moviesLoaded = true,
+                    moviesError = if (page > 1 || merged.isEmpty()) error.toUserMessage(context, R.string.error_load_failed) else null
+                )
+            }
         }
     }
 
@@ -1167,10 +1208,12 @@ class WatchlistViewModel @Inject constructor(
         page: Int,
         plan: TraktRepository.WatchlistRefreshPlan?
     ) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingShows = if (page > 1 || !silent) true else _uiState.value.isLoadingShows,
-            showsError = if (page > 1 || !silent) null else _uiState.value.showsError
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingShows = if (page > 1 || !silent) true else state.isLoadingShows,
+                showsError = if (page > 1 || !silent) null else state.showsError
+            )
+        }
         if (page == 1) hydrateFromOfflineCache(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
         if (forceReload && page == 1) loadedTraktShows.clear()
         val result = retryIO(maxRetries) {
@@ -1195,15 +1238,17 @@ class WatchlistViewModel @Inject constructor(
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
             val merged = mergeWatchlistItems(loadedTraktShows, doubanItems, WatchlistMediaType.SHOW)
             val totalCount = traktRepository.getShowWatchlistTotalCount(page, 200) ?: rawItems.size
-            _uiState.value = _uiState.value.copy(
-                shows = merged,
-                showTotalCount = unionCount(totalCount, loadedTraktShows, doubanItems),
-                isLoadingShows = false,
-                showsLoaded = true,
-                hasMoreShows = page < totalPages,
-                showPage = page + 1,
-                showsError = null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    shows = merged,
+                    showTotalCount = unionCount(totalCount, loadedTraktShows, doubanItems),
+                    isLoadingShows = false,
+                    showsLoaded = true,
+                    hasMoreShows = page < totalPages,
+                    showPage = page + 1,
+                    showsError = null
+                )
+            }
             // 想看列表首页成功后写离线缓存：豆瓣合并路径原先不落盘，导致冷启动只能白屏等网络
             if (page == 1) {
                 offlineCacheManager.saveMediaItems(
@@ -1217,18 +1262,20 @@ class WatchlistViewModel @Inject constructor(
         }.onFailure { error ->
             val doubanItems = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
             val merged = mergeWatchlistItems(loadedTraktShows, doubanItems, WatchlistMediaType.SHOW)
-            _uiState.value = _uiState.value.copy(
-                shows = if (merged.isNotEmpty()) merged else _uiState.value.shows,
-                showTotalCount = merged.size.takeIf { it > 0 } ?: _uiState.value.showTotalCount,
-                isLoadingShows = false,
-                showsLoaded = true,
-                showsError = if (page > 1 || merged.isEmpty()) error.toUserMessage(context, R.string.error_load_failed) else null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    shows = if (merged.isNotEmpty()) merged else state.shows,
+                    showTotalCount = merged.size.takeIf { it > 0 } ?: state.showTotalCount,
+                    isLoadingShows = false,
+                    showsLoaded = true,
+                    showsError = if (page > 1 || merged.isEmpty()) error.toUserMessage(context, R.string.error_load_failed) else null
+                )
+            }
         }
     }
 
     private suspend fun loadHistoryMoviesWithDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(isLoadingHistoryMovies = true, historyMoviesError = null)
+        _uiState.update { it.copy(isLoadingHistoryMovies = true, historyMoviesError = null) }
         hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_MOVIE)
         if (forceReload) loadedTraktHistoryMovies.clear()
         val result = fetchAllHistoryPages<TraktWatchlistMovieItem> { page ->
@@ -1263,12 +1310,14 @@ class WatchlistViewModel @Inject constructor(
             replaceLoadedTraktItems(loadedTraktHistoryMovies, uiItems)
             val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryMovies, doubanItems, WatchlistMediaType.MOVIE)
-            _uiState.value = _uiState.value.copy(
-                historyMovies = merged,
-                isLoadingHistoryMovies = false,
-                historyMoviesLoaded = true,
-                historyMoviesError = null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    historyMovies = merged,
+                    isLoadingHistoryMovies = false,
+                    historyMoviesLoaded = true,
+                    historyMoviesError = null
+                )
+            }
             // 已看列表成功后写离线缓存，供下次冷启动先出内容
             offlineCacheManager.saveMediaItems(
                 OfflineCacheManager.TYPE_HISTORY_MOVIE,
@@ -1277,17 +1326,19 @@ class WatchlistViewModel @Inject constructor(
         }.onFailure { error ->
             val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryMovies, doubanItems, WatchlistMediaType.MOVIE)
-            _uiState.value = _uiState.value.copy(
-                historyMovies = if (merged.isNotEmpty()) merged else _uiState.value.historyMovies,
-                isLoadingHistoryMovies = false,
-                historyMoviesLoaded = true,
-                historyMoviesError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
-            )
+            _uiState.update { state ->
+                state.copy(
+                    historyMovies = if (merged.isNotEmpty()) merged else state.historyMovies,
+                    isLoadingHistoryMovies = false,
+                    historyMoviesLoaded = true,
+                    historyMoviesError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
+                )
+            }
         }
     }
 
     private suspend fun loadHistoryShowsWithDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(isLoadingHistoryShows = true, historyShowsError = null)
+        _uiState.update { it.copy(isLoadingHistoryShows = true, historyShowsError = null) }
         hydrateFromOfflineCache(OfflineCacheManager.TYPE_HISTORY_SHOW)
         if (forceReload) loadedTraktHistoryShows.clear()
         val result = fetchAllHistoryPages<TraktWatchlistShowItem> { page ->
@@ -1322,12 +1373,14 @@ class WatchlistViewModel @Inject constructor(
             replaceLoadedTraktItems(loadedTraktHistoryShows, uiItems)
             val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryShows, doubanItems, WatchlistMediaType.SHOW)
-            _uiState.value = _uiState.value.copy(
-                historyShows = merged,
-                isLoadingHistoryShows = false,
-                historyShowsLoaded = true,
-                historyShowsError = null
-            )
+            _uiState.update { state ->
+                state.copy(
+                    historyShows = merged,
+                    isLoadingHistoryShows = false,
+                    historyShowsLoaded = true,
+                    historyShowsError = null
+                )
+            }
             // 已看列表成功后写离线缓存，供下次冷启动先出内容
             offlineCacheManager.saveMediaItems(
                 OfflineCacheManager.TYPE_HISTORY_SHOW,
@@ -1336,144 +1389,174 @@ class WatchlistViewModel @Inject constructor(
         }.onFailure { error ->
             val doubanItems = getDoubanWatchlistItems("collect", forceReload)
             val merged = mergeWatchlistItems(loadedTraktHistoryShows, doubanItems, WatchlistMediaType.SHOW)
-            _uiState.value = _uiState.value.copy(
-                historyShows = if (merged.isNotEmpty()) merged else _uiState.value.historyShows,
-                isLoadingHistoryShows = false,
-                historyShowsLoaded = true,
-                historyShowsError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
-            )
+            _uiState.update { state ->
+                state.copy(
+                    historyShows = if (merged.isNotEmpty()) merged else state.historyShows,
+                    isLoadingHistoryShows = false,
+                    historyShowsLoaded = true,
+                    historyShowsError = if (merged.isNotEmpty()) null else error.toUserMessage(context, R.string.error_load_failed)
+                )
+            }
         }
     }
 
     private suspend fun loadOthersWithDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(isLoadingOthers = true, othersError = null)
+        _uiState.update { it.copy(isLoadingOthers = true, othersError = null) }
         val doubanItems = getDoubanWatchlistItems("wish", forceReload)
         val merged = mergeWatchlistItems(emptyList(), doubanItems, WatchlistMediaType.OTHER)
-        _uiState.value = _uiState.value.copy(
-            others = merged,
-            otherTotalCount = merged.size,
-            isLoadingOthers = false,
-            othersLoaded = true,
-            hasMoreOthers = false,
-            othersError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                others = merged,
+                otherTotalCount = merged.size,
+                isLoadingOthers = false,
+                othersLoaded = true,
+                hasMoreOthers = false,
+                othersError = null
+            )
+        }
     }
 
     private suspend fun loadHistoryOthersWithDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(isLoadingHistoryOthers = true, historyOthersError = null)
+        _uiState.update { it.copy(isLoadingHistoryOthers = true, historyOthersError = null) }
         val doubanItems = getDoubanWatchlistItems("collect", forceReload)
         val merged = mergeWatchlistItems(emptyList(), doubanItems, WatchlistMediaType.OTHER)
-        _uiState.value = _uiState.value.copy(
-            historyOthers = merged,
-            isLoadingHistoryOthers = false,
-            historyOthersLoaded = true,
-            historyOthersError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                historyOthers = merged,
+                isLoadingHistoryOthers = false,
+                historyOthersLoaded = true,
+                historyOthersError = null
+            )
+        }
     }
 
     // ========== 豆瓣独立模式：watchlist 数据源走本地 douban_synced_items 表 ==========
 
     /** 豆瓣模式：想看电影列表（status="wish"） */
     private suspend fun loadMoviesFromDouban(forceReload: Boolean, silent: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingMovies = !silent,
-            moviesError = if (silent) _uiState.value.moviesError else null
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingMovies = !silent,
+                moviesError = if (silent) state.moviesError else null
+            )
+        }
         // 豆瓣模式数据全量本地,不分页;forceReload 时重新读表(数据可能在后台同步更新)
         val items = getDoubanItemsForType("wish", WatchlistMediaType.MOVIE, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
-        _uiState.value = _uiState.value.copy(
-            movies = uiItems,
-            movieTotalCount = uiItems.size,
-            isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
-            moviesLoaded = true,
-            hasMoreMovies = false,  // 豆瓣模式本地全量,不分页
-            moviesError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                movies = uiItems,
+                movieTotalCount = uiItems.size,
+                isLoadingMovies = if (silent) state.isLoadingMovies else false,
+                moviesLoaded = true,
+                hasMoreMovies = false,  // 豆瓣模式本地全量,不分页
+                moviesError = null
+            )
+        }
     }
 
     /** 豆瓣模式：想看剧集列表（status="wish"） */
     private suspend fun loadShowsFromDouban(forceReload: Boolean, silent: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingShows = !silent,
-            showsError = if (silent) _uiState.value.showsError else null
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingShows = !silent,
+                showsError = if (silent) state.showsError else null
+            )
+        }
         val items = getDoubanItemsForType("wish", WatchlistMediaType.SHOW, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
-        _uiState.value = _uiState.value.copy(
-            shows = uiItems,
-            showTotalCount = uiItems.size,
-            isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
-            showsLoaded = true,
-            hasMoreShows = false,
-            showsError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                shows = uiItems,
+                showTotalCount = uiItems.size,
+                isLoadingShows = if (silent) state.isLoadingShows else false,
+                showsLoaded = true,
+                hasMoreShows = false,
+                showsError = null
+            )
+        }
     }
 
     /** 豆瓣模式：想看其他类型列表（status="wish"） */
     private suspend fun loadOthersFromDouban(forceReload: Boolean, silent: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingOthers = !silent,
-            othersError = if (silent) _uiState.value.othersError else null
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingOthers = !silent,
+                othersError = if (silent) state.othersError else null
+            )
+        }
         val items = getDoubanItemsForType("wish", WatchlistMediaType.OTHER, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
-        _uiState.value = _uiState.value.copy(
-            others = uiItems,
-            otherTotalCount = uiItems.size,
-            isLoadingOthers = false,
-            othersLoaded = true,
-            hasMoreOthers = false,
-            othersError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                others = uiItems,
+                otherTotalCount = uiItems.size,
+                isLoadingOthers = false,
+                othersLoaded = true,
+                hasMoreOthers = false,
+                othersError = null
+            )
+        }
     }
 
     /** 豆瓣模式：已看电影列表（status="collect"） */
     private suspend fun loadHistoryMoviesFromDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingHistoryMovies = true,
-            historyMoviesError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingHistoryMovies = true,
+                historyMoviesError = null
+            )
+        }
         val items = getDoubanItemsForType("collect", WatchlistMediaType.MOVIE, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
-        _uiState.value = _uiState.value.copy(
-            historyMovies = uiItems,
-            isLoadingHistoryMovies = false,
-            historyMoviesLoaded = true,
-            historyMoviesError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                historyMovies = uiItems,
+                isLoadingHistoryMovies = false,
+                historyMoviesLoaded = true,
+                historyMoviesError = null
+            )
+        }
     }
 
     /** 豆瓣模式：已看剧集列表（status="collect"） */
     private suspend fun loadHistoryShowsFromDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingHistoryShows = true,
-            historyShowsError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingHistoryShows = true,
+                historyShowsError = null
+            )
+        }
         val items = getDoubanItemsForType("collect", WatchlistMediaType.SHOW, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
-        _uiState.value = _uiState.value.copy(
-            historyShows = uiItems,
-            isLoadingHistoryShows = false,
-            historyShowsLoaded = true,
-            historyShowsError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                historyShows = uiItems,
+                isLoadingHistoryShows = false,
+                historyShowsLoaded = true,
+                historyShowsError = null
+            )
+        }
     }
 
     /** 豆瓣模式：已看其他类型列表（status="collect"） */
     private suspend fun loadHistoryOthersFromDouban(forceReload: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isLoadingHistoryOthers = true,
-            historyOthersError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                isLoadingHistoryOthers = true,
+                historyOthersError = null
+            )
+        }
         val items = getDoubanItemsForType("collect", WatchlistMediaType.OTHER, forceReload)
         val uiItems = items.map { it.toMediaUiItem() }
-        _uiState.value = _uiState.value.copy(
-            historyOthers = uiItems,
-            isLoadingHistoryOthers = false,
-            historyOthersLoaded = true,
-            historyOthersError = null
-        )
+        _uiState.update { state ->
+            state.copy(
+                historyOthers = uiItems,
+                isLoadingHistoryOthers = false,
+                historyOthersLoaded = true,
+                historyOthersError = null
+            )
+        }
     }
 
     /** DoubanSyncedItem → MediaUiItem 映射（豆瓣模式本地数据渲染用） */
@@ -1847,12 +1930,14 @@ class WatchlistViewModel @Inject constructor(
         if (state.moviesLoaded || state.showsLoaded || state.othersLoaded) {
             if (forceRefresh) {
                 // 只重置分页，保留已有数据避免 UI 闪烁和重复拉取
-                _uiState.value = state.copy(
-                    moviePage = 1,
-                    showPage = 1,
-                    hasMoreMovies = true,
-                    hasMoreShows = true
-                )
+                _uiState.update {
+                    it.copy(
+                        moviePage = 1,
+                        showPage = 1,
+                        hasMoreMovies = true,
+                        hasMoreShows = true
+                    )
+                }
             }
             loadMovies(forceReload = forceRefresh, silent = silent, revalidate = !forceRefresh)
             loadShows(forceReload = forceRefresh, silent = silent, revalidate = !forceRefresh)
@@ -1869,12 +1954,14 @@ class WatchlistViewModel @Inject constructor(
     fun refreshWatchlist() {
         val state = _uiState.value
         if (state.moviesLoaded || state.showsLoaded || state.othersLoaded) {
-            _uiState.value = state.copy(
-                moviePage = 1,
-                showPage = 1,
-                hasMoreMovies = true,
-                hasMoreShows = true
-            )
+            _uiState.update {
+                it.copy(
+                    moviePage = 1,
+                    showPage = 1,
+                    hasMoreMovies = true,
+                    hasMoreShows = true
+                )
+            }
             loadMovies(forceReload = true, silent = true, loadAllPages = true)
             loadShows(forceReload = true, silent = true, loadAllPages = true)
             loadOthers(forceReload = true, silent = true)
@@ -2014,45 +2101,46 @@ class WatchlistViewModel @Inject constructor(
     }
 
     private fun applyWatchlistMutation(mutation: TraktRepository.WatchlistMutation): Boolean {
-        val state = _uiState.value
         val isMovie = mutation.mediaType == MediaType.MOVIE
-        val loaded = if (isMovie) state.moviesLoaded else state.showsLoaded
-        if (!loaded) return false
-
-        val currentItems = if (isMovie) state.movies else state.shows
-        val existing = currentItems.any { it.traktId == mutation.traktId }
-        val updatedItems = when (mutation.action) {
-            TraktRepository.WatchlistMutationAction.ADD -> {
-                (currentItems.filter { it.traktId != mutation.traktId } + mutation.toMediaUiItem())
-                    .sortedWith(watchlistListedAtComparator())
+        var applied = false
+        _uiState.update { state ->
+            val loaded = if (isMovie) state.moviesLoaded else state.showsLoaded
+            if (!loaded) return@update state
+            applied = true
+            val currentItems = if (isMovie) state.movies else state.shows
+            val existing = currentItems.any { it.traktId == mutation.traktId }
+            val updatedItems = when (mutation.action) {
+                TraktRepository.WatchlistMutationAction.ADD -> {
+                    (currentItems.filter { it.traktId != mutation.traktId } + mutation.toMediaUiItem())
+                        .sortedWith(watchlistListedAtComparator())
+                }
+                TraktRepository.WatchlistMutationAction.REMOVE -> {
+                    currentItems.filter { it.traktId != mutation.traktId }
+                }
             }
-            TraktRepository.WatchlistMutationAction.REMOVE -> {
-                currentItems.filter { it.traktId != mutation.traktId }
+            if (isMovie) {
+                state.copy(
+                    movies = updatedItems,
+                    movieTotalCount = when (mutation.action) {
+                        TraktRepository.WatchlistMutationAction.ADD ->
+                            if (existing) state.movieTotalCount else (state.movieTotalCount ?: currentItems.size) + 1
+                        TraktRepository.WatchlistMutationAction.REMOVE ->
+                            (state.movieTotalCount ?: currentItems.size).minus(if (existing) 1 else 0).coerceAtLeast(0)
+                    }
+                )
+            } else {
+                state.copy(
+                    shows = updatedItems,
+                    showTotalCount = when (mutation.action) {
+                        TraktRepository.WatchlistMutationAction.ADD ->
+                            if (existing) state.showTotalCount else (state.showTotalCount ?: currentItems.size) + 1
+                        TraktRepository.WatchlistMutationAction.REMOVE ->
+                            (state.showTotalCount ?: currentItems.size).minus(if (existing) 1 else 0).coerceAtLeast(0)
+                    }
+                )
             }
         }
-        val updatedState = if (isMovie) {
-            state.copy(
-                movies = updatedItems,
-                movieTotalCount = when (mutation.action) {
-                    TraktRepository.WatchlistMutationAction.ADD ->
-                        if (existing) state.movieTotalCount else (state.movieTotalCount ?: currentItems.size) + 1
-                    TraktRepository.WatchlistMutationAction.REMOVE ->
-                        (state.movieTotalCount ?: currentItems.size).minus(if (existing) 1 else 0).coerceAtLeast(0)
-                }
-            )
-        } else {
-            state.copy(
-                shows = updatedItems,
-                showTotalCount = when (mutation.action) {
-                    TraktRepository.WatchlistMutationAction.ADD ->
-                        if (existing) state.showTotalCount else (state.showTotalCount ?: currentItems.size) + 1
-                    TraktRepository.WatchlistMutationAction.REMOVE ->
-                        (state.showTotalCount ?: currentItems.size).minus(if (existing) 1 else 0).coerceAtLeast(0)
-                }
-            )
-        }
-        _uiState.value = updatedState
-        return true
+        return applied
     }
 
     /**
@@ -2232,21 +2320,23 @@ class WatchlistViewModel @Inject constructor(
         isWatchlist: Boolean
     ) {
         val selectionKeys = items.map { it.selectionKey }.toSet()
-        _uiState.value = when (type) {
-            WatchlistMediaType.MOVIE -> if (isWatchlist) {
-                _uiState.value.copy(movies = _uiState.value.movies.filter { it.selectionKey !in selectionKeys })
-            } else {
-                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.selectionKey !in selectionKeys })
-            }
-            WatchlistMediaType.SHOW -> if (isWatchlist) {
-                _uiState.value.copy(shows = _uiState.value.shows.filter { it.selectionKey !in selectionKeys })
-            } else {
-                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.selectionKey !in selectionKeys })
-            }
-            WatchlistMediaType.OTHER -> if (isWatchlist) {
-                _uiState.value.copy(others = _uiState.value.others.filter { it.selectionKey !in selectionKeys })
-            } else {
-                _uiState.value.copy(historyOthers = _uiState.value.historyOthers.filter { it.selectionKey !in selectionKeys })
+        _uiState.update { state ->
+            when (type) {
+                WatchlistMediaType.MOVIE -> if (isWatchlist) {
+                    state.copy(movies = state.movies.filter { it.selectionKey !in selectionKeys })
+                } else {
+                    state.copy(historyMovies = state.historyMovies.filter { it.selectionKey !in selectionKeys })
+                }
+                WatchlistMediaType.SHOW -> if (isWatchlist) {
+                    state.copy(shows = state.shows.filter { it.selectionKey !in selectionKeys })
+                } else {
+                    state.copy(historyShows = state.historyShows.filter { it.selectionKey !in selectionKeys })
+                }
+                WatchlistMediaType.OTHER -> if (isWatchlist) {
+                    state.copy(others = state.others.filter { it.selectionKey !in selectionKeys })
+                } else {
+                    state.copy(historyOthers = state.historyOthers.filter { it.selectionKey !in selectionKeys })
+                }
             }
         }
     }

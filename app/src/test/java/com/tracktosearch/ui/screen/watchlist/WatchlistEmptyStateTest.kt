@@ -1,6 +1,8 @@
 package com.tracktosearch.ui.screen.watchlist
 
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.remote.trakt.TraktConnectionState
+import com.tracktosearch.data.session.SessionMode
 import org.junit.Test
 
 class WatchlistEmptyStateTest {
@@ -95,6 +97,105 @@ class WatchlistEmptyStateTest {
         assertThat(resolveWatchlistSectionError(state, 0, 0)).isNull()
         assertThat(resolveWatchlistSectionError(state, 0, 1)).isEqualTo("shows failed")
         assertThat(resolveWatchlistSectionError(state, 1, 1)).isNull()
+    }
+
+    @Test
+    fun `默认状态六个分区都未完成首次加载`() {
+        val state = WatchlistUiState()
+        assertThat(isWatchlistSectionLoaded(state, 0, 0)).isFalse()
+        assertThat(isWatchlistSectionLoaded(state, 0, 1)).isFalse()
+        assertThat(isWatchlistSectionLoaded(state, 0, 2)).isFalse()
+        assertThat(isWatchlistSectionLoaded(state, 1, 0)).isFalse()
+        assertThat(isWatchlistSectionLoaded(state, 1, 1)).isFalse()
+        assertThat(isWatchlistSectionLoaded(state, 1, 2)).isFalse()
+    }
+
+    @Test
+    fun `加载完成后空列表也算已加载`() {
+        val state = WatchlistUiState(
+            moviesLoaded = true,
+            showsLoaded = true,
+            othersLoaded = true,
+            historyMoviesLoaded = true,
+            historyShowsLoaded = true,
+            historyOthersLoaded = true
+        )
+        assertThat(isWatchlistSectionLoaded(state, 0, 0)).isTrue()
+        assertThat(isWatchlistSectionLoaded(state, 0, 1)).isTrue()
+        assertThat(isWatchlistSectionLoaded(state, 0, 2)).isTrue()
+        assertThat(isWatchlistSectionLoaded(state, 1, 0)).isTrue()
+        assertThat(isWatchlistSectionLoaded(state, 1, 1)).isTrue()
+        assertThat(isWatchlistSectionLoaded(state, 1, 2)).isTrue()
+    }
+
+    @Test
+    fun `Trakt首帧未加载且无数据时显示骨架`() {
+        assertThat(
+            shouldShowWatchlistInitialSkeleton(
+                state = WatchlistUiState(),
+                selectedMode = 0,
+                selectedTab = 0,
+                sessionMode = SessionMode.TRAKT,
+                traktConnectionState = TraktConnectionState.CONNECTED,
+                hasData = false
+            )
+        ).isTrue()
+    }
+
+    @Test
+    fun `离线快照已有数据时不显示骨架`() {
+        assertThat(
+            shouldShowWatchlistInitialSkeleton(
+                state = WatchlistUiState(),
+                selectedMode = 0,
+                selectedTab = 0,
+                sessionMode = SessionMode.TRAKT,
+                traktConnectionState = TraktConnectionState.CONNECTED,
+                hasData = true
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun `已加载的空列表显示空态而不是骨架`() {
+        assertThat(
+            shouldShowWatchlistInitialSkeleton(
+                state = WatchlistUiState(moviesLoaded = true),
+                selectedMode = 0,
+                selectedTab = 0,
+                sessionMode = SessionMode.TRAKT,
+                traktConnectionState = TraktConnectionState.CONNECTED,
+                hasData = false
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun `访客模式不等待首次加载`() {
+        assertThat(
+            shouldShowWatchlistInitialSkeleton(
+                state = WatchlistUiState(),
+                selectedMode = 0,
+                selectedTab = 0,
+                sessionMode = SessionMode.GUEST,
+                traktConnectionState = TraktConnectionState.DISCONNECTED,
+                hasData = false
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun `Trakt连接检查中即使暂时是访客也先显示骨架`() {
+        assertThat(
+            shouldShowWatchlistInitialSkeleton(
+                state = WatchlistUiState(),
+                selectedMode = 0,
+                selectedTab = 0,
+                sessionMode = SessionMode.GUEST,
+                traktConnectionState = TraktConnectionState.CHECKING,
+                hasData = false
+            )
+        ).isTrue()
     }
 
     @Test

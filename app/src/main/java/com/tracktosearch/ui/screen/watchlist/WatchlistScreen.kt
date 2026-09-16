@@ -261,10 +261,13 @@ fun WatchlistScreen(
     val hasActiveFilters by viewModel.hasActiveFilters.collectAsStateWithLifecycle()
     val availableGenres by viewModel.availableGenres.collectAsStateWithLifecycle()
     val isTraktConnected by viewModel.isTraktConnected.collectAsStateWithLifecycle()
+    val traktConnectionState by viewModel.traktConnectionState.collectAsStateWithLifecycle()
     val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
     val isDoubanLoggedIn by viewModel.isDoubanLoggedInFlow.collectAsStateWithLifecycle()
     val sessionKey = when {
-        isDoubanMode -> SessionMode.DOUBAN
+        // isDoubanMode 是 stateIn(initialValue = false)，冷启动首帧可能尚未收到真实值；
+        // 与导航层保持一致，用持久化豆瓣登录态兜住这段首帧，避免豆瓣模式被短暂当成 GUEST。
+        isDoubanMode || (isDoubanLoggedIn && !isTraktConnected) -> SessionMode.DOUBAN
         isTraktConnected -> SessionMode.TRAKT
         else -> SessionMode.GUEST
     }
@@ -574,8 +577,26 @@ fun WatchlistScreen(
         isRemoving = false
     }
 
+    val currentHasData = when {
+        selectedMode == 0 && selectedTab == 0 -> uiState.movies.isNotEmpty()
+        selectedMode == 0 && selectedTab == 1 -> uiState.shows.isNotEmpty()
+        selectedMode == 0 && selectedTab == 2 -> uiState.others.isNotEmpty()
+        selectedMode == 1 && selectedTab == 0 -> uiState.historyMovies.isNotEmpty()
+        selectedMode == 1 && selectedTab == 1 -> uiState.historyShows.isNotEmpty()
+        else -> uiState.historyOthers.isNotEmpty()
+    }
+    // 冷启动首帧的 UiState 还没收到 LaunchedEffect 触发的加载：isLoadingX=false、loaded=false。
+    // 这一段必须按“首次加载中”处理，否则会先用默认空列表画一帧空白态。
+    val showInitialSkeleton = shouldShowWatchlistInitialSkeleton(
+        state = uiState,
+        selectedMode = selectedMode,
+        selectedTab = selectedTab,
+        sessionMode = sessionKey,
+        traktConnectionState = traktConnectionState,
+        hasData = currentHasData
+    )
     // 当前列表是否正在加载
-    val isCurrentLoading = when {
+    val isCurrentLoading = showInitialSkeleton || when {
         selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
         selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
         selectedMode == 0 && selectedTab == 2 -> uiState.isLoadingOthers
@@ -1863,21 +1884,9 @@ fun WatchlistScreen(
 
             } // CompositionLocalProvider(LocalBackdrop) 顶栏结束
 
-            // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
-            val isLoading = if (selectedMode == 0) {
-                when (selectedTab) {
-                    0 -> uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
-                    1 -> uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
-                    else -> uiState.isLoadingOthers && !uiState.othersLoaded && uiState.others.isEmpty()
-                }
-            } else {
-                when (selectedTab) {
-                    0 -> uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
-                    1 -> uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
-                    else -> uiState.isLoadingHistoryOthers && !uiState.historyOthersLoaded && uiState.historyOthers.isEmpty()
-                }
-            }
-            if (isLoading) {
+            // 骨架屏：首次加载且没有数据可显示时显示。判定同时覆盖 ViewModel 还没开始加载的首帧，
+            // 避免默认空状态先画一帧空态再切到数据。
+            if (showInitialSkeleton) {
                 WatchlistSkeletonGrid(
                     modifier = Modifier
                         .fillMaxSize()

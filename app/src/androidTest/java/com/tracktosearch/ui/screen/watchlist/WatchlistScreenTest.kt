@@ -21,6 +21,7 @@ import com.tracktosearch.HiltTestActivity
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.WatchlistMediaType
+import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import io.mockk.every
@@ -618,6 +619,7 @@ class WatchlistScreenTest {
         every { mock.availableGenres } returns MutableStateFlow(emptyList())
         every { mock.decadeOptions } returns MutableStateFlow(emptyList())
         every { mock.isTraktConnected } returns MutableStateFlow(false)
+        every { mock.traktConnectionState } returns MutableStateFlow(TraktConnectionState.DISCONNECTED)
         every { mock.isDoubanLoggedInFlow } returns MutableStateFlow(false)
         every { mock.needFirstSyncGuide } returns MutableStateFlow(false)
         every { mock.syncCompleteEvent } returns MutableSharedFlow()
