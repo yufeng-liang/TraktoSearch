@@ -25,13 +25,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,26 +43,9 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
-import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.tracktosearch.ui.navigation.DetailSeedStore
-import java.util.concurrent.atomic.AtomicReference
-
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface PosterColorExtractorProvider {
-    fun posterColorExtractor(): PosterColorExtractor
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -100,34 +78,16 @@ fun MovieCard(
     posterShimmer: ShimmerState? = null
 ) {
     val context = LocalContext.current
-    // 通过 EntryPoint 获取 PosterColorExtractor 单例,用于提前提取海报主色写入缓存
-    val posterColorExtractor = remember {
-        EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            PosterColorExtractorProvider::class.java
-        ).posterColorExtractor()
-    }
-    // 卡片可见性状态:海报加载成功 + 卡片仍在屏幕上 1.5s 后才提取主色,
-    // 避免快速滑动时大量卡片同时触发 Palette CPU 密集型计算影响帧率
-    var colorExtracted by remember { mutableStateOf(false) }
-    // 仅保存延迟主色提取任务，不把 Bitmap 放入 Compose 状态。
-    val colorExtractionScope = rememberCoroutineScope()
-    val colorExtractionJob = remember { AtomicReference<Job?>(null) }
-    val shouldExtractColor = remember(posterUrl, posterColorExtractor) {
-        posterUrl != null && posterColorExtractor.peekCachedColor(posterUrl) == null
-    }
-
-    // posterUrl 变化时重置提取状态
-    LaunchedEffect(posterUrl) {
-        colorExtracted = false
-        colorExtractionJob.getAndSet(null)?.cancel()
-    }
-
-    // 海报加载成功 + 卡片仍在组合树中,延迟 500ms 后提取主色
-    // 快速滑过的卡片会在 DisposableEffect 中取消协程,不会浪费 CPU
-    // 500ms 确保用户点击卡片进入详情页前 PosterColorCache 大概率已写入
+    val colorExtractor = remember(context) { posterColorExtractor(context) }
+    // 海报加载成功后延迟提取主色写入缓存，详情页首帧即可取到沉浸色。
     // 卡片海报源图已降级 w342(列表数据 posterUrl),解码 342 与源图 1:1,显示约 318px 清晰;
     // 详情页 header 改用 w780 独立高清图(见 DetailHeaderContent),不复用卡片解码结果
+    val onPosterLoaded = rememberPosterColorExtraction(posterUrl, colorExtractor)
+    val shouldExtractColor = remember(posterUrl, colorExtractor) {
+        posterUrl != null &&
+            colorExtractor.peekCachedColor(posterUrl) == null &&
+            colorExtractor.peekCachedColorCandidates(posterUrl) == null
+    }
     val imageRequest = remember(posterUrl, shouldExtractColor) {
         ImageRequest.Builder(context)
             .data(posterUrl)
@@ -137,33 +97,16 @@ fun MovieCard(
                 if (shouldExtractColor) {
                     listener(
                         onSuccess = { _, result ->
-                            colorExtractionJob.getAndSet(null)?.cancel()
                             // Coil 已经解码出 BitmapDrawable 时直接复用位图，避免图片批量完成时
                             // 在主线程额外复制 Bitmap；非 BitmapDrawable 才走兼容转换。
                             val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
                                 ?: result.drawable.toBitmap()
-                            colorExtractionJob.set(colorExtractionScope.launch {
-                                delay(500L)
-                                if (!colorExtracted && posterUrl != null) {
-                                    withContext(Dispatchers.Default) {
-                                        posterColorExtractor.extractDominantColor(posterUrl, bitmap)
-                                    }
-                                    colorExtracted = true
-                                }
-                            }
-                            )
+                            onPosterLoaded(bitmap)
                         }
                     )
                 }
             }
             .build()
-    }
-
-    // 卡片离开屏幕时清理 bitmap 引用,帮助 GC
-    DisposableEffect(posterUrl) {
-        onDispose {
-            colorExtractionJob.getAndSet(null)?.cancel()
-        }
     }
 
     // 包装点击回调：把已渲染的海报/年份/来源交给详情页做首帧种子

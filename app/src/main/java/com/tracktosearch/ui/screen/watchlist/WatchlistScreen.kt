@@ -199,8 +199,10 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.localizedGenreLine
 import com.tracktosearch.ui.component.localizedGenreName
+import com.tracktosearch.ui.component.posterColorExtractor
 import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.component.rememberPosterColorExtraction
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.navigation.NotificationNavigator
@@ -2035,6 +2037,13 @@ private fun WatchlistPosterCard(
         SharedOrigin.of(SharedOrigin.WATCHLIST, item.selectionKey)
     }
 
+    // 海报加载成功后预提取主色写入缓存：点进详情页时 DetailViewModel 能直接命中，
+    // 沉浸色随首帧出现，而不是先空白、等详情页海报解码后再渐变。
+    // 该提取曾在一次列表重构中被移除，导致看单入口的沉浸色退化，这里重新接回。
+    val context = LocalContext.current
+    val colorExtractor = remember(context) { posterColorExtractor(context) }
+    val onPosterLoaded = rememberPosterColorExtraction(item.posterUrl, colorExtractor)
+
     val wrappedOnClick = remember(onClick, item.tmdbId, isMultiSelectMode, origin) {
         {
             if (!isMultiSelectMode && item.tmdbId > 0) {
@@ -2053,6 +2062,7 @@ private fun WatchlistPosterCard(
                 year = item.year?.toString(),
                 genres = null,
                 imageSize = 264,
+                onImageSuccess = onPosterLoaded,
                 onClick = wrappedOnClick,
                 onLongClick = if (isMultiSelectMode) null else onLongClick
             )
