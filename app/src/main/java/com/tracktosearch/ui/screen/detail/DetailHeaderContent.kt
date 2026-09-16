@@ -509,6 +509,9 @@ internal fun DetailHeaderContent(
                 currentTmdbId = tmdbId,
                 onMovieClick = onCollectionMovieClick
             )
+        } else if (uiState.isCollectionLoading) {
+            // 已知该片属于系列但数据未到：首帧就占位，避免卡片随后插入把下方内容整体下推。
+            CollectionSectionSkeleton(shimmer = headerShimmer)
         }
 
         // 季/集信息（仅电视剧，放在简介下方）

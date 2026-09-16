@@ -193,7 +193,7 @@ class MediaMetadataRepository @Inject constructor(
         if (!forceRefresh && cached != null && cachedFresh && missingSections.isEmpty()) {
             detailMemory.put(
                 cacheKey,
-                TimedValue(cached, entity?.detailRefreshedAt ?: now, SCHEMA_VERSION)
+                TimedValue(cached, entity.detailRefreshedAt, SCHEMA_VERSION)
             )
             return cached
         }
@@ -362,11 +362,15 @@ class MediaMetadataRepository @Inject constructor(
     ) {
         val existing = dao.getByKey(key.cacheKey())
         val now = System.currentTimeMillis()
+        val summary = bundle.summary ?: existing?.let(::decodeSummary)
         val row = (existing ?: newEntity(key)).copy(
             mediaType = key.mediaType,
             tmdbId = key.tmdbId,
             locale = key.locale,
-            summaryJson = json.encodeToString(MediaSummary.serializer(), bundle.summary),
+            // summary=null 是“只有 R2 section 可用”的部分响应，不能把空摘要写进本地缓存。
+            summaryJson = summary?.let {
+                json.encodeToString(MediaSummary.serializer(), it)
+            } ?: existing?.summaryJson,
             detailJson = json.encodeToString(MediaDetailBundle.serializer(), bundle),
             schemaVersion = SCHEMA_VERSION,
             // 详情 section 刷新只更新 section 时间；摘要 TTL 由摘要接口单独维护。
@@ -375,10 +379,12 @@ class MediaMetadataRepository @Inject constructor(
             updatedAt = now
         )
         dao.upsertAll(listOf(row))
-        summaryMemory.put(
-            row.mediaKey,
-            TimedValue(bundle.summary, row.summaryRefreshedAt, SCHEMA_VERSION)
-        )
+        summary?.let {
+            summaryMemory.put(
+                row.mediaKey,
+                TimedValue(it, row.summaryRefreshedAt, SCHEMA_VERSION)
+            )
+        }
         detailMemory.put(row.mediaKey, TimedValue(bundle, refreshedAt, SCHEMA_VERSION))
     }
 
@@ -452,7 +458,8 @@ class MediaMetadataRepository @Inject constructor(
             "videos" -> bundle.videos != null
             "images" -> bundle.images != null
             "similar" -> bundle.similar != null
-            "collection" -> bundle.collection != null
+            // summary.collectionId=null 表示服务端已确认“无系列”，与尚未加载区分。
+            "collection" -> bundle.collection != null || bundle.summary?.collectionId == null && bundle.summary != null
             else -> true
         }
 
@@ -563,7 +570,7 @@ data class MediaCollection(
 
 @Serializable
 data class MediaDetailBundle(
-    val summary: MediaSummary,
+    val summary: MediaSummary? = null,
     val credits: TmdbCreditsResponse? = null,
     val videos: List<TmdbVideo>? = null,
     val images: List<MediaStill>? = null,
@@ -591,7 +598,7 @@ private fun MediaSummaryDto.toModel(): MediaSummary = MediaSummary(
 )
 
 private fun MediaDetailBundleDto.toModel(): MediaDetailBundle = MediaDetailBundle(
-    summary = summary.toModel(),
+    summary = summary?.toModel(),
     credits = credits?.toModel(),
     videos = videos,
     images = images?.map(MediaImageDto::toModel),

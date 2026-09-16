@@ -126,6 +126,7 @@ class DetailViewModelDoubanTest {
             doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
         } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
         every { mediaMetadataRepository.peekSummaryLocal(any()) } returns null
+        coEvery { mediaMetadataRepository.getCachedSummary(any()) } returns null
         coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(

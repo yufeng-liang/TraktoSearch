@@ -217,6 +217,8 @@ data class DetailUiState(
     val isLoadingRecommendations: Boolean = false,
     // 系列信息
     val collectionInfo: TmdbCollectionResponse? = null,
+    // 系列加载状态：避免“无系列”和“尚未加载”在 UI 上无法区分
+    val isCollectionLoading: Boolean = false,
     // 影视状态（Released, In Production, Returning Series, Ended 等）
     val status: String = "",
     // 各模块加载错误提示
@@ -569,7 +571,11 @@ class DetailViewModel @Inject constructor(
             _uiState.value = cached.uiState.withoutTransientSceneState().copy(
                 isMarkedWatchlist = peekedStates?.first ?: cached.uiState.isMarkedWatchlist,
                 isMarkedWatched = peekedStates?.second ?: cached.uiState.isMarkedWatched,
-                ratingSource = restoredRatingSource
+                ratingSource = restoredRatingSource,
+                // 缓存里已知有系列但卡片还没加载出来时，保持占位，避免返回详情后二次插入。
+                isCollectionLoading = cached.currentMediaType == MediaType.MOVIE &&
+                    cached.currentCollectionId > 0 &&
+                    cached.uiState.collectionInfo == null
             )
             if (peekedStates == null) {
                 applyWatchStates(cacheKey, traktId, cached.currentMediaType, cached.currentImdbId)
@@ -663,7 +669,7 @@ class DetailViewModel @Inject constructor(
 
         // 首帧种子：TMDB 内存缓存 peek → 调用方传入 → 列表卡片点击时暂存的海报/年份。
         // 目的是让海报/标题在第一帧就正确，既消掉「空白→弹入」，也让共享元素转场有落点。
-        val seed = peekDetailSeed(tmdbId, mediaType, title, year)
+        val seed = loadDetailSeed(tmdbId, mediaType, title, year)
         // 发现页等栏目的海报来自 TMDB 列表接口，不写详情缓存，peek 必然落空，靠卡片暂存兜底
         val cardSeed = if (seed?.posterUrl == null || year == null) DetailSeedStore.peek(tmdbId) else null
         // 列表卡片已经显示的 Trakt 海报优先；摘要海报只在首帧没有卡片海报时兜底，
@@ -686,6 +692,8 @@ class DetailViewModel @Inject constructor(
             isMarkedWatchlist = inWatchlist,
             isMarkedWatched = isWatched,
             isLoadingVideosImages = true,
+            // 摘要确认有系列时首帧就占位；摘要未知则不凭空占位，避免无系列影片多出一块骨架。
+            isCollectionLoading = seed?.collectionId != null,
             doubanIdForSync = currentDoubanId,
             ratingSource = if (currentDoubanId != null) {
                 DetailRatingSource.DOUBAN
@@ -709,6 +717,7 @@ class DetailViewModel @Inject constructor(
         // 本人短评独立于公共评论加载：先命中本地缓存，再按 TTL 后台校准。
         startOwnCommentLoad()
 
+        val detailJobKey = cacheKey
         viewModelScope.launch {
             // 海报/标题只依赖 tmdbId，提前并发发起，不排在豆瓣补充、登录态、标记态后面
             val enrichmentDeferred = if (tmdbId > 0) {
@@ -717,6 +726,7 @@ class DetailViewModel @Inject constructor(
                 null
             }
             val doubanSupplement = loadDoubanSupplement(currentDoubanId, currentImdbId)
+            if (currentDetailCacheKey != detailJobKey) return@launch
             if (doubanSupplement != null) {
                 currentDoubanId = doubanSupplement.doubanId
                 doubanSupplement.imdbId?.let { currentImdbId = it }
@@ -778,7 +788,10 @@ class DetailViewModel @Inject constructor(
             applyWatchStates(cacheKey, currentTraktId, currentMediaType, currentImdbId)
 
             var tmdbRating = 0.0
-            var collectionId = 0
+            // 本地摘要既已确认系列归属，即使 TMDB 富化失败也应继续用它加载系列；
+            // 否则首帧占位会被取消，系列卡片直接消失。
+            var collectionId = seed?.collectionId ?: 0
+            if (collectionId > 0) currentCollectionId = collectionId
             if (tmdbId <= 0) {
                 // 纯豆瓣条目(tmdbId=0)：无 TMDB 海报，保持 supplement 已填入的豆瓣海报
                 _uiState.value = _uiState.value.copy(isLoading = false)
@@ -787,11 +800,15 @@ class DetailViewModel @Inject constructor(
                 startSearch()
             } else {
                 val prepared = enrichmentDeferred?.await()
+                if (currentDetailCacheKey != detailJobKey) return@launch
                 if (prepared != null) {
                     tmdbRating = prepared.rating
                     // enrichMovie/enrichTv 已返回 collectionId 和 imdbId，无需第二次 getDetail
-                    collectionId = prepared.collectionId
+                    if (prepared.collectionId > 0) collectionId = prepared.collectionId
                     currentCollectionId = collectionId
+                    _uiState.value = _uiState.value.copy(
+                        isCollectionLoading = currentMediaType == MediaType.MOVIE && collectionId > 0
+                    )
                     if (currentImdbId.isBlank()) {
                         prepared.imdbId?.takeIf { it.isNotBlank() }?.let { currentImdbId = it }
                     }
@@ -817,6 +834,11 @@ class DetailViewModel @Inject constructor(
                 val displayOriginalTitle = currentOriginalTitle.ifEmpty {
                     // 如果 TMDB 没返回 originalTitle 或与中文标题相同，使用 Trakt 原始标题
                     title.takeIf { it.isNotEmpty() && it != chineseTitle.replace("+", " ") } ?: ""
+                }
+                // 富化失败时不能用「摘要说过有系列」把骨架永久挂住；有系列 ID 就继续加载，
+                // 没有才退出占位。
+                if (_uiState.value.isCollectionLoading && collectionId <= 0) {
+                    _uiState.value = _uiState.value.copy(isCollectionLoading = false)
                 }
                 // 富化结果落地：种子/豆瓣补充已经填上的值一律保留，只补空缺。
                 // 以前这里是 `enrichment?.x ?: ""`，fetchEnrichment 失败返回 null 时会把首帧
@@ -855,6 +877,8 @@ class DetailViewModel @Inject constructor(
                 saveToCache()
                 startSearch()
             }
+
+            if (currentDetailCacheKey != detailJobKey) return@launch
 
             // 根据模块可见性设置，按需加载各模块数据
             val visibility = _uiState.value.sectionVisible
@@ -1616,15 +1640,18 @@ class DetailViewModel @Inject constructor(
     private fun fetchCredits() {
         if (currentTmdbId <= 0) return
         val cacheKey = currentDetailCacheKey ?: return
+        val requestTmdbId = currentTmdbId
+        val requestMediaType = currentMediaType
+        val metadataKey = currentMediaMetadataKey() ?: return
         viewModelScope.launch {
             try {
                 val bundle = mediaMetadataRepository.getDetail(
-                    currentMediaMetadataKey() ?: return@launch,
+                    metadataKey,
                     setOf("credits")
                 )
                 if (currentDetailCacheKey != cacheKey) return@launch
                 val credits = bundle?.credits
-                    ?: tmdbRepository.getCredits(currentTmdbId, currentMediaType)
+                    ?: tmdbRepository.getCredits(requestTmdbId, requestMediaType)
                 credits?.let {
                     // 按职位优先级排序：导演 > 编剧 > 制片人，去重
                     val priorityOrder = mapOf("Director" to 0, "Writer" to 1, "Producer" to 2, "Screenplay" to 1)
@@ -1654,17 +1681,21 @@ class DetailViewModel @Inject constructor(
             return
         }
         val cacheKey = currentDetailCacheKey ?: return
+        val requestTmdbId = currentTmdbId
+        val requestTraktId = currentTraktId
+        val requestMediaType = currentMediaType
+        val metadataKey = currentMediaMetadataKey() ?: return
         _uiState.value = _uiState.value.copy(isLoadingVideosImages = true)
         viewModelScope.launch {
             try {
                 val bundle = mediaMetadataRepository.getDetail(
-                    currentMediaMetadataKey() ?: return@launch,
+                    metadataKey,
                     setOf("videos", "images")
                 )
                 val videosDeferred = async {
-                    bundle?.videos ?: when (currentMediaType) {
-                            MediaType.MOVIE -> tmdbRepository.getMovieVideos(currentTmdbId)
-                            MediaType.SHOW -> tmdbRepository.getTvVideos(currentTmdbId)
+                    bundle?.videos ?: when (requestMediaType) {
+                            MediaType.MOVIE -> tmdbRepository.getMovieVideos(requestTmdbId)
+                            MediaType.SHOW -> tmdbRepository.getTvVideos(requestTmdbId)
                             MediaType.PERSON -> emptyList()
                             MediaType.DISK -> emptyList()
                         }
@@ -1677,23 +1708,23 @@ class DetailViewModel @Inject constructor(
                             height = image.height ?: 0,
                             iso_639_1 = image.iso6391
                         )
-                    } ?: when (currentMediaType) {
-                        MediaType.MOVIE -> tmdbRepository.getMovieImages(currentTmdbId)
-                        MediaType.SHOW -> tmdbRepository.getTvImages(currentTmdbId)
+                    } ?: when (requestMediaType) {
+                        MediaType.MOVIE -> tmdbRepository.getMovieImages(requestTmdbId)
+                        MediaType.SHOW -> tmdbRepository.getTvImages(requestTmdbId)
                         MediaType.PERSON -> emptyList()
                         MediaType.DISK -> emptyList()
                     }
                 }
                 // Trakt 数据源（补充）
                 val traktVideosDeferred = async {
-                    if (currentTraktId > 0) {
-                        traktRepository.getVideos(currentTraktId.toString(), currentMediaType)
+                    if (requestTraktId > 0) {
+                        traktRepository.getVideos(requestTraktId.toString(), requestMediaType)
                             .getOrDefault(emptyList())
                     } else emptyList()
                 }
                 val traktImagesDeferred = async {
-                    if (currentTraktId > 0) {
-                        traktRepository.getImages(currentTraktId.toString(), currentMediaType)
+                    if (requestTraktId > 0) {
+                        traktRepository.getImages(requestTraktId.toString(), requestMediaType)
                             .getOrDefault(TraktImages())
                     } else TraktImages()
                 }
@@ -3588,7 +3619,7 @@ class DetailViewModel @Inject constructor(
         }
         if (metadataKey != null) {
             val summary = mediaMetadataRepository.getSummaries(listOf(metadataKey)).firstOrNull()
-            if (summary != null) {
+            if (summary != null && summary.hasDisplayMetadata()) {
                 val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
                     title
                 } else {
@@ -3661,7 +3692,8 @@ class DetailViewModel @Inject constructor(
         val releaseDate: String,
         val country: String,
         val runtime: Int?,
-        val status: String
+        val status: String,
+        val collectionId: Int?
     )
 
     /**
@@ -3670,7 +3702,7 @@ class DetailViewModel @Inject constructor(
      * 列表页渲染海报时已经调过 enrichMovie/enrichTv，所以从列表进入时基本必然命中；
      * 命中即海报与标题零帧就位，共享元素转场也能立刻找到落点。
      */
-    private fun peekDetailSeed(
+    private suspend fun loadDetailSeed(
         tmdbId: Int,
         mediaType: MediaType,
         title: String,
@@ -3683,8 +3715,11 @@ class DetailViewModel @Inject constructor(
             MediaType.PERSON, MediaType.DISK -> null
         }
         if (metadataKey != null) {
+            // 先读内存，未命中再读 Room；只查本地，不触发网络，避免首帧被摘要请求拖慢。
             val summary = mediaMetadataRepository.peekSummaryLocal(metadataKey)
-            if (summary != null && summary.hasDisplayMetadata()) {
+                ?: mediaMetadataRepository.getCachedSummary(metadataKey)
+                ?.takeIf { it.hasDisplayMetadata() }
+            if (summary != null) {
                 val displayTitle = if (summary.titleSource == TitleSource.NONE) {
                     title
                 } else {
@@ -3699,6 +3734,7 @@ class DetailViewModel @Inject constructor(
                     country = summary.countries.joinToString(" · "),
                     runtime = summary.runtime,
                     status = summary.status,
+                    collectionId = summary.collectionId,
                     routeTitle = title
                 )
             }
@@ -3714,6 +3750,7 @@ class DetailViewModel @Inject constructor(
                     country = it.country,
                     runtime = it.runtime,
                     status = it.status,
+                    collectionId = it.collectionId,
                     routeTitle = title
                 )
             }
@@ -3727,6 +3764,7 @@ class DetailViewModel @Inject constructor(
                     country = it.country,
                     runtime = it.episodeRunTime,
                     status = it.status,
+                    collectionId = null,
                     routeTitle = title
                 )
             }
@@ -3767,6 +3805,7 @@ class DetailViewModel @Inject constructor(
         country: String,
         runtime: Int?,
         status: String,
+        collectionId: Int?,
         routeTitle: String
     ): DetailSeed {
         val displayTitle = chineseTitle.takeIf { it.isNotEmpty() } ?: routeTitle
@@ -3778,7 +3817,8 @@ class DetailViewModel @Inject constructor(
             releaseDate = releaseDate,
             country = country,
             runtime = runtime?.takeIf { it > 0 },
-            status = status
+            status = status,
+            collectionId = collectionId
         )
     }
 
@@ -3821,17 +3861,27 @@ class DetailViewModel @Inject constructor(
     /** 获取系列信息 */
     private fun fetchCollection(collectionId: Int) {
         val cacheKey = currentDetailCacheKey ?: return
+        val metadataKey = currentMediaMetadataKey() ?: return
         viewModelScope.launch {
-            val bundle = mediaMetadataRepository.getDetail(
-                currentMediaMetadataKey() ?: return@launch,
-                setOf("collection")
-            )
-            if (currentDetailCacheKey != cacheKey) return@launch
-            val collection = bundle?.collection?.toTmdbCollection()
-                ?: tmdbRepository.getCollection(collectionId)
-            if (collection != null && currentDetailCacheKey == cacheKey) {
-                _uiState.value = _uiState.value.copy(collectionInfo = collection)
+            val collection = try {
+                val bundle = mediaMetadataRepository.getDetail(
+                    metadataKey,
+                    setOf("collection")
+                )
+                bundle?.collection?.toTmdbCollection()
+                    ?: tmdbRepository.getCollection(collectionId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
             }
+            if (currentDetailCacheKey != cacheKey) return@launch
+            // 成功、空系列或失败都要退出 loading，避免骨架永久停留。
+            _uiState.value = _uiState.value.copy(
+                // 失败时保留已有系列数据，不能因为一次网络失败把卡片清掉。
+                collectionInfo = collection ?: _uiState.value.collectionInfo,
+                isCollectionLoading = false
+            )
         }
     }
 

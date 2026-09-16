@@ -2029,6 +2029,15 @@ class WatchlistViewModel @Inject constructor(
             } catch (_: Exception) {
                 emptyList()
             }
+            val returnedKeys = summaries.mapTo(mutableSetOf()) { summary ->
+                MediaKey(summary.mediaType, summary.tmdbId, summary.locale).cacheKey()
+            }
+            // 失败或缺失的条目不能被记成“已预取”，下一次可见时仍需重试。
+            candidates.forEach { (key, _) ->
+                if (key.cacheKey() !in returnedKeys) {
+                    prefetchedMetadataKeys.remove(key.cacheKey())
+                }
+            }
             summaries.forEach { summary ->
                 val item = candidates.firstOrNull {
                     it.first.mediaType == summary.mediaType &&

@@ -59,6 +59,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.neumorphicOuterShadow
+import com.tracktosearch.ui.component.ShimmerState
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.component.usesNeumorphicDecoration
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -349,6 +351,49 @@ internal fun EpisodeRow(
 }
 
 // ==================== 系列卡片 ====================
+
+/**
+ * 系列卡片骨架。
+ *
+ * 尺寸与 [CollectionSection] 的真实卡片一致：标题行 + 110dp 海报 + 两行片名，
+ * 确保系列数据晚到时只替换骨架，不把下方内容整体下推。
+ */
+@Composable
+internal fun CollectionSectionSkeleton(
+    shimmer: ShimmerState
+) {
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.4f)
+                .height(20.dp)
+                .shimmer(shimmer, RoundedCornerShape(4.dp))
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) {
+                Column(
+                    modifier = Modifier.width(80.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(80.dp)
+                            .height(110.dp)
+                            .shimmer(shimmer, RoundedCornerShape(6.dp))
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp)
+                            .shimmer(shimmer, RoundedCornerShape(4.dp))
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun CollectionSection(

@@ -102,7 +102,7 @@ class MediaMetadataRepositoryTest {
                     mediaType = key.mediaType,
                     tmdbId = key.tmdbId,
                     locale = key.locale,
-                    summaryJson = json.encodeToString(MediaSummary.serializer(), old.summary),
+                    summaryJson = json.encodeToString(MediaSummary.serializer(), old.summary!!),
                     detailJson = json.encodeToString(MediaDetailBundle.serializer(), old),
                     schemaVersion = 3,
                     summaryRefreshedAt = 0L,
@@ -250,7 +250,7 @@ class MediaMetadataRepositoryTest {
                     mediaType = key.mediaType,
                     tmdbId = key.tmdbId,
                     locale = key.locale,
-                    summaryJson = json.encodeToString(MediaSummary.serializer(), old.summary),
+                    summaryJson = json.encodeToString(MediaSummary.serializer(), old.summary!!),
                     detailJson = json.encodeToString(MediaDetailBundle.serializer(), old),
                     schemaVersion = 1,
                     summaryRefreshedAt = System.currentTimeMillis(),
@@ -302,6 +302,81 @@ class MediaMetadataRepositoryTest {
         assertThat(first?.videos).isEmpty()
         assertThat(second?.videos).isEmpty()
         assertThat(api.detailRequests).hasSize(1)
+    }
+
+    @Test
+    fun `已确认无系列的空 collection 视为已缓存，不重复请求`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val key = MediaKey("movie", 550, "zh-CN")
+        val dao = FakeMediaMetadataDao()
+        val api = FakeMediaApi(
+            detailBundle = MediaDetailBundleDto(
+                // summary 存在且 collectionId=null：服务端明确确认“无系列”。
+                summary = summaryDto(key, title = "搏击俱乐部").copy(collectionId = null),
+                collection = null
+            )
+        )
+        val repository = MediaMetadataRepository(
+            api,
+            dao,
+            json,
+            CoroutineScope(SupervisorJob() + dispatcher)
+        )
+
+        val first = repository.getDetail(key, setOf("collection"))
+        val second = repository.getDetail(key, setOf("collection"))
+
+        assertThat(first?.collection).isNull()
+        assertThat(second?.collection).isNull()
+        assertThat(api.detailRequests).hasSize(1)
+    }
+
+    @Test
+    fun `部分响应 summary 为空时仍保留已有摘要`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val key = MediaKey("movie", 550, "zh-CN")
+        val old = summary(key, title = "旧摘要")
+        val dao = FakeMediaMetadataDao().apply {
+            put(
+                MediaMetadataEntity(
+                    mediaKey = key.cacheKey(),
+                    mediaType = key.mediaType,
+                    tmdbId = key.tmdbId,
+                    locale = key.locale,
+                    summaryJson = json.encodeToString(MediaSummary.serializer(), old),
+                    schemaVersion = 3,
+                    summaryRefreshedAt = System.currentTimeMillis(),
+                    detailRefreshedAt = 0L
+                )
+            )
+        }
+        val api = FakeMediaApi(
+            detailBundle = MediaDetailBundleDto(
+                summary = null,
+                images = listOf(
+                    MediaImageDto(
+                        filePath = "/partial.jpg",
+                        width = 1920,
+                        height = 1080,
+                        iso6391 = null,
+                        source = "tmdb"
+                    )
+                )
+            )
+        )
+        val repository = MediaMetadataRepository(
+            api,
+            dao,
+            json,
+            CoroutineScope(SupervisorJob() + dispatcher)
+        )
+
+        val result = repository.getDetail(key, setOf("images"))
+
+        assertThat(result?.summary).isNull()
+        assertThat(result?.images?.single()?.filePath).isEqualTo("/partial.jpg")
+        // summary=null 只是 R2 部分响应，不能把本地摘要抹成空。
+        assertThat(dao.getByKey(key.cacheKey())?.summaryJson).contains("旧摘要")
     }
 
     private fun summary(key: MediaKey, title: String): MediaSummary = MediaSummary(

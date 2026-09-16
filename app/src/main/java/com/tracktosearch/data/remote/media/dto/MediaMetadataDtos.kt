@@ -55,7 +55,8 @@ data class MediaDetailEnvelope(
 
 @Serializable
 data class MediaDetailBundleDto(
-    @SerialName("summary") val summary: MediaSummaryDto = MediaSummaryDto(),
+    // 摘要缺失但 R2 section 仍可用时，服务端返回 summary=null 的部分 bundle。
+    @SerialName("summary") val summary: MediaSummaryDto? = null,
     @SerialName("credits") val credits: MediaCreditsDto? = null,
     @SerialName("videos") val videos: List<TmdbVideo>? = null,
     @SerialName("images") val images: List<MediaImageDto>? = null,

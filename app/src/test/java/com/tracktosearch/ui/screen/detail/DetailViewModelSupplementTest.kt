@@ -136,6 +136,8 @@ class DetailViewModelSupplementTest {
         coEvery {
             doubanRexxarRepository.getPhotos(any(), any(), any(), any(), any())
         } returns Result.failure(IllegalStateException("Rexxar photos not stubbed"))
+        every { mediaMetadataRepository.peekSummaryLocal(any()) } returns null
+        coEvery { mediaMetadataRepository.getCachedSummary(any()) } returns null
         coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns emptyList()
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
