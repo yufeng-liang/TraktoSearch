@@ -1615,12 +1615,14 @@ class DetailViewModel @Inject constructor(
 
     private fun fetchCredits() {
         if (currentTmdbId <= 0) return
+        val cacheKey = currentDetailCacheKey ?: return
         viewModelScope.launch {
             try {
                 val bundle = mediaMetadataRepository.getDetail(
                     currentMediaMetadataKey() ?: return@launch,
                     setOf("credits")
                 )
+                if (currentDetailCacheKey != cacheKey) return@launch
                 val credits = bundle?.credits
                     ?: tmdbRepository.getCredits(currentTmdbId, currentMediaType)
                 credits?.let {
@@ -1651,6 +1653,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingVideosImages = false)
             return
         }
+        val cacheKey = currentDetailCacheKey ?: return
         _uiState.value = _uiState.value.copy(isLoadingVideosImages = true)
         viewModelScope.launch {
             try {
@@ -1699,6 +1702,7 @@ class DetailViewModel @Inject constructor(
                 val images = imagesDeferred.await()
                 val traktVideos = traktVideosDeferred.await()
                 val traktImagesData = traktImagesDeferred.await()
+                if (currentDetailCacheKey != cacheKey) return@launch
 
                 // 排序：official Trailer 优先，然后非 official Trailer，然后 Teaser，然后其他
                 val sortedVideos = videos
@@ -3816,14 +3820,16 @@ class DetailViewModel @Inject constructor(
 
     /** 获取系列信息 */
     private fun fetchCollection(collectionId: Int) {
+        val cacheKey = currentDetailCacheKey ?: return
         viewModelScope.launch {
             val bundle = mediaMetadataRepository.getDetail(
                 currentMediaMetadataKey() ?: return@launch,
                 setOf("collection")
             )
+            if (currentDetailCacheKey != cacheKey) return@launch
             val collection = bundle?.collection?.toTmdbCollection()
                 ?: tmdbRepository.getCollection(collectionId)
-            if (collection != null) {
+            if (collection != null && currentDetailCacheKey == cacheKey) {
                 _uiState.value = _uiState.value.copy(collectionInfo = collection)
             }
         }
