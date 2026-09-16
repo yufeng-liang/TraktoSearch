@@ -12,6 +12,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktHistoryIds
 import com.tracktosearch.data.remote.trakt.dto.TraktHistoryMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktHistoryShow
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
+import com.tracktosearch.data.remote.trakt.dto.TraktImages
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktAvatar
@@ -141,6 +142,38 @@ class TraktRepositoryTest {
         assertThat(repository.getMovieWatchlistTotalCount(1, 200)).isEqualTo(237)
         assertThat(repository.getShowWatchlist(1, 200, forceRefresh = true).getOrThrow().second).isEqualTo(1)
         assertThat(repository.getShowWatchlistTotalCount(1, 200)).isEqualTo(19)
+    }
+
+    @Test
+    fun `watchlist请求使用full_images且新缓存键不复用旧full缓存`() = runTest {
+        val headers = Headers.headersOf(
+            "X-Pagination-Item-Count", "1",
+            "X-Pagination-Page-Count", "1"
+        )
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } returns
+            Response.success(
+                listOf(TraktWatchlistMovieItem(movie = TraktMovie(
+                    title = "Movie",
+                    ids = TraktIds(trakt = 1, tmdb = 101),
+                    images = TraktImages(poster = listOf("https://media.trakt.tv/poster.webp"))
+                ))), headers
+            )
+        coEvery { traktApiService.getShowWatchlist(any(), any(), any(), any()) } returns
+            Response.success(
+                listOf(TraktWatchlistShowItem(show = TraktShow(
+                    title = "Show",
+                    ids = TraktIds(trakt = 2, tmdb = 202),
+                    images = TraktImages(poster = listOf("https://media.trakt.tv/show.webp"))
+                ))), headers
+            )
+
+        val movie = repository.getMovieWatchlist(1, 200, forceRefresh = true).getOrThrow().first.single().movie
+        val show = repository.getShowWatchlist(1, 200, forceRefresh = true).getOrThrow().first.single().show
+
+        assertThat(movie.images.poster).containsExactly("https://media.trakt.tv/poster.webp")
+        assertThat(show.images.poster).containsExactly("https://media.trakt.tv/show.webp")
+        coVerify { traktApiService.getWatchlist("movies", "full,images", 1, 200) }
+        coVerify { traktApiService.getShowWatchlist("shows", "full,images", 1, 200) }
     }
 
     @Test

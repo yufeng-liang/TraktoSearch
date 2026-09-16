@@ -1463,6 +1463,9 @@
     <string name="genre_biography">传记</string>
     <string name="genre_noir">黑色电影</string>
     <string name="genre_game_show">游戏节目</string>
+    <string name="genre_suspense">惊险</string>
+    <string name="genre_donghua">国漫</string>
+    <string name="genre_holiday">节日</string>
     <string name="genre_other">其他</string>
 
     <!-- Content Descriptions (Badge) -->

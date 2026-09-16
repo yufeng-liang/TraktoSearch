@@ -1368,6 +1368,9 @@
     <string name="genre_biography">전기</string>
     <string name="genre_noir">필름 누아르</string>
     <string name="genre_game_show">게임 쇼</string>
+    <string name="genre_suspense">서스펜스</string>
+    <string name="genre_donghua">중국 애니메이션</string>
+    <string name="genre_holiday">휴일</string>
     <string name="genre_other">기타</string>
 
     <!-- Content Descriptions (Badge) -->

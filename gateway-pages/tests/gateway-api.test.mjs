@@ -108,7 +108,42 @@ test('caches anonymous public API responses at the gateway edge', async () => {
     }
 });
 
-test('never caches requests carrying user credentials', async () => {
+test('caches public read-only endpoints even when the app sends Authorization', async () => {
+    const calls = [];
+    const entries = new Map();
+    const originalCaches = globalThis.caches;
+    globalThis.caches = {
+        default: {
+            async match(request) {
+                return entries.get(request.url);
+            },
+            async put(request, response) {
+                entries.set(request.url, response);
+            },
+        },
+    };
+
+    try {
+        const env = { AUTH_WORKER: serviceBinding(calls, { data: { title: 'cached' } }) };
+        const init = { headers: { Authorization: 'Bearer user-token' } };
+        const first = await onRequest(contextFor('/gateway-api/api/tmdb/movie/1', init, env));
+        const second = await onRequest(contextFor('/gateway-api/api/tmdb/movie/1', init, env));
+
+        assert.equal(first.headers.get('X-Gateway-Cache'), 'MISS');
+        assert.equal(second.headers.get('X-Gateway-Cache'), 'HIT');
+        // 客户端响应保持不缓存（App 有自建缓存层）
+        assert.equal(first.headers.get('Cache-Control'), 'public, max-age=0');
+        // 边缘缓存条目必须带 TTL，否则 put() 会被 Cache API 拒绝（413）
+        const cachedEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/tmdb/movie/1');
+        assert.equal(cachedEntry.headers.get('Cache-Control'), 'public, max-age=600');
+        assert.equal(calls.length, 1);
+        assert.equal(entries.size, 1);
+    } finally {
+        globalThis.caches = originalCaches;
+    }
+});
+
+test('never caches endpoints that carry per-user data', async () => {
     const calls = [];
     const entries = new Map();
     const originalCaches = globalThis.caches;
@@ -125,14 +160,57 @@ test('never caches requests carrying user credentials', async () => {
 
     try {
         const env = { AUTH_WORKER: serviceBinding(calls, { data: { private: true } }) };
-        const init = { headers: { Authorization: 'Bearer user-token' } };
-        const first = await onRequest(contextFor('/gateway-api/api/tmdb/movie/1', init, env));
-        const second = await onRequest(contextFor('/gateway-api/api/tmdb/movie/1', init, env));
+        const privatePaths = [
+            '/gateway-api/api/trakt/sync/watchlist/movies',
+            '/gateway-api/api/trakt/users/me',
+            '/gateway-api/api/trakt/recommendations/movies',
+            '/gateway-api/api/trakt/shows/1/progress/watched',
+            '/gateway-api/api/trakt/oauth/authorize',
+            // 查询串里的 session_id / guest_session_id 代表个人账号态数据
+            '/gateway-api/api/tmdb/account/favorite/movies?session_id=abc',
+            '/gateway-api/api/tmdb/guest_session/xyz/rated/movies?guest_session_id=def',
+            '/gateway-api/api/tmdb/guest_session/xyz/rated/movies',
+            '/gateway-api/api/tmdb/account/xyz/lists',
+        ];
 
-        assert.equal(first.headers.get('X-Gateway-Cache'), 'BYPASS');
-        assert.equal(second.headers.get('X-Gateway-Cache'), 'BYPASS');
-        assert.equal(calls.length, 2);
+        for (const path of privatePaths) {
+            const init = { headers: { Authorization: 'Bearer user-token' } };
+            const first = await onRequest(contextFor(path, init, env));
+            const second = await onRequest(contextFor(path, init, env));
+            assert.equal(first.headers.get('X-Gateway-Cache'), 'BYPASS', `${path} 不应命中缓存`);
+            assert.equal(second.headers.get('X-Gateway-Cache'), 'BYPASS', `${path} 不应命中缓存`);
+            assert.equal(first.headers.get('Cache-Control'), 'no-store', `${path} 不应可缓存`);
+        }
+
+        assert.equal(calls.length, privatePaths.length * 2);
         assert.equal(entries.size, 0);
+    } finally {
+        globalThis.caches = originalCaches;
+    }
+});
+
+test('does not share cache between different query parameters', async () => {
+    const calls = [];
+    const entries = new Map();
+    const originalCaches = globalThis.caches;
+    globalThis.caches = {
+        default: {
+            async match(request) {
+                return entries.get(request.url);
+            },
+            async put(request, response) {
+                entries.set(request.url, response);
+            },
+        },
+    };
+
+    try {
+        const env = { AUTH_WORKER: serviceBinding(calls, { data: { ok: true } }) };
+        await onRequest(contextFor('/gateway-api/api/tmdb/search/movie?query=a&language=zh-CN', {}, env));
+        await onRequest(contextFor('/gateway-api/api/tmdb/search/movie?query=b&language=zh-CN', {}, env));
+
+        assert.equal(calls.length, 2);
+        assert.equal(entries.size, 2);
     } finally {
         globalThis.caches = originalCaches;
     }

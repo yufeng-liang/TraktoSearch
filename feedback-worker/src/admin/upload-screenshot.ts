@@ -6,6 +6,7 @@ import { generateSecureToken } from '../util/crypto';
 import { checkRateLimit } from '../util/rate-limit';
 
 interface Env {
+    DB: D1Database;
     KV: KVNamespace;
     SCREENSHOTS: R2Bucket;
 }

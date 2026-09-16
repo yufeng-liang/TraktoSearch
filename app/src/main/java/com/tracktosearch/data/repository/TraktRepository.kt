@@ -72,6 +72,14 @@ class TraktRepository @Inject constructor(
         private const val TTL_WATCHLIST_IDS = 6 * 60 * 60 * 1000L // 想看/已看 ID 集合 6 小时（避免每次启动全量拉取）
         private const val TTL_SEARCH_PERSON = 10 * 60 * 1000L    // 人物搜索/详情缓存 10 分钟（避免重复请求）
         private const val TTL_WATCH_HISTORY = 60 * 60 * 1000L  // 已看历史 1 小时缓存
+        /** /sync/last_activities 内存缓存 TTL：短 TTL，避免页面频繁进出时重复打接口 */
+        private const val TTL_LAST_ACTIVITIES = 60 * 1000L
+        /** /sync/last_activities 内存缓存 key（账号级单条数据） */
+        private const val LAST_ACTIVITIES_CACHE_KEY = "last_activities"
+        /** Watchlist 活动基线在 DataStore 中的 key */
+        private const val WATCHLIST_ACTIVITY_BASELINE_KEY = "watchlist_activity_baseline_v1"
+        /** Watchlist 服务端总数在 DataStore 中的 key（跳过列表请求时恢复计数与分页） */
+        private const val WATCHLIST_TOTALS_KEY = "watchlist_totals_v1"
         private const val MAX_MARK_RECORDS = 10000              // 流水表上限
         /** 并行 enrich 并发上限，防止冷启动瞬间打爆 TMDB */
         const val ENRICH_CONCURRENCY = 10
@@ -201,6 +209,45 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /**
+     * 由 /sync/last_activities 得出的 Watchlist 增量刷新决策。
+     *
+     * [moviesWatchlistedAt] / [showsWatchlistedAt] 是本次观察到的活动时间，
+     * 成功拉取对应列表后回传给 [markMovieWatchlistSynced] / [markShowWatchlistSynced] 更新基线。
+     */
+    data class WatchlistRefreshPlan(
+        val shouldRefreshMovies: Boolean = true,
+        val shouldRefreshShows: Boolean = true,
+        /** 本次是否真的读到了 /sync/last_activities；失败时为 false，禁止写活动基线 */
+        val activitiesAvailable: Boolean = false,
+        val moviesWatchlistedAt: String? = null,
+        val showsWatchlistedAt: String? = null
+    )
+
+    /**
+     * 上次成功同步到的 Watchlist 活动时间基线（账号级，跨重启保留）。
+     *
+     * null 表示「该类型从未成功同步过」，空串表示「已同步且服务端未返回活动时间」。
+     * 只有 null 才会强制刷新，避免服务端从不返回活动时间时每次都全量拉取。
+     */
+    @Serializable
+    data class WatchlistActivityBaseline(
+        val moviesWatchlistedAt: String? = null,
+        val showsWatchlistedAt: String? = null
+    )
+
+    /**
+     * 最近一次成功同步到的 Watchlist 服务端总数（账号级，跨重启保留）。
+     *
+     * 跳过列表请求时快照里只有首页数据，没有总数就无法恢复顶部计数，
+     * 也会让后续分页停在首页；用它把计数与分页起点补回来。
+     */
+    @Serializable
+    data class WatchlistTotals(
+        val movies: Int? = null,
+        val shows: Int? = null
+    )
+
     enum class WatchlistMutationAction { ADD, REMOVE }
 
     /** 详情页标记成功后的单条想看变更，供 Watchlist 在跨页面返回时立即应用。 */
@@ -286,6 +333,9 @@ class TraktRepository @Inject constructor(
             register { recommendationsCache.clearAll() }
             register { showRecommendationsCache.clearAll() }
             register { watchHistoryPageCache.clearAll() }
+            // 活动时间基线是账号私有数据，切号/重新授权后必须清除，否则新账号会沿用旧账号的基线而跳过拉取
+            register { watchlistActivityBaselineCache.clearAll() }
+            register { watchlistTotalsCache.clearAll() }
             // 统计快照是账号私有数据，切换账号必须清除，否则新账号会看到上一个账号的统计
             register { statisticsSnapshotStore.clear() }
             register { clearUserProfileCacheInternal() }
@@ -389,6 +439,7 @@ class TraktRepository @Inject constructor(
         movieWatchlistTotalCountCache.clear()
         showWatchlistTotalCountCache.clear()
         watchHistoryCache.clear()
+        lastActivitiesCache.clear()
         // 清除负缓存，避免下一用户继承上一用户的"未找到"标记
         notFoundTmdbIds.clear()
         notFoundImdbIds.clear()
@@ -648,6 +699,30 @@ class TraktRepository @Inject constructor(
         TTL_ID_MAPPING, 1, persistentDataStore, json, "watch_history_page1_v1", persistentScope
     )
 
+    /**
+     * Watchlist 活动时间基线（永久，账号级单条）。
+     *
+     * 记录「上次成功同步到的 watchlisted_at」，跨重启复用以跳过未变化的列表请求。
+     * 与 Room 离线快照绑定：快照被清空（切号、清全部缓存）时基线一并清除，避免用旧基线跳过拉取而显示空列表。
+     */
+    private val watchlistActivityBaselineCache = persistentTtlCache<WatchlistActivityBaseline>(
+        TTL_ID_MAPPING, 1, persistentDataStore, json, "watchlist_activity_baseline_v1", persistentScope
+    )
+
+    /** /sync/last_activities 短 TTL 内存缓存，getOrAwait 提供飞行中去重 */
+    private val lastActivitiesCache = TtlCache<TraktLastActivities>(TTL_LAST_ACTIVITIES, maxSize = 1)
+
+    /** 活动基线读改写串行化：电影与剧集并行同步完成时避免互相覆盖 */
+    private val watchlistActivityBaselineMutex = Mutex()
+
+    /** Watchlist 服务端总数（永久，账号级单条） */
+    private val watchlistTotalsCache = persistentTtlCache<WatchlistTotals>(
+        TTL_ID_MAPPING, 1, persistentDataStore, json, "watchlist_totals_v1", persistentScope
+    )
+
+    /** 总数读改写串行化：电影与剧集并发写入时避免互相覆盖 */
+    private val watchlistTotalsMutex = Mutex()
+
     // 短期内存缓存：人物详情和演字号搜索，App 进程内有效（10 分钟）
     private val personSummaryCache = TtlCache<Result<TraktPersonDetail>>(TTL_SEARCH_PERSON, maxSize = 50)
     private val personMovieCreditsCache = TtlCache<Result<TraktPersonCreditsResponse>>(TTL_SEARCH_PERSON, maxSize = 30)
@@ -657,8 +732,8 @@ class TraktRepository @Inject constructor(
     val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
         searchByTmdbCache, searchByImdbCache, watchlistWatchedIdsCache, recommendationsCache,
         trendingMoviesCache, trendingShowsCache, anticipatedMoviesCache,
-        anticipatedShowsCache, showRecommendationsCache, trendingListsCache,
-        showSeasonsCache, watchHistoryPageCache
+        anticipatedShowsCache, showRecommendationsCache, trendingListsCache, watchlistActivityBaselineCache,
+        watchlistTotalsCache, showSeasonsCache, watchHistoryPageCache
     )
 
     /** ID 映射持久化缓存（tmdb↔trakt、imdb↔trakt），用于设置页按类目清除 */
@@ -854,14 +929,129 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /**
+     * 读取 /sync/last_activities 并给出 Watchlist 增量刷新决策。
+     *
+     * - 首次没有基线（或基线被清空）：两个列表都判定为需要拉取。
+     * - 活动时间未变化：对应类型判定为跳过列表请求，保留当前 UI 与离线快照。
+     * - 活动接口失败：返回全量刷新，由后续列表请求自行成败，不写入错误基线。
+     * - [forceRefresh]：跳过时间比较强制拉取，但仍带出最新活动时间用于更新基线。
+     *
+     * 电影与剧集并发调用时共用同一次 /sync/last_activities 请求（TtlCache 飞行中去重 + 短 TTL）。
+     */
+    suspend fun resolveWatchlistRefreshPlan(forceRefresh: Boolean = false): WatchlistRefreshPlan {
+        val activities = try {
+            loadLastActivities(skipCache = forceRefresh)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("TraktRepo", "resolveWatchlistRefreshPlan failed: ${e.message}")
+            null
+        } ?: return WatchlistRefreshPlan()
+
+        val baseline = watchlistActivityBaselineCache.getAfterLoad(WATCHLIST_ACTIVITY_BASELINE_KEY)
+        val moviesWatchlistedAt = activities.movies.watchlistedAt?.trim().orEmpty()
+        val showsWatchlistedAt = activities.shows.watchlistedAt?.trim().orEmpty()
+        return WatchlistRefreshPlan(
+            shouldRefreshMovies = forceRefresh || baseline?.moviesWatchlistedAt == null ||
+                baseline.moviesWatchlistedAt != moviesWatchlistedAt,
+            shouldRefreshShows = forceRefresh || baseline?.showsWatchlistedAt == null ||
+                baseline.showsWatchlistedAt != showsWatchlistedAt,
+            activitiesAvailable = true,
+            moviesWatchlistedAt = moviesWatchlistedAt.ifEmpty { null },
+            showsWatchlistedAt = showsWatchlistedAt.ifEmpty { null }
+        )
+    }
+
+    /** 电影 Watchlist 成功拉取后更新活动基线；失败或未取到活动时间时不写入。 */
+    suspend fun markMovieWatchlistSynced(plan: WatchlistRefreshPlan) {
+        if (!plan.activitiesAvailable) return
+        updateWatchlistActivityBaseline(moviesWatchlistedAt = plan.moviesWatchlistedAt.orEmpty())
+    }
+
+    /** 电视剧 Watchlist 成功拉取后更新活动基线；失败或未取到活动时间时不写入。 */
+    suspend fun markShowWatchlistSynced(plan: WatchlistRefreshPlan) {
+        if (!plan.activitiesAvailable) return
+        updateWatchlistActivityBaseline(showsWatchlistedAt = plan.showsWatchlistedAt.orEmpty())
+    }
+
+    private suspend fun loadLastActivities(skipCache: Boolean): TraktLastActivities {
+        val sessionGeneration = sessionCacheRegistry.currentGeneration()
+        val result = lastActivitiesCache.getOrAwait(LAST_ACTIVITIES_CACHE_KEY, skipCache = skipCache) {
+            val response = traktApiService.getLastActivities()
+            if (response.isSuccessful) {
+                response.body() ?: TraktLastActivities()
+            } else {
+                throw Exception("Failed to fetch last activities: ${response.code()}")
+            }
+        }
+        return requireCurrentSessionValue(sessionGeneration, result)
+    }
+
+    /**
+     * 更新活动基线。
+     *
+     * 只在对应类型的列表真正拉取成功后才调用；参数为空串表示「已同步且服务端无活动时间」，
+     * 与「从未同步（null）」区分开，避免服务端不返回活动时间时每次刷新都全量拉取。
+     */
+    private suspend fun updateWatchlistActivityBaseline(
+        moviesWatchlistedAt: String? = null,
+        showsWatchlistedAt: String? = null
+    ) {
+        // 电影与剧集并行同步完成时会各回写一次基线，读改写必须串行化，
+        // 否则后写的会把另一类型刚写入的新基线覆盖回旧值，导致下次又多拉一次列表。
+        watchlistActivityBaselineMutex.withLock {
+            val current = watchlistActivityBaselineCache.getAfterLoad(WATCHLIST_ACTIVITY_BASELINE_KEY)
+                ?: WatchlistActivityBaseline()
+            watchlistActivityBaselineCache.put(
+                WATCHLIST_ACTIVITY_BASELINE_KEY,
+                current.copy(
+                    moviesWatchlistedAt = moviesWatchlistedAt ?: current.moviesWatchlistedAt,
+                    showsWatchlistedAt = showsWatchlistedAt ?: current.showsWatchlistedAt
+                )
+            )
+        }
+    }
+
+
+    /**
+     * 记录最近一次成功同步到的 Watchlist 服务端总数。
+     *
+     * 跳过列表请求时用 [savedWatchlistTotal] 恢复顶部计数与分页起点，
+     * 避免快照只有首页数据时列表永远停在 200 条。
+     */
+    suspend fun rememberWatchlistTotal(mediaType: MediaType, totalCount: Int) {
+        watchlistTotalsMutex.withLock {
+            val current = watchlistTotalsCache.getAfterLoad(WATCHLIST_TOTALS_KEY) ?: WatchlistTotals()
+            watchlistTotalsCache.put(
+                WATCHLIST_TOTALS_KEY,
+                when (mediaType) {
+                    MediaType.MOVIE -> current.copy(movies = totalCount)
+                    MediaType.SHOW -> current.copy(shows = totalCount)
+                    else -> current
+                }
+            )
+        }
+    }
+
+    /** 读取上次成功同步到的 Watchlist 服务端总数；从未同步过时返回 null。 */
+    suspend fun savedWatchlistTotal(mediaType: MediaType): Int? {
+        val totals = watchlistTotalsCache.getAfterLoad(WATCHLIST_TOTALS_KEY) ?: return null
+        return when (mediaType) {
+            MediaType.MOVIE -> totals.movies
+            MediaType.SHOW -> totals.shows
+            else -> null
+        }
+    }
+
     suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
-        val cacheKey = "p${page}_$limit"
+        val cacheKey = "watchlist_v2_full_images_p${page}_$limit"
         return runCatching {
             val result = movieWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
                 val response = traktApiService.getWatchlist(
                     type = "movies",
-                    extended = "full",
+                    extended = "full,images",
                     page = page,
                     limit = limit
                 )
@@ -872,6 +1062,7 @@ class TraktRepository @Inject constructor(
                     sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
                         movieWatchlistTotalCountCache.put(cacheKey, totalCount)
                     }
+                    if (page == 1) rememberWatchlistTotal(MediaType.MOVIE, totalCount)
                     Pair(items, totalPages)
                 } else {
                     throw Exception("Failed to fetch movie watchlist: ${response.code()}")
@@ -883,12 +1074,12 @@ class TraktRepository @Inject constructor(
 
     suspend fun getShowWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
-        val cacheKey = "p${page}_$limit"
+        val cacheKey = "watchlist_v2_full_images_p${page}_$limit"
         return runCatching {
             val result = showWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
                 val response = traktApiService.getShowWatchlist(
                     type = "shows",
-                    extended = "full",
+                    extended = "full,images",
                     page = page,
                     limit = limit
                 )
@@ -899,6 +1090,7 @@ class TraktRepository @Inject constructor(
                     sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
                         showWatchlistTotalCountCache.put(cacheKey, totalCount)
                     }
+                    if (page == 1) rememberWatchlistTotal(MediaType.SHOW, totalCount)
                     Pair(items, totalPages)
                 } else {
                     throw Exception("Failed to fetch show watchlist: ${response.code()}")
@@ -910,11 +1102,11 @@ class TraktRepository @Inject constructor(
 
     /** 返回最近一次成功获取的电影 watchlist 服务端总条数。 */
     fun getMovieWatchlistTotalCount(page: Int = 1, limit: Int = 50): Int? =
-        movieWatchlistTotalCountCache.get("p${page}_$limit")
+        movieWatchlistTotalCountCache.get("watchlist_v2_full_images_p${page}_$limit")
 
     /** 返回最近一次成功获取的电视剧 watchlist 服务端总条数。 */
     fun getShowWatchlistTotalCount(page: Int = 1, limit: Int = 50): Int? =
-        showWatchlistTotalCountCache.get("p${page}_$limit")
+        showWatchlistTotalCountCache.get("watchlist_v2_full_images_p${page}_$limit")
 
     suspend fun getMovieHistory(page: Int = 1, limit: Int = 200, extended: String = "full"): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         return try {

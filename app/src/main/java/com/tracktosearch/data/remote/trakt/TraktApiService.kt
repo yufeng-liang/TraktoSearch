@@ -8,7 +8,7 @@ interface TraktApiService {
     @GET("sync/watchlist/{type}/added/desc")
     suspend fun getWatchlist(
         @Path("type") type: String,
-        @Query("extended") extended: String = "full",
+        @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50
     ): Response<List<TraktWatchlistMovieItem>>
@@ -16,7 +16,7 @@ interface TraktApiService {
     @GET("sync/watchlist/{type}/added/desc")
     suspend fun getShowWatchlist(
         @Path("type") type: String = "shows",
-        @Query("extended") extended: String = "full",
+        @Query("extended") extended: String = "full,images",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50
     ): Response<List<TraktWatchlistShowItem>>
@@ -32,6 +32,13 @@ interface TraktApiService {
 
     @POST("sync/watchlist/remove")
     suspend fun removeFromWatchlist(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
+
+    /**
+     * 账号级活动时间。官方建议本地缓存时间戳，未变化时跳过对应同步请求。
+     * 参考 https://docs.trakt.tv/reference/getsynclastactivities
+     */
+    @GET("sync/last_activities")
+    suspend fun getLastActivities(): Response<TraktLastActivities>
 
     @GET("sync/history")
     suspend fun getMovieHistory(

@@ -55,13 +55,17 @@ export async function onRequest(context) {
 
     const cachePlan = getPublicCachePlan(request, upstreamPath);
     const cache = cachePlan ? globalThis.caches?.default : undefined;
-    const cacheKey = cache ? new Request(url.toString(), { method: 'GET' }) : null;
+    // 缓存 key 只保留路径与查询串，剥离 Authorization / Cookie 等请求头：
+    // 登录用户与访客请求同一公开资源时应共享同一份边缘缓存。
+    const cacheKey = cache ? new Request(publicCacheKey(url), { method: 'GET' }) : null;
     if (cache && cacheKey) {
         try {
             const cached = await cache.match(cacheKey);
             if (cached) {
                 const headers = new Headers(cached.headers);
                 headers.set('X-Gateway-Cache', 'HIT');
+                // 缓存条目里存的是边缘 TTL；回给客户端时仍按「客户端不缓存」处理（App 有自建缓存层）
+                headers.set('Cache-Control', 'public, max-age=0');
                 return new Response(cached.body, {
                     status: cached.status,
                     statusText: cached.statusText,
@@ -116,16 +120,11 @@ export async function onRequest(context) {
         }));
 
         const responseHeaders = new Headers(upstream.headers);
+        // 客户端响应维持「不缓存」，真正省请求靠 App 自建缓存 + 下面的边缘缓存条目。
         responseHeaders.set(
             'Cache-Control',
             cachePlan && upstream.status === 200 ? 'public, max-age=0' : 'no-store'
         );
-        // 边缘缓存 TTL 用 CDN-Cache-Control 单独控制：s-maxage 隐含 proxy-revalidate，
-        // 与 stale-while-revalidate 混用会使其失效（Cloudflare 官方文档明确禁止）；
-        // 客户端 max-age=0 不缓存 API 响应（App 有自建缓存层）。
-        if (cachePlan && upstream.status === 200) {
-            responseHeaders.set('CDN-Cache-Control', `max-age=${cachePlan.ttlSeconds}, stale-while-revalidate=60`);
-        }
         responseHeaders.set('X-Gateway-Cache', cachePlan ? 'MISS' : 'BYPASS');
         for (const [name, value] of Object.entries(corsHeaders())) {
             if (!responseHeaders.has(name)) responseHeaders.set(name, value);
@@ -142,7 +141,18 @@ export async function onRequest(context) {
         });
 
         if (cache && cacheKey && cachePlan && upstream.status === 200) {
-            const cacheWrite = cache.put(cacheKey, response.clone()).catch(() => undefined);
+            // 写入边缘缓存的条目单独覆盖 TTL：Workers Cache API 的 put() 只识别
+            // Cache-Control（不识别 CDN-Cache-Control），且 max-age=0 / no-store 的响应会被拒绝写入。
+            // 因此条目用 cachePlan 的 TTL，回给客户端的头仍保持 max-age=0。
+            const cacheEntrySource = response.clone();
+            const cacheEntryHeaders = new Headers(cacheEntrySource.headers);
+            cacheEntryHeaders.set('Cache-Control', `public, max-age=${cachePlan.ttlSeconds}`);
+            const cacheEntry = new Response(cacheEntrySource.body, {
+                status: cacheEntrySource.status,
+                statusText: cacheEntrySource.statusText,
+                headers: cacheEntryHeaders,
+            });
+            const cacheWrite = cache.put(cacheKey, cacheEntry).catch(() => undefined);
             if (typeof context.waitUntil === 'function') {
                 context.waitUntil(cacheWrite);
             } else {
@@ -157,11 +167,20 @@ export async function onRequest(context) {
 }
 
 /**
- * 仅缓存不带用户凭据的只读资源。带 Authorization 的请求永远绕过缓存，
- * 因此不会把 watchlist、历史、评分或同步结果写入共享边缘缓存。
+ * 仅缓存「公开只读」资源。
+ *
+ * 是否可缓存由路径与方法决定，与请求是否携带 Authorization 无关：App 的
+ * AuthInterceptor 会给所有网关请求统一注入 Authorization，若因为请求头就绕过缓存，
+ * 登录用户就拿不到任何边缘缓存；而 TMDB / Trakt 公开端点 / OMDb / 豆瓣热榜对所有人返回同一份数据。
+ *
+ * 私有路径（Trakt sync/recommendations/users、oauth、progress、comments）
+ * 不在白名单内，永远不会写入共享缓存，因此不会串号。
  */
 function getPublicCachePlan(request, path) {
-    if (request.method !== 'GET' || request.headers.has('Authorization') || request.headers.has('Cookie')) return null;
+    if (request.method !== 'GET') return null;
+    // TMDB 账号态端点靠 session_id / guest_session_id 标识身份（查询串或路径段），
+    // 这类响应属于单个用户，绝不能写进所有人共享的边缘缓存（App 不使用这些端点）。
+    if (hasUserScopedQuery(request.url) || hasUserScopedPath(path)) return null;
 
     if (path.startsWith('/api/tmdb/')) return { ttlSeconds: 600 };
     if (path.startsWith('/api/douban/')) return { ttlSeconds: 300 };
@@ -179,6 +198,22 @@ function getPublicCachePlan(request, path) {
     }
 
     return null;
+}
+
+/** 判断请求是否携带会改变响应归属的用户级查询凭据。 */
+function hasUserScopedQuery(rawUrl) {
+    const params = new URL(rawUrl).searchParams;
+    return params.has('session_id') || params.has('guest_session_id');
+}
+
+/** 判断路径本身是否含用户级凭据段，如 /api/tmdb/guest_session/{id}/rated/movies。 */
+function hasUserScopedPath(path) {
+    return /^\/api\/tmdb\/(?:guest_session|account)\//.test(path);
+}
+
+/** 构造公开缓存 key：只保留路径与查询串，剥离所有凭据类请求头。 */
+function publicCacheKey(url) {
+    return url.origin + url.pathname + url.search;
 }
 
 function corsHeaders() {

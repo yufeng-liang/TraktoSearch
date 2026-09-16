@@ -623,11 +623,13 @@ class DetailViewModel @Inject constructor(
             }
             delayedLoadJob?.cancel()
             delayedLoadJob = viewModelScope.launch {
-                delay(1500)
-                if (visibility.recommendations && cached.uiState.recommendations.isEmpty()) fetchRecommendations()
+                // 系列详情命中 TmdbRepository 的内存/持久化缓存时是本地读取，
+                // 让它和首屏并发发出，第二次进入就能和头部同帧出现，而不是等满 1.5s
                 if (cached.currentMediaType == MediaType.MOVIE && cached.currentCollectionId > 0 && cached.uiState.collectionInfo == null) {
                     fetchCollection(cached.currentCollectionId)
                 }
+                delay(1500)
+                if (visibility.recommendations && cached.uiState.recommendations.isEmpty()) fetchRecommendations()
             }
             return
         }
@@ -812,10 +814,12 @@ class DetailViewModel @Inject constructor(
                     country = beforeEnrichment.country.ifBlank {
                         doubanSupplement?.country ?: enrichment?.country.orEmpty()
                     },
-                    // 海报 TMDB 优先；纯豆瓣条目(tmdbId=0 无 TMDB 海报)时用豆瓣海报兜底
-                    posterUrl = enrichment?.posterUrl
-                        ?: doubanSupplement?.posterUrl
-                        ?: beforeEnrichment.posterUrl,
+                    // 首帧已有海报时不再替换：列表卡片用的是 Trakt 海报，详情页若换成 TMDB 那张，
+                    // 用户会看到海报二次加载并跳成另一张图，沉浸色也要重算一遍。
+                    // 只有首帧没有海报（推荐/搜索等无种子入口）时才用 TMDB / 豆瓣兜底。
+                    posterUrl = beforeEnrichment.posterUrl
+                        ?: enrichment?.posterUrl
+                        ?: doubanSupplement?.posterUrl,
                     year = beforeEnrichment.year ?: doubanSupplement?.year ?: enrichment?.year ?: year,
                     releaseDate = beforeEnrichment.releaseDate.ifBlank {
                         enrichment?.releaseDate.orEmpty()

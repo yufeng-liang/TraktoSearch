@@ -31,7 +31,8 @@ data class TraktMovie(
     val runtime: Int = 0,
     val genres: List<String> = emptyList(),
     @kotlinx.serialization.SerialName("poster_path")
-    val posterPath: String? = null
+    val posterPath: String? = null,
+    val images: TraktImages = TraktImages()
 )
 
 @Serializable
@@ -50,7 +51,8 @@ data class TraktShow(
     @kotlinx.serialization.SerialName("aired_episodes")
     val airedEpisodes: Int = 0,
     @kotlinx.serialization.SerialName("poster_path")
-    val posterPath: String? = null
+    val posterPath: String? = null,
+    val images: TraktImages = TraktImages()
 )
 
 @Serializable
@@ -65,6 +67,30 @@ data class TraktWatchlistShowItem(
     val listed_at: String = "",
     val watched_at: String = "",
     val show: TraktShow = TraktShow()
+)
+
+/**
+ * Trakt `/sync/last_activities` 中单个类型的活动时间。
+ *
+ * 只保留 Watchlist 增量同步需要的 `watchlisted_at`，其余字段由 Json 的 ignoreUnknownKeys 忽略。
+ * 接口在某些类型上可能返回 null（从无活动），所以用可空字符串承接，null 与空串都视为「无活动时间」。
+ */
+@Serializable
+data class TraktLastActivityType(
+    @kotlinx.serialization.SerialName("watchlisted_at")
+    val watchlistedAt: String? = null
+)
+
+/**
+ * Trakt `/sync/last_activities` 响应。
+ *
+ * 用于判断 Watchlist 是否变化：时间戳未变化时跳过对应的列表请求，
+ * 只刷新发生变化的类型，避免每次进页面都全量拉取两个列表。
+ */
+@Serializable
+data class TraktLastActivities(
+    val movies: TraktLastActivityType = TraktLastActivityType(),
+    val shows: TraktLastActivityType = TraktLastActivityType()
 )
 
 @Serializable

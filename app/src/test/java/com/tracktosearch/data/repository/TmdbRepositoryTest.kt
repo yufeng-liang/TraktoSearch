@@ -265,6 +265,21 @@ class TmdbRepositoryTest {
     }
 
     @Test
+    fun enrichMovie_title等于原始标题时仍走alternative_titles() = runTest {
+        val detail = testMovieDetail.copy(title = "Movie A", original_title = "Movie A")
+        val altTitles = TmdbAlternativeTitlesResponse(
+            titles = listOf(TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文译名", type = ""))
+        )
+        coEvery { tmdbApiService.getMovieDetail(100, "zh-CN") } returns Response.success(detail)
+        coEvery { tmdbApiService.getMovieAlternativeTitles(100, "CN") } returns Response.success(altTitles)
+
+        val result = repository.enrichMovie(100, "Movie A", 2024)
+
+        assertThat(result.chineseTitle).isEqualTo("中文译名")
+        coVerify(exactly = 1) { tmdbApiService.getMovieAlternativeTitles(100, "CN") }
+    }
+
+    @Test
     fun enrichMovie_title为空_走alternative_titles() = runTest {
         val detail = testMovieDetail.copy(title = "")
         val altTitles = TmdbAlternativeTitlesResponse(
@@ -435,6 +450,21 @@ class TmdbRepositoryTest {
 
         assertThat(result.chineseTitle).isEqualTo("中文剧名")
         coVerify(exactly = 0) { tmdbApiService.getTvAlternativeTitles(any(), any()) }
+    }
+
+    @Test
+    fun enrichTv_name等于原始名称时仍走alternative_titles() = runTest {
+        val detail = testTvDetail.copy(name = "Show A", original_name = "Show A")
+        val altTitles = TmdbAlternativeTitlesResponse(
+            titles = listOf(TmdbAlternativeTitle(iso_3166_1 = "CN", title = "中文剧名", type = ""))
+        )
+        coEvery { tmdbApiService.getTvDetail(200, "zh-CN") } returns Response.success(detail)
+        coEvery { tmdbApiService.getTvAlternativeTitles(200, "CN") } returns Response.success(altTitles)
+
+        val result = repository.enrichTv(200, "Show A", 2024)
+
+        assertThat(result.chineseTitle).isEqualTo("中文剧名")
+        coVerify(exactly = 1) { tmdbApiService.getTvAlternativeTitles(200, "CN") }
     }
 
     @Test
