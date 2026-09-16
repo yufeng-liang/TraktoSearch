@@ -46,7 +46,7 @@ export interface MediaSummary {
 }
 
 export interface MediaDetailBundle {
-    summary: MediaSummary;
+    summary: MediaSummary | null;
     credits: MediaCredits | null;
     videos: MediaVideo[] | null;
     images: MediaImage[] | null;
@@ -355,10 +355,6 @@ async function resolveDetail(
         }
     }
 
-    if (!summary) {
-        throw new Error('TMDB summary unavailable');
-    }
-
     const sectionValues = new Map<MediaSection, unknown>();
     for (const [section, cached] of cachedSections) {
         sectionValues.set(section, cached.value);
@@ -367,7 +363,7 @@ async function resolveDetail(
     for (const section of sectionsToFetch) {
         let value: unknown = null;
         if (section === 'collection') {
-            const collectionId = summary.collectionId;
+            const collectionId = summary?.collectionId ?? null;
             if (collectionId !== null) {
                 try {
                     value = await fetchCollection(env, collectionId, locale);
@@ -376,7 +372,9 @@ async function resolveDetail(
                     partial = true;
                 }
             }
-        } else {
+        } else if (fetchedBase !== null) {
+            // 只有主详情回源成功才允许映射 section；回源失败时不能用 {} 生成空数组，
+            // 否则会把一次 TMDB 故障固化成长达 30~365 天的空缓存。
             value = mapSectionValue(section, fetchedBase?.raw ?? {});
         }
         sectionValues.set(section, value);
@@ -384,7 +382,12 @@ async function resolveDetail(
         // 其他 section 只有拿到 TMDB 数据时才写；回源失败不能把 null 当成负缓存。
         if (value !== null) {
             await safeSaveSection(env, mediaType, tmdbId, locale, section, value);
-        } else if (section === 'collection' && fetchedBase !== null) {
+        } else if (
+            section === 'collection' &&
+            fetchedBase !== null &&
+            summary?.collectionId === null
+        ) {
+            // 只有 TMDB 明确返回“无系列”时才能写负缓存；collection 请求失败不能伪装成无系列。
             await safeSaveSection(env, mediaType, tmdbId, locale, section, null);
         }
     }
@@ -793,8 +796,15 @@ function collectionObjectKey(collectionId: number, locale: string): string {
     return `v1/collection/${collectionId}/${locale}.json`;
 }
 
-function leaseKey(kind: 'summary' | 'detail', mediaType: MediaType, tmdbId: number, locale: string): string {
-    return `${kind}:${mediaType}:${tmdbId}:${locale}:${SCHEMA_VERSION}`;
+function leaseKey(
+    kind: 'summary' | 'detail',
+    mediaType: MediaType,
+    tmdbId: number,
+    locale: string,
+    section?: MediaSection,
+): string {
+    const suffix = section ? `:${section}` : '';
+    return `${kind}:${mediaType}:${tmdbId}:${locale}:${SCHEMA_VERSION}${suffix}`;
 }
 
 async function safeReadSummaryRow(
@@ -885,9 +895,7 @@ async function safeSaveSummary(
             nextTitleRefreshedAt = existing?.title_refreshed_at != null
                 ? Number(existing.title_refreshed_at)
                 : titleRefreshedAt;
-            nextVolatileRefreshedAt = existing?.volatile_refreshed_at != null
-                ? Number(existing.volatile_refreshed_at)
-                : volatileRefreshedAt;
+            // 只保留稳定字段的刷新时间；易变字段本次确实已回源成功，必须推进 TTL。
         }
         await env.MEDIA_DB.prepare(`
             INSERT INTO media_summary (
@@ -1060,33 +1068,44 @@ async function refreshDetailSections(
     locale: string,
     sections: MediaSection[],
 ): Promise<void> {
-    const key = leaseKey('detail', mediaType, tmdbId, locale);
-    const lease = await tryAcquireLease(env, key);
-    if (!lease) return;
-    try {
-        const appendSections = sections.filter((section) => section !== 'collection');
-        const fetched = await fetchMediaBase(env, mediaType, tmdbId, locale, appendSections);
-        for (const section of sections) {
-            let value: unknown = null;
-            if (section === 'collection') {
-                if (fetched.summary.collectionId !== null) {
-                    try {
-                        value = await fetchCollection(env, fetched.summary.collectionId, locale);
-                    } catch {
-                        value = null;
-                    }
-                }
-            } else {
-                value = mapSectionValue(section, fetched.raw);
-            }
-            if (value !== null) {
-                await safeSaveSection(env, mediaType, tmdbId, locale, section, value);
-            }
+    // 租约按 section 粒度领取：多个 section 同时过期时不能互相吞掉刷新任务，
+    // 同一 section 的并发刷新仍由各自的 lease 单飞。
+    for (const section of sections) {
+        const key = leaseKey('detail', mediaType, tmdbId, locale, section);
+        const lease = await tryAcquireLease(env, key);
+        if (!lease) continue;
+        try {
+            await refreshDetailSection(env, mediaType, tmdbId, locale, section);
+        } finally {
+            await releaseLease(env, key, lease.owner);
         }
-        // 详情 section 刷新不是摘要刷新：不得用本次上游返回的标题、海报等潜在变化
-        // 改写 D1 摘要，否则快速切换详情时可能看到稳定字段反复跳变。
-    } finally {
-        await releaseLease(env, key, lease.owner);
+    }
+}
+
+/** 刷新单个 section，不触碰摘要稳定字段。 */
+async function refreshDetailSection(
+    env: MediaCacheEnv,
+    mediaType: MediaType,
+    tmdbId: number,
+    locale: string,
+    section: MediaSection,
+): Promise<void> {
+    const appendSections = section === 'collection' ? [] : [section];
+    const fetched = await fetchMediaBase(env, mediaType, tmdbId, locale, appendSections);
+    if (section === 'collection') {
+        if (fetched.summary.collectionId !== null) {
+            const value = await fetchCollection(env, fetched.summary.collectionId, locale);
+            await safeSaveSection(env, mediaType, tmdbId, locale, section, value);
+        } else {
+            // 本次回源已确认“无系列”，同样要写负缓存推进 refreshed_at，
+            // 否则空系列条目每个过期周期都会重复回源。
+            await safeSaveSection(env, mediaType, tmdbId, locale, section, null);
+        }
+        return;
+    }
+    const value = mapSectionValue(section, fetched.raw);
+    if (value !== null) {
+        await safeSaveSection(env, mediaType, tmdbId, locale, section, value);
     }
 }
 

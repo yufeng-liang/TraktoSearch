@@ -474,7 +474,39 @@ test('已有摘要和部分 section 时，缺失 section 回源失败仍返回�
     assert.equal(response.headers.get('X-Media-Partial'), 'true');
     assert.equal(body.data.summary.title, '搏击俱乐部');
     assert.equal(body.data.images[0].filePath, '/still.jpg');
-    assert.deepEqual(body.data.videos, []);
+    assert.equal(body.data.videos, null);
+    // 失败不能把空数组写成长期缓存；否则 30 天内都会稳定显示“无预告片”。
+    assert.equal(env.MEDIA_CACHE.objects.has('v1/movie/550/zh-CN/videos.json'), false);
+    assert.equal(
+        env.MEDIA_DB.manifest.has('movie:550:zh-CN:3:videos'),
+        false,
+    );
+});
+
+test('摘要缺失但 R2 已有 section 时返回部分 bundle，不把可用缓存变成 502', async () => {
+    installFetch(async () => jsonResponse({}, 500));
+    const env = createEnv(fetch);
+    const now = Date.now();
+    const objectKey = 'v1/movie/550/zh-CN/images.json';
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:images', {
+        object_key: objectKey,
+        refreshed_at: now,
+    });
+    await env.MEDIA_CACHE.put(objectKey, JSON.stringify([
+        { filePath: '/still.jpg', width: 1920, height: 1080, iso6391: null, source: 'tmdb' },
+    ]));
+
+    const response = await handleMediaDetail(
+        new Request('https://worker.test/api/media/detail?type=movie&id=550&locale=zh-CN&sections=images'),
+        env,
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('X-Media-Cache'), 'R2');
+    assert.equal(response.headers.get('X-Media-Partial'), 'true');
+    assert.equal(body.data.summary, null);
+    assert.equal(body.data.images[0].filePath, '/still.jpg');
 });
 
 test('无系列电影的空 collection 会写入缓存，后续请求不再访问 TMDB', async () => {
@@ -633,6 +665,183 @@ test('详情 section 后台刷新不重写摘要稳定字段', async () => {
     await Promise.all(tasks);
 
     assert.equal(env.MEDIA_DB.summary.get('movie:550:zh-CN:3').payload_json, oldPayload);
+});
+
+test('collection 请求失败不写负缓存，后续请求仍会重试', async () => {
+    let fetchCount = 0;
+    installFetch(async (url) => {
+        const path = new URL(url).pathname;
+        if (path.includes('/collection/')) return jsonResponse({}, 500);
+        fetchCount += 1;
+        return jsonResponse(movieDetail({
+            belongs_to_collection: { id: 120, name: '系列' },
+        }));
+    });
+    const env = createEnv(fetch);
+    const request = new Request(
+        'https://worker.test/api/media/detail?type=movie&id=550&locale=zh-CN&sections=collection',
+    );
+
+    const first = await handleMediaDetail(request, env);
+    const firstBody = await first.json();
+    assert.equal(first.status, 200);
+    assert.equal(firstBody.data.collection, null);
+    assert.equal(first.headers.get('X-Media-Partial'), 'true');
+    assert.equal(env.MEDIA_DB.manifest.has('movie:550:zh-CN:3:collection'), false);
+
+    const second = await handleMediaDetail(request, env);
+    assert.equal(second.headers.get('X-Media-Partial'), 'true');
+    assert.equal(fetchCount, 2);
+});
+
+test('过期空 collection 刷新会写回负缓存并推进 TTL', async () => {
+    let fetchCount = 0;
+    installFetch(async () => {
+        fetchCount += 1;
+        return jsonResponse(movieDetail({ belongs_to_collection: null }));
+    });
+    const env = createEnv(fetch);
+    const now = Date.now();
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+        payload_json: JSON.stringify({
+            mediaType: 'movie',
+            tmdbId: 550,
+            locale: 'zh-CN',
+            title: '搏击俱乐部',
+            originalTitle: 'Fight Club',
+            posterPath: '/poster.jpg',
+            year: 1999,
+            genres: ['剧情'],
+            voteAverage: 8.4,
+            runtime: 139,
+            countries: ['美国'],
+            status: 'Released',
+            imdbId: 'tt0137523',
+            collectionId: null,
+            titleSource: 'DETAIL',
+        }),
+        title_refreshed_at: now,
+        volatile_refreshed_at: now,
+    });
+    const objectKey = 'v1/movie/550/zh-CN/collection.json';
+    env.MEDIA_DB.manifest.set('movie:550:zh-CN:3:collection', {
+        object_key: objectKey,
+        refreshed_at: Date.now() - 400 * 24 * 60 * 60 * 1000,
+    });
+    await env.MEDIA_CACHE.put(objectKey, JSON.stringify(null));
+    const { ctx, tasks } = createContext();
+
+    await handleMediaDetail(
+        new Request('https://worker.test/api/media/detail?type=movie&id=550&locale=zh-CN&sections=collection'),
+        env,
+        ctx,
+    );
+    await Promise.all(tasks);
+
+    const manifest = env.MEDIA_DB.manifest.get('movie:550:zh-CN:3:collection');
+    assert.equal(fetchCount, 1);
+    assert.ok(manifest.refreshed_at > now - 1000);
+});
+
+test('摘要后台刷新推进 volatile TTL，不因旧时间戳反复回源', async () => {
+    const oldAt = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    let fetchCount = 0;
+    installFetch(async () => {
+        fetchCount += 1;
+        return jsonResponse(movieDetail({ vote_average: 9.1 }));
+    });
+    const env = createEnv(fetch);
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+        payload_json: JSON.stringify({
+            mediaType: 'movie',
+            tmdbId: 550,
+            locale: 'zh-CN',
+            title: '搏击俱乐部',
+            originalTitle: 'Fight Club',
+            posterPath: '/poster.jpg',
+            year: 1999,
+            genres: ['剧情'],
+            voteAverage: 8.4,
+            runtime: 139,
+            countries: ['美国'],
+            status: 'Released',
+            imdbId: 'tt0137523',
+            collectionId: null,
+            titleSource: 'DETAIL',
+        }),
+        title_refreshed_at: oldAt,
+        volatile_refreshed_at: oldAt,
+    });
+    const { ctx, tasks } = createContext();
+    const request = new Request('https://worker.test/api/media/summaries?locale=zh-CN&ids=movie:550');
+
+    await handleMediaSummaries(request, env, ctx);
+    await Promise.all(tasks);
+    const saved = env.MEDIA_DB.summary.get('movie:550:zh-CN:3');
+    assert.equal(saved.title_refreshed_at, oldAt);
+    assert.ok(saved.volatile_refreshed_at > oldAt);
+
+    await handleMediaSummaries(request, env, ctx);
+    await Promise.all(tasks);
+    assert.equal(fetchCount, 1);
+});
+
+test('同一影片不同 section 的过期刷新互不吞掉', async () => {
+    const oldAt = Date.now() - 400 * 24 * 60 * 60 * 1000;
+    let detailFetch = 0;
+    installFetch(async (url) => {
+        detailFetch += 1;
+        return jsonResponse(movieDetail({
+            credits: { cast: [], crew: [] },
+            videos: {
+                results: [{ id: 'v1', key: 'abc', name: 'Trailer', site: 'YouTube', type: 'Trailer', official: true, size: 1080 }],
+            },
+        }));
+    });
+    const env = createEnv(fetch);
+    const now = Date.now();
+    env.MEDIA_DB.summary.set('movie:550:zh-CN:3', {
+        payload_json: JSON.stringify({
+            mediaType: 'movie',
+            tmdbId: 550,
+            locale: 'zh-CN',
+            title: '搏击俱乐部',
+            originalTitle: 'Fight Club',
+            posterPath: '/poster.jpg',
+            year: 1999,
+            genres: ['剧情'],
+            voteAverage: 8.4,
+            runtime: 139,
+            countries: ['美国'],
+            status: 'Released',
+            imdbId: 'tt0137523',
+            collectionId: null,
+            titleSource: 'DETAIL',
+        }),
+        title_refreshed_at: now,
+        volatile_refreshed_at: now,
+    });
+    for (const section of ['credits', 'videos']) {
+        const objectKey = `v1/movie/550/zh-CN/${section}.json`;
+        env.MEDIA_DB.manifest.set(`movie:550:zh-CN:3:${section}`, {
+            object_key: objectKey,
+            refreshed_at: oldAt,
+        });
+        await env.MEDIA_CACHE.put(
+            objectKey,
+            JSON.stringify(section === 'credits' ? { cast: [], crew: [] } : []),
+        );
+    }
+    const { ctx, tasks } = createContext();
+
+    await handleMediaDetail(
+        new Request('https://worker.test/api/media/detail?type=movie&id=550&locale=zh-CN&sections=credits,videos'),
+        env,
+        ctx,
+    );
+    await Promise.all(tasks);
+
+    assert.equal(detailFetch, 2);
 });
 
 test('videos 回源携带 include_video_language，避免中文详情漏掉英文预告片', async () => {
