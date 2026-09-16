@@ -604,6 +604,27 @@ class TmdbRepositoryTest {
         }
     }
 
+    @Test
+    fun enrichMovie_系统语言为法语时国家按法语输出而不是回退中文() = runTest {
+        val previousLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("fr", "FR"))
+            val language = kotlinx.coroutines.flow.MutableStateFlow(LanguageStorage.LANGUAGE_SYSTEM)
+            coEvery { languageStorage.language } returns language
+            val detail = testMovieDetail.copy(
+                production_countries = listOf(TmdbProductionCountry("US", "United States of America"))
+            )
+            coEvery { tmdbApiService.getMovieDetail(100, "fr-FR") } returns Response.success(detail)
+
+            val result = repository.enrichMovie(100, "Original", 2024)
+
+            // 旧实现把非法/未列举语言一律映射到简体中文，法语系统会显示「美国」。
+            assertThat(result.country).isEqualTo("États-Unis")
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
+    }
+
     // ==================== getMovieDetail / getTvDetail ====================
 
     @Test

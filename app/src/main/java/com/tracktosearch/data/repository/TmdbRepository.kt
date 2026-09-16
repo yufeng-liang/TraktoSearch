@@ -650,6 +650,14 @@ class TmdbRepository @Inject constructor(
     private fun codeToCountryName(code: String, tmdbLang: String): String {
         if (code.length != 2) return code
         return try {
+            // 先按 TMDB 请求语言（可能是 fr/ru/th 等系统语言）取译名；
+            // 以前只映射四种应用语言、其余一律落回简体中文，法/德/西等系统语言会显示中文国名。
+            val requested = Locale.forLanguageTag(tmdbLang).takeIf { it.language.isNotEmpty() }
+            requested?.let { locale ->
+                val display = Locale(locale.language, code).displayCountry
+                if (display.isNotEmpty() && !display.equals(code, ignoreCase = true)) return display
+            }
+            // 兜底：TMDB 语言不可用时退回应用四种语言，最后才用中文，避免显示成裸代码。
             val lang = when {
                 tmdbLang.startsWith("zh") -> Locale.SIMPLIFIED_CHINESE
                 tmdbLang.startsWith("en") -> Locale.ENGLISH

@@ -416,8 +416,10 @@ class MediaMetadataRepository @Inject constructor(
     )
 
     companion object {
+        // v4: v3 的 countries 直接透传 TMDB 的英文国名（如 "Germany"），
+        // 服务端已改为按 locale 输出译名，这里隔离本地旧值，让详情页重新取回中文国名。
         // v3: v2 可能已缓存中文请求下的空 videos；隔离旧详情，避免列表/详情误用。
-        private const val SCHEMA_VERSION = 3
+        private const val SCHEMA_VERSION = 4
         private const val MAX_SUMMARY_BATCH = 20
         private const val DAO_KEY_BATCH = 800
         private const val SUMMARY_TTL_MS = 24 * 60 * 60 * 1000L

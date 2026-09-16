@@ -73,7 +73,7 @@ class MediaMetadataRepositoryTest {
                     tmdbId = key.tmdbId,
                     locale = key.locale,
                     summaryJson = json.encodeToString(MediaSummary.serializer(), old),
-                    schemaVersion = 3,
+                    schemaVersion = 4,
                     summaryRefreshedAt = 0L
                 )
             )
@@ -104,7 +104,7 @@ class MediaMetadataRepositoryTest {
                     locale = key.locale,
                     summaryJson = json.encodeToString(MediaSummary.serializer(), old.summary!!),
                     detailJson = json.encodeToString(MediaDetailBundle.serializer(), old),
-                    schemaVersion = 3,
+                    schemaVersion = 4,
                     summaryRefreshedAt = 0L,
                     detailRefreshedAt = 0L
                 )
@@ -344,7 +344,7 @@ class MediaMetadataRepositoryTest {
                     tmdbId = key.tmdbId,
                     locale = key.locale,
                     summaryJson = json.encodeToString(MediaSummary.serializer(), old),
-                    schemaVersion = 3,
+                    schemaVersion = 4,
                     summaryRefreshedAt = System.currentTimeMillis(),
                     detailRefreshedAt = 0L
                 )
