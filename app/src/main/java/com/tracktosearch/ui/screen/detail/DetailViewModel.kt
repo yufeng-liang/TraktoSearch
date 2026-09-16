@@ -682,8 +682,17 @@ class DetailViewModel @Inject constructor(
                 DetailRatingSource.UNKNOWN
             }
         )
-        // 海报已就位时立刻预查主色，让沉浸背景与海报同帧出现而不是滞后一拍
-        if (seededPoster != null) prefetchPosterColor(seededPoster)
+        // 海报已就位时立刻取主色：内存缓存命中就直接写进上面那份首帧 UiState，
+        // 沉浸背景与海报同帧出现；未命中才交给 prefetchPosterColor 异步补查。
+        if (seededPoster != null) {
+            val cachedColor = posterColorExtractor.peekCachedColor(seededPoster)
+                ?: posterColorExtractor.peekCachedColorCandidates(seededPoster)
+            if (cachedColor != null && cachedColor != 0L) {
+                _uiState.value = _uiState.value.copy(posterDominantColor = Color(cachedColor))
+            } else {
+                prefetchPosterColor(seededPoster)
+            }
+        }
         if (seed != null) currentOriginalTitle = seed.originalTitle
 
         // 本人短评独立于公共评论加载：先命中本地缓存，再按 TTL 后台校准。

@@ -50,6 +50,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
     @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     @Inject lateinit var themeStorage: ThemeStorage
+    // 海报主色持久化缓存：启动预热到内存，详情页首帧才能同步取到沉浸色
+    @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
     // 开屏日签开关：系统 splash 的图标分两档，见 TraktSearchApp.onCreate 里的那次预读
     @Inject lateinit var splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
@@ -122,6 +124,18 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                     }
                     appDatabaseProvider.get()
                     StartupTrace.mark("application.db_warmup.done")
+                    // 海报主色缓存预热：详情页首帧要同步读内存层（peekColor 不读盘），
+                    // 漏了这一步时冷启动后整轮都要等详情页海报解码完才出沉浸色。
+                    try {
+                        // 已在后台预热线程上，直接阻塞读完这份小表
+                        runBlocking { posterColorCache.warmUp() }
+                        StartupTrace.mark("application.poster_color_warmup.done")
+                    } catch (e: Exception) {
+                        StartupTrace.mark(
+                            "application.poster_color_warmup.failed",
+                            "err=${e.javaClass.simpleName}"
+                        )
+                    }
                 } catch (e: Exception) {
                     // 预热失败不影响启动：后续主线程首次访问数据库时仍会按需创建
                     StartupTrace.mark("application.db_warmup.failed", "err=${e.javaClass.simpleName}")

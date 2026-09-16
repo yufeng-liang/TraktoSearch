@@ -8,7 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.data.util.posterCacheKeyCandidates
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import dagger.hilt.android.EntryPointAccessors
@@ -17,29 +17,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
 private const val MAX_AMBIENT_POSTERS = 12
-private val POSTER_CACHE_SIZES = listOf(
-    TmdbImageUrls.W185,
-    TmdbImageUrls.W342,
-    TmdbImageUrls.W500,
-    TmdbImageUrls.W780,
-    TmdbImageUrls.H632
-)
-
-/** 将 TMDB 相对路径或完整 URL 统一成海报颜色缓存使用的 key。 */
-/** 同一海报可能以不同 TMDB 尺寸写入缓存，读取时尝试所有已使用尺寸。 */
-internal fun posterCacheKeyCandidates(path: String): List<String> {
-    val value = path.trim().takeIf { it.isNotEmpty() } ?: return emptyList()
-    val tmdbPattern = Regex("^(https?://[^/]+/.*?/t/p/)([^/]+)(/.*)$")
-    val match = tmdbPattern.matchEntire(value)
-    if (match != null) {
-        return POSTER_CACHE_SIZES.map { size ->
-            val sizeName = size.substringAfterLast('/')
-            "${match.groupValues[1]}$sizeName${match.groupValues[3]}"
-        }
-    }
-    if (value.startsWith("http", ignoreCase = true)) return listOf(value)
-    return POSTER_CACHE_SIZES.map { size -> TmdbImageUrls.build(value, size) }
-}
 
 /**
  * 只读取已经存在的海报颜色缓存，绝不触发图片或网络请求。

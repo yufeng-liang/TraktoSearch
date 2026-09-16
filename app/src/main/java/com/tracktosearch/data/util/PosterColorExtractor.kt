@@ -24,6 +24,21 @@ class PosterColorExtractor @Inject constructor(
     /** 仅查当前进程内存缓存，不挂起、不触发磁盘读取。 */
     fun peekCachedColor(posterUrl: String): Long? = cache.peekColor(posterUrl)
 
+    /**
+     * 按 TMDB 各尺寸候选 key 查内存缓存。
+     *
+     * 同一张海报在列表与详情页可能用不同尺寸的 URL（w342 / w780），
+     * 写入与读取的 key 因此可能对不上；这里统一把候选尺寸都试一遍。
+     */
+    fun peekCachedColorCandidates(posterUrl: String): Long? {
+        val candidates = posterCacheKeyCandidates(posterUrl)
+        for (url in candidates) {
+            val argb = cache.peekColor(url)
+            if (argb != null && argb != 0L) return argb
+        }
+        return null
+    }
+
     suspend fun extractDominantColor(posterUrl: String, bitmap: Bitmap): Long = withContext(Dispatchers.Default) {
         cache.getColor(posterUrl)?.let { return@withContext it }
 
