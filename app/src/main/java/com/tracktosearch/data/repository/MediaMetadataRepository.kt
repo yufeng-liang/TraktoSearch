@@ -214,8 +214,13 @@ class MediaMetadataRepository @Inject constructor(
 
         val fetched = fetchDetail(normalized, requestedSections)
         if (fetched == null) {
+            // 网络失败：保留旧值回填内存时沿用上一次刷新时间。
+            // 若误标为 now，会抑制 6h 内的后台刷新，把过期详情当新鲜一直用。
             cached?.let {
-                detailMemory.put(cacheKey, TimedValue(it, now, SCHEMA_VERSION))
+                detailMemory.put(
+                    cacheKey,
+                    TimedValue(it, memory?.refreshedAt ?: entity?.detailRefreshedAt ?: 0L, SCHEMA_VERSION)
+                )
             }
             return cached
         }

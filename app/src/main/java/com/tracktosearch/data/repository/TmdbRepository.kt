@@ -366,9 +366,9 @@ class TmdbRepository @Inject constructor(
         }
 
         return try {
-            val response = tmdbApiService.getMovieDetail(tmdbId, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val detail = response.body() ?: return fallbackMovie(originalTitle, year)
+            // 复用 getOrAwait 单飞版本（getMovieDetail）：并发富化同一 tmdbId 只发一次网络请求
+            val detail = getMovieDetail(tmdbId)
+            if (detail != null) {
                 movieDetailCache.put(key, detail)
                 val chineseTitle = resolveMovieChineseTitle(tmdbId, originalTitle, detail)
                 movieTitleCache.put(key, chineseTitle)
@@ -452,9 +452,9 @@ class TmdbRepository @Inject constructor(
         }
 
         return try {
-            val response = tmdbApiService.getTvDetail(tmdbId, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val detail = response.body() ?: return fallbackTv(originalName, year)
+            // 复用 getOrAwait 单飞版本（getTvDetail）：并发富化同一 tmdbId 只发一次网络请求
+            val detail = getTvDetail(tmdbId)
+            if (detail != null) {
                 tvDetailCache.put(key, detail)
                 val chineseTitle = resolveTvChineseTitle(tmdbId, originalName, detail)
                 tvTitleCache.put(key, chineseTitle)
@@ -988,7 +988,8 @@ class TmdbRepository @Inject constructor(
         val key = langKey(id)
         return tvImagesCache.getOrAwait(key) {
             try {
-                val response = tmdbApiService.getTvImages(id, "zh,null")
+                // 与 getMovieImages 保持一致的语言参数，避免硬编码 "zh,null" 忽略用户语言设置
+                val response = tmdbApiService.getTvImages(id, getTmdbImageLanguage())
                 if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
                 else emptyList()
             } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }

@@ -22,7 +22,11 @@ open class TtlCache<T>(
     private val ttlMillis: Long = 10 * 60 * 1000L,
     private val maxSize: Int = 0
 ) {
-    private data class Entry<V>(val value: V, val expireAt: Long, val accessSeq: Long)
+    /** null 值包装：ConcurrentHashMap 不允许 null value，
+     *  用一对象层级把「查询无结果」作为负缓存条目写入，短 TTL 内避免同 key 重复 fetch。 */
+    private class CacheSlot<V>(val value: V?)
+
+    private data class Entry<V>(val value: CacheSlot<V>, val expireAt: Long, val accessSeq: Long)
 
     private val cache = ConcurrentHashMap<String, Entry<T>>()
     private val accessCounter = AtomicLong(0L)
@@ -62,7 +66,7 @@ open class TtlCache<T>(
         cache.compute(key) { _, existing ->
             if (existing == null) null else existing.copy(accessSeq = seq)
         }
-        return entry.value
+        return entry.value.value
     }
 
     open fun put(key: String, value: T) {
@@ -76,7 +80,7 @@ open class TtlCache<T>(
 
     /** 子类专用：用指定 expireAt 写入（如 PersistentTtlCache 从磁盘恢复时保留原始过期时间） */
     protected fun putInternal(key: String, value: T, expireAt: Long) {
-        cache[key] = Entry(value, expireAt, accessCounter.incrementAndGet())
+        cache[key] = Entry(CacheSlot(value), expireAt, accessCounter.incrementAndGet())
         trimCounter.incrementAndGet()
         trimToSize()
     }

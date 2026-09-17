@@ -31,6 +31,7 @@ import org.jsoup.nodes.Document
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
 /** 豆瓣 Cookie 过期异常（401 或响应为登录页）。
@@ -152,6 +153,8 @@ class DoubanRepository(
     private val publicUploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val findDoubanIdFlights = ConcurrentHashMap<String, CompletableDeferred<String?>>()
     private val negativeFindDoubanIdUntil = ConcurrentHashMap<String, Long>()
+    /** imdbId(小写)→doubanId 进程内 memo：详情缓存全表扫盘只在首次 miss 时发生，命中后走常数级快速路径。 */
+    private val imdbIdToDoubanIdMemo = ConcurrentHashMap<String, String>()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -164,12 +167,20 @@ class DoubanRepository(
     private val _delayEvent = MutableStateFlow<DelayInfo?>(null)
     val delayEvent: StateFlow<DelayInfo?> = _delayEvent.asStateFlow()
 
-    /** 带延时上报的 delay 封装:delay 前设 delayEvent,delay 后清 null */
+    /** 并发延时引用计数：详情并发爬取（Semaphore≤3）时多个 delay 叠加，
+     *  任一未结束都不清流，避免倒计时中间被早结束的协程清成 null 闪现消失。 */
+    private val delayActiveCount = AtomicInteger(0)
+
+    /** 带延时上报的 delay 封装:delay 前设 delayEvent,最后一个并发 delay 结束后清 null */
     private suspend fun delayWithEvent(type: DelayType, millisRange: LongRange) {
         val millis = Random.nextLong(millisRange.first, millisRange.last + 1)
         _delayEvent.value = DelayInfo(type, (millis / 1000).toInt(), System.currentTimeMillis())
-        delay(millis)
-        _delayEvent.value = null
+        delayActiveCount.incrementAndGet()
+        try {
+            delay(millis)
+        } finally {
+            if (delayActiveCount.decrementAndGet() == 0) _delayEvent.value = null
+        }
     }
 
     // 不自动跟随重定向的客户端: 豆瓣网页删除收藏表单 POST /subject/{id}/remove 成功后返回 302
@@ -903,6 +914,14 @@ class DoubanRepository(
         // 2. 查 douban_synced_items 表 by imdbId(调用方 DAO 查询)
         // 此处不直接查 DAO,由 ViewModel 层查询后传入,避免 Repository 依赖 DAO
 
+        // 2.5 进程内 memo：并发查询同一 imdbId 时避免重复全量扫详情缓存（disk 线性扫）
+        if (!imdbId.isNullOrBlank()) {
+            imdbIdToDoubanIdMemo[imdbId.lowercase()]?.let { doubanId ->
+                persistDoubanMapping(legacyCacheKey, publicKeys, doubanId)
+                return doubanId
+            }
+        }
+
         // 3. 查 Gitee 公共映射池（直连 Raw，不经过网关）。
         if (publicKeys.isNotEmpty()) {
             publicDataPoolManager?.getMappings(publicKeys)?.let { mappings ->
@@ -913,9 +932,10 @@ class DoubanRepository(
             }
         }
 
-        // 4. 遍历 DoubanDetailCache by imdbId
+        // 4. 遍历 DoubanDetailCache by imdbId（仅首次 miss 才会扫到这里，命中后由 memo 承接）
         if (!imdbId.isNullOrBlank()) {
-            getDetailSnapshot().entries.firstOrNull { (_, entry) ->
+            val snapshot = getDetailSnapshot()
+            snapshot.entries.firstOrNull { (_, entry) ->
                 entry.imdbId == imdbId
             }?.key?.let { doubanId ->
                 // 命中详情缓存,写入映射缓存
@@ -982,6 +1002,14 @@ class DoubanRepository(
     ) {
         legacyKey?.let { idMappingCache?.put(it, doubanId) }
         publicKeys.forEach { key -> idMappingCache?.put(key, doubanId) }
+        // 同步维护进程内 imdbId→doubanId memo，后续查询走常数级命中
+        publicKeys.firstNotNullOfOrNull { key ->
+            if (key.startsWith("imdb:")) {
+                key.substringAfter("imdb:").substringBeforeLast(':')
+            } else {
+                null
+            }
+        }?.let { memoImdb -> imdbIdToDoubanIdMemo[memoImdb] = doubanId }
         negativeFindDoubanIdUntil.entries.removeIf { entry ->
             publicKeys.any { key -> entry.key.contains(key) }
         }

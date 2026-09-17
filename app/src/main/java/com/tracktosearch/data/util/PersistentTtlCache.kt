@@ -141,6 +141,9 @@ class PersistentTtlCache<T>(
     override fun put(key: String, value: T) {
         withGenerationLock {
             markKeyWrittenDuringLoad(key)
+            // 持久化缓存不做负缓存（TTL 往往很长/永久）：临时无结果不应被永久/长期抑制，
+            // 且 null 会污染 DataStore 序列化。内存负缓存仅由纯内存 TtlCache 承担。
+            if (value == null) return@withGenerationLock
             super.put(key, value)
             val expireAt = getExpireAt(key) ?: return@withGenerationLock
             // 攒批异步落盘，不阻塞内存写入返回
@@ -194,7 +197,7 @@ class PersistentTtlCache<T>(
             // 先写入内存缓存（获取 expireAt），再批量写入 DataStore
             val toWrite = mutableListOf<Pair<String, T>>()
             entries.forEach { (key, value) ->
-                if (overwrite || get(key) == null) {
+                if ((overwrite || get(key) == null) && value != null) {
                     withGenerationLock {
                         if (!isCurrentGeneration(writeGeneration)) return@withGenerationLock
                         markKeyWrittenDuringLoad(key)
