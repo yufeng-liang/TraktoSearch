@@ -437,7 +437,7 @@ internal fun DetailHeaderContent(
                         showDetail = false
                     )
                 } else {
-                    CastRowSkeleton(shimmer = headerShimmer)
+                    CastRowSkeleton()
                 }
             }
             if (showFullCast) {
@@ -480,7 +480,7 @@ internal fun DetailHeaderContent(
                 // 骨架屏占位，防止加载后内容跳变；栏目标题为静态文字直接显示，「全部」随数据到达后出现
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {
                     DetailSectionHeader(title = stringResource(R.string.detail_videos_section))
-                    VideosRowSkeleton(shimmer = headerShimmer)
+                    VideosRowSkeleton()
                 }
             }
         }

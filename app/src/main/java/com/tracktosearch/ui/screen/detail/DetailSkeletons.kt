@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
+import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,16 +12,30 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.tracktosearch.R
 import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
+import kotlinx.coroutines.delay
 
 /**
  * 详情页骨架屏。
@@ -33,63 +49,101 @@ import com.tracktosearch.ui.component.shimmer
 
 private val SkeletonShape = RoundedCornerShape(8.dp)
 private val SkeletonLineShape = RoundedCornerShape(4.dp)
+private val CastSkeletonShape = RoundedCornerShape(6.dp)
 
-/** 演职员骨架：5 张 68×95 卡 + 两行文字，与 CastCard 同尺寸。 */
+/** 动态省略号每步持续时长。只改字符，不做淡入、位移或缩放。 */
+private const val LOADING_DOTS_STEP_MS = 600L
+
+/**
+ * 演职员加载态：保留一张 68×95 幽灵卡，下面用透明文字维持姓名和角色两行高度。
+ *
+ * 不再重复五张满尺寸 shimmer，也不显示转圈；等真实数据到达后原位替换。
+ */
 @Composable
 internal fun CastRowSkeleton(
-    modifier: Modifier = Modifier,
-    shimmer: ShimmerState? = null
+    modifier: Modifier = Modifier
 ) {
-    val state = shimmer ?: rememberShimmer()
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        repeat(5) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 68.dp, height = 95.dp)
-                        .shimmer(state, SkeletonShape)
-                )
-                Spacer(modifier = Modifier.height(5.dp))
-                Box(
-                    modifier = Modifier
-                        .width(56.dp)
-                        .height(10.dp)
-                        .shimmer(state, SkeletonLineShape)
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(8.dp)
-                        .shimmer(state, SkeletonLineShape)
-                )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(width = 68.dp, height = 95.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), CastSkeletonShape),
+                contentAlignment = Alignment.Center
+            ) {
+                LoadingDotsText()
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            // 与真实 CastCard 的姓名/角色两行同高（labelSmall lineHeight = 16sp），
+            // 数据到达时栏目高度不变。
+            Box(modifier = Modifier.fillMaxWidth().height(16.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(16.dp))
         }
     }
 }
 
-/** 预告片/截图骨架：3 张 240×135 横卡。 */
+/** 预告片/截图加载态：一张 240×135 幽灵横卡，不再铺满整排 shimmer。 */
 @Composable
 internal fun VideosRowSkeleton(
-    modifier: Modifier = Modifier,
-    shimmer: ShimmerState? = null
+    modifier: Modifier = Modifier
 ) {
-    val state = shimmer ?: rememberShimmer()
-    LazyRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Box(
+        modifier = modifier
+            .width(240.dp)
+            .height(135.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), SkeletonShape),
+        contentAlignment = Alignment.Center
     ) {
-        items(3) {
-            Box(
-                modifier = Modifier
-                    .width(240.dp)
-                    .height(135.dp)
-                    .shimmer(state, SkeletonShape)
-            )
+        LoadingDotsText()
+    }
+}
+
+/**
+ * “加载中”加动态省略号。
+ *
+ * 省略号固定占一段宽度，只切换点数，因此“加载中”不会左右抖动。系统关闭动画时固定显示
+ * 三个点，避免无效的定时重组。
+ */
+@Composable
+private fun LoadingDotsText() {
+    val context = LocalContext.current
+    val animationsEnabled = remember(context) {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) != 0f
+    }
+    var dotCount by remember { mutableIntStateOf(if (animationsEnabled) 1 else 3) }
+    LaunchedEffect(animationsEnabled) {
+        if (!animationsEnabled) return@LaunchedEffect
+        while (true) {
+            delay(LOADING_DOTS_STEP_MS)
+            dotCount = if (dotCount == 3) 1 else dotCount + 1
         }
+    }
+    val fullDescription = stringResource(R.string.loading_default)
+    Row(
+        modifier = Modifier.clearAndSetSemantics { contentDescription = fullDescription },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.detail_loading_base),
+            // 9sp：日文“読み込み中”连省略号槽也放得进 68dp 幽灵卡，不裁切也不撑宽。
+            fontSize = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+        Text(
+            text = ".".repeat(dotCount),
+            fontSize = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.width(12.dp)
+        )
     }
 }
 
