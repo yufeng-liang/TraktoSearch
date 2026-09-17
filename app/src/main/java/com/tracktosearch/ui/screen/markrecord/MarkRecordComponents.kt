@@ -23,6 +23,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -64,6 +65,7 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
+import com.tracktosearch.ui.theme.floatingDialogColor
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -630,6 +632,7 @@ fun FilterSheetContent(
         )
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
+            colors = DatePickerDefaults.colors(containerColor = floatingDialogColor()),
             confirmButton = {
                 // 对话框有自己的宿主 View，每个槽各取一份
                 val confirmHaptics = rememberAppHaptics()
@@ -659,6 +662,7 @@ fun FilterSheetContent(
         )
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
+            colors = DatePickerDefaults.colors(containerColor = floatingDialogColor()),
             confirmButton = {
                 val confirmHaptics = rememberAppHaptics()
                 TextButton(

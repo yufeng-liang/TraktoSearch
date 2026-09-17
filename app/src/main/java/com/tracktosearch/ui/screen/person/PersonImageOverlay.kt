@@ -43,6 +43,7 @@ import com.tracktosearch.ui.component.recordOpenImageBounds
 import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 // ==================== 全部人物图片底部弹窗 ====================
 
@@ -74,7 +75,7 @@ internal fun AllPersonImagesPanel(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = floatingSheetColor(),
         dragHandle = null
     ) {
         val haptics = rememberAppHaptics()

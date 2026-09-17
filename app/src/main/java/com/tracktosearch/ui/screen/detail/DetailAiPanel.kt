@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Rect
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiDetailInterestLevel
 import com.tracktosearch.data.ai.AiDetailWatchTiming
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +55,7 @@ fun DetailAiPanel(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = floatingSheetColor()
     ) {
         LazyColumn(
             modifier = Modifier

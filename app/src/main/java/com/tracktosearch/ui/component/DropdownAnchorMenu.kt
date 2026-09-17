@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 /**
  * 锚点 + 菜单一体的公共下拉菜单组件（窗口管理与动画复刻官方 Material3 DropdownMenu）。
@@ -128,7 +129,7 @@ fun DropdownAnchorMenu(
                             shape = MaterialTheme.shapes.extraSmall,
                             clip = false
                         )
-                        .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.extraSmall)
+                        .background(floatingDialogColor(), MaterialTheme.shapes.extraSmall)
                         .clip(MaterialTheme.shapes.extraSmall)
                         .padding(vertical = 8.dp)
                 ) {

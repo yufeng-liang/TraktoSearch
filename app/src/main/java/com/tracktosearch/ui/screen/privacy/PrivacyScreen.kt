@@ -121,6 +121,7 @@ import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
@@ -294,7 +295,7 @@ fun PrivacyScreen(
             if (showClearAiProfileDialog) {
                 AlertDialog(
                     onDismissRequest = { showClearAiProfileDialog = false },
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = floatingDialogColor(),
                     title = { Text(stringResource(R.string.settings_ai_profile_clear_confirm_title)) },
                     text = { Text(stringResource(R.string.settings_ai_profile_clear_confirm_message)) },
                     confirmButton = {
