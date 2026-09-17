@@ -173,6 +173,13 @@ class SettingsViewModel @Inject constructor(
 
     val accentColor: StateFlow<com.tracktosearch.ui.theme.MonetAccent?> = themeStorage.accentColor
 
+    /** 自定义色调收藏列表（上限 8），与选中值分属两个 Flow，避免整表重组 */
+    val customAccentColors: StateFlow<List<Long>> = themeStorage.customAccentColors
+
+    val selectedCustomAccentArgb: StateFlow<Long?> = themeStorage.selectedCustomAccentArgb
+
+    /** 旧单值视图（迁移期保留，UI 重画完成后删除） */
+    @Deprecated("改用 customAccentColors / selectedCustomAccentArgb")
     val customAccentArgb: StateFlow<Long?> = themeStorage.customAccentArgb
 
     val visualEffectMode: StateFlow<VisualEffectMode> = themeStorage.visualEffectMode
@@ -239,8 +246,29 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { themeStorage.setAccentColor(accent) }
     }
 
+    @Deprecated("改用 addCustomAccent / removeCustomAccent / setSelectedCustomAccent")
     fun setCustomAccent(argb: Long?) {
         viewModelScope.launch { themeStorage.setCustomAccent(argb) }
+    }
+
+    fun addCustomAccent(argb: Long) {
+        viewModelScope.launch { themeStorage.addCustomAccent(argb) }
+    }
+
+    fun removeCustomAccent(argb: Long) {
+        viewModelScope.launch { themeStorage.removeCustomAccent(argb) }
+    }
+
+    fun updateCustomAccent(old: Long, new: Long) {
+        viewModelScope.launch { themeStorage.updateCustomAccent(old, new) }
+    }
+
+    fun setSelectedCustomAccent(argb: Long?) {
+        viewModelScope.launch { themeStorage.setSelectedCustomAccent(argb) }
+    }
+
+    fun clearCustomAccents() {
+        viewModelScope.launch { themeStorage.clearCustomAccents() }
     }
 
     fun setVisualEffectMode(mode: VisualEffectMode) {

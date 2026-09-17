@@ -62,9 +62,17 @@ class ThemeStorage private constructor(
     private val _glassVariant = MutableStateFlow(GlassVariant.CLEAR)
     val glassVariant: StateFlow<GlassVariant> = _glassVariant.asStateFlow()
 
-    /** 自定义色调 ARGB（null = 未设置，非 null = 用户自由调色激活） */
-    private val _customAccentArgb = MutableStateFlow<Long?>(null)
-    val customAccentArgb: StateFlow<Long?> = _customAccentArgb.asStateFlow()
+    /** 自定义色调收藏列表（上限 [MAX_CUSTOM_ACCENTS] 个，保持添加顺序） */
+    private val _customAccentColors = MutableStateFlow<List<Long>>(emptyList())
+    val customAccentColors: StateFlow<List<Long>> = _customAccentColors.asStateFlow()
+
+    /** 当前选中的自定义色调 ARGB（null = 未选中自定义色调） */
+    private val _selectedCustomAccentArgb = MutableStateFlow<Long?>(null)
+    val selectedCustomAccentArgb: StateFlow<Long?> = _selectedCustomAccentArgb.asStateFlow()
+
+    /** 旧单值 API 只读视图（迁移期兼容，恒等于 [selectedCustomAccentArgb]） */
+    @Deprecated("改用 selectedCustomAccentArgb，旧视图仅迁移期保留")
+    val customAccentArgb: StateFlow<Long?> = _selectedCustomAccentArgb
 
     // 主页面背景彩色弥散光晕：预设(枚举名)与开关。默认 BLOOM（星云需解锁霉粉彩蛋）
     private val _meshPreset = MutableStateFlow("BLOOM")
@@ -82,7 +90,23 @@ class ThemeStorage private constructor(
             _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])
-            _customAccentArgb.value = prefs[KEY_CUSTOM_ACCENT_ARGB]
+            // 自定义色调：先读新列表结构，再处理旧单值 key 的迁移（一次性并入 + 删旧 key）
+            val colors = decodeAccentColors(prefs[KEY_CUSTOM_ACCENT_COLORS])
+            val legacy = prefs[KEY_CUSTOM_ACCENT_ARGB]
+            val (migratedColors, migratedSelected) = mergeLegacyAccent(colors, legacy)
+            _customAccentColors.value = migratedColors
+            _selectedCustomAccentArgb.value = prefs[KEY_SELECTED_CUSTOM_ACCENT]?.toLongOrNull()
+                ?.takeIf { it in migratedColors }
+                ?: migratedSelected
+            if (legacy != null) {
+                // 旧 key 一旦读到（无论是否成功并入）立即淘汰：写回新结构并删除旧 key，
+                // 避免下次冷启动又走一次迁移分支。写入失败不阻塞主题加载，下轮再试。
+                dataStore.edit { p ->
+                    p[KEY_CUSTOM_ACCENT_COLORS] = encodeAccentColors(migratedColors)
+                    _selectedCustomAccentArgb.value?.let { p[KEY_SELECTED_CUSTOM_ACCENT] = it.toString() }
+                    p.remove(KEY_CUSTOM_ACCENT_ARGB)
+                }
+            }
             _meshPreset.value = prefs[KEY_MESH_PRESET] ?: "BLOOM"
             _meshEnabled.value = prefs[KEY_MESH_ENABLED] ?: false
             initializationComplete.complete(Unit)
@@ -152,16 +176,96 @@ class ThemeStorage private constructor(
         _glassVariant.value = GlassVariant.CLEAR
     }
 
+    /**
+     * 旧单值 API（迁移期保留）：null = 清除自定义色调；非 null = 收藏并选中该色。
+     * 等价于 [addCustomAccent]（同色仅选中）+ [setSelectedCustomAccent]。
+     */
     suspend fun setCustomAccent(argb: Long?) {
+        if (argb == null) {
+            setSelectedCustomAccent(null)
+        } else {
+            addCustomAccent(argb)
+        }
+    }
+
+    /**
+     * 添加自定义色调到收藏：同色只选中不新增，返回 false；满 [MAX_CUSTOM_ACCENTS] 返回 false；
+     * 新增成功返回 true 并自动选中新色。
+     */
+    suspend fun addCustomAccent(argb: Long): Boolean {
         initializationComplete.await()
+        val current = _customAccentColors.value
+        if (argb in current) {
+            persistSelected(argb)
+            return false
+        }
+        if (current.size >= MAX_CUSTOM_ACCENTS) return false
+        persistColorsAndSelected(current + argb, argb)
+        return true
+    }
+
+    /** 移除收藏色；若移除的是选中色则同时清除选中。 */
+    suspend fun removeCustomAccent(argb: Long) {
+        initializationComplete.await()
+        val current = _customAccentColors.value
+        if (argb !in current) return
+        val next = current - argb
+        persistColorsAndSelected(next, if (_selectedCustomAccentArgb.value == argb) null else _selectedCustomAccentArgb.value)
+    }
+
+    /** 原位更新收藏色（编辑模式复用）；选中该色时选中值同步为新色。 */
+    suspend fun updateCustomAccent(old: Long, new: Long) {
+        initializationComplete.await()
+        if (old == new) return
+        val current = _customAccentColors.value
+        if (old !in current) return
+        // 编辑成别的已收藏色时不产生重复：收起该位置的旧色即可（同色只保留一份）。
+        val next = current.map { if (it == old) new else it }.distinct()
+        val selected = if (_selectedCustomAccentArgb.value == old) new else _selectedCustomAccentArgb.value
+        persistColorsAndSelected(next, selected)
+    }
+
+    /** 清空全部自定义色调收藏并清除选中。 */
+    suspend fun clearCustomAccents() {
+        initializationComplete.await()
+        if (_customAccentColors.value.isEmpty() && _selectedCustomAccentArgb.value == null) return
+        persistColorsAndSelected(emptyList(), null)
+    }
+
+    /** 仅设置选中色（需已在收藏列表内，否则视为清除选中）。 */
+    suspend fun setSelectedCustomAccent(argb: Long?) {
+        initializationComplete.await()
+        if (argb != null && argb !in _customAccentColors.value) {
+            persistSelected(null)
+            return
+        }
+        persistSelected(argb)
+    }
+
+    /** 持久化收藏列表与选中值，并同步内存状态。 */
+    private suspend fun persistColorsAndSelected(colors: List<Long>, selected: Long?) {
         dataStore.edit { prefs ->
-            if (argb != null) {
-                prefs[KEY_CUSTOM_ACCENT_ARGB] = argb
+            prefs[KEY_CUSTOM_ACCENT_COLORS] = encodeAccentColors(colors)
+            if (selected != null) {
+                prefs[KEY_SELECTED_CUSTOM_ACCENT] = selected.toString()
             } else {
-                prefs.remove(KEY_CUSTOM_ACCENT_ARGB)
+                prefs.remove(KEY_SELECTED_CUSTOM_ACCENT)
             }
         }
-        _customAccentArgb.value = argb
+        _customAccentColors.value = colors
+        persistSelected(selected)
+    }
+
+    /** 持久化并发布选中值（不落盘会失去重启后的选中记忆）。 */
+    private suspend fun persistSelected(selected: Long?) {
+        dataStore.edit { prefs ->
+            if (selected != null) {
+                prefs[KEY_SELECTED_CUSTOM_ACCENT] = selected.toString()
+            } else {
+                prefs.remove(KEY_SELECTED_CUSTOM_ACCENT)
+            }
+        }
+        _selectedCustomAccentArgb.value = selected
     }
 
     suspend fun readAccentColorSnapshot(): MonetAccent? {
@@ -231,9 +335,41 @@ class ThemeStorage private constructor(
         private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
         private val KEY_VISUAL_EFFECT_MODE = stringPreferencesKey("visual_effect_mode")
         private val KEY_GLASS_VARIANT = stringPreferencesKey("glass_variant")
+        private val KEY_CUSTOM_ACCENT_COLORS = stringPreferencesKey("custom_accent_colors")
+        private val KEY_SELECTED_CUSTOM_ACCENT = stringPreferencesKey("selected_custom_accent")
         private val KEY_CUSTOM_ACCENT_ARGB = longPreferencesKey("custom_accent_argb")
         private val KEY_MESH_PRESET = stringPreferencesKey("mesh_preset")
         private val KEY_MESH_ENABLED = booleanPreferencesKey("mesh_enabled")
+
+        /** 自定义色调收藏数量上限（UI 满额后禁用添加入口） */
+        const val MAX_CUSTOM_ACCENTS = 8
+
+        /**
+         * 解析收藏列表的落盘格式（逗号分隔的 ARGB 十进制串）。
+         * 脏数据宽松处理：非数字段直接丢弃、去重、按上限截断，绝不抛异常 ——
+         * 这条路径挂在 DataStore 首值加载里，抛出去等于一条脏数据崩掉整个启动。
+         */
+        internal fun decodeAccentColors(raw: String?): List<Long> =
+            raw?.split(',')
+                ?.mapNotNull { it.toLongOrNull() }
+                ?.distinct()
+                ?.take(MAX_CUSTOM_ACCENTS)
+                ?: emptyList()
+
+        internal fun encodeAccentColors(colors: List<Long>): String =
+            colors.joinToString(",")
+
+        /**
+         * 旧单值 key 并入新列表的迁移决策（纯函数，便于单测）。
+         *
+         * @return (迁移后的列表, 需要作为选中值的旧色) —— 旧色为 null 表示本次
+         * 无迁移选中（旧色未设置、已在列表中、或列表已满放不下旧色）。
+         */
+        internal fun mergeLegacyAccent(colors: List<Long>, legacy: Long?): Pair<List<Long>, Long?> {
+            if (legacy == null || legacy in colors) return colors to null
+            if (colors.size >= MAX_CUSTOM_ACCENTS) return colors to null
+            return (colors + legacy) to legacy
+        }
 
         /**
          * 已下线的色调 -> 色相最近的幸存者。见 [decodeAccentName]。
