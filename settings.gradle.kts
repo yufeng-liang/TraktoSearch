@@ -7,7 +7,12 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
-        // Maven Central 主节点（repo1.maven.org 在当前网络环境不可达，官方主节点可直连）
+        // 仓库顺序说明：Gradle 对每个模块绑定「第一个提供元数据的仓库」，跨仓库不回退补文件，
+        // 因此主源必须覆盖全部构件。官方主站在本网络对部分构件返回 403，主源用阿里云；
+        // 腾讯云/官方作冗余。若镜像漏构件（如阿里云缺 haze -android RC 的 aar，已预铺缓存），
+        // 从有该构件的源下载后预铺进 Gradle 缓存即可。
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
         maven { url = uri("https://repo.maven.apache.org/maven2/") }
         gradlePluginPortal()
         maven { url = uri("https://developer.huawei.com/repo/") }
@@ -21,7 +26,12 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
-        // Maven Central 主节点（repo1.maven.org 在当前网络环境不可达，官方主节点可直连）
+        // 仓库顺序说明：Gradle 对每个模块绑定「第一个提供元数据的仓库」，跨仓库不回退补文件，
+        // 因此主源必须覆盖全部构件。官方主站在本网络对部分构件返回 403，主源用阿里云；
+        // 腾讯云/官方作冗余。若镜像漏构件（如阿里云缺 haze -android RC 的 aar，已预铺缓存），
+        // 从有该构件的源下载后预铺进 Gradle 缓存即可。
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
         maven { url = uri("https://repo.maven.apache.org/maven2/") }
         maven { url = uri("https://developer.huawei.com/repo/") }
         maven { url = uri("https://jitpack.io") }
