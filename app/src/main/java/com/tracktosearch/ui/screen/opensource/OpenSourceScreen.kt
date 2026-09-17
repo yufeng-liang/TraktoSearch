@@ -48,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -177,31 +176,18 @@ fun OpenSourceScreen(
 }
 
 /**
- * 顶部感谢卡片：纯 Compose 绘制，无外部图片素材。
- * 视觉从上到下：主题色渐变洗白 → 捧心徽标（致谢意象）→ 两行主文案 → 致谢标语胶囊 → 库数量小结。
+ * 顶部感谢文案：纯 Compose 绘制，无外部图片素材，无卡片样式，文字直接显示。
+ * 视觉从上到下：捧心徽标（致谢意象）→ 两行主文案 → 致谢标语胶囊 → 库数量小结。
  */
 @Composable
 private fun OssThanksCard(libraryTotal: Int, groupTotal: Int) {
     val scheme = MaterialTheme.colorScheme
-    Surface(
-        shape = DesignToken.Hero,
-        color = scheme.surfaceVariant,
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        0f to scheme.primary.copy(alpha = 0.14f),
-                        0.75f to Color.Transparent
-                    )
-                )
-                .padding(horizontal = 24.dp, vertical = 22.dp)
-        ) {
             // 捧心手势 = 致谢/回馈，比奖杯麦穗更贴「感谢贡献者」而非「自我表彰」
             Box(
                 contentAlignment = Alignment.Center,
@@ -255,7 +241,6 @@ private fun OssThanksCard(libraryTotal: Int, groupTotal: Int) {
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant
             )
-        }
     }
 }
 
