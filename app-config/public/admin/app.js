@@ -159,7 +159,7 @@ const Palettes = {
         const monetKeys = Object.keys(this.presets).filter(k => k.startsWith('monet-'));
 
         const renderSwatch = (key, p) => `
-            <button class="palette-swatch${key === this.current ? ' active' : ''}" data-palette="${key}">
+            <button class="palette-swatch${key === this.current ? ' active' : ''}" data-palette="${key}" aria-pressed="${key === this.current}">
                 <div class="palette-swatch-colors">
                     <span class="palette-swatch-dot" style="background:${p.accent}"></span>
                     <span class="palette-swatch-dot" style="background:${p.ambient1}"></span>
@@ -184,7 +184,9 @@ const Palettes = {
 
     updatePanelActive() {
         document.querySelectorAll('.palette-swatch').forEach(el => {
-            el.classList.toggle('active', el.dataset.palette === this.current);
+            const active = el.dataset.palette === this.current;
+            el.classList.toggle('active', active);
+            el.setAttribute('aria-pressed', String(active));
         });
     },
 
@@ -720,7 +722,7 @@ function auditDetail(log) {
     if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_NOT_FOUND') return '刷新令牌不存在或已失效';
     if (log.eventType === 'FRIEND_UPDATE' && detail.startsWith('fields:')) {
         const labels = { nickname: '昵称', note: '备注', max_devices: '设备上限', expires_at: '有效期至' };
-        const fields = detail.slice(7).split(',').map((field) => labels[field] || field);
+        const fields = detail.slice(7).split(',').map((field) => labels[field] || escapeHtml(field));
         return `已更新：${fields.join('、')}`;
     }
     return '—';
@@ -814,7 +816,8 @@ function navigate(route, params = {}) {
 
 function updateActiveNav() {
     document.querySelectorAll('.nav-link, .sidebar-link').forEach(el => {
-        const active = el.dataset.route === state.route;
+        const active = el.dataset.route === state.route
+            || (el.dataset.route === 'crash-logs' && state.route === 'crash-log-detail');
         el.classList.toggle('active', active);
         if (active) {
             el.setAttribute('aria-current', 'page');
@@ -1021,8 +1024,15 @@ function renderDashboard(container, renderToken) {
 
     header.querySelector('#dashboardRefresh').addEventListener('click', () => {
         if (renderToken !== state.renderToken || !container.isConnected) return;
-        container.innerHTML = '';
-        renderDashboard(container, renderToken);
+        const refreshBtn = header.querySelector('#dashboardRefresh');
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '刷新中...';
+        loadDashboard(container, renderToken, stats, grid).finally(() => {
+            if (renderToken === state.renderToken && container.isConnected) {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '刷新';
+            }
+        });
     });
 
     loadDashboard(container, renderToken, stats, grid);
@@ -1081,6 +1091,9 @@ async function loadDashboard(container, renderToken, stats, grid) {
 
     if (s) {
         grid.innerHTML = dashboardHealthCard(s, aiSummary);
+    } else {
+        // stats 失败时替换骨架，避免两张骨架卡常驻
+        grid.innerHTML = dashboardErrorCard('统计加载失败', statsRes.reason, container, renderToken);
     }
 
     if (auditRes.status === 'fulfilled') {
@@ -1471,7 +1484,7 @@ function loadInvitesSection(friendId, section, renderToken) {
                 '<div><span>已失效</span><strong>' + (Number(summary.expired || 0) + Number(summary.revoked || 0)) + '</strong></div>' +
             '</div><div class="table-scroll"><table><thead><tr><th>邀请码</th><th>类型</th><th>状态</th>' +
                 '<th>创建时间</th><th>有效期至</th><th>使用时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-            '<div class="invite-pagination"><span>第 ' + (invites.length ? offset + 1 : 0) + ' - ' + (offset + invites.length) + ' 条</span>' +
+            '<div class="invite-pagination"><span>' + (invites.length ? '第 ' + (offset + 1) + ' - ' + (offset + invites.length) + ' 条' : '暂无记录') + '</span>' +
                 '<div><button class="btn btn-ghost btn-sm invite-prev" ' + (offset === 0 ? 'disabled' : '') + '>上一页</button>' +
                 '<button class="btn btn-ghost btn-sm invite-next" ' + (data.hasMore ? '' : 'disabled') + '>下一页</button></div></div>';
         section.querySelector('.invite-status-filter').value = status;
@@ -1592,6 +1605,7 @@ function renderAudit(container, renderToken) {
     const resultFilter = toolbar.querySelector('#resultFilter');
     const timeFilter = toolbar.querySelector('#timeFilter');
     eventFilter.insertAdjacentHTML('beforeend', '<option value="REINSTALL_RECOVER">卸载重装恢复</option>');
+    let loadSequence = 0;
 
     function loadAndRender(offset = 0) {
         const eFilter = eventFilter.value;
@@ -1602,9 +1616,11 @@ function renderAudit(container, renderToken) {
         const params = { limit: 50, offset, from: Math.floor(cutoff / 1000) };
         if (eFilter) params.eventType = eFilter;
         if (rFilter) params.result = rFilter;
+        const sequence = ++loadSequence;
 
         API.getAuditLogs(params).then(page => {
             if (renderToken !== state.renderToken || !container.isConnected) return;
+            if (sequence !== loadSequence) return;
             const logs = page.logs;
 
             const tbody = tableWrap.querySelector('tbody');
@@ -1615,7 +1631,7 @@ function renderAudit(container, renderToken) {
                     <tr>
                         <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
                         <td>${eventLabel(l.eventType)}</td>
-                        <td>${escapeHtml(auditDetail(l))}</td>
+                        <td>${auditDetail(l)}</td>
                         <td>${entityCell(l.friendName, l.friendId, '未知用户')}</td>
                         <td>${entityCell(l.deviceName, l.deviceId, '未知设备')}</td>
                         <td>${statusBadge(l.result)}</td>
@@ -1630,6 +1646,7 @@ function renderAudit(container, renderToken) {
             pagination.querySelector('.audit-next')?.addEventListener('click', () => loadAndRender(page.offset + page.limit));
         }).catch(err => {
             if (renderToken !== state.renderToken || !container.isConnected) return;
+            if (sequence !== loadSequence) return;
             const tbody = tableWrap.querySelector('tbody');
             tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="auditRetry">重试</button></div></td></tr>`;
             tbody.querySelector('#auditRetry')?.addEventListener('click', () => loadAndRender(0));
@@ -1962,6 +1979,10 @@ function showRevokeDeviceModal(deviceId, deviceName) {
     body.innerHTML = `
         <div class="confirm-danger-text">确定要撤销设备 <strong>${escapeHtml(deviceName)}</strong> 吗？</div>
         <div class="confirm-danger-impact">⚠️ 撤销后该设备的所有会话立即失效，无法再访问任何敏感接口。此操作不可逆，需要重新生成邀请码才能再次绑定。</div>
+        <label class="revoke-checkbox">
+            <input type="checkbox" id="revokeDeleteRecord">
+            <span class="revoke-checkbox-text">同时删除该设备记录<span class="revoke-checkbox-hint">删除后设备列表将不再显示此条记录</span></span>
+        </label>
     `;
 
     const confirmBtn = document.createElement('button');
@@ -1977,18 +1998,36 @@ function showRevokeDeviceModal(deviceId, deviceName) {
         ]
     });
 
+    const deleteRecordCheckbox = body.querySelector('#revokeDeleteRecord');
+    deleteRecordCheckbox.addEventListener('change', () => {
+        confirmBtn.textContent = deleteRecordCheckbox.checked ? '撤销并删除记录' : '确认撤销';
+    });
+
     modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
     confirmBtn.addEventListener('click', async () => {
         confirmBtn.disabled = true;
         confirmBtn.textContent = '撤销中...';
         try {
             await API.revokeDevice(deviceId);
-            modal.close();
-            showToast('设备已撤销');
+            if (deleteRecordCheckbox.checked) {
+                // 撤销成功后设备状态为 REVOKED，此时才可删除记录
+                confirmBtn.textContent = '删除记录中...';
+                try {
+                    await API.deleteDevice(deviceId);
+                    modal.close();
+                    showToast('设备已撤销并删除记录');
+                } catch (deleteErr) {
+                    modal.close();
+                    showToast('设备已撤销，但删除记录失败: ' + errorMessage(deleteErr), 'error');
+                }
+            } else {
+                modal.close();
+                showToast('设备已撤销');
+            }
             navigate('friend-detail', { id: state.params.id });
         } catch (err) {
             confirmBtn.disabled = false;
-            confirmBtn.textContent = '确认撤销';
+            confirmBtn.textContent = deleteRecordCheckbox.checked ? '撤销并删除记录' : '确认撤销';
             showToast('撤销失败: ' + errorMessage(err), 'error');
         }
     });
@@ -2172,14 +2211,14 @@ function renderFeedback(container, renderToken) {
                 tableWrap.innerHTML = '<div class="empty-state" style="text-align:center;padding:32px;color:var(--text-dim)">暂无反馈</div>';
             } else {
                 const rows = feedbacks.map(f => {
-                    const typeLabel = typeLabels[f.type] || f.type;
+                    const typeLabel = escapeHtml(typeLabels[f.type] || f.type);
                     const typeColor = typeColors[f.type] || '#9ca3af';
-                    const statusLabel = statusLabels[f.status] || f.status;
+                    const statusLabel = escapeHtml(statusLabels[f.status] || f.status);
                     const statusColor = statusColors[f.status] || '#9ca3af';
                     const screenshotBadge = f.screenshots ? '📷' : '';
                     const contentPreview = escapeHtml((f.content || '').slice(0, 50)) + (f.content && f.content.length > 50 ? '...' : '');
                     const displayId = escapeHtml(f.displayId || f.display_id || '');
-                    return `<tr data-id="${escapeHtml(f.id)}" class="fb-row" style="cursor:pointer">
+                    return `<tr data-id="${escapeHtml(f.id)}" class="fb-row" style="cursor:pointer" tabindex="0" role="button" aria-label="查看反馈详情">
                         <td><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span></td>
                         <td><span class="badge" style="background:${typeColor};color:white">${typeLabel}</span></td>
                         <td>${escapeHtml(f.friend_nickname || '—')}</td>
@@ -2197,6 +2236,12 @@ function renderFeedback(container, renderToken) {
                 `;
                 tableWrap.querySelectorAll('.fb-row').forEach(row => {
                     row.addEventListener('click', () => showFeedbackDetail(row.dataset.id, container, renderToken));
+                    row.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            showFeedbackDetail(row.dataset.id, container, renderToken);
+                        }
+                    });
                 });
             }
 
@@ -2244,7 +2289,8 @@ function showFeedbackDetail(id, container, renderToken) {
         }
 
         const repliesHtml = replies.map(r => {
-            const role = r.authorRole || r.author_role || 'developer';
+            const rawRole = r.authorRole || r.author_role || 'developer';
+            const role = rawRole === 'user' ? 'user' : 'developer';
             const screenshotsArr = Array.isArray(r.screenshots) ? r.screenshots : [];
             const roleLabel = role === 'developer' ? '自己' : '用户';
             const screenshotsInner = screenshotsArr.length > 0
@@ -2273,7 +2319,7 @@ function showFeedbackDetail(id, container, renderToken) {
             </div>
             <div class="detail-grid">
                 <div class="card detail-card">
-                    <div class="card-header"><span class="card-title">反馈内容</span><span style="color:${statusColors[f.status] || '#9ca3af'};font-weight:500">${statusLabels[f.status] || f.status || ''}</span></div>
+                    <div class="card-header"><span class="card-title">反馈内容</span><span style="color:${statusColors[f.status] || '#9ca3af'};font-weight:500">${escapeHtml(statusLabels[f.status] || f.status || '')}</span></div>
                     <div style="display:grid;gap:10px;font-size:13px;margin-bottom:16px">
                         <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">用户</span><span>${escapeHtml(f.friend_nickname || '—')}</span></div>
                         <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">时间</span><span>${formatTime(f.created_at)}</span></div>
@@ -2338,13 +2384,15 @@ function showFeedbackDetail(id, container, renderToken) {
                         }
                         const result = await API.uploadScreenshot('/fb/admin/upload-screenshot', file);
                         pendingScreenshots.push(result.key);
+                        const objectUrl = URL.createObjectURL(file);
                         const thumb = document.createElement('div');
                         thumb.className = 'fb-upload-thumb';
                         thumb.dataset.key = result.key;
-                        thumb.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="待上传"><button class="fb-upload-thumb-remove" type="button">×</button>`;
+                        thumb.innerHTML = `<img src="${objectUrl}" alt="待上传"><button class="fb-upload-thumb-remove" type="button">×</button>`;
                         thumb.querySelector('.fb-upload-thumb-remove').addEventListener('click', () => {
                             const idx = pendingScreenshots.indexOf(result.key);
                             if (idx >= 0) pendingScreenshots.splice(idx, 1);
+                            URL.revokeObjectURL(objectUrl);
                             thumb.remove();
                         });
                         document.getElementById('fb-upload-thumbs').appendChild(thumb);
@@ -2379,11 +2427,33 @@ function showFeedbackDetail(id, container, renderToken) {
             });
         });
         document.getElementById('fb-close')?.addEventListener('click', () => {
-            if (!confirm('确认关闭此反馈？关闭后用户仍可查看但不能再回复。')) return;
-            API.post('/fb/admin/close', { feedbackId: id }).then(() => {
-                showToast('已关闭');
-                showFeedbackDetail(id, container, renderToken);
-            }).catch(err => showToast('关闭失败：' + (err.message || ''), 'error'));
+            const body = document.createElement('div');
+            body.innerHTML = `
+                <div class="confirm-danger-text">确定要关闭此反馈吗？</div>
+                <div class="confirm-danger-impact">关闭后用户仍可查看但不能再回复。</div>
+            `;
+            const confirmBtn = Object.assign(document.createElement('button'), {
+                className: 'btn btn-danger', textContent: '确认关闭', type: 'button',
+            });
+            const cancelBtn = Object.assign(document.createElement('button'), {
+                className: 'btn btn-ghost', textContent: '取消', type: 'button',
+            });
+            modal.open({ title: '关闭反馈', body, footer: [cancelBtn, confirmBtn] });
+            cancelBtn.addEventListener('click', () => modal.close());
+            confirmBtn.addEventListener('click', async () => {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = '关闭中...';
+                try {
+                    await API.post('/fb/admin/close', { feedbackId: id });
+                    modal.close();
+                    showToast('已关闭');
+                    showFeedbackDetail(id, container, renderToken);
+                } catch (err) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = '确认关闭';
+                    showToast('关闭失败：' + (err.message || ''), 'error');
+                }
+            });
         });
         container.querySelectorAll('.fb-screenshot-img').forEach(img => {
             img.addEventListener('click', () => window.open(img.dataset.key, '_blank'));
@@ -2396,16 +2466,41 @@ function showFeedbackDetail(id, container, renderToken) {
 }
 
 // ===== Crash Logs =====
-/** 崩溃日志 API 请求：走 /api/* Pages Functions 路径，401/登录重定向时与 API.request 一致跳 Access 登录 */
+/** 崩溃日志 API 请求：走 /api/* Pages Functions 路径，401/登录重定向时与 API.request 一致跳 Access 登录；带超时并支持路由切换时取消 */
 function crashFetch(path, options) {
-    return fetch(path, options).then(res => {
-        if (res.status === 401 || (res.redirected && res.url.includes('/cdn-cgi/access/login'))) {
-            localStorage.removeItem('tts-access-token');
-            window.location.href = API.getAccessLoginUrl();
-            throw new Error('UNAUTHORIZED');
-        }
-        return res;
-    });
+    const controller = new AbortController();
+    activeRequestControllers.add(controller);
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+    return fetch(path, { ...options, signal: controller.signal })
+        .then(res => {
+            if (res.status === 401 || (res.redirected && res.url.includes('/cdn-cgi/access/login'))) {
+                localStorage.removeItem('tts-access-token');
+                window.location.href = API.getAccessLoginUrl();
+                throw new Error('UNAUTHORIZED');
+            }
+            return res;
+        })
+        .catch(error => {
+            if (error?.name === 'AbortError') {
+                if (!timedOut) {
+                    const cancelledError = new Error('Request cancelled');
+                    cancelledError.code = 'REQUEST_CANCELLED';
+                    throw cancelledError;
+                }
+                const timeoutError = new Error('Request timed out');
+                timeoutError.code = 'REQUEST_TIMEOUT';
+                throw timeoutError;
+            }
+            throw error;
+        })
+        .finally(() => {
+            clearTimeout(timeoutId);
+            activeRequestControllers.delete(controller);
+        });
 }
 
 function crashStatusBadge(status) {
@@ -2513,7 +2608,7 @@ function renderCrashLogs(container, renderToken) {
                 tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-title">无记录</div><div class="empty-desc">当前条件下没有崩溃日志</div></div></td></tr>`;
             } else {
                 tbody.innerHTML = entries.map(e => `
-                    <tr class="crash-row" data-id="${escapeHtml(e.id)}" style="cursor:pointer">
+                    <tr class="crash-row" data-id="${escapeHtml(e.id)}" style="cursor:pointer" tabindex="0" role="button" aria-label="查看崩溃详情">
                         <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim);white-space:nowrap">${formatDateTime(e.timestamp)}</td>
                         <td>${entityCell(e.device, '', '未知设备')}</td>
                         <td style="font-size:12px">${escapeHtml(e.androidVersion || '—')}</td>
@@ -2525,6 +2620,12 @@ function renderCrashLogs(container, renderToken) {
                 `).join('');
                 tableWrap.querySelectorAll('.crash-row').forEach(row => {
                     row.addEventListener('click', () => navigate('crash-log-detail', { id: row.dataset.id }));
+                    row.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            navigate('crash-log-detail', { id: row.dataset.id });
+                        }
+                    });
                 });
             }
 
@@ -2644,6 +2745,22 @@ parseHash();
 updateActiveNav();
 render();
 
+// 侧栏网关状态：启动与每次路由切换时探测，避免静态"在线"误导
+function updateGatewayStatus() {
+    const dot = document.getElementById('gatewayStatusDot');
+    const text = document.getElementById('gatewayStatusText');
+    if (!dot || !text) return;
+    API.getStats().then(s => {
+        const online = s.gatewayHealth === 'ok';
+        dot.classList.toggle('status-dot-offline', !online);
+        text.textContent = online ? '网关在线' : '网关异常';
+    }).catch(() => {
+        dot.classList.add('status-dot-offline');
+        text.textContent = '网关离线';
+    });
+}
+updateGatewayStatus();
+
 // ===== AI 健康 =====
 const AI_PROVIDER_META = {
     // 百炼是当前主力（额度按模型独立、吞吐不受智谱账号级限制），模型列表按 handler 的
@@ -2722,8 +2839,11 @@ async function loadAiHealth(container, renderToken) {
     const cardsEl = container.querySelector('#aiProviderCards');
     const tableEl = container.querySelector('#aiEventTable');
     if (!cardsEl || !tableEl) return;
-    container.querySelectorAll('#aiHealthWindow button').forEach(b =>
-        b.classList.toggle('active', b.dataset.window === AI_HEALTH_STATE.window));
+    container.querySelectorAll('#aiHealthWindow button').forEach(b => {
+        const active = b.dataset.window === AI_HEALTH_STATE.window;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', String(active));
+    });
     const providerFilterEl = container.querySelector('#aiEventProvider');
     if (providerFilterEl) providerFilterEl.value = AI_HEALTH_STATE.providerFilter;
     cardsEl.innerHTML = [1, 2, 3].map(() => '<div class="loading-skeleton" style="height:180px"></div>').join('');

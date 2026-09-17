@@ -28,7 +28,7 @@
     --text-muted: #b8c0cc;
     --text-dim: #98a0ae;
     --accent: #7c8cf8;
-    --accent-hover: '#a0abfa';
+    --accent-hover: #a0abfa;
     --accent-soft: rgba(124, 140, 248, 0.15);
     --success: #4ade80;
     --success-soft: rgba(74, 222, 128, 0.15);
@@ -135,12 +135,6 @@ input, select { font-family: inherit; }
     bottom: -150px; right: -100px;
     animation-delay: -24s;
 }
-@keyframes blob-float {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    25% { transform: translate(30px, -40px) scale(1.08); }
-    50% { transform: translate(-20px, 20px) scale(0.95); }
-    75% { transform: translate(15px, 30px) scale(1.03); }
-}
 
 /* ===== Glass primitive ===== */
 .glass {
@@ -222,7 +216,7 @@ input, select { font-family: inherit; }
 .nav-link {
     padding: 8px 14px;
     border-radius: var(--radius);
-    font-family: 'Instrument Serif', serif;
+    font-family: var(--font-display);
     font-size: 14px;
     font-weight: 600;
     color: var(--text-muted);
@@ -393,7 +387,7 @@ input, select { font-family: inherit; }
     gap: 12px;
     padding: 12px 14px;
     border-radius: var(--radius);
-    font-family: 'Instrument Serif', serif;
+    font-family: var(--font-display);
     font-size: 15px;
     font-weight: 600;
     color: var(--text-muted);
@@ -436,6 +430,10 @@ input, select { font-family: inherit; }
     background: var(--success);
     box-shadow: 0 0 8px var(--success);
     animation: pulse 2s ease-in-out infinite;
+}
+.status-dot-offline {
+    background: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
 }
 @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -794,12 +792,12 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ===== States ===== */
 .loading-skeleton {
-    background: linear-gradient(90deg, var(--surface-hover) 25%, var(--border) 50%, var(--surface-hover) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    background: linear-gradient(90deg, var(--surface) 22%, var(--surface-hover) 50%, var(--surface) 78%);
+    background-size: 320% 100%;
+    animation: shimmer 2.6s ease-in-out infinite;
     border-radius: var(--radius);
 }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 
 .empty-state {
     text-align: center;
@@ -981,6 +979,27 @@ tbody tr:last-child td { border-bottom: none; }
     color: var(--danger);
     margin-bottom: 18px;
 }
+.revoke-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color var(--transition), background var(--transition);
+}
+.revoke-checkbox:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.revoke-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    flex: 0 0 auto;
+    accent-color: var(--danger);
+    cursor: pointer;
+}
+.revoke-checkbox-text { font-size: 13px; font-weight: 500; color: var(--text); }
+.revoke-checkbox-hint { display: block; font-size: 12px; color: var(--text-dim); font-weight: 400; margin-top: 2px; }
 
 /* ===== Section headings ===== */
 .section-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
@@ -1111,7 +1130,7 @@ tbody tr:last-child td { border-bottom: none; }
     .topbar-nav { display: none; }
     .sidebar {
         position: fixed;
-        top: var(--topbar-h);
+        top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
         left: 0;
         bottom: 0;
         z-index: 40;
@@ -1121,7 +1140,7 @@ tbody tr:last-child td { border-bottom: none; }
     .sidebar-scrim:not([hidden]) {
         display: block;
         position: fixed;
-        inset: var(--topbar-h) 0 0;
+        inset: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)) 0 0;
         z-index: 30;
         border: 0;
         padding: 0;
