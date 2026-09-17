@@ -46,6 +46,10 @@ export function buildTraktPublicApiHeaders(
 /** 判断 Trakt 子路径是否为公开端点（无需用户 access_token）。
  *  - sync/* 、recommendations/* 、users/* 、shows/{id}/progress/* 需要用户凭据
  *  - 其余端点（movies/* 、shows/* 、lists/* 、search/* 、people/* 等）仅需 client_id
+ *
+ *  注意：oauth/* 由调用方（index.ts）在上层单独分流，不会进入本函数。
+ *  gateway-pages 边缘缓存对 /api/trakt/ 的排除集必须与本函数保持一致
+ *  （见 functions/gateway-api/[[path]].js getPublicCachePlan），改动需两端同步。
  */
 export function isTraktPublicPath(traktPath: string): boolean {
     if (traktPath.startsWith('sync/')) return false;

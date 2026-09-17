@@ -27,6 +27,9 @@ const CACHE_TTL: Record<string, number> = {
 };
 const SCRAPE_CACHE_VERSION = 3;
 
+// 豆瓣网页抓取可能因网络/反爬响应慢而挂起；超时避免 CPU 时间片空转，超时后走 MISS 返回。
+const SCRAPE_FETCH_TIMEOUT_MS = 20 * 1000;
+
 interface ChartItem {
     rank: number;
     title: string;
@@ -239,7 +242,10 @@ function json(data: unknown): Response {
 // ==================== 新片榜 ====================
 
 async function scrapeChart(): Promise<{ code: number; data: ChartItem[]; total: number; cached: boolean; updatedAt: string }> {
-    const response = await fetch('https://movie.douban.com/chart', { headers: DOUBAN_HEADERS });
+    const response = await fetch('https://movie.douban.com/chart', {
+        headers: DOUBAN_HEADERS,
+        signal: AbortSignal.timeout(SCRAPE_FETCH_TIMEOUT_MS),
+    });
 
     const items: ChartItem[] = [];
     const state: { current: Partial<ChartItem> | null } = { current: null };
@@ -333,7 +339,10 @@ function finalizeChartItem(item: Partial<ChartItem>): ChartItem {
 // ==================== 一周口碑榜 ====================
 
 async function scrapeWeekly(): Promise<{ code: number; data: WeeklyItem[]; total: number; cached: boolean; updatedAt: string }> {
-    const response = await fetch('https://movie.douban.com/chart', { headers: DOUBAN_HEADERS });
+    const response = await fetch('https://movie.douban.com/chart', {
+        headers: DOUBAN_HEADERS,
+        signal: AbortSignal.timeout(SCRAPE_FETCH_TIMEOUT_MS),
+    });
 
     const items: WeeklyItem[] = [];
     const state: { current: Partial<WeeklyItem> | null } = { current: null };
@@ -424,7 +433,10 @@ async function enrichWeeklyPosters(items: WeeklyItem[]): Promise<void> {
             try {
                 const resp = await fetch(
                     `https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(item.title)}`,
-                    { headers: DOUBAN_HEADERS },
+                    {
+                        headers: DOUBAN_HEADERS,
+                        signal: AbortSignal.timeout(SCRAPE_FETCH_TIMEOUT_MS),
+                    },
                 );
                 if (!resp.ok) return '';
                 const data = await resp.json() as Array<{ type?: string; img?: string }>;
@@ -455,7 +467,10 @@ function finalizeWeeklyItem(item: Partial<WeeklyItem>): WeeklyItem {
 // ==================== 正在热映 ====================
 
 async function scrapeNowPlaying(): Promise<{ code: number; data: NowPlayingItem[]; total: number; cached: boolean; updatedAt: string }> {
-    const response = await fetch('https://movie.douban.com/', { headers: DOUBAN_HEADERS });
+    const response = await fetch('https://movie.douban.com/', {
+        headers: DOUBAN_HEADERS,
+        signal: AbortSignal.timeout(SCRAPE_FETCH_TIMEOUT_MS),
+    });
 
     const items: NowPlayingItem[] = [];
     const state: { current: Partial<NowPlayingItem> | null } = { current: null };
@@ -560,7 +575,10 @@ function finalizeNowPlayingItem(item: Partial<NowPlayingItem>): NowPlayingItem {
 async function scrapeTop250(page: number): Promise<{ code: number; data: Top250Item[]; total: number; page: number; cached: boolean; updatedAt: string }> {
     const start = (page - 1) * 25;
     const url = `https://movie.douban.com/top250?start=${start}&filter=`;
-    const response = await fetch(url, { headers: DOUBAN_HEADERS });
+    const response = await fetch(url, {
+        headers: DOUBAN_HEADERS,
+        signal: AbortSignal.timeout(SCRAPE_FETCH_TIMEOUT_MS),
+    });
 
     const items: Top250Item[] = [];
     const state: { current: Partial<Top250Item> | null } = { current: null };

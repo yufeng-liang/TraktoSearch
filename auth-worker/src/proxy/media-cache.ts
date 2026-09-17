@@ -21,6 +21,8 @@ const IMAGES_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SIMILAR_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COLLECTION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REFRESH_LEASE_MS = 60 * 1000;
+// TMDB 详情带 append_to_response 较重，给足超时余量，避免上游无响应拖死整个请求。
+const TMDB_FETCH_TIMEOUT_MS = 20 * 1000;
 
 export type MediaType = 'movie' | 'tv';
 export type MediaSection = 'credits' | 'videos' | 'images' | 'similar' | 'collection';
@@ -314,8 +316,13 @@ async function resolveDetail(
     const missingSections: MediaSection[] = [];
     const expiredSections: MediaSection[] = [];
     let partial = false;
-    for (const section of sections) {
+    // 各 section 的 manifest+R2 读取互相独立，并发加载避免 5 个 section 串行拉满
+    // 延迟（快路径整体耗时从 O(n) 变 O(1)）；读写路径仍全程串行，无竞态。
+    const sectionResults = await Promise.all(sections.map(async (section) => {
         const cached = await safeReadSection(env, mediaType, tmdbId, locale, section);
+        return { section, cached };
+    }));
+    for (const { section, cached } of sectionResults) {
         if (!cached) {
             missingSections.push(section);
             continue;
@@ -515,6 +522,9 @@ async function tmdbGet(
                 'User-Agent': TMDB_USER_AGENT,
                 ...auth.headers,
             },
+            // 无界 fetch 一旦上游挂起，请求会在 CPU 时间片里空转浪费配额；
+            // 超时让 fetchWithKeyRotation 快速失败，走缓存降级或错误返回。
+            signal: AbortSignal.timeout(TMDB_FETCH_TIMEOUT_MS),
         });
     }, [401, 403, 429]);
 }

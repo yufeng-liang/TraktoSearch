@@ -11,6 +11,10 @@ const DOUBAN_PREFIX = '/api/douban/';
 // 热榜单点：直接抓取 movie.douban.com，用 HTMLRewriter 流式解析，绕过 douban-movie-api worker 的 10ms CPU 限制
 const DIRECT_SCRAPE_PATHS = new Set(['api/chart', 'api/weekly', 'api/nowplaying', 'api/top250']);
 
+// douban-movie-api 走 Service Binding（内部调用），仍可能因上游豆瓣响应慢而挂起；
+// 超时让 fetchWithKeyRotation 快速失败，避免请求长时间空转浪费允许量。
+const DOUBAN_FETCH_TIMEOUT_MS = 20 * 1000;
+
 export async function handleDoubanProxy(
     request: Request,
     env: Env,
@@ -46,6 +50,7 @@ export async function handleDoubanProxy(
                 method: request.method,
                 headers: buildDoubanHeaders(key),
                 body,
+                signal: AbortSignal.timeout(DOUBAN_FETCH_TIMEOUT_MS),
             }));
         },
         [401, 403, 429],
