@@ -12,13 +12,12 @@ import androidx.compose.ui.graphics.Color
  * 和 [com.tracktosearch.ui.screen.statistics.rememberAnalyticsPalette] 同一个取舍：
  * 牺牲一点主题一致性，换来「这张卡片是什么」永远认得出。
  *
- * **不分明暗档**：卡片上是 17sp Bold 白字加 12sp 白字，两者都得按 WCAG 普通字号算
- * （14pt 粗体即 18.67px 才算大字号，17sp 差一点），所以每个端点的亮度都被
- * 「白字 ≥ 4.5:1」压到 0.183 以下。这个上限一卡，明暗两套算出来只差两三个 RGB 档，
- * 分两套没有意义。原先的亮版热门橙 #E6AA35 上白字只有 2.07:1，六张卡片里五张不合格。
+ * **hero 卡片刻意走浅色**：五个分类快捷入口卡的渐变此前为满足「白字 ≥ 4.5:1」被压暗，
+ * 现按用户要求恢复到明亮浅色（保住色相、只动明度的原始设计），白字可读性随之放宽，
+ * 见 DiscoverPaletteTest 的分档断言。
+ * **登录引导卡与玫瑰提示卡仍维持深色**，以保住白字 AA。
  *
- * 改这里的色值时：保住色相、只动明度，然后确认白字仍有 4.5:1
- * （见 DiscoverPaletteTest）。
+ * 改这里的色值时：保住色相、只动明度（见 DiscoverPaletteTest）。
  */
 internal data class GradientColors(val start: Color, val end: Color) {
 
@@ -36,19 +35,19 @@ internal data class GradientColors(val start: Color, val end: Color) {
 }
 
 /** 热门 — 橙到芥黄。 */
-internal val DiscoverPopularGradient = GradientColors(Color(0xFFC05526), Color(0xFF966F22))
+internal val DiscoverPopularGradient = GradientColors(Color(0xFFF06A2F), Color(0xFFE6AA35))
 
 /** 即将上映 — 玫红到紫。 */
-internal val DiscoverUpcomingGradient = GradientColors(Color(0xFFAC5B80), Color(0xFF8D61BD))
+internal val DiscoverUpcomingGradient = GradientColors(Color(0xFFCB6C98), Color(0xFF9C6BD1))
 
 /** 推荐 — 蓝到青。 */
-internal val DiscoverRecommendGradient = GradientColors(Color(0xFF4E74BE), Color(0xFF278091))
+internal val DiscoverRecommendGradient = GradientColors(Color(0xFF5C89E0), Color(0xFF36AFC7))
 
 /** 豆瓣新片 — 绿到青。 */
-internal val DiscoverDoubanGradient = GradientColors(Color(0xFF2F8459), Color(0xFF327F91))
+internal val DiscoverDoubanGradient = GradientColors(Color(0xFF42B87C), Color(0xFF43A9C2))
 
 /** 热门片单 — 玫红到砖褐。 */
-internal val DiscoverListsGradient = GradientColors(Color(0xFFB7566E), Color(0xFFA46558))
+internal val DiscoverListsGradient = GradientColors(Color(0xFFE56B89), Color(0xFFC67A6B))
 
 /** 豆瓣登录引导卡 — 与 [DiscoverDoubanGradient] 同族，稍亮一点以区分「入口」和「引导」。 */
 internal val DiscoverDoubanLoginGradient = GradientColors(Color(0xFF348457), Color(0xFF328089))
