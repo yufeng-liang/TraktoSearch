@@ -120,6 +120,7 @@ import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import com.tracktosearch.ui.theme.LocalMainColorScheme
+import com.tracktosearch.ui.theme.VintagePaperPage
 import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.data.util.CurrentPageHolder
 import com.tracktosearch.data.util.StartupTrace
@@ -714,6 +715,7 @@ fun AppNavigation(
             ) {
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage(keepPaperDialogs = true) {
                         ActivationLoginScreen(
                             expired = currentAuthState == AuthState.EXPIRED,
                             onLoginSuccess = {
@@ -746,6 +748,7 @@ fun AppNavigation(
                                 }
                             },
                         )
+                        }
                     }
                 }
 
@@ -1034,6 +1037,7 @@ fun AppNavigation(
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage {
                         val type = backStackEntry.arguments?.getString("type") ?: "movie"
                         val traktId = backStackEntry.arguments?.getInt("traktId") ?: 0
                         val tmdbId = backStackEntry.arguments?.getInt("tmdbId") ?: 0
@@ -1082,6 +1086,7 @@ fun AppNavigation(
                             onTraktLogin = { launchDirectTraktLogin() },
                             onDoubanLogin = { navController.navigate(Routes.DOUBAN_LOGIN) }
                         )
+                        }
                     }
                 }
 
@@ -1095,6 +1100,7 @@ fun AppNavigation(
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage {
                         val keyword = backStackEntry.arguments?.getString("keyword") ?: ""
                         SearchScreen(
                             initialKeyword = keyword,
@@ -1123,6 +1129,7 @@ fun AppNavigation(
                                 navController.navigate(Routes.MAIN) { launchSingleTop = true }
                             }
                         )
+                        }
                     }
                 }
 
@@ -1135,6 +1142,7 @@ fun AppNavigation(
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage {
                         val personId = backStackEntry.arguments?.getInt("personId") ?: 0
                         val personName = java.net.URLDecoder.decode(
                             backStackEntry.arguments?.getString("personName") ?: "", "UTF-8"
@@ -1158,6 +1166,7 @@ fun AppNavigation(
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
                             }
                         )
+                        }
                     }
                 }
 
@@ -1186,6 +1195,7 @@ fun AppNavigation(
                     }
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage {
                         // listId 与 listName 由 TraktListDetailViewModel 自己从 SavedStateHandle 取，
                         // 这里不再重复读一遍。
                         TraktListDetailScreen(
@@ -1200,6 +1210,7 @@ fun AppNavigation(
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             }
                         )
+                        }
                     }
                 }
 
@@ -1329,6 +1340,7 @@ fun AppNavigation(
 
                 composable(Routes.SPLASH_QUOTE) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage {
                         com.tracktosearch.ui.screen.dailystamp.DailyStampScreen(
                             onBack = { navController.popBackStack() },
                             // mediaType 由台词库给（movie/show），两个命名空间的 tmdbId 各自编号；
@@ -1346,6 +1358,7 @@ fun AppNavigation(
                                 )
                             }
                         )
+                        }
                     }
                 }
 
@@ -1391,6 +1404,7 @@ fun AppNavigation(
 
                 composable(Routes.DOUBAN_LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage(keepPaperDialogs = true) {
                         // 识别来源：从 ActivationLoginScreen 进入时，登录成功应直达主页（豆瓣独立模式）；
                         // 从 MainScreen 进入时，沿用 onBack 返回上一页即可
                         val previousRoute = navController.previousBackStackEntry?.destination?.route
@@ -1405,6 +1419,7 @@ fun AppNavigation(
                             }
                         } else null
                         )
+                        }
                     }
                 }
 
@@ -1418,6 +1433,7 @@ fun AppNavigation(
                     // 提供共享转场作用域:豆瓣详情页海报源需要 LocalAnimatedVisibilityScope
                     // 才能附加 sharedBounds,与全屏 overlay 配对实现海报缩放转场
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        VintagePaperPage {
                         DoubanItemDetailScreen(
                             doubanId = doubanId,
                             onBack = { watchlistChanged, watchedChanged ->
@@ -1436,6 +1452,7 @@ fun AppNavigation(
                                 navController.popBackStack()
                             }
                         )
+                        }
                     }
                 }
 

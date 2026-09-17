@@ -16,6 +16,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -80,6 +81,42 @@ fun floatingDialogColor(): Color =
 fun floatingSheetColor(): Color =
     LocalFloatingSheetColor.current.takeIf { it != Color.Unspecified }
         ?: MaterialTheme.colorScheme.surfaceContainerLow
+
+/** 票根主题标记（true = 复古票根）：AppNavigation 白名单页面据此包回纸色 scheme。 */
+val LocalIsVintageTheme = staticCompositionLocalOf<Boolean> { false }
+
+/**
+ * 票根主题下的「纸背景页」包装器：把子树重挂回 baseColorScheme（牛皮纸），覆盖
+ * [TraktoSearchTheme] 全局的中性页面底；非票根主题 no-op（详情页/登录页等
+ * LocalMainColorScheme 是主界面专用 scheme，包回会给它们染色，所以必须由
+ * 票根标记把关，其他主题行为不变）。
+ *
+ * [keepPaperDialogs] = true 时（激活登录/豆瓣登录），浮层 local 一并覆盖回纸色槽位
+ * surfaceVariant / surfaceContainerLow——与现状票根弹窗观感一致，不跟随全局
+ * 「中性+纸色混色」。
+ */
+@Composable
+fun VintagePaperPage(
+    keepPaperDialogs: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    if (!LocalIsVintageTheme.current) {
+        content()
+        return
+    }
+    MaterialTheme(colorScheme = LocalMainColorScheme.current ?: MaterialTheme.colorScheme) {
+        if (keepPaperDialogs) {
+            CompositionLocalProvider(
+                LocalFloatingDialogColor provides MaterialTheme.colorScheme.surfaceVariant,
+                LocalFloatingSheetColor provides MaterialTheme.colorScheme.surfaceContainerLow,
+            ) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
 
 /**
  * 复古票根：唯一手写而非生成的主题，因为它要整套换纸。
@@ -360,28 +397,35 @@ fun TraktoSearchTheme(
         else -> monetColorScheme(seed = if (darkTheme) Red500 else Red700, dark = darkTheme)
     }
 
-    // 页面底色分层：baseColorScheme.background 是「主界面染色底」。子页面（NavHost 里
-    // 除 MAIN 外的目的地）统一覆盖成纯中性灰；票根主题的牛皮纸本身就是底色而非染色，
-    // 整站保持一致，不做覆盖。LocalMainColorScheme 保留 baseColorScheme 供 MainScreen 子树使用。
+    // 页面底色分层：baseColorScheme.background 是「主界面染色底」。NavHost 目的地统一覆盖成
+    // 纯中性灰；票根主题的牛皮纸底色只在白名单页面由 VintagePaperPage 包回 baseColorScheme
+    // 提供（主界面四 tab、详情类、登录、开屏语录），其余子页面与非票根主题一致走中性。
+    // LocalMainColorScheme 保留 baseColorScheme 供 MainScreen 子树与白名单页面使用。
     val isVintageTheme = accentColor == MonetAccent.VINTAGE_TICKET
-    val pageColorScheme = if (isVintageTheme) {
-        baseColorScheme
-    } else {
-        baseColorScheme.copy(
-            background = if (darkTheme) NeutralPageBackgroundDark else NeutralPageBackgroundLight,
-            onBackground = if (darkTheme) NeutralPageInkDark else NeutralPageInkLight,
-        )
-    }
+    val pageColorScheme = baseColorScheme.copy(
+        background = if (darkTheme) NeutralPageBackgroundDark else NeutralPageBackgroundLight,
+        onBackground = if (darkTheme) NeutralPageInkDark else NeutralPageInkLight,
+    )
 
-    // 浮层底色：非票根主题统一纯中性（弹窗/sheet 各自对齐原容器明度档），
-    // 票根主题用纸色槽位；与调用点所在页面（主屏或子页面）无关，弹窗从哪打开都中性。
+    // 浮层底色：非票根主题统一纯中性（弹窗/sheet 各自对齐原容器明度档），票根主题统一在
+    // 中性浮层基准上掺 surfaceVariant 纸色（TicketPaper*Variant，与卡片同一张纸），
+    // 浅色档 10% / 深色档 20%，保留复古纸感但不复刻整站暖底；与调用点所在页面无关，
+    // 弹窗从哪打开都中性。登录页内浮层例外覆盖回纯纸色，见 VintagePaperPage(keepPaperDialogs)。
     val floatingDialog = if (isVintageTheme) {
-        baseColorScheme.surfaceVariant
+        lerp(
+            if (darkTheme) NeutralFloatingDialogDark else NeutralFloatingDialogLight,
+            if (darkTheme) TicketPaperDarkVariant else TicketPaperLightVariant,
+            if (darkTheme) 0.20f else 0.10f,
+        )
     } else {
         if (darkTheme) NeutralFloatingDialogDark else NeutralFloatingDialogLight
     }
     val floatingSheet = if (isVintageTheme) {
-        baseColorScheme.surfaceContainerLow
+        lerp(
+            if (darkTheme) NeutralFloatingSheetDark else NeutralFloatingSheetLight,
+            if (darkTheme) TicketPaperDarkVariant else TicketPaperLightVariant,
+            if (darkTheme) 0.20f else 0.10f,
+        )
     } else {
         if (darkTheme) NeutralFloatingSheetDark else NeutralFloatingSheetLight
     }
@@ -405,6 +449,7 @@ fun TraktoSearchTheme(
         // 统一覆盖 Haze 未显式设置时的噪点默认值，显式 noiseFactor(0f) 仍然优先。
         CompositionLocalProvider(
             LocalMainColorScheme provides baseColorScheme,
+            LocalIsVintageTheme provides isVintageTheme,
             LocalFloatingDialogColor provides floatingDialog,
             LocalFloatingSheetColor provides floatingSheet,
             LocalHazeBlurStyle provides AppHazeDefaultBlurStyle,
