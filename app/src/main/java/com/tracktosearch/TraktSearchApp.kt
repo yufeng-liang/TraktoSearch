@@ -54,6 +54,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
     // 开屏日签开关：系统 splash 的图标分两档，见 TraktSearchApp.onCreate 里的那次预读
     @Inject lateinit var splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage
+    @Inject lateinit var tmdbRepository: com.tracktosearch.data.repository.TmdbRepository
+    @Inject lateinit var traktRepository: com.tracktosearch.data.repository.TraktRepository
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例
     @Inject lateinit var appDatabaseProvider: Provider<AppDatabase>
     // 惰性 Provider：注入本身不触发 EncryptedSharedPreferences 初始化，仅在使用时才解析
@@ -170,8 +172,25 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             // 后续启用时恢复下一行调用。
             // remoteConfigManager.initialize()
             StartupTrace.mark("application.remote_config.disabled")
-            // 持久化缓存按当前页面首次使用时加载；不在 Application 阶段全量读盘或预热。
-            StartupTrace.mark("application.cache_warmup.deferred", "reason=load_on_page")
+            // 高频持久化缓存后台预热：详情/演职员/ID 映射在列表富化与详情页进入时几乎必用，
+            // 启动时先读盘回填，页面首次 getOrAwait 的 awaitLoaded 直接通过。
+            // 只预热高频子集：长尾缓存仍按页面首用加载，避免全量读盘浪费。
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    tmdbRepository.highFrequencyCaches.forEach { it.loadFromDisk() }
+                    StartupTrace.mark("application.cache_warmup.done", "scope=high_frequency")
+                } catch (e: Exception) {
+                    // 预热失败不影响启动：页面首用时仍会按需 awaitLoaded 加载
+                    StartupTrace.mark("application.cache_warmup.failed", "err=${e.javaClass.simpleName}")
+                }
+            }
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    traktRepository.warmupHighFrequencyCaches()
+                } catch (e: Exception) {
+                    StartupTrace.mark("application.cache_warmup.trakt.failed", "err=${e.javaClass.simpleName}")
+                }
+            }
         }
     }
 

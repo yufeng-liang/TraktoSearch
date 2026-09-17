@@ -739,6 +739,12 @@ class TraktRepository @Inject constructor(
     /** ID 映射持久化缓存（tmdb↔trakt、imdb↔trakt），用于设置页按类目清除 */
     val idMappingCaches: List<PersistentTtlCache<*>> get() = listOf(searchByTmdbCache, searchByImdbCache)
 
+    /** 高频持久化缓存（tmdb/imdb↔trakt ID 映射），列表富化时几乎每行都会命中，
+     *  由 Application 启动后台预热，避免首次 getOrAwait 被 awaitLoaded 全量回填拖住。 */
+    suspend fun warmupHighFrequencyCaches() {
+        idMappingCaches.forEach { it.loadFromDisk() }
+    }
+
     /** 影视数据持久化缓存（想看/已看 ID + 趋势/推荐/列表 + 已看历史首页），用于设置页按类目清除 */
     val mediaDataCaches: List<PersistentTtlCache<*>> get() = listOf(
         watchlistWatchedIdsCache, recommendationsCache, trendingMoviesCache, trendingShowsCache,

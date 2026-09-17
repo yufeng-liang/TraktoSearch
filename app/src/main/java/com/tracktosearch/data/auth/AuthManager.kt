@@ -310,6 +310,24 @@ class AuthManager @Inject constructor(
     }
 
     /**
+     * 冷启动本地快速初始化：只读本地会话并按「是否曾激活」做乐观授权判定，
+     * 不发起任何网络请求。供 MainActivity 组合门使用，让首屏不被网络校验拖住。
+     *
+     * - 有本地 refresh 会话 → 乐观置 AUTHORIZED（真实状态由完整初始化/校验在后台收敛；
+     *   沿用 initializeForStartup 超时路径的乐观语义，离线宽限仍可进主界面）
+     * - 从未激活 → UNAUTHORIZED，走登录页
+     *
+     * @return 是否已激活（可作为 hasGatewayAccess 的本地近似判据）
+     */
+    suspend fun initializeLocalOnly(): Boolean {
+        loadCachedSession()
+        val hasLocalSession = !deviceId.isNullOrBlank() &&
+            !tokenStorage.getRefreshToken().isNullOrBlank()
+        _authState.value = if (hasLocalSession) AuthState.AUTHORIZED else AuthState.UNAUTHORIZED
+        return hasLocalSession
+    }
+
+    /**
      * 启动授权校验的硬上限，避免网关连接异常时系统 Splash 无限等待。
      * 超时仍沿用已有离线宽限判定，不会把已激活用户直接送回登录页。
      */

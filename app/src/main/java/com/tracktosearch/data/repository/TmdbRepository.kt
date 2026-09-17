@@ -234,6 +234,12 @@ class TmdbRepository @Inject constructor(
         popularMoviesCache, upcomingMoviesCache, topRatedMoviesCache, trendingMoviesCache
     )
 
+    /** 高频持久化缓存（详情/演职员/人物），首屏富化与详情页进入时立即可用，
+     *  由 Application 启动后台预热，避免首次 getOrAwait 被 awaitLoaded 全量回填拖住。 */
+    val highFrequencyCaches: List<PersistentTtlCache<*>> get() = listOf(
+        movieDetailCache, tvDetailCache, creditsCache, personDetailCache
+    )
+
     data class MovieEnrichment(
         val posterUrl: String?,
         val chineseTitle: String,

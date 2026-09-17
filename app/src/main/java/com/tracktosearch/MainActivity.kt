@@ -185,7 +185,10 @@ class MainActivity : AppCompatActivity() {
 
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
+    /** 启动网络就绪门槛（完整初始化/校验，含网络请求），见 onCreate 第二段 B。 */
     private var authInitializationJob: Job? = null
+    /** 启动本地就绪门槛（只读本地会话与缓存，无网络请求），组合门只等它。 */
+    private var authLocalJob: Job? = null
     /**
      * 主界面导航树摆好了没有——布局完成，被放行的这一帧画出来就是主界面。
      *
@@ -311,21 +314,20 @@ class MainActivity : AppCompatActivity() {
             StartupTrace.mark("startup.stamp_ready", "quote=${splashQuote != null}")
         }
 
-        // 第二段：App 的就绪门槛。日签已经压在最上面，这里做的都是它背后的事——
-        // 激活态与 Trakt 缓存态定起点路由、默认标签页、网络校验 Trakt 连接。
-        // 跑完置 isReady，日签的跳过提示与退场都以它为条件：用户按下跳过时下面必须是能用的界面。
-        authInitializationJob = lifecycleScope.launch {
+        // 第二段：App 的就绪门槛。日签已经压在最上面，这里做的都是它背后的事。
+        // 拆成两段：A 段只读本地会话与本地缓存定起点路由/默认标签页（无网络请求），
+        // 组合门只等它，首屏不再被最长 2s 的网关校验拖住；B 段在日签背后完成完整
+        // 初始化（token 轮换/网关校验），真实连接态随后由网络校验收敛进 SessionModeManager。
+        // A 段跑完置 isReady，日签的跳过提示与退场都以它为条件：用户按下跳过时下面必须是能用的界面。
+        authLocalJob = lifecycleScope.launch {
             StartupTrace.mark("startup.enter")
             var isAuthorized = false
             var cachedTraktProfile: com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse? = null
             try {
-                StartupTrace.measure("auth.initialize") {
-                    authManager.initializeForStartup()
+                StartupTrace.measure("auth.local") {
+                    isAuthorized = authManager.initializeLocalOnly()
                 }
-                val authState = authManager.authState.value
-                isAuthorized = authState.hasGatewayAccess()
-                // 判断 Trakt 授权状态
-                // 已授权后检查 Trakt 连接状态
+                // 已授权后检查 Trakt 本地资料缓存（纯磁盘读取）
                 cachedTraktProfile = if (isAuthorized) {
                     StartupTrace.measure("trakt.profile.cache") {
                         traktRepository.getCachedUserProfile()
@@ -334,7 +336,8 @@ class MainActivity : AppCompatActivity() {
                     StartupTrace.mark("trakt.profile.cache.skipped", "reason=not_authorized")
                     null
                 }
-                // 同步初始 Trakt 连接态到 SessionModeManager（AppNavigation 据此派生 isLoggedIn/isDoubanMode）
+                // 同步初始 Trakt 连接态到 SessionModeManager（AppNavigation 据此派生 isLoggedIn/isDoubanMode）；
+                // 真实连接态由 B 段完成后的网络校验收敛
                 sessionModeManager.setTraktConnectionState(
                     when {
                         !isAuthorized -> TraktConnectionState.DISCONNECTED
@@ -348,7 +351,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 // 起点路由的兜底是 isReady 的 finally：哪怕上面整段挂掉，也要放行到界面，
                 // 不能让用户永远停在日签上。起点保持初值（登录页），用户可以重新走一遍激活。
-                StartupTrace.mark("startup.gate.failed", "err=${e.javaClass.simpleName}")
+                StartupTrace.mark("startup.local_gate.failed", "err=${e.javaClass.simpleName}")
             }
             // 默认标签页：进主页第一帧就要用，赶不上就会先落在「想看」再跳走
             initialTab = if (opensSearchFromWidget) {
@@ -364,6 +367,20 @@ class MainActivity : AppCompatActivity() {
             }
             isReady = true
             StartupTrace.mark("startup.ready")
+        }
+
+        // 第二段 B：网络就绪门槛。完整初始化（token 轮换/网关校验）在日签背后继续跑，
+        // 结果由 AuthManager 状态收敛驱动 UI；已激活设备在状态收敛到撤销/过期前仍留在主界面，
+        // AppNavigation 的 authState 守卫负责把撤销/过期用户兜底回登录页。
+        authInitializationJob = lifecycleScope.launch {
+            authLocalJob?.join()
+            try {
+                StartupTrace.measure("auth.network") {
+                    authManager.initializeForStartup()
+                }
+            } catch (e: Exception) {
+                StartupTrace.mark("startup.network_gate.failed", "err=${e.javaClass.simpleName}")
+            }
         }
 
         // 第三段：日签背后继续跑的启动工作。它们都不参与首屏——想看列表由 WatchlistScreen
@@ -472,7 +489,7 @@ class MainActivity : AppCompatActivity() {
         // 用户碰不到这段空窗：跳过提示要等 isReady，而 isReady 之后才开始这段推迟。
         lifecycleScope.launch {
             stampJob.join()
-            authInitializationJob?.join()
+            authLocalJob?.join()
             delay(NAV_DEFER_MS)
             navComposed = true
             StartupTrace.mark("startup.nav_visible")
