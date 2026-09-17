@@ -504,13 +504,13 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle()
             val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle()
-            val customAccentArgb by themeStorage.customAccentArgb.collectAsStateWithLifecycle()
+            val selectedCustomAccentArgb by themeStorage.selectedCustomAccentArgb.collectAsStateWithLifecycle()
             val visualEffectMode by themeStorage.visualEffectMode.collectAsStateWithLifecycle()
             val glassVariant by themeStorage.glassVariant.collectAsStateWithLifecycle()
             TraktoSearchTheme(
                 themeMode = themeMode,
                 accentColor = accentColor,
-                customAccentArgb = customAccentArgb,
+                customAccentArgb = selectedCustomAccentArgb,
                 visualEffectMode = visualEffectMode,
                 glassVariant = glassVariant
             ) {

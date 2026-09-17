@@ -491,8 +491,6 @@ dependencies {
     // 中文转拼音（看单搜索拼音匹配）
     implementation(libs.pinyin4j)
 
-implementation(libs.skydoves.colorpicker)
-
     /**
      * RichTap 触感 SDK（瑞声科技），vendored 二进制，96 KiB。
      *

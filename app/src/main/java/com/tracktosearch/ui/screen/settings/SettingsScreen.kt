@@ -251,7 +251,8 @@ fun SettingsScreen(
     val isDark = isAppDarkTheme()
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
-    val currentCustomAccentArgb by viewModel.customAccentArgb.collectAsStateWithLifecycle()
+    val customAccentColors by viewModel.customAccentColors.collectAsStateWithLifecycle()
+    val selectedCustomAccentArgb by viewModel.selectedCustomAccentArgb.collectAsStateWithLifecycle()
     val currentVisualEffectMode by viewModel.visualEffectMode.collectAsStateWithLifecycle()
     val currentGlassVariant by viewModel.glassVariant.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -919,8 +920,12 @@ fun SettingsScreen(
         AccentColorDialog(
             currentAccent = currentAccent,
             onAccentSelected = { viewModel.setAccentColor(it) },
-            customAccentArgb = currentCustomAccentArgb,
-            onCustomAccentSelected = { viewModel.setCustomAccent(it) },
+            customAccentColors = customAccentColors,
+            selectedCustomAccentArgb = selectedCustomAccentArgb,
+            onCustomAccentSelected = { viewModel.setSelectedCustomAccent(it) },
+            onCustomAccentAdd = { viewModel.addCustomAccent(it) },
+            onCustomAccentUpdate = { old, new -> viewModel.updateCustomAccent(old, new) },
+            onCustomAccentRemove = { viewModel.removeCustomAccent(it) },
             currentMode = currentVisualEffectMode,
             currentVariant = currentGlassVariant,
             onVisualEffectSelected = { mode, variant ->
