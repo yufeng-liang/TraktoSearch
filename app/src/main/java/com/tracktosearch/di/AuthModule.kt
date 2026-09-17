@@ -23,8 +23,11 @@ object AuthModule {
     @Provides
     @Singleton
     @Named("auth")
-    fun provideAuthOkHttpClient(authHeaderInterceptor: AuthHeaderInterceptor): OkHttpClient {
-        return OkHttpClient.Builder()
+    fun provideAuthOkHttpClient(
+        baseClient: OkHttpClient,
+        authHeaderInterceptor: AuthHeaderInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
             .addInterceptor(authHeaderInterceptor)
             // 授权接口仅在启动/校验/激活场景调用，收紧超时防止单个请求长时间占用启动预算
             // （协程侧 2s 上限先行截断，这里兜底网络栈自身超时）

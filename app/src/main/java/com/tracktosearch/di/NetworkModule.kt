@@ -41,6 +41,7 @@ import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.brotli.BrotliInterceptor
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -57,7 +58,9 @@ private val Context.doubanPersistentCacheStore: DataStore<Preferences> by prefer
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val CACHE_SIZE = 10L * 1024 * 1024 // 10 MB
+    // 10 MB → 50 MB：网关侧已让 trakt/tmdb 明细类响应携带正向 max-age 可被 HTTP 缓存复用；
+    // 分层持久缓存兜底之外，提升磁盘份额减少冷启动重复回源
+    private const val CACHE_SIZE = 50L * 1024 * 1024 // 50 MB
     private const val DOUBAN_REXXAR_BASE_URL = "https://m.douban.com/rexxar/api/v2/"
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 
@@ -97,6 +100,8 @@ object NetworkModule {
         connectivityObserver: ConnectivityObserver
     ): OkHttpClient {
         return OkHttpClient.Builder()
+            // 统一启用 Brotli 解压：网关 worker 若响应 br 编码可透明解压，天然存在时无额外开销
+            .addInterceptor(BrotliInterceptor)
             .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .dns(dnsCache)
             // 无网快速失败：避免离线时按 connectTimeout 空等浪费电量，网络恢复后 OkHttp 自动重连
@@ -153,12 +158,13 @@ object NetworkModule {
             })
             .addInterceptor(RetryInterceptor(
                 connectivityObserver = connectivityObserver,
-                maxRetries = 2,
+                maxRetries = 1,
                 tokenProvider = tokenStorage::getCachedAccessToken
             ))
             .addInterceptor(loggingInterceptor)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
-    }
+        }
 
     @Provides
     @Singleton
@@ -197,13 +203,14 @@ object NetworkModule {
             })
             .addInterceptor(RetryInterceptor(
                 connectivityObserver = connectivityObserver,
-                maxRetries = 2,
+                maxRetries = 1,
                 tokenProvider = tokenStorage::getCachedAccessToken
             ))
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
     }
 
@@ -368,6 +375,7 @@ object NetworkModule {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(45, TimeUnit.SECONDS)
             .build()
     }
 
@@ -407,6 +415,7 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
     }
 
@@ -443,9 +452,11 @@ object NetworkModule {
     fun provideOmdbOkHttpClient(
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
+        cache: Cache,
         authInterceptor: AuthInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
+            .cache(cache)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(8, TimeUnit.SECONDS)
@@ -480,8 +491,9 @@ object NetworkModule {
         return baseClient.newBuilder()
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
-    }
+        }
 
     @Provides
     @Singleton
@@ -604,8 +616,9 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
-    }
+        }
 
     @Provides
     @Singleton
@@ -677,8 +690,9 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
-    }
+        }
 
     @Provides
     @Singleton
@@ -711,8 +725,9 @@ object NetworkModule {
                 chain.proceed(request)
             })
             .addInterceptor(loggingInterceptor)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
-    }
+        }
 
     @Provides
     @Singleton
@@ -739,6 +754,7 @@ object NetworkModule {
         val client = baseClient.newBuilder()
             // 出题/每日知识走两段顺序 LLM 生成，首包可达数十秒；10s 读超时真机必现 SocketTimeout
             .readTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(110, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
                 chain.proceed(
@@ -780,7 +796,7 @@ class NetworkStatusInterceptor(
  */
 class RetryInterceptor(
     private val connectivityObserver: ConnectivityObserver,
-    private val maxRetries: Int = 2,
+    private val maxRetries: Int = 1,
     private val baseDelayMs: Long = 500L,
     private val tokenProvider: () -> String? = { null }
 ) : Interceptor {
@@ -797,10 +813,10 @@ class RetryInterceptor(
             // 优先读 Retry-After header（429 响应通常携带，单位秒），否则用指数退避
             val retryAfterSec = response.header("Retry-After")?.toLongOrNull()
             response.close()
-            // 限制最大延迟 3 秒：既保留 429 退避语义，又避免长时间阻塞 OkHttp dispatcher 线程
+            // 限制最大延迟 2 秒：既保留 429 退避语义，又避免长时间阻塞 OkHttp dispatcher 线程
             val delayMs = (retryAfterSec?.let { it * 1000 }
                 ?: baseDelayMs * 2.0.pow(retries.toDouble()).toLong())
-                .coerceAtMost(3_000L)
+                .coerceAtMost(2_000L)
             try {
                 Thread.sleep(delayMs)
             } catch (_: InterruptedException) {

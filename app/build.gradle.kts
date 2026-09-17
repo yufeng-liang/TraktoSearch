@@ -425,6 +425,7 @@ dependencies {
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
+    implementation(libs.okhttp.brotli)
 
     // Image
     implementation(libs.coil.compose)
