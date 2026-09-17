@@ -10,9 +10,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,18 +48,11 @@ import androidx.compose.ui.unit.sp
  * 排版与卡片，规格对齐搜索源管理页（[com.tracktosearch.ui.screen.searchsource]）。
  */
 
-/** Unicode 圆圈数字覆盖 1 至 20；更长章节安全回退普通阿拉伯数字。 */
-private val CIRCLED_NUMERALS = listOf(
-    "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
-    "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳",
-)
-
 /** 段落编号，[index] 从 0 起；所有语言统一使用阿拉伯数字。 */
 internal fun helpSectionNumeral(index: Int): String = (index + 1).toString()
 
-/** 条目编号，[index] 从 0 起；1 至 20 使用圆圈数字，超出后安全回退普通数字。 */
-internal fun helpItemNumeral(index: Int): String =
-    CIRCLED_NUMERALS.getOrNull(index) ?: (index + 1).toString()
+/** 条目编号，[index] 从 0 起；统一阿拉伯数字，展示由 HelpItem 的圆形徽章承载。 */
+internal fun helpItemNumeral(index: Int): String = (index + 1).toString()
 
 /**
  * 把命中的关键词标成主题强调色。
@@ -131,9 +127,10 @@ internal fun HelpSectionHeader(
     ) {
         Text(
             text = numeral,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
+            // 段号 14sp（titleSmall 档），右对齐：编号右缘与条目徽章的右缘对齐成同一条垂直轴
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.End,
             modifier = Modifier.width(22.dp),
         )
         Text(
@@ -154,22 +151,36 @@ internal fun HelpSectionHeader(
     }
 }
 
-/** 一条正文。编号占一列固定宽，让所有条目的文字左边缘对齐。 */
+/** 一条正文。编号徽章占一列固定宽，让所有条目的文字左边缘对齐。 */
 @Composable
 internal fun HelpItem(numeral: String, text: AnnotatedString) {
+    val primary = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Text(
-            text = numeral,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            lineHeight = 21.sp,
-            modifier = Modifier.width(22.dp),
-        )
+        // 圆形数字徽章：20dp 主色圆底 + 12sp 白字。圈号（①…）字形依赖系统字体，
+        // 换用纯图形绘制：圆底在 22dp 编号列内右对齐，右缘与段标题号右缘对齐；
+        // 首行文字左缘固定在 22dp 处，换行时正文与编号列互不干扰。
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(22.dp)
+                .height(20.dp),
+        ) {
+            Text(
+                text = numeral,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onPrimary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(primary),
+            )
+        }
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,

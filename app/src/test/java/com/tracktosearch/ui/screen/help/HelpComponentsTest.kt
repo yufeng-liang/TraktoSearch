@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * 帮助页编号与命中高亮的单测。
  *
- * 章节编号不再按语言分支；正文圆圈数字必须覆盖 1 至 20，超出后安全回退普通数字。
+ * 章节编号不再按语言分支；正文条目号统一阿拉伯数字（视觉由 HelpItem 的圆形徽章承载）。
  */
 class HelpComponentsTest {
 
@@ -26,15 +26,15 @@ class HelpComponentsTest {
     }
 
     @Test
-    fun `正文前二十条使用圆圈数字`() {
-        assertThat(helpItemNumeral(0)).isEqualTo("①")
-        assertThat(helpItemNumeral(9)).isEqualTo("⑩")
-        assertThat(helpItemNumeral(10)).isEqualTo("⑪")
-        assertThat(helpItemNumeral(19)).isEqualTo("⑳")
+    fun `正文条目统一使用阿拉伯数字`() {
+        assertThat(helpItemNumeral(0)).isEqualTo("1")
+        assertThat(helpItemNumeral(9)).isEqualTo("10")
+        assertThat(helpItemNumeral(10)).isEqualTo("11")
+        assertThat(helpItemNumeral(19)).isEqualTo("20")
     }
 
     @Test
-    fun `正文超过二十条回退普通数字`() {
+    fun `正文条目编号可安全增长`() {
         assertThat(helpItemNumeral(20)).isEqualTo("21")
         assertThat(helpItemNumeral(99)).isEqualTo("100")
     }

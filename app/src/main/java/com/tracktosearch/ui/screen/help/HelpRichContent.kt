@@ -178,7 +178,7 @@ private fun HelpFineLine(
 /**
  * 自定义搜索源的技术规格：参数表 → 解析说明 → 三段示例 JSON。
  *
- * 解析说明那三条重新从「①」编号：它们是这一小节的第一二三条，不是整段的第九十十一条。
+ * 解析说明那三条重新从「1」编号：它们是这一小节的第一二三条，不是整段的第九十十一条。
  */
 @Composable
 private fun HelpCustomSourceSpec(query: String) {
