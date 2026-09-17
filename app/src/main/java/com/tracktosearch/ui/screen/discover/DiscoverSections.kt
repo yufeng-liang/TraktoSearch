@@ -151,6 +151,7 @@ internal fun TmdbMovieSection(
                                 isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
                                 isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
                                 tmdbId = movie.id,
+                                originalTitle = movie.original_title,
                                 origin = posterOrigin,
                                 onClick = { onItemClick(movie) }
                             )

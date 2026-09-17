@@ -33,6 +33,7 @@ import com.tracktosearch.data.util.CommentTranslator
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.test.MainDispatcherRule
 import com.tracktosearch.ui.navigation.DetailSeedStore
+import com.tracktosearch.ui.component.SharedOrigin
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -661,6 +662,76 @@ class DetailViewModelDoubanTest {
         assertThat(state.runtime).isEqualTo(100)
         assertThat(state.status).isEqualTo("Released")
         assertThat(state.displayTitle).isEqualTo("种子标题")
+    }
+
+    @Test
+    fun cardSeedOriginalTitleShowsOnFirstFrameAndSurvivesEnrichment() = runTest {
+        // 发现页/筛选页入口：列表接口带了原著原名，卡片点击时写进种子。
+        // 详情页首帧就要显示原名，否则富化回来那一行插入会把评分卡与下方内容整体下推。
+        DetailSeedStore.remember(
+            tmdbId = 558,
+            posterUrl = "https://image.tmdb.org/seed558.jpg",
+            year = 2026,
+            origin = SharedOrigin.DISCOVER,
+            originalTitle = "Seed Original 558"
+        )
+        // 富化稍后才返回（含同名原名）：种子值不能阻止富化，也不能被清成空。
+        coEvery {
+            tmdbRepository.enrichMovie(558, "Route title 558", null)
+        } returns TmdbRepository.MovieEnrichment(
+            posterUrl = "https://image.tmdb.org/poster558.jpg",
+            chineseTitle = "中文标题 558",
+            originalTitle = "Seed Original 558",
+            overview = "overview",
+            genres = "剧情",
+            year = 2026,
+            rating = 7.5,
+            runtime = 120,
+            releaseDate = "2026-08-11",
+            country = "中国",
+            status = "Released"
+        )
+        coEvery { doubanSyncedItemDao.getByImdbId(any()) } returns null
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery { doubanRepository.findDoubanId(any(), any(), any(), any()) } returns null
+        coEvery { traktRepository.getRelatedMovies(any()) } returns Result.success(emptyList())
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 558,
+            title = "Route title 558",
+            mediaType = MediaType.MOVIE
+        )
+        // 富化挂起期间的这一份状态就是首帧：原名必须已经在
+        assertThat(viewModel.uiState.value.originalTitle).isEqualTo("Seed Original 558")
+
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.originalTitle).isEqualTo("Seed Original 558")
+    }
+
+    @Test
+    fun seedOriginalTitleEqualtoDisplayTitleIsNotShownAsOriginal() = runTest {
+        // 中文片名没有外文原名时列表也会回 original_title（和 title 相同）。
+        // 这种值不能当作原名，否则「原名」行会重复显示一遍片名。
+        DetailSeedStore.remember(
+            tmdbId = 559,
+            posterUrl = "https://image.tmdb.org/seed559.jpg",
+            year = 2026,
+            origin = SharedOrigin.DISCOVER,
+            originalTitle = "同名标题"
+        )
+        coEvery { doubanSyncedItemDao.getByImdbId(any()) } returns null
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        coEvery { doubanRepository.findDoubanId(any(), any(), any(), any()) } returns null
+        coEvery { traktRepository.getRelatedMovies(any()) } returns Result.success(emptyList())
+
+        viewModel.loadDetail(
+            traktId = 0,
+            tmdbId = 559,
+            title = "同名标题",
+            mediaType = MediaType.MOVIE
+        )
+        assertThat(viewModel.uiState.value.originalTitle).isEmpty()
     }
 
     @Test

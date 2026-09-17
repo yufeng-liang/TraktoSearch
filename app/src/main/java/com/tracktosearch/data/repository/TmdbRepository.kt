@@ -321,6 +321,25 @@ class TmdbRepository @Inject constructor(
             ?: movieAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, getTmdbCountry()) }
     }
 
+    /**
+     * 同步读取本地详情缓存里的原始标题（电影 original_title / 剧集 original_name）。
+     *
+     * 详情页首帧要显示「原名」那一行，而列表数据（Trakt 榜单、搜索结果、观看历史等）
+     * 的字段模型里没有原名，只有渲染时调过的 TMDB 详情缓存里有。这里把它同步取出来，
+     * 避免原名晚一帧插入把评分卡和下方内容整体下推。
+     *
+     * 只读内存，不挂起、不读盘、不发网络；拿不到返回 null 由调用方决定是否再等磁盘。
+     */
+    fun peekOriginalTitle(tmdbId: Int, mediaType: MediaType): String? {
+        if (tmdbId <= 0) return null
+        val key = langKey(tmdbId)
+        return when (mediaType) {
+            MediaType.MOVIE -> movieDetailCache.get(key)?.original_title
+            MediaType.SHOW -> tvDetailCache.get(key)?.original_name
+            MediaType.PERSON, MediaType.DISK -> null
+        }?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
         val key = langKey(tmdbId)
         val cached = movieDetailCache.get(key)

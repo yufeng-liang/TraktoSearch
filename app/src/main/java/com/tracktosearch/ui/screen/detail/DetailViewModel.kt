@@ -667,21 +667,41 @@ class DetailViewModel @Inject constructor(
         currentScoreMap = emptyMap()
         currentHighRelevanceMap = emptyMap()
 
-        // 首帧种子：TMDB 内存缓存 peek → 调用方传入 → 列表卡片点击时暂存的海报/年份。
-        // 目的是让海报/标题在第一帧就正确，既消掉「空白→弹入」，也让共享元素转场有落点。
+        // 首帧种子：TMDB 内存缓存 peek → 调用方传入 → 列表卡片点击时暂存的海报/年份/原名。
+        // 目的是让海报/标题/原名在第一帧就正确，既消掉「空白→弹入」，也让共享元素转场有落点。
         val seed = loadDetailSeed(tmdbId, mediaType, title, year)
         // 发现页等栏目的海报来自 TMDB 列表接口，不写详情缓存，peek 必然落空，靠卡片暂存兜底
         val cardSeed = if (seed?.posterUrl == null || year == null) DetailSeedStore.peek(tmdbId) else null
+        val cardSeedForOriginalTitle = DetailSeedStore.peek(tmdbId)
+        // 原名单独取一次，四条来源按可靠性排序：
+        // 1. 摘要种子（已有本地化标题 + 原名，最完整）；
+        // 2. 卡片暂存（列表接口当场返回的 original_title/original_name）；
+        // 3. TMDB 详情缓存内存命中（Trakt 系入口的列表模型没有原名，但渲染时大多已调过详情接口）。
+        // 都不去补的话，原名要等富化回来才插入，评分卡和下方内容会被整体下推。
+        // 这里只做同步内存 peek：磁盘回填要挂起，放进种子阶段会拖慢首帧，得不偿失。
+        val cachedOriginalTitle = if (seed?.originalTitle.isNullOrBlank()) {
+            cardSeedForOriginalTitle?.originalTitle?.takeIf { it.isNotBlank() }
+                ?: tmdbRepository.peekOriginalTitle(tmdbId, mediaType)
+        } else {
+            null
+        }
         // 列表卡片已经显示的 Trakt 海报优先；摘要海报只在首帧没有卡片海报时兜底，
         // 避免进入详情第一帧就把用户刚看到的同一张卡片海报换成另一张图。
         val seededPoster = seedPosterUrl ?: seed?.posterUrl ?: cardSeed?.posterUrl
         val seededYear = year ?: cardSeed?.year
+        // 原名同样以种子链为准：摘要/富化缓存没有时用列表卡片暂存的原名补上。
+        // 不补的话首帧不显示原名，富化回来后那一行插入会把评分卡连同下方内容推下去。
+        // 与主标题相同的值不当作原名，避免中文片名在原名行重复显示一遍。
+        val seededDisplayTitle = (seed?.displayTitle ?: title).replace("+", " ")
+        val seededOriginalTitle = (seed?.originalTitle?.takeIf { it.isNotBlank() } ?: cachedOriginalTitle)
+            ?.takeIf { it != seededDisplayTitle }
+            .orEmpty()
         _uiState.value = DetailUiState(
             isLoading = true,
             isSearching = true,
             title = title.replace("+", " "),
-            displayTitle = (seed?.displayTitle ?: title).replace("+", " "),
-            originalTitle = seed?.originalTitle.orEmpty(),
+            displayTitle = seededDisplayTitle,
+            originalTitle = seededOriginalTitle,
             genres = seed?.genres.orEmpty(),
             releaseDate = seed?.releaseDate.orEmpty(),
             country = seed?.country.orEmpty(),
@@ -712,7 +732,7 @@ class DetailViewModel @Inject constructor(
                 prefetchPosterColor(seededPoster)
             }
         }
-        if (seed != null) currentOriginalTitle = seed.originalTitle
+        if (seededOriginalTitle.isNotEmpty()) currentOriginalTitle = seededOriginalTitle
 
         // 本人短评独立于公共评论加载：先命中本地缓存，再按 TTL 后台校准。
         startOwnCommentLoad()

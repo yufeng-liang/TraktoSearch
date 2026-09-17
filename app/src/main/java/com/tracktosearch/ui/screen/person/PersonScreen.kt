@@ -358,7 +358,8 @@ fun PersonScreen(
                                                             credit.id,
                                                             posterUrl,
                                                             year.toIntOrNull(),
-                                                            origin = origin
+                                                            origin = origin,
+                                                            originalTitle = credit.original_title
                                                         )
                                                         viewModel.resolveAndNavigate(
                                                             tmdbId = credit.id,
@@ -449,7 +450,8 @@ fun PersonScreen(
                                                             credit.id,
                                                             posterUrl,
                                                             year.toIntOrNull(),
-                                                            origin = origin
+                                                            origin = origin,
+                                                            originalTitle = credit.original_name
                                                         )
                                                         viewModel.resolveAndNavigate(
                                                             tmdbId = credit.id,

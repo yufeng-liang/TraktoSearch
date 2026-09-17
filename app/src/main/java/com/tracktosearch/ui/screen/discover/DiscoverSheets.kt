@@ -54,6 +54,8 @@ import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
+import com.tracktosearch.ui.component.SharedOrigin
+import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
@@ -252,7 +254,18 @@ internal fun TmdbAllSheet(
                         imageUrl = movie.poster_path?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
                         year = movie.release_date.take(4),
-                        onClick = { onItemClick(movie) }
+                        onClick = {
+                            // 弹窗网格不走 MovieCard，首帧种子得在这里补：海报、年份、原名
+                            // 都是列表接口当场就有的字段，不补的话原名晚一帧插入会把下方内容推下去。
+                            DetailSeedStore.remember(
+                                tmdbId = movie.id,
+                                posterUrl = movie.poster_path?.let { TmdbImageUrls.W342 + it },
+                                year = movie.release_date.take(4).toIntOrNull(),
+                                origin = SharedOrigin.of(SharedOrigin.DISCOVER, "tmdb-all"),
+                                originalTitle = movie.original_title.ifBlank { movie.original_name }
+                            )
+                            onItemClick(movie)
+                        }
                     )
                 }
                 item(span = { GridItemSpan(3) }) {

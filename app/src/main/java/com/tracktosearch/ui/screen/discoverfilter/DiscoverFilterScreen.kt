@@ -326,7 +326,8 @@ fun DiscoverFilterScreen(
                                         item.poster_path?.let { TmdbImageUrls.W342 + it },
                                         (item.release_date.ifBlank { item.first_air_date.orEmpty() })
                                             .take(4).toIntOrNull(),
-                                        origin = SharedOrigin.DISCOVER_FILTER
+                                        origin = SharedOrigin.DISCOVER_FILTER,
+                                        originalTitle = item.original_title.ifBlank { item.original_name }
                                     )
                                     if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
                                         onMovieClick(item.id, title)

@@ -83,6 +83,13 @@ internal fun MovieCard(
     isInWatchlist: Boolean = false,
     isWatched: Boolean = false,
     tmdbId: Int = 0,
+    /**
+     * 列表数据里的原始标题（TMDB 的 original_title / original_name）。
+     *
+     * 详情页首帧用它填「原名」那一行；不传的话原名要等详情富化回来才插入，
+     * 会把评分卡与下方内容整体下推一截。
+     */
+    originalTitle: String? = null,
     /** 评分来源是否为豆瓣：true 显示绿色填充样式，false 显示带星星样式 */
     isDoubanRating: Boolean = false,
     /** 本卡片所属栏目，见 [discoverSectionOrigin]；与 tmdbId 一起写入详情页首帧种子。 */
@@ -100,10 +107,16 @@ internal fun MovieCard(
     }
     // 点击时把海报与来源交给详情页：本栏目卡片的海报来自 TMDB 列表接口，
     // 详情页 peek 详情缓存必然落空
-    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin) {
+    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin, originalTitle) {
         {
             if (tmdbId > 0) {
-                DetailSeedStore.remember(tmdbId, posterUrl, year.toIntOrNull(), origin)
+                DetailSeedStore.remember(
+                    tmdbId,
+                    posterUrl,
+                    year.toIntOrNull(),
+                    origin,
+                    originalTitle = originalTitle
+                )
             }
             onClick()
         }

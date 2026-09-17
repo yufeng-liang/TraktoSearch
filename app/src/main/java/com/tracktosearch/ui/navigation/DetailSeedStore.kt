@@ -17,7 +17,7 @@ import com.tracktosearch.ui.component.SharedOrigin
  * 与来源侧完全相同的共享元素 key，海报转场因此只会认被点击的那一张卡片，
  * 不需要活跃 id、点击 token 一类的全局运行期状态。
  *
- * 只在进程内有效、容量上限 [MAX_ENTRIES]，只存三个小字段，不做持久化：
+ * 只在进程内有效、容量上限 [MAX_ENTRIES]，只存几个小字段，不做持久化：
  * 种子丢了最坏情况是退回「等详情接口」加「无海报转场」，没有正确性影响。
  */
 object DetailSeedStore {
@@ -27,6 +27,14 @@ object DetailSeedStore {
     data class Seed(
         val posterUrl: String?,
         val year: Int?,
+        /**
+         * 列表卡片数据里已有的原始标题（TMDB 的 original_title / original_name）。
+         *
+         * 详情页首帧用它填「原名」那一行。列表接口本来就会返回这个字段，不接的话
+         * 从列表进详情时原名要等富化回来才插入，右列文字块随之长高，评分卡和下方内容
+         * 会被整体下推一截——实测 411dp 宽下是 20px。
+         */
+        val originalTitle: String? = null,
         val origin: String = SharedOrigin.ANY,
     )
 
@@ -36,24 +44,36 @@ object DetailSeedStore {
     }
 
     /**
-     * 记录一条种子；tmdbId 无效或三个字段都无信息时不占用容量。
+     * 记录一条种子；tmdbId 无效或所有字段都无信息时不占用容量。
      *
-     * [origin] 每次都覆盖，它表达的是「最近一次点击来自哪里」；海报与年份缺省时保留旧值，
-     * 这样只为记录来源而写入的调用不会把先前拿到的海报抹掉。
+     * [origin] 每次都覆盖，它表达的是「最近一次点击来自哪里」；海报、年份与原名缺省时保留旧值，
+     * 这样只为记录来源而写入的调用不会把先前拿到的数据抹掉。
+     *
+     * [originalTitle] 放在 [origin] 之后而不是之前：历史调用点用位置参数传 origin，
+     * 插到中间会把来源字符串喂进原名参数。
      */
     fun remember(
         tmdbId: Int,
         posterUrl: String? = null,
         year: Int? = null,
         origin: String = SharedOrigin.ANY,
+        originalTitle: String? = null,
     ) {
         if (tmdbId <= 0) return
-        if (posterUrl.isNullOrBlank() && year == null && origin == SharedOrigin.ANY) return
+        if (
+            posterUrl.isNullOrBlank() &&
+            year == null &&
+            origin == SharedOrigin.ANY &&
+            originalTitle.isNullOrBlank()
+        ) {
+            return
+        }
         synchronized(seeds) {
             val previous = seeds[tmdbId]
             seeds[tmdbId] = Seed(
                 posterUrl = posterUrl?.takeIf { it.isNotBlank() } ?: previous?.posterUrl,
                 year = year ?: previous?.year,
+                originalTitle = originalTitle?.takeIf { it.isNotBlank() } ?: previous?.originalTitle,
                 origin = origin,
             )
         }

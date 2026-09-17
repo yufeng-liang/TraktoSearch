@@ -57,6 +57,13 @@ fun MovieCard(
     tmdbId: Int,
     onClick: () -> Unit,
     /**
+     * 列表数据里的原始标题（TMDB 的 original_title / original_name）。
+     *
+     * 详情页首帧用它填「原名」那一行；不传的话原名要等详情富化回来才插入，
+     * 会把评分卡与下方内容整体下推一截。
+     */
+    originalTitle: String? = null,
+    /**
      * 本卡片所属的列表，见 [SharedOrigin]。
      *
      * 与 tmdbId 一起写入 [DetailSeedStore]，详情页用它做首帧种子。
@@ -111,11 +118,17 @@ fun MovieCard(
 
     // 包装点击回调：把已渲染的海报/年份/来源交给详情页做首帧种子
     // remember 包裹避免每次重组创建新 lambda 实例,减少不必要 recomposition
-    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin) {
+    val wrappedOnClick = remember(onClick, tmdbId, posterUrl, year, origin, originalTitle) {
         {
             if (tmdbId > 0) {
                 // 发现页等栏目的海报来自 TMDB 列表接口，不会写入详情缓存，详情页 peek 落空
-                DetailSeedStore.remember(tmdbId, posterUrl, year, origin)
+                DetailSeedStore.remember(
+                    tmdbId,
+                    posterUrl,
+                    year,
+                    origin,
+                    originalTitle = originalTitle
+                )
             }
             onClick()
         }

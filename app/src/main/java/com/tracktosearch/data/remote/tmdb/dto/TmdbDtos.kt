@@ -164,6 +164,8 @@ data class TmdbPersonMovieCredits(
 data class TmdbPersonMovieCredit(
     val id: Int = 0,
     val title: String = "",
+    /** 原始片名，人物作品列表进详情页时作为首帧原名种子。 */
+    val original_title: String = "",
     val poster_path: String? = null,
     val character: String = "",
     val release_date: String = "",
@@ -179,6 +181,8 @@ data class TmdbPersonTvCredits(
 data class TmdbPersonTvCredit(
     val id: Int = 0,
     val name: String = "",
+    /** 原始剧名，语义同 [TmdbPersonMovieCredit.original_title]。 */
+    val original_name: String = "",
     val poster_path: String? = null,
     val character: String = "",
     val first_air_date: String = "",
@@ -205,6 +209,13 @@ data class TmdbMultiSearchResponse(
 data class TmdbSearchResult(
     val id: Int = 0,
     val title: String = "",
+    /**
+     * 原始标题：`language=zh-CN` 时 [title] 是中文译名，这个字段仍是原片名。
+     *
+     * 详情页首帧要用它填「原名」那一行——列表接口本来就返回该字段，不去接的话
+     * 从发现页/筛选页进详情时只能等详情富化回来，原名行插入会把评分卡和下方内容整体下推。
+     */
+    val original_title: String = "",
     val overview: String = "",
     val poster_path: String? = null,
     val release_date: String = "",
@@ -214,6 +225,8 @@ data class TmdbSearchResult(
     val origin_country: List<String> = emptyList(),
     val original_language: String = "",  // 原始语言（discover/movie 不返回 origin_country 时用此推断）
     val name: String? = null,          // TV 节目标题
+    /** 剧集原始名称，语义同 [original_title]。 */
+    val original_name: String = "",
     val first_air_date: String? = null  // TV 首播日期
 )
 
