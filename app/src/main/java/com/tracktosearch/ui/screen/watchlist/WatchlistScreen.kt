@@ -2648,10 +2648,12 @@ private class FilteredResult(
 )
 
 /**
- * 在 [Dispatchers.Default] 上构建索引并完成过滤 + 排序，结果作为 State 返回。
+ * 过滤当前分区的条目。
  *
- * 计算期间沿用上一次的结果（produceState 语义），因此不会出现"先清空再填充"的闪动；
- * 相比原先在组合期同步计算，大列表落地时不再占用主线程。
+ * 没有搜索词、筛选条件全为默认值时，结果恒等于入参列表本身：此时同步返回，避免列表落地
+ * 后还要等 [Dispatchers.Default] 上的过滤任务跑完才见到海报。否则用 [produceState] 在
+ * 后台构建索引并过滤 + 排序，计算期间沿用上一次结果（不会"先清空再填充"），
+ * 大列表落地时也不占用主线程。
  */
 @Composable
 private fun rememberFilteredItems(
@@ -2660,6 +2662,19 @@ private fun rememberFilteredItems(
     filter: FilterState
 ): FilteredResult {
     val token = remember(searchQuery, filter) { "$filter||$searchQuery" }
+    if (canUseUnfilteredList(searchQuery, filter)) {
+        // 无搜索无筛选：结果就是原列表按默认顺序排列。同步直出，不等后台过滤任务。
+        // 常见路径（Trakt 直出、离线快照）落地时已排好序，这里只做一次 O(n) 相邻校验；
+        // 豆瓣合并路径未排序，才补一次整表排序（290 条约几十微秒，远低于建拼音索引）。
+        return remember(items, token) {
+            val ordered = if (isWatchlistListInDefaultOrder(items)) {
+                items
+            } else {
+                items.sortedWith(watchlistListedAtComparator())
+            }
+            FilteredResult(token, ordered)
+        }
+    }
     val indexHolder = remember(items) { SearchIndexHolder() }
     val result by produceState(
         initialValue = FilteredResult(token, items),

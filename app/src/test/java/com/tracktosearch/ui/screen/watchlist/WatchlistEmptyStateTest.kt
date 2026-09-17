@@ -204,6 +204,77 @@ class WatchlistEmptyStateTest {
     }
 
     @Test
+    fun `无搜索且筛选为默认值时可以同步直出列表`() {
+        assertThat(canUseUnfilteredList("", FilterState())).isTrue()
+    }
+
+    @Test
+    fun `有搜索词时不能同步直出`() {
+        assertThat(canUseUnfilteredList("盗梦", FilterState())).isFalse()
+    }
+
+    @Test
+    fun `任一项筛选条件非默认时不能同步直出`() {
+        assertThat(canUseUnfilteredList("", FilterState(selectedGenres = setOf("动作")))).isFalse()
+        assertThat(canUseUnfilteredList("", FilterState(selectedDecadeKeys = setOf(2020)))).isFalse()
+        assertThat(canUseUnfilteredList("", FilterState(markedTimePreset = MarkedTimePreset.SEVEN_DAYS))).isFalse()
+        assertThat(canUseUnfilteredList("", FilterState(markedTimeOrder = SortOrder.ASC))).isFalse()
+        assertThat(canUseUnfilteredList("", FilterState(ratingRange = 7f..10f))).isFalse()
+    }
+
+    @Test
+    fun `已按标记时间降序排列的列表被视为默认顺序`() {
+        val items = listOf(
+            sampleItem(traktId = 3, listedAt = "2024-06-20T10:00:00Z"),
+            sampleItem(traktId = 2, listedAt = "2024-06-18T10:00:00Z"),
+            sampleItem(traktId = 1, listedAt = "2024-06-15T10:00:00Z")
+        )
+        assertThat(isWatchlistListInDefaultOrder(items)).isTrue()
+    }
+
+    @Test
+    fun `平局按 selectionKey 升序才算默认顺序`() {
+        val sorted = listOf(
+            sampleItem(traktId = 1, listedAt = "2024-06-20T10:00:00Z"),
+            sampleItem(traktId = 2, listedAt = "2024-06-20T10:00:00Z")
+        )
+        assertThat(isWatchlistListInDefaultOrder(sorted)).isTrue()
+
+        val reversed = listOf(
+            sampleItem(traktId = 2, listedAt = "2024-06-20T10:00:00Z"),
+            sampleItem(traktId = 1, listedAt = "2024-06-20T10:00:00Z")
+        )
+        assertThat(isWatchlistListInDefaultOrder(reversed)).isFalse()
+    }
+
+    @Test
+    fun `升序或乱序列表不算默认顺序`() {
+        val ascending = listOf(
+            sampleItem(traktId = 1, listedAt = "2024-06-15T10:00:00Z"),
+            sampleItem(traktId = 2, listedAt = "2024-06-20T10:00:00Z")
+        )
+        assertThat(isWatchlistListInDefaultOrder(ascending)).isFalse()
+
+        val shuffled = listOf(
+            sampleItem(traktId = 1, listedAt = "2024-06-15T10:00:00Z"),
+            sampleItem(traktId = 3, listedAt = "2024-06-20T10:00:00Z"),
+            sampleItem(traktId = 2, listedAt = "2024-06-18T10:00:00Z")
+        )
+        assertThat(isWatchlistListInDefaultOrder(shuffled)).isFalse()
+    }
+
+    private fun sampleItem(traktId: Int, listedAt: String) = MediaUiItem(
+        traktId = traktId,
+        tmdbId = traktId * 10,
+        title = "Title $traktId",
+        displayTitle = "Title $traktId",
+        year = 2024,
+        genres = "",
+        posterUrl = null,
+        listedAt = listedAt
+    )
+
+    @Test
     fun `任一平台提供观看记录时显示统计入口`() {
         assertThat(canOpenWatchStatistics(traktConnected = true, doubanMode = false)).isTrue()
         assertThat(canOpenWatchStatistics(traktConnected = false, doubanMode = true)).isTrue()

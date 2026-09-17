@@ -64,6 +64,31 @@ fun isWatchlistSectionLoaded(
 }
 
 /**
+ * 搜索词为空且筛选条件全为默认值时，过滤/排序结果恒等于原列表。
+ *
+ * 这种情况必须让调用方同步直出原列表，不能等 [Dispatchers.Default] 上的过滤任务返回：
+ * 冷启动列表落地那几帧里，计数徽标直接读 UiState 已经变成 290，而网格读到的还是
+ * 上一批的空结果，屏幕上先后闪出「空态引导卡片」和「一片空白」，之后才出现海报。
+ */
+fun canUseUnfilteredList(searchQuery: String, filter: FilterState): Boolean =
+    searchQuery.isBlank() && filter == FilterState()
+
+/**
+ * 列表是否已按默认排序（标记时间降序 + selectionKey 平局键）排好。
+ *
+ * 同步直出原列表的前提是它已经处于默认顺序，否则会改变用户看到的次序。
+ * 这里只做一次 O(n) 相邻比较，不做整表排序，避免把索引构建/排序拉回主线程。
+ */
+fun isWatchlistListInDefaultOrder(items: List<MediaUiItem>): Boolean {
+    if (items.size < 2) return true
+    val comparator = watchlistListedAtComparator()
+    for (index in 0 until items.size - 1) {
+        if (comparator.compare(items[index], items[index + 1]) > 0) return false
+    }
+    return true
+}
+
+/**
  * 冷启动首帧是否应显示首次加载骨架。
  *
  * ViewModel 的 [WatchlistUiState] 初始值既不是 loading，也没有 loaded 标记；如果 UI 只看
