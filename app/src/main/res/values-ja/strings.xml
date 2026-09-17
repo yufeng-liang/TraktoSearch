@@ -2139,7 +2139,7 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">データとプライバシー</string>
-    <string name="privacy_entry_subtitle">AI データ · 診断と権限 · 端末内データ · プライバシー · 利用と権利</string>
+    <string name="privacy_entry_subtitle">データスイッチ · プライバシー · 利用と権利</string>
     <string name="privacy_section_ai_data">AI データとプロフィール</string>
     <string name="privacy_section_diagnostics">診断と権限</string>
     <string name="privacy_section_local_data">端末内データ</string>

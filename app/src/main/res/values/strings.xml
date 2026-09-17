@@ -2134,7 +2134,7 @@ Config:
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">Data &amp; Privacy</string>
-    <string name="privacy_entry_subtitle">AI data · diagnostics &amp; permissions · on-device data · privacy · terms &amp; rights</string>
+    <string name="privacy_entry_subtitle">data switches · privacy · terms &amp; rights</string>
     <string name="privacy_section_ai_data">AI data &amp; profile</string>
     <string name="privacy_section_diagnostics">Diagnostics &amp; permissions</string>
     <string name="privacy_section_local_data">On-device data</string>

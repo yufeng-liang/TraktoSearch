@@ -2127,7 +2127,7 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">数据与隐私</string>
-    <string name="privacy_entry_subtitle">AI 数据 · 诊断与权限 · 本地数据 · 隐私说明 · 使用与权利</string>
+    <string name="privacy_entry_subtitle">数据开关·隐私说明·使用与权利</string>
     <string name="privacy_section_ai_data">AI 数据与画像</string>
     <string name="privacy_section_diagnostics">诊断与权限</string>
     <string name="privacy_section_local_data">本地数据</string>

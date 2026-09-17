@@ -2139,7 +2139,7 @@
 
     <!-- Privacy Center Screen -->
     <string name="privacy_title">데이터 &amp; 개인정보</string>
-    <string name="privacy_entry_subtitle">AI 데이터 · 진단 및 권한 · 기기 내 데이터 · 개인정보 · 이용과 권리</string>
+    <string name="privacy_entry_subtitle">데이터 스위치 · 개인정보 · 이용과 권리</string>
     <string name="privacy_section_ai_data">AI 데이터 및 프로필</string>
     <string name="privacy_section_diagnostics">진단 및 권한</string>
     <string name="privacy_section_local_data">기기 내 데이터</string>
