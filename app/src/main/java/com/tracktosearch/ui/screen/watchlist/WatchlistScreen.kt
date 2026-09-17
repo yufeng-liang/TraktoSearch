@@ -535,6 +535,17 @@ fun WatchlistScreen(
             )
         }
     }
+    // 搜索框展开时，滑动内容列表即自动收起：只在「静止 → 开始滚动」边沿触发一次，
+    // 滚动持续期间不再反复收起（distinctUntilChanged 吃掉连续 true）。
+    // currentGridState 随 (mode, tab) 切换重建，作为 key 一并纳入。
+    LaunchedEffect(currentGridState, isSearchExpanded) {
+        if (!isSearchExpanded) return@LaunchedEffect
+        snapshotFlow { currentGridState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                if (scrolling) collapseSearch()
+            }
+    }
     // key 必须同时包含 selectedMode 和 selectedTab：
     // currentGridState 由两者共同决定，缺任一 key 都会导致切 tab 后回调里仍持有旧的 gridState，
     // 「回到顶部」操作滚到不可见列表上
