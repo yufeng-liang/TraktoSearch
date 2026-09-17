@@ -518,6 +518,8 @@
     <string name="settings_accent_dynamic">Dynamic</string>
     <string name="settings_accent_custom">Custom</string>
     <string name="settings_accent_reset_default">Reset to Default (Wallpaper)</string>
+    <string name="settings_accent_add">Add custom color</string>
+    <string name="settings_accent_delete">Delete this color</string>
     <!-- Accent Color Names, ordered by hue to match the swatch grid -->
     <string name="accent_renoir">Renoir Pink</string>
     <string name="accent_poppy">Poppy Red</string>

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +27,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,13 +53,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.theme.MonetAccent
+import com.tracktosearch.ui.theme.HctChromaSlider
+import com.tracktosearch.ui.theme.HctHueSlider
+import com.tracktosearch.ui.theme.HctToneGrid
+import com.tracktosearch.ui.theme.monetColorScheme
+import com.tracktosearch.data.util.mcu.hct.Hct
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
@@ -77,14 +84,8 @@ import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.onColorFor
 import com.tracktosearch.ui.theme.isDarkScheme
 import com.tracktosearch.ui.theme.floatingDialogColor
-import com.github.skydoves.colorpicker.compose.HsvColorPicker
-import com.github.skydoves.colorpicker.compose.rememberColorPickerController
-import com.github.skydoves.colorpicker.compose.BrightnessSlider
-import com.github.skydoves.colorpicker.compose.SaturationSlider
-import com.github.skydoves.colorpicker.compose.ColorEnvelope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -292,8 +293,16 @@ private fun HapticLimitNotice(
 internal fun AccentColorDialog(
     currentAccent: com.tracktosearch.ui.theme.MonetAccent?,
     onAccentSelected: (com.tracktosearch.ui.theme.MonetAccent?) -> Unit,
-    customAccentArgb: Long?,
+    customAccentColors: List<Long>,
+    selectedCustomAccentArgb: Long?,
+    /** 选中/取消选中自定义色调：非 null=选中，null=取消选中（与预设/壁纸互斥） */
     onCustomAccentSelected: (Long?) -> Unit,
+    /** 自定义色调弹窗确认（添加模式，storage 自动去重+选中） */
+    onCustomAccentAdd: (Long) -> Unit,
+    /** 自定义色调弹窗确认（编辑模式，原位更新） */
+    onCustomAccentUpdate: (Long, Long) -> Unit,
+    /** 长按确认删除已收藏自定义色调 */
+    onCustomAccentRemove: (Long) -> Unit,
     currentMode: VisualEffectMode,
     currentVariant: GlassVariant,
     onVisualEffectSelected: (VisualEffectMode, GlassVariant) -> Unit,
@@ -308,6 +317,10 @@ internal fun AccentColorDialog(
     var materialMenuExpanded by remember { mutableStateOf(false) }
     var meshMenuExpanded by remember { mutableStateOf(false) }
     var showCustomPicker by remember { mutableStateOf(false) }
+    /** 编辑模式的旧色（非 null = 该色原位更新；null = 添加新色） */
+    var editingArgb by remember { mutableStateOf<Long?>(null) }
+    /** 长按进入待删态的色；再点该盘确认删除，点别的盘退出待删 */
+    var pendingDeleteArgb by remember { mutableStateOf<Long?>(null) }
 
     // 色块要显示当前深浅色档实际会用到的那一个种子色 ——
     // 以前一律取 .light，深色模式下点进去和看到的不是一个颜色。
@@ -318,15 +331,6 @@ internal fun AccentColorDialog(
     val dynamicColors = remember(swatchIsDark) {
         val ring = MonetAccent.entries.map { if (swatchIsDark) it.dark else it.light }
         ring + ring.first()
-    }
-    // 彩虹渐变上的勾选图标：没有单一底色，所以按「整条渐变里最差的那一档」定黑白 ——
-    // 取平均亮度再套阈值会被暗档拉低，结果给出白勾，压在金黄档上只有 2.30:1。
-    val dynamicCheckTint = remember(dynamicColors) {
-        fun worstContrast(ink: Float) = dynamicColors.minOf { swatch ->
-            val a = swatch.luminance().coerceAtLeast(0f)
-            (maxOf(a, ink) + 0.05f) / (minOf(a, ink) + 0.05f)
-        }
-        if (worstContrast(0f) >= worstContrast(1f)) Color.Black else Color.White
     }
 
     // 壁纸取色后的真实主色预览（Android 12+），否则回退彩虹渐变
@@ -635,12 +639,14 @@ internal fun AccentColorDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                // 色调区：壁纸取色 + 按色相排序的印象派色块网格 + 自由调色（都排完再放）
-                val customMarker = Any()
+                // 色调区：壁纸取色 → 印象派预设 → 已收藏自定义纯色盘 → 彩虹＋盘
+                val addMarker = Any()
+                val addDisabled = customAccentColors.size >= ThemeStorage.MAX_CUSTOM_ACCENTS
                 val swatches: List<Any?> = buildList {
                     add(null) // 壁纸取色
                     addAll(MonetAccent.entries)
-                    add(customMarker) // 自由调色收尾，不打断色环顺序
+                    addAll(customAccentColors.map { it as Any }) // 自定义收藏（Long 装箱）
+                    if (!addDisabled) add(addMarker) // 满 8 则收掉添加入口
                 }
                 val rows = swatches.chunked(4)
                 rows.forEach { row ->
@@ -649,66 +655,119 @@ internal fun AccentColorDialog(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         row.forEach { swatch ->
-                            val isCustom = swatch === customMarker
-                            val accent = swatch as? MonetAccent // null 表示壁纸取色
+                            val isAdd = swatch === addMarker
+                            val customSwatch = swatch as? Long
+                            val isCustom = customSwatch != null
+                            val accent = swatch as? MonetAccent // 非 null 表示预设，null 表示壁纸取色
                             val labelResId = when {
-                                isCustom -> R.string.settings_accent_custom
+                                isAdd -> R.string.settings_accent_custom
+                                isCustom -> null
                                 accent != null -> accent.labelResId
                                 else -> R.string.settings_accent_dynamic
                             }
-                            // 勾选态：壁纸取色仅在未启用自由调色时勾选，自定义色独立勾选
-                            val selected = when {
-                                isCustom -> customAccentArgb != null
-                                accent != null -> currentAccent == accent
-                                else -> currentAccent == null && customAccentArgb == null
+                            val swatchColor = when {
+                                isCustom -> Color(customSwatch.toInt())
+                                accent != null -> if (swatchIsDark) accent.dark else accent.light
+                                else -> null
                             }
+                            // 勾选态：壁纸仅在未选中预设/自定义时勾选；自定义与预设互斥勾选
+                            val selected = when {
+                                isAdd -> false
+                                isCustom -> selectedCustomAccentArgb == customSwatch
+                                accent != null -> currentAccent == accent
+                                else -> currentAccent == null && selectedCustomAccentArgb == null
+                            }
+                            // 长按进入待删的盘；再点确认删除，点别的盘自然退出待删
+                            val isPendingDelete = isCustom && pendingDeleteArgb == customSwatch
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
-                                    // 色板是一组里选一个（自由调色那格转开子弹窗），走刻度感
-                                    .hapticClickable(semantic = HapticSemantic.SEGMENT_TICK) {
-                                        if (isCustom) {
-                                            showCustomPicker = true
-                                        } else {
-                                            // 选择预设/壁纸取色时清除自定义色，避免 Theme 优先走 customAccent
-                                            onCustomAccentSelected(null)
-                                            onAccentSelected(accent)
-                                        }
-                                    }
                                     .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                val swatchColor = accent?.let { if (swatchIsDark) it.dark else it.light }
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
+                                        .combinedClickable(
+                                            onClick = {
+                                                if (isCustom && pendingDeleteArgb == customSwatch) {
+                                                    // 待删态再点 = 确认删除
+                                                    onCustomAccentRemove(customSwatch!!)
+                                                    pendingDeleteArgb = null
+                                                } else {
+                                                    pendingDeleteArgb = null
+                                                    when {
+                                                        isAdd -> {
+                                                            editingArgb = null
+                                                            showCustomPicker = true
+                                                        }
+                                                        isCustom -> if (selected) {
+                                                            // 再按已选色盘 = 打开弹窗原位编辑
+                                                            editingArgb = customSwatch
+                                                            showCustomPicker = true
+                                                        } else {
+                                                            // 选中自定义色，并与预设/壁纸互斥
+                                                            onAccentSelected(null)
+                                                            onCustomAccentSelected(customSwatch)
+                                                        }
+                                                        else -> {
+                                                            // 预设/壁纸：清除自定义选中，避免 Theme 优先走 customAccent
+                                                            onCustomAccentSelected(null)
+                                                            onAccentSelected(accent)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onLongClick = { if (isCustom) pendingDeleteArgb = customSwatch }
+                                        )
                                         .background(
                                             brush = when {
-                                                isCustom -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
+                                                isAdd -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
                                                 swatchColor != null -> androidx.compose.ui.graphics.SolidColor(swatchColor)
                                                 dynamicPrimaryColor != null -> androidx.compose.ui.graphics.SolidColor(dynamicPrimaryColor)
                                                 else -> androidx.compose.ui.graphics.Brush.sweepGradient(colors = dynamicColors)
                                             }
                                         )
                                         .then(
-                                            if (selected)
-                                                Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                            else Modifier
+                                            when {
+                                                isPendingDelete -> Modifier.border(3.dp, MaterialTheme.colorScheme.error, CircleShape)
+                                                selected -> Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                                else -> Modifier
+                                            }
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (selected) {
+                                    if (isPendingDelete) {
+                                        // 待删确认按钮：红底圆 + 删除图标，点盘即删
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.error),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Delete,
+                                                contentDescription = stringResource(R.string.settings_accent_delete),
+                                                tint = MaterialTheme.colorScheme.onError,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    } else if (selected) {
+                                        // 勾统一白色（含彩虹渐变盘），在深色预设上靠深色描边兜底可辨
                                         Icon(
                                             imageVector = Icons.Rounded.Check,
                                             contentDescription = null,
-                                            // 勾的颜色跟主题里 onPrimary 用同一条规则，别在这儿另写一套阈值。
-                                            // 三种底：固定色块用它自己的色，壁纸取到的真实主色用那个色，
-                                            // 剩下的彩虹渐变没有单一底色，按整条渐变的最差对比度定，见 dynamicCheckTint。
-                                            tint = swatchColor?.let { onColorFor(it) }
-                                                ?: dynamicPrimaryColor?.takeIf { !isCustom }?.let { onColorFor(it) }
-                                                ?: dynamicCheckTint,
+                                            tint = Color.White,
                                             modifier = Modifier.size(20.dp)
+                                        )
+                                    } else if (isAdd) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Add,
+                                            contentDescription = stringResource(R.string.settings_accent_add),
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
                                 }
@@ -717,15 +776,17 @@ internal fun AccentColorDialog(
                                     modifier = Modifier.width(72.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    AdaptiveSingleLineText(
-                                        text = stringResource(labelResId),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                        maxFontSize = 11.sp,
-                                        minFontSize = 8.5.sp,
-                                        modifier = Modifier.width(72.dp),
-                                        textAlign = TextAlign.Center,
-                                        fillMaxWidth = true
-                                    )
+                                    if (labelResId != null) {
+                                        AdaptiveSingleLineText(
+                                            text = stringResource(labelResId),
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                            maxFontSize = 11.sp,
+                                            minFontSize = 8.5.sp,
+                                            modifier = Modifier.width(72.dp),
+                                            textAlign = TextAlign.Center,
+                                            fillMaxWidth = true
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -744,18 +805,15 @@ internal fun AccentColorDialog(
         }
     )
 
-    // 自由调色弹窗
+    // 自由调色弹窗：添加（editingArgb=null）或编辑（回填原色）共用同一面板
     if (showCustomPicker) {
         CustomAccentDialog(
-            initialArgb = customAccentArgb,
-            onColorSelected = { argb ->
-                onCustomAccentSelected(argb)
-                // 选择自定义色后同时清除预设色（互斥）
-                onAccentSelected(null)
-            },
-            onResetDefault = {
-                // 恢复默认：清除自定义色并回到壁纸取色
-                onCustomAccentSelected(null)
+            initialArgb = editingArgb,
+            onColorConfirmed = { argb ->
+                val old = editingArgb
+                if (old != null) onCustomAccentUpdate(old, argb)
+                else onCustomAccentAdd(argb)
+                // 自定义色调激活后与预设/壁纸互斥
                 onAccentSelected(null)
             },
             onDismiss = { showCustomPicker = false }
@@ -763,27 +821,35 @@ internal fun AccentColorDialog(
     }
 }
 
-/** 自由调色弹窗：HSV 圆形色轮 + 亮度滑杆 + HEX 显示 + 预览 */
+/**
+ * 自由调色弹窗：HCT 三轴选色（FlClash 同款 Hue/Chroma 渐变滑杆 + Tone 网格）
+ * + 8 role 全 scheme 实时预览。只留取消/确定，确定按添加或编辑语义由调用方处理。
+ *
+ * @param initialArgb 编辑模式时回填该色 HCT；null = 添加模式，以 Hct(0,0,60) 中性灰起步
+ * @param onColorConfirmed 用户选中并确认的最终色（ARGB Long）
+ */
 @Composable
 internal fun CustomAccentDialog(
     initialArgb: Long?,
-    onColorSelected: (Long) -> Unit,
-    onDismiss: () -> Unit,
-    onResetDefault: () -> Unit
+    onColorConfirmed: (Long) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val initialColor = remember(initialArgb) {
-        // 未设置自定义色时默认白色起步，使亮度条渐变与圆盘指针一致（白→黑）
-        initialArgb?.let { Color(it.toInt()) } ?: Color.White
+    val darkTheme = isSystemInDarkTheme()
+    // 三轴状态：编辑模式回填原色，添加模式 FlClash 同款中性灰起步
+    val seedHct = remember(initialArgb) {
+        if (initialArgb != null) Hct.fromInt(initialArgb.toInt())
+        else Hct.from(0.0, 0.0, 60.0)
     }
-    val controller = rememberColorPickerController()
-    var selectedColor by remember { mutableStateOf(initialColor) }
+    var hue by remember(seedHct) { mutableFloatStateOf(seedHct.hue.toFloat()) }
+    var chroma by remember(seedHct) { mutableFloatStateOf(seedHct.chroma.toFloat()) }
+    var tone by remember(seedHct) { mutableStateOf(seedHct.tone.toInt()) }
 
-    // 控制器需与弹窗初始颜色同步，否则圆盘指针与亮度条渐变使用不一致的内部状态
-    LaunchedEffect(initialColor) {
-        controller.selectByColor(initialColor, fromUser = false)
+    val currentColor = remember(hue, chroma, tone) {
+        Color(Hct.from(hue.toDouble(), chroma.toDouble(), tone.toDouble()).toInt())
     }
-    val hexText = remember(selectedColor) {
-        String.format("#%06X", selectedColor.toArgb() and 0xFFFFFF)
+    // 预览直接吃生产同款 scheme 生成器，保证所见即所得
+    val previewScheme = remember(currentColor, darkTheme) {
+        monetColorScheme(seed = currentColor, dark = darkTheme)
     }
 
     AlertDialog(
@@ -797,78 +863,77 @@ internal fun CustomAccentDialog(
             )
         },
         text = {
-            // text 槽自带宿主 View，「恢复默认」那一记要在槽内取实例
-            val haptics = rememberAppHaptics()
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                HsvColorPicker(
-                    modifier = Modifier.fillMaxWidth().height(280.dp),
-                    controller = controller,
-                    onColorChanged = { envelope -> selectedColor = envelope.color }
+                HctHueSlider(hue = hue, onHueChanged = { hue = it })
+                HctChromaSlider(hue = hue, chroma = chroma, onChromaChanged = { chroma = it })
+                HctToneGrid(
+                    hue = hue,
+                    chroma = chroma,
+                    selectedTone = tone,
+                    onToneSelected = { tone = it }
                 )
-                // 饱和度滑轨：附加后亮度条渐变才按当前饱和度取色（圆心 sat=0 时渐变正确显示黑→白，
-                // 而非库默认固定的「当前 hue 满饱和→黑」）
-                SaturationSlider(
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                    controller = controller
-                )
-                BrightnessSlider(
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                    controller = controller
-                )
-                // HEX
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("HEX", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(40.dp))
-                    Text(hexText, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurface)
-                }
-                // 预览
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(selectedColor))
-                        Spacer(Modifier.height(4.dp))
-                        Text("Primary", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val containerColor = deriveContainerColor(selectedColor)
-                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(containerColor))
-                        Spacer(Modifier.height(4.dp))
-                        Text("Container", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(shape = RoundedCornerShape(20.dp), color = selectedColor, modifier = Modifier.height(36.dp)) {
-                            Text("示例按钮", color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text("Button", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
-                    }
-                }
-                TextButton(onClick = { haptics.tap(); onResetDefault(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.settings_accent_reset_default), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                ColorRolePreviewGrid(scheme = previewScheme)
             }
         },
         confirmButton = {
-            // 每个槽各取一份，理由同 text 槽
             val confirmHaptics = rememberAppHaptics()
             Button(onClick = {
                 confirmHaptics.tap()
-                onColorSelected(selectedColor.toArgb().toLong())
+                onColorConfirmed(currentColor.toArgb().toLong())
                 onDismiss()
-            }) { Text("确定") }
+            }) { Text(stringResource(R.string.common_confirm)) }
         },
         dismissButton = {
             val dismissHaptics = rememberAppHaptics()
-            TextButton(onClick = { dismissHaptics.lightTap(); onDismiss() }) { Text("取消") }
+            TextButton(onClick = { dismissHaptics.lightTap(); onDismiss() }) {
+                Text(stringResource(R.string.common_cancel))
+            }
         }
     )
 }
 
-private fun deriveContainerColor(seed: Color): Color {
-    val hct = com.tracktosearch.data.util.mcu.hct.Hct.fromInt(seed.toArgb())
-    val c = com.tracktosearch.data.util.mcu.hct.Hct.from(hct.hue, hct.chroma * 0.3, 90.0)
-    return Color(c.toInt())
+/** 8 个 M3 role（含 on* 前景）的全 scheme 预览：4×2 网格，每格 44dp 高。 */
+@Composable
+private fun ColorRolePreviewGrid(scheme: androidx.compose.material3.ColorScheme) {
+    val roles = listOf(
+        Triple(scheme.primary, scheme.onPrimary, "Primary"),
+        Triple(scheme.secondary, scheme.onSecondary, "Secondary"),
+        Triple(scheme.tertiary, scheme.onTertiary, "Tertiary"),
+        Triple(scheme.error, scheme.onError, "Error"),
+        Triple(scheme.surface, scheme.onSurface, "Surface"),
+        Triple(scheme.primaryContainer, scheme.onPrimaryContainer, "P.Cont"),
+        Triple(scheme.secondaryContainer, scheme.onSecondaryContainer, "S.Cont"),
+        Triple(scheme.tertiaryContainer, scheme.onTertiaryContainer, "T.Cont")
+    )
+    roles.chunked(4).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            row.forEach { (bg, fg, label) ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(bg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        color = fg,
+                        fontSize = 9.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2
+                    )
+                }
+            }
+            repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+        }
+    }
 }
 
 /** 语言选择对话框 */
