@@ -240,7 +240,7 @@ test('caches normalized media metadata endpoints with dedicated public TTLs', as
         const summaryEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/media/summaries?locale=zh-CN&ids=movie:550');
         const detailEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/media/detail?type=movie&id=550&locale=zh-CN&sections=credits');
         assert.equal(summaryEntry.headers.get('Cache-Control'), 'public, max-age=3600');
-        assert.equal(detailEntry.headers.get('Cache-Control'), 'public, max-age=21600');
+        assert.equal(detailEntry.headers.get('Cache-Control'), 'public, max-age=3600');
     } finally {
         globalThis.caches = originalCaches;
     }
@@ -322,6 +322,45 @@ test('edge cache hit exposes X-Media-Cache EDGE instead of stale upstream header
         assert.equal(cachedResponse.headers.get('X-Gateway-Cache'), 'HIT');
         assert.equal(cachedResponse.headers.get('X-Media-Cache'), 'EDGE');
         assert.equal(cachedResponse.headers.get('X-Media-Partial'), 'false');
+    } finally {
+        globalThis.caches = originalCaches;
+    }
+});
+
+test('caches douban hot lists longer than dynamic endpoints and bypasses purge', async () => {
+    const calls = [];
+    const entries = new Map();
+    const originalCaches = globalThis.caches;
+    globalThis.caches = {
+        default: {
+            async match(request) { return entries.get(request.url); },
+            async put(request, response) { entries.set(request.url, response); },
+        },
+    };
+
+    try {
+        const env = { AUTH_WORKER: serviceBinding(calls, { data: { ok: true } }) };
+        await onRequest(contextFor('/gateway-api/api/douban/api/chart', {}, env));
+        await onRequest(contextFor('/gateway-api/api/douban/api/top250?page=1', {}, env));
+        await onRequest(contextFor('/gateway-api/api/douban/search?q=test', {
+            headers: { Authorization: 'Bearer user-token' },
+        }, env));
+
+        // 热榜单点边缘 TTL 提高到 1h，与 auth-worker 内部 12~24h 缓存协调
+        const chartEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/douban/api/chart');
+        assert.equal(chartEntry.headers.get('Cache-Control'), 'public, max-age=3600');
+        // 动态端点维持短缓存
+        const searchEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/douban/search?q=test');
+        assert.equal(searchEntry.headers.get('Cache-Control'), 'public, max-age=300');
+
+        // ?purge=1 是强制刷新入口，必须穿透边缘缓存直连上游
+        const purgeCalls = [];
+        const purgeEnv = { AUTH_WORKER: serviceBinding(purgeCalls, { data: { purged: true } }) };
+        const first = await onRequest(contextFor('/gateway-api/api/douban/api/chart?purge=1', {}, purgeEnv));
+        const second = await onRequest(contextFor('/gateway-api/api/douban/api/chart?purge=1', {}, purgeEnv));
+        assert.equal(first.headers.get('X-Gateway-Cache'), 'BYPASS');
+        assert.equal(second.headers.get('X-Gateway-Cache'), 'BYPASS');
+        assert.equal(purgeCalls.length, 2);
     } finally {
         globalThis.caches = originalCaches;
     }

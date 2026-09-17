@@ -191,13 +191,29 @@ function getPublicCachePlan(request, path) {
     // TMDB 账号态端点靠 session_id / guest_session_id 标识身份（查询串或路径段），
     // 这类响应属于单个用户，绝不能写进所有人共享的边缘缓存（App 不使用这些端点）。
     if (hasUserScopedQuery(request.url) || hasUserScopedPath(path)) return null;
+    // ?purge=1 是 auth-worker 侧豆瓣热榜的强制刷新入口，必须穿透边缘缓存直连回源，
+    // 否则手动刷新只会命中旧边缘条目，抓取逻辑永远不执行。
+    if (new URL(request.url).searchParams.has('purge')) return null;
 
     if (path.startsWith('/api/tmdb/')) return { ttlSeconds: 600 };
     if (path === '/api/media/summaries') return { ttlSeconds: 3600 };
-    if (path === '/api/media/detail') return { ttlSeconds: 21600 };
-    if (path.startsWith('/api/douban/')) return { ttlSeconds: 300 };
+    // detail 响应含 summary 易变字段（评分/时长，内部 volatile TTL 24h）；
+    // 边缘 TTL 校准到与 summaries 一致，避免边缘缓存把易变数据滞后放大到 24h+6h。
+    if (path === '/api/media/detail') return { ttlSeconds: 3600 };
+    if (path.startsWith('/api/douban/')) {
+        // 热榜单点（api/chart、api/weekly、api/nowplaying、api/top250）由 auth-worker
+        // 直接抓豆瓣网页，内部 caches.default 已缓存 12~24h；边缘给 1h 挡重复回源、
+        // 降低 worker 允许量消耗，新鲜度仍由 App 端 6h 客户端缓存主导。
+        // 其余豆瓣端点（搜索/详情等，透传 douban-movie-api）动态性高，维持短缓存。
+        const doubanPath = path.slice('/api/douban/'.length);
+        const hot = doubanPath === 'api/chart' || doubanPath === 'api/weekly'
+            || doubanPath === 'api/nowplaying' || doubanPath === 'api/top250';
+        return { ttlSeconds: hot ? 3600 : 300 };
+    }
     if (path.startsWith('/api/omdb/')) return { ttlSeconds: 600 };
 
+    // 排除集与 auth-worker 的 isTraktPublicPath 保持一致（唯一事实来源），改动需两端同步；
+    // 公开端点对所有人返回同一份数据，缓存 300s；私有路径绝不写入共享缓存，避免串号。
     if (path.startsWith('/api/trakt/')) {
         const traktPath = path.slice('/api/trakt/'.length);
         if (traktPath.startsWith('oauth/')) return null;
