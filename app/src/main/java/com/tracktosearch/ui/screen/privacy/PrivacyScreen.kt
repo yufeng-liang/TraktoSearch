@@ -60,7 +60,6 @@ import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -456,6 +455,9 @@ private fun PrivacySectionCard(
  * [enabled] = false 时整行降透明度且不响应点击：画像开关组在未登录、总开关关闭
  * 或云端写入进行中都会落到这个状态，此时要「看得见但拨不动」，而不是消失。
  *
+ * [loading] 只表示首值尚未回填：开关仍按当前占位值绘制，但不响应点击，也不显示
+ * 进度圈。这样页面结构从首帧起就是稳定的，加载完成后只更新正确状态。
+ *
  * [indent] = true 表示这一行从属于上一行（如「个性化分析」挂在画像授权下）：
  * 左内边距加深、图标容器与字号各缩一档，让从属关系不靠文字说明也看得出来。
  */
@@ -476,13 +478,12 @@ private fun PrivacySwitchRow(
     val iconBoxSize = if (indent) 34.dp else 40.dp
     val iconSize = if (indent) 19.dp else 22.dp
     val titleSize = if (indent) 14.sp else 15.sp
-    val interactive = enabled && !loading
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (enabled || loading) 1f else DISABLED_ROW_ALPHA)
+            .alpha(if (enabled) 1f else DISABLED_ROW_ALPHA)
             .hapticClickable(
-                enabled = interactive,
+                enabled = enabled && !loading,
                 semantic = if (checked) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
             ) { onToggle(!checked) }
             .padding(
@@ -527,27 +528,12 @@ private fun PrivacySwitchRow(
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        if (loading) {
-            Box(
-                modifier = Modifier
-                    .width(52.dp)
-                    .height(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        } else {
-            Switch(
-                checked = checked,
-                enabled = enabled,
-                onCheckedChange = { haptics.toggle(it); onToggle(it) },
-                colors = appSwitchColors()
-            )
-        }
+        Switch(
+            checked = checked,
+            enabled = enabled && !loading,
+            onCheckedChange = { haptics.toggle(it); onToggle(it) },
+            colors = appSwitchColors()
+        )
     }
 }
 
