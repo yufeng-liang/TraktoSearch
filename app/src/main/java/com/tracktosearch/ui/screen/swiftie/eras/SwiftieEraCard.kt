@@ -185,10 +185,11 @@ fun SwiftieEraCard(
     val longTitles = remember(era) {
         BooleanArray(era.tracks.size) { era.tracks[it].length > LONG_TITLE_CHARS }
     }
-    // 母题的照片抠图（Red 的围巾、evermore 的背影，其余母题仍是线画）。位图只能在
+    // 母题的照片抠图（Red 的围巾、evermore 的背影、Speak Now 的花束，其余母题仍是线画）。位图只能在
     // 组合阶段读，draw 阶段（drawBehind）拿不到 resources；别的时代这里恒为 null，
     // 那 10 张卡片因此连一次解码都不做
     val photoRes = when (era.motif) {
+        SwiftieEraMotif.SPEAK_NOW_BOUQUET -> R.drawable.era_speak_now_bouquet
         SwiftieEraMotif.RED_SCARF -> R.drawable.era_red_scarf
         SwiftieEraMotif.BRAID_PLAID -> R.drawable.era_evermore_back
         else -> null

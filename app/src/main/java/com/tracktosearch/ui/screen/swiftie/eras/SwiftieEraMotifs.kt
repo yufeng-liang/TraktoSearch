@@ -94,8 +94,9 @@ internal const val COLUMN_FADE_MIN = 0.514f
 /**
  * 金饰件的固定色。
  *
- * 帷幕的流苏绳、化妆镜的灯泡不能吃时代主色 —— Speak Now 是紫、Showgirl 是橙，
- * 「金流苏」染成紫的就不是金流苏了。Fearless 自己的主色就是这个金，那一张仍走主色。
+ * reputation 的蛇瞳、化妆镜的灯泡、打火机内焰不能吃时代主色 ——
+ * 金瞳、暖灯与火苗染成时代色就不是那个东西了。Fearless 自己的主色就是这个金，
+ * 那一张仍走主色。
  */
 private val PROP_GOLD = Color(0xFFC9A227)
 
@@ -134,7 +135,8 @@ internal fun DrawScope.drawEraMotif(
     eraElapsedMs: Long,
     loverAimAngle: Float = LOVER_FALLBACK_AIM_ANGLE,
     /**
-     * 本母题的照片抠图。**只有两个母题用得上**：Red 的红围巾与 evermore 的背影 ——
+     * 本母题的照片抠图。**只有三个母题用得上**：Red 的红围巾、evermore 的背影与
+     * Speak Now 的花束 ——
      * 其余母题一律传 null，那些函数根本不读这个参数，母题本身照旧画。
      *
      * 位图只能在组合阶段读（draw 阶段拿不到 resources），所以由 `SwiftieEraCard` 传进来。
@@ -163,7 +165,7 @@ internal fun DrawScope.drawEraMotif(
     when (motif) {
         SwiftieEraMotif.PORCH_GUITAR -> drawPorchGuitar(color, phase, alpha)
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
-        SwiftieEraMotif.STAGE_CURTAIN -> drawStageCurtain(color, phase, alpha)
+        SwiftieEraMotif.SPEAK_NOW_BOUQUET -> drawSpeakNowBouquetMotif(color, phase, propPhoto)
         SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer, propMapleInk)
         SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
@@ -836,278 +838,65 @@ private fun DrawScope.drawGoldTassels(
     drawPath(fringe, color, alpha = alpha * 0.85f, style = Stroke(width = u * 0.005f))
 }
 
-/** 3 · Speak Now：剧院帷幕一角（绒面垂褶 + 金流苏绳）+ 紫舞裙裙摆。 */
-private fun DrawScope.drawStageCurtain(color: Color, phase: Float, alpha: Float) {
-    veilWaveTexture(color, phase)
-    val box = propBox()
-    val w = box.width
-    val h = box.height
-    val u = min(w, h)
-    translate(left = box.left, top = box.top) {
-        // 绒面靠「褶缝暗、褶脊亮」读出来。白卡上「亮」等于色少，所以两侧 alpha 高、
-        // 中间低 —— 反过来就是一排纸筒
-        val folds = 5
-        val foldWidth = w / folds
-        val hemY = h * 0.44f
-        val fold = Path()
-        repeat(folds) { index ->
-            val left = index * foldWidth
-            val breathe = sin((phase + index * 0.2f) * TAU) * u * 0.012f
-            fold.rewind()
-            fold.moveTo(left, 0f)
-            fold.lineTo(left + foldWidth, 0f)
-            fold.lineTo(left + foldWidth, hemY + breathe)
-            fold.quadraticTo(
-                left + foldWidth * 0.5f, hemY + foldWidth * 0.42f + breathe,
-                left, hemY + breathe
-            )
-            fold.close()
-            drawPath(
-                path = fold,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        color.copy(alpha = alpha * 1.3f),
-                        color.copy(alpha = alpha * 0.45f),
-                        color.copy(alpha = alpha * 1.3f)
-                    ),
-                    startX = left,
-                    endX = left + foldWidth
-                )
-            )
-        }
-        drawCurtainRope(phase, alpha, w, h, u)
-        drawDressSilhouette(color, phase, alpha, w, h, u)
-    }
-}
-
-/**
- * 系幕绳与穗子。绳身走一条二次贝塞尔（垂链），穗子挂在最低点。
- *
- * 绳上那几道斜短线是绳股的捻向 —— 少了它，金绳就是一条金色橡皮筋。
- */
-private fun DrawScope.drawCurtainRope(phase: Float, alpha: Float, w: Float, h: Float, u: Float) {
-    val x0 = -w * 0.02f
-    val y0 = h * 0.12f
-    val cx = w * 0.5f
-    val cy = h * 0.34f
-    val x1 = w * 1.02f
-    val y1 = h * 0.08f
-    val rope = Path()
-    rope.moveTo(x0, y0)
-    rope.quadraticTo(cx, cy, x1, y1)
-    drawPath(rope, PROP_GOLD, alpha = alpha * 2.2f, style = Stroke(width = u * 0.020f))
-    val twist = Path()
-    repeat(11) { index ->
-        val t = (index + 0.5f) / 11f
-        val inv = 1f - t
-        val px = inv * inv * x0 + 2f * inv * t * cx + t * t * x1
-        val py = inv * inv * y0 + 2f * inv * t * cy + t * t * y1
-        twist.moveTo(px - u * 0.012f, py + u * 0.010f)
-        twist.lineTo(px + u * 0.012f, py - u * 0.010f)
-    }
-    drawPath(twist, Color.White, alpha = alpha * 1.4f, style = Stroke(width = u * 0.005f))
-    // 穗子挂在垂链最低点（t = 0.5），随相位轻摆
-    val knotX = 0.25f * x0 + 0.5f * cx + 0.25f * x1
-    val knotY = 0.25f * y0 + 0.5f * cy + 0.25f * y1
-    rotate(degrees = sin(phase * TAU) * 3.5f, pivot = Offset(knotX, knotY)) {
-        drawCircle(PROP_GOLD, u * 0.024f, Offset(knotX, knotY), alpha = alpha * 2.4f)
-        val cone = Path()
-        cone.moveTo(knotX - u * 0.030f, knotY + u * 0.016f)
-        cone.lineTo(knotX + u * 0.030f, knotY + u * 0.016f)
-        cone.lineTo(knotX + u * 0.016f, knotY + u * 0.075f)
-        cone.lineTo(knotX - u * 0.016f, knotY + u * 0.075f)
-        cone.close()
-        drawPath(cone, PROP_GOLD, alpha = alpha * 2.0f)
-        val strands = Path()
-        repeat(6) { index ->
-            val sx = knotX + (index - 2.5f) * u * 0.011f
-            strands.moveTo(sx, knotY + u * 0.070f)
-            strands.lineTo(sx + (index - 2.5f) * u * 0.004f, knotY + u * 0.135f)
-        }
-        drawPath(strands, PROP_GOLD, alpha = alpha * 1.8f, style = Stroke(width = u * 0.006f))
-    }
-}
-
-/**
- * 紫裙剪影：*Speak Now* 那件紫色礼服。
- *
- * 上一版是「三层弧形褶」的裙摆，被点名过 ——「一点都不像」。确实：三条同心的弧压在同样是
- * 弧形褶的帷幕上，两者的画法一模一样，屏幕上读作帷幕多了三条彩带。裙子之所以是裙子，
- * 靠的不是褶而是**穿着它的人**：头、肩、收进去的腰、张开的裙。
- *
- * 所以这一版是一整个剪影，而且**只是剪影**：一块纯色的形，不画脸、不画手指、不打高光。
- * 加了五官它立刻从「一个时代的符号」变成「某个人的画像」——
- * `SwiftieEraBackdrop` 里 Showgirl 那张舞台把人物留给中央原创舞女剪影，这里只画卡片道具。
- *
- * 比例按时装插画的 9 头身而不是真人的 7.5：礼服的重点在裙，腿的长度让给裙摆。
- * 但**只拉长腿、不缩小头** —— 头一小于 1/10 身高，整个剪影就从「一个人」退回「一枚别针」。
- * 一条手臂抬起、一条垂下，加上裙摆随 [phase] 摆 —— 静止的对称剪影读作一枚图标。
- */
-private fun DrawScope.drawDressSilhouette(
+/** 3 · Speak Now：紫色薄纱底纹 + 一束系着缎带的紫色花束。 */
+private fun DrawScope.drawSpeakNowBouquetMotif(
     color: Color,
     phase: Float,
-    alpha: Float,
-    w: Float,
-    h: Float,
-    u: Float
+    bouquet: ImageBitmap?
 ) {
-    val figTop = h * 0.320f
-    val figH = h * 0.655f
-    val cx = w * 0.50f
-    // 纵向一律「身高的几分之几」：改 figH 整个人一起缩放，比例不会散
-    fun y(f: Float) = figTop + figH * f
-    // 头占身高的 0.112 = 8.9 头身。上一版是 0.084（11.9 头身），
-    // 屏幕上读作一根别针 —— 时装插画拉长的是腿，不是把头缩掉
-    val headRx = figH * 0.049f
-    val neckHalf = figH * 0.024f
-    val shoulderHalf = figH * 0.098f
-    val waistHalf = figH * 0.052f
-    val hemHalf = figH * 0.300f
-    // 裙摆摆动：左右不同步（左摆 = 右收），整块平移读作整个人在飘
-    val sway = sin(phase * TAU) * u * 0.020f
+    veilWaveTexture(color, phase)
+    if (bouquet != null) drawSpeakNowBouquet(bouquet, phase)
+}
 
-    // 长卷发：Speak Now 那一头长卷发是这个时代的另一半标志，光有裙子读不出是哪一年
-    val hair = Path()
-    hair.moveTo(cx - headRx * 1.08f, y(0.062f))
-    hair.cubicTo(
-        cx - headRx * 1.72f, y(0.152f),
-        cx - headRx * 2.08f, y(0.252f),
-        cx - headRx * 1.30f, y(0.345f)
-    )
-    hair.cubicTo(
-        cx - headRx * 0.68f, y(0.276f),
-        cx - headRx * 0.54f, y(0.132f),
-        cx, y(0.020f)
-    )
-    hair.cubicTo(
-        cx + headRx * 0.54f, y(0.132f),
-        cx + headRx * 0.68f, y(0.276f),
-        cx + headRx * 1.30f, y(0.345f)
-    )
-    hair.cubicTo(
-        cx + headRx * 2.08f, y(0.252f),
-        cx + headRx * 1.72f, y(0.152f),
-        cx + headRx * 1.08f, y(0.062f)
-    )
-    hair.close()
+/**
+ * 花束在道具框内的基础适配宽度。
+ *
+ * 0.94 对宽高同时生效：常见比例下先吃满框宽，极矮的卡片上则改为吃满框高，
+ * 不论哪种比例都留出余量，避免花枝/缎带被卡片圆角或曲目列视觉切边。
+ */
+private const val SPEAK_NOW_BOUQUET_FIT = 0.94f
 
-    // 两条手臂：一抬一垂。用圆头粗描而不是描轮廓 —— 这个尺寸下手臂只有几像素宽，
-    // 描出来的轮廓线自己就把里面填满了
-    val arms = Path()
-    arms.moveTo(cx - shoulderHalf * 0.86f, y(0.200f))
-    arms.quadraticTo(cx - shoulderHalf * 1.52f, y(0.290f), cx - shoulderHalf * 1.40f, y(0.430f))
-    arms.moveTo(cx + shoulderHalf * 0.86f, y(0.196f))
-    arms.quadraticTo(cx + shoulderHalf * 1.90f, y(0.150f), cx + shoulderHalf * 2.30f, y(0.048f))
-    val armWidth = figH * 0.030f
+/** 需求方在当前落位基础上要求的额外放大比例。 */
+private const val SPEAK_NOW_BOUQUET_GROWTH = 1.33f
 
-    // 主体：头 → 颈 → 露肩胸衣 → 收腰 → 张开的裙。一条闭合路径，一次填完
-    val body = Path()
-    body.moveTo(cx - neckHalf, y(0.112f))
-    body.lineTo(cx - neckHalf, y(0.146f))
-    // 左肩 → 左胸 → 左腰
-    body.quadraticTo(cx - shoulderHalf * 0.96f, y(0.162f), cx - shoulderHalf, y(0.208f))
-    body.cubicTo(
-        cx - shoulderHalf * 0.92f, y(0.286f),
-        cx - waistHalf * 1.42f, y(0.352f),
-        cx - waistHalf, y(0.404f)
+/**
+ * 把花束贴到右侧道具列：先按道具框等比例适配，再额外放大
+ * [SPEAK_NOW_BOUQUET_GROWTH]；右缘贴住道具框，纵向居中。
+ *
+ * 放大后右侧仍留原有的安全边距，新增面积向左向上展开；呼吸只做极小幅度，
+ * 素材本身不是挂饰，幅度大了会像整束花在漂。花束按原图不透明绘制，不吃
+ * `columnFade`，避免长歌名那一行经过时花束跟着发淡。
+ */
+private fun DrawScope.drawSpeakNowBouquet(photo: ImageBitmap, phase: Float) {
+    val box = propBox()
+    val scale = min(
+        box.width * SPEAK_NOW_BOUQUET_FIT / photo.width,
+        box.height * SPEAK_NOW_BOUQUET_FIT / photo.height
+    ) * SPEAK_NOW_BOUQUET_GROWTH
+    val dstW = photo.width * scale
+    val dstH = photo.height * scale
+    val left = box.right - dstW
+    val top = box.top + (box.height - dstH) * 0.5f
+    val sway = sin(phase * TAU) * dstW * 0.008f
+    drawImage(
+        image = photo,
+        srcOffset = IntOffset.Zero,
+        srcSize = IntSize(photo.width, photo.height),
+        dstOffset = IntOffset(
+            (left + sway).roundToInt(),
+            top.roundToInt()
+        ),
+        dstSize = IntSize(dstW.roundToInt(), dstH.roundToInt()),
+        alpha = 1f,
+        filterQuality = FilterQuality.High
     )
-    // 左侧裙：一路外扩到裙摆
-    body.cubicTo(
-        cx - hemHalf * 0.50f, y(0.628f),
-        cx - hemHalf * 0.90f, y(0.876f),
-        cx - hemHalf + sway, y(0.972f)
-    )
-    // 裙摆下缘：三段起伏。**这一条必须是波浪** —— 一条直边的裙摆读作一只梯形
-    body.quadraticTo(cx - hemHalf * 0.52f + sway, y(1.010f), cx - hemHalf * 0.14f, y(0.986f))
-    body.quadraticTo(cx + hemHalf * 0.22f, y(0.962f), cx + hemHalf * 0.56f, y(0.998f))
-    body.quadraticTo(cx + hemHalf * 0.86f, y(1.024f), cx + hemHalf - sway, y(0.964f))
-    // 右侧裙上行回腰
-    body.cubicTo(
-        cx + hemHalf * 0.90f, y(0.876f),
-        cx + hemHalf * 0.50f, y(0.628f),
-        cx + waistHalf, y(0.404f)
-    )
-    // 右腰 → 右胸 → 右肩
-    body.cubicTo(
-        cx + waistHalf * 1.42f, y(0.352f),
-        cx + shoulderHalf * 0.92f, y(0.286f),
-        cx + shoulderHalf, y(0.208f)
-    )
-    body.quadraticTo(cx + shoulderHalf * 0.96f, y(0.162f), cx + neckHalf, y(0.146f))
-    body.lineTo(cx + neckHalf, y(0.112f))
-    // 头：右下颌 → 右侧 → 顶 → 左侧 → 左下颌
-    body.cubicTo(
-        cx + headRx * 0.62f, y(0.106f),
-        cx + headRx * 1.05f, y(0.086f),
-        cx + headRx * 1.05f, y(0.058f)
-    )
-    body.cubicTo(
-        cx + headRx * 1.05f, y(0.014f),
-        cx + headRx * 0.60f, y(0f),
-        cx, y(0f)
-    )
-    body.cubicTo(
-        cx - headRx * 0.60f, y(0f),
-        cx - headRx * 1.05f, y(0.014f),
-        cx - headRx * 1.05f, y(0.058f)
-    )
-    body.cubicTo(
-        cx - headRx * 1.05f, y(0.086f),
-        cx - headRx * 0.62f, y(0.106f),
-        cx - neckHalf, y(0.112f)
-    )
-    body.close()
-
-    // 垫白**三块一起先垫**，再统一上色。
-    //
-    // 上一版是「垫一块 → 上一块颜色」轮着来，而手臂的垫白比彩色描边宽一档
-    // （0.034 vs 0.028）—— 那多出来的一圈白正好压在已经上过色的躯干上，
-    // 手臂与身体之间就永远隔着一道白边，截出来两条胳膊像两根悬空的面条。
-    // 白在白卡上是**不可见**的，一次垫完不会互相破坏；颜色才会。
-    drawPath(hair, Color.White, alpha = alpha * PROP_MASK)
-    drawPath(
-        arms, Color.White,
-        alpha = alpha * PROP_MASK,
-        style = Stroke(width = armWidth, cap = StrokeCap.Round)
-    )
-    drawPath(body, Color.White, alpha = alpha * PROP_MASK)
-
-    // 上色：发在最下（肩把发根压住），身体在最上（盖掉肩上的接缝）
-    drawPath(hair, color, alpha = alpha * 2.0f)
-    drawPath(
-        arms, color,
-        alpha = alpha * 2.1f,
-        style = Stroke(width = armWidth, cap = StrokeCap.Round)
-    )
-    drawPath(body, color, alpha = alpha * 2.3f)
-
-    // 裙上四道竖向的裥：同色再压一遍，深一档就是布的褶。剪影不打高光，
-    // 白卡上「亮」等于色少，加白只会在紫裙上开四个洞
-    val pleats = Path()
-    repeat(4) { index ->
-        val f = (index - 1.5f) / 2.0f
-        pleats.moveTo(cx + waistHalf * f * 0.9f, y(0.425f))
-        pleats.quadraticTo(
-            cx + hemHalf * f * 0.62f, y(0.716f),
-            cx + hemHalf * f * 0.90f + sway * f, y(0.958f)
-        )
-    }
-    drawPath(pleats, color, alpha = alpha * 0.85f, style = Stroke(width = u * 0.011f))
-    // 裙摆内里那一道暗边：布是有厚度的，翻起来的那一面比正面深
-    val inner = Path()
-    inner.moveTo(cx - hemHalf * 0.92f + sway, y(0.952f))
-    inner.quadraticTo(cx - hemHalf * 0.50f + sway, y(0.988f), cx - hemHalf * 0.14f, y(0.964f))
-    inner.quadraticTo(cx + hemHalf * 0.22f, y(0.940f), cx + hemHalf * 0.56f, y(0.976f))
-    inner.quadraticTo(cx + hemHalf * 0.82f, y(1.000f), cx + hemHalf * 0.94f - sway, y(0.944f))
-    drawPath(inner, color, alpha = alpha * 1.1f, style = Stroke(width = u * 0.014f))
 }
 
 /**
  * 4 · Red：一条红围巾（卡片右上角）+ 一杯枫糖拿铁（共用的右侧列里）。
  *
  * 围巾是 *All Too Well* 的核心意象，所以它在卡片上不是「垂下来的一条」而是
- * **绕起来挂着**的样子；直挂的一条与页面背景那根枯枝、以及别张卡片上的垂布
- * （folklore 的开衫、Speak Now 的裙摆）都太像。
+ * **绕起来挂着**的样子；直挂的一条与页面背景那根枯枝、以及 folklore 开衫的垂布都太像。
  *
  * 画的是**照片抠图**（`era_red_scarf.png`：用户给的素材，裁到外框、抹掉透明区的
  * 黑 RGB、降到 760 宽），不再用 Canvas 手画。手画那版把罗纹与流苏试到第七种画法，

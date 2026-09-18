@@ -15,8 +15,8 @@ enum class SwiftieEraMotif {
     PORCH_GUITAR,
     /** 2 · Fearless：城堡阳台一角 + 几缕金色流苏 */
     CASTLE_BALCONY,
-    /** 3 · Speak Now：剧院帷幕一角（绒面 + 金流苏绳）+ 紫舞裙裙摆 */
-    STAGE_CURTAIN,
+    /** 3 · Speak Now：紫色薄纱底纹 + 一束系着缎带的紫色花束 */
+    SPEAK_NOW_BOUQUET,
     /** 4 · Red：垂下的红围巾 + 一杯枫糖拿铁（杯套上刻着一片枫叶） */
     RED_SCARF,
     /** 5 · 1989：宝丽来白框 + 一只海鸥 */
@@ -234,7 +234,7 @@ object SwiftieErasData {
         mainColor = Color(0xFF7B4BA8),
         textColor = Color(0xFF7B4BA8),
         fontResId = R.font.era_speak_now,
-        motif = SwiftieEraMotif.STAGE_CURTAIN,
+        motif = SwiftieEraMotif.SPEAK_NOW_BOUQUET,
         tracks = listOf(
             "Mine",
             "Sparks Fly",
