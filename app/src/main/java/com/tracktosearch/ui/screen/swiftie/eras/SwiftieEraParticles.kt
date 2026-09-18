@@ -166,7 +166,8 @@ private fun buildSwarm(
 private class Swarms(
     val motes: Map<SwiftieEraParticle, List<Mote>>,
     /** Lover 那张是心与蝴蝶混在一起，蝴蝶走另一个 mover，单独一张表 */
-    val butterflies: List<Mote>
+    val butterflies: List<Mote>,
+    val seagulls: List<SeagullFlight>
 )
 
 /**
@@ -190,9 +191,6 @@ private fun buildSwarms(lowRam: Boolean): Swarms = Swarms(
         SwiftieEraParticle.AUTUMN_LEAF to buildSwarm(
             2012, swarmSize(5, lowRam), 2..3, 0.055f..0.085f, 0.09f, 2..3
         ),
-        SwiftieEraParticle.SEAGULL to buildSwarm(
-            2014, swarmSize(4, lowRam), 2..3, 0.030f..0.050f, 0.05f, 1..2
-        ),
         SwiftieEraParticle.HEART_BUTTERFLY to buildSwarm(
             2019, swarmSize(4, lowRam), 3..4, 0.030f..0.048f, 0.05f, 2..4
         ),
@@ -213,7 +211,8 @@ private fun buildSwarms(lowRam: Boolean): Swarms = Swarms(
         )
     ),
     // 蝴蝶横穿画面，扑翼 8..12 拍，和上浮的心共用不了一套参数
-    butterflies = buildSwarm(20190823, swarmSize(3, lowRam), 3..4, 0.028f..0.042f, 0.05f, 8..12)
+    butterflies = buildSwarm(20190823, swarmSize(3, lowRam), 3..4, 0.028f..0.042f, 0.05f, 8..12),
+    seagulls = seagullFlights(lowRam)
 )
 
 /**
@@ -304,7 +303,7 @@ private fun DrawScope.drawEraParticles(
 ) {
     val stage = SwiftieErasData.STAGE.getOrNull(index) ?: return
     val particle = stage.particle ?: return
-    val motes = swarms.motes[particle] ?: return
+    val motes = swarms.motes[particle].orEmpty()
     val era = SwiftieErasData.ALL[index]
     val main = era.mainColor
     val lit = stage.backdropColors.first()
@@ -320,7 +319,7 @@ private fun DrawScope.drawEraParticles(
             drawAutumnLeaves(motes, phase, travelPhase, layerAlpha * 0.58f, maple, main, LEAF_BACK, deep)
 
         SwiftieEraParticle.SEAGULL ->
-            drawSeagulls(motes, phase, travelPhase, layerAlpha * 0.68f, scratch, lit, deep)
+            drawSeagulls(swarms.seagulls, phase, travelPhase, layerAlpha * 0.94f, scratch)
 
         SwiftieEraParticle.HEART_BUTTERFLY -> drawHeartsAndButterflies(
             motes, swarms.butterflies, phase, travelPhase, layerAlpha, scratch, heart, main, deep
@@ -512,55 +511,19 @@ private fun DrawScope.drawAutumnLeaves(
     }
 }
 
-/**
- * 4 · 海鸥 —— mover：**横向滑翔**（与蝴蝶同一组）。
- *
- * 两段弧线组成的翼展剪影，翼展宽度与浓淡随「透视」一起缓慢变化（模拟远近），
- * 一半个体从右往左 —— 天上不会所有鸟一个方向。翼尖那一撮深色是远处海鸥的辨识点。
- */
+/** 海鸥按远到近画在卡片后方；扑翼、滑翔与行程分别计时。 */
 private fun DrawScope.drawSeagulls(
-    motes: List<Mote>,
+    birds: List<SeagullFlight>,
     phase: Float,
     travelPhase: Float,
     alpha: Float,
-    path: Path,
-    plumage: Color,
-    wingTip: Color
+    path: Path
 ) {
-    motes.forEach { mote ->
-        val travel = travelOf(mote, travelPhase)
-        val round = roundOf(mote, travel)
-        val t = travel - floor(travel)
-        val a = alpha * edgeFade(t, 0.10f)
+    birds.forEach { bird ->
+        val pose = updateSeagullPose(bird, phase, travelPhase, size.width, size.height)
+        val a = alpha * pose.alpha
         if (a <= 0.01f) return@forEach
-        val across = if (mote.twist > 0) t else 1f - t
-        val cx = (-0.14f + across * 1.28f) * size.width
-        // 偶尔轻微升降：两条低频正弦叠出来的，不是规律的上下波
-        val cy = (
-            0.08f + hash01(mote.seed, round, 1) * 0.34f +
-                lissajous(t, mote.freqA * 0.55f, mote.freqB * 0.4f, mote.beatOffset) * 0.045f
-            ) * size.height
-        // near：0.55 远、1.0 近。翼展和浓度一起变，才读作在往远处飞
-        val near = 0.55f + 0.45f * (0.5f + 0.5f * sin((phase * mote.beat + mote.beatOffset) * TAU))
-        val span = mote.size * (0.72f + hash01(mote.seed, round, 2) * 0.56f) * near * size.minDimension
-        path.rewind()
-        path.moveTo(-span, -span * 0.34f)
-        path.quadraticTo(-span * 0.44f, span * 0.18f, 0f, 0f)
-        path.quadraticTo(span * 0.44f, span * 0.18f, span, -span * 0.34f)
-        withTransform({
-            translate(cx, cy)
-            // 压翼：滑翔的鸟会侧一点身，正对屏幕的剪影是死的
-            rotate(mote.bend * 9f + sin(t * TAU * 2f) * 4f, Offset.Zero)
-        }) {
-            drawPath(
-                path = path,
-                color = plumage,
-                alpha = a * near,
-                style = Stroke(width = span * 0.13f, cap = StrokeCap.Round)
-            )
-            drawCircle(wingTip, span * 0.072f, Offset(-span, -span * 0.34f), alpha = a * near * 0.8f)
-            drawCircle(wingTip, span * 0.072f, Offset(span, -span * 0.34f), alpha = a * near * 0.8f)
-        }
+        drawFlyingSeagull(path, pose, bird.halfSpan * pose.scale * size.minDimension, bird.direction, a)
     }
 }
 

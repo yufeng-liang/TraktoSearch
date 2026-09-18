@@ -120,6 +120,8 @@ private val MOSS_LIGHT = Color(0xFF8C9968)
  * 全部存成扁平 `FloatArray`：draw lambda 里遍历不装箱、不分配迭代器。
  */
 private class BackdropShapes(lowRam: Boolean) {
+    val knit = KnitTexture(lowRam)
+
     /** Midnights 星野：x, y, r 三元组。低配砍到三分之一。 */
     val stars: FloatArray = buildTriples(if (lowRam) 40 else 120, 2010) { random ->
         floatArrayOf(
@@ -359,7 +361,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.FIREFLY_PORCH -> drawFireflyPorch(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.GOLDEN_CASTLE -> drawGoldenCastle(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, alpha)
-        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(path, top, mid, deep, phase, alpha, lowRam, maple)
+        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(top, mid, deep, phase, alpha, shapes.knit, maple)
         SwiftieEraBackdrop.SKYLINE_POLAROIDS ->
             drawSkylinePolaroids(path, top, mid, deep, phase, alpha, shapes)
         SwiftieEraBackdrop.HALFTONE_THRONE ->
@@ -1742,156 +1744,94 @@ private fun DrawScope.drawWindowGlass(
 
 // ─────────────────────── 4 · Red ───────────────────────
 
-/**
- * 枯枝上挂着的五片大红枫叶 + 铺满下半屏的粗棒针织物。
- *
- * 主体是**枫叶**（见 [KNIT_MAPLES]）：秋天与那件针织是 Red 的两个视觉支柱，而围巾
- * 已经在卡片右上角画成「围起来的一圈」了 —— 背景再挂一条就是同一件道具画两遍，
- * 两条围巾还会互相抢主体。织物本身铺在 [KNIT_TOP] 以下，是这一张的纹理不是主体。
- * 线圈刻意粗（每行 13 针）—— 那件是粗棒针织的，细密的针法读作 T 恤。
- *
- * 前几轮截图的四处返工记在这儿，免得再犯：
- * - 上三分之一原先**是空的**（只有两条雾），12 张里唯一一张卡片以上没有主体的。
- * - 织物上缘原先是一道 `drawRect` 的**直边**，读作「贴上去的一块矩形」。现在上缘走
- *   [knitEdge] 的双频正弦，V 字线圈**逐针**裁在它下面 —— 边缘因此是按针脚锯齿的，
- *   真织物的收边本来就这样，比一条光滑曲线更像。
- * - 麻花辫原先只有左边一条，孤零零一道读作「一根绳子」。改成三条各带罗纹沟槽的绞花柱。
- * - 线圈原先行行等高等距，是一张网格贴图。现在行高、V 的深度与横向错位都按 [jitter01]
- *   抖过 —— 手织物不会那么齐。
- *
- * 整块织物**不随 [phase] 动**：布料该是垂在那儿的，飘起来就成了旗子。动的只有秋雾。
- */
+/** 静止织纹只随尺寸重建；分档合并针脚，让上缘淡入不增加逐针绘制调用。 */
+private class KnitTexture(lowRam: Boolean) {
+    private val columns = if (lowRam) 26 else 38
+    private var canvasSize = Size.Zero
+    val shadows = Array(KNIT_FADE_STEPS) { Path() }
+    val leftYarn = Array(KNIT_FADE_STEPS) { Path() }
+    val rightYarn = Array(KNIT_FADE_STEPS) { Path() }
+
+    fun update(canvas: Size) {
+        if (canvas == canvasSize) return
+        canvasSize = canvas
+        for (i in 0 until KNIT_FADE_STEPS) {
+            shadows[i].rewind()
+            leftYarn[i].rewind()
+            rightYarn[i].rewind()
+        }
+        if (canvas.width <= 0f || canvas.height <= 0f) return
+        val stitchW = canvas.width / columns
+        val stitchH = stitchW * 0.86f
+        var row = 0
+        var y = (KNIT_TOP - 0.034f) * canvas.height
+        while (y < canvas.height + stitchH) {
+            for (column in -1..columns) {
+                val seed = row * 131 + column * 17
+                val x = (column + 0.5f) * stitchW +
+                    (jitter01(seed + 5) - 0.5f) * stitchW * 0.07f
+                val needleY = y + (jitter01(seed + 9) - 0.5f) * stitchH * 0.06f
+                val fade = ((needleY - knitEdge(x / canvas.width) * canvas.height) /
+                    (canvas.height * 0.10f)).coerceIn(0f, 1f)
+                val strength = fade * fade * (3f - 2f * fade)
+                val bucket = (strength * KNIT_FADE_STEPS).roundToInt() - 1
+                if (bucket < 0) continue
+                val needleH = stitchH * (0.94f + jitter01(seed + 13) * 0.05f)
+                for (side in -1..1 step 2) {
+                    shadows[bucket].yarnLeg(x, needleY, stitchW, needleH, side)
+                    val light = if (side < 0) leftYarn[bucket] else rightYarn[bucket]
+                    light.yarnLeg(
+                        x - stitchW * 0.035f, needleY - stitchH * 0.035f,
+                        stitchW, needleH, side
+                    )
+                }
+            }
+            y += stitchH * (0.98f + jitter01(row * 7 + 3) * 0.04f)
+            row++
+        }
+    }
+
+    private fun Path.yarnLeg(x: Float, y: Float, w: Float, h: Float, side: Int) {
+        val dx = w * side
+        moveTo(x + dx * 0.30f, y)
+        cubicTo(
+            x + dx * 0.44f, y + h * 0.21f,
+            x + dx * 0.28f, y + h * 0.70f,
+            x + dx * 0.035f, y + h
+        )
+        cubicTo(
+            x + dx * 0.01f, y + h * 0.69f,
+            x + dx * 0.13f, y + h * 0.20f,
+            x + dx * 0.30f, y
+        )
+        close()
+    }
+}
+
+/** 枫叶为主体，普通平针只作低对比底纹；织物静止，秋雾沿用原有运动。 */
 private fun DrawScope.drawKnitAutumn(
-    path: Path,
     top: Color,
     mid: Color,
     deep: Color,
     phase: Float,
     alpha: Float,
-    lowRam: Boolean,
+    knit: KnitTexture,
     maple: MapleArt
 ) {
     val w = size.width
     val h = size.height
-    val stitchW = w / (if (lowRam) 9f else 13f)
-    val stitchH = stitchW * 0.72f
-    val stroke = stitchW * 0.17f
 
-    // 远景暖雾先铺满上半屏：枯枝与围巾压在它上面才分得出前后
     val drift = sin(phase * TAU) * 0.02f
     drawFogBand(0.16f + drift, 0.24f, top, alpha * DISTANT_ALPHA * 1.4f)
 
-    // 织物本体：先垫一层布身，织物才不是「浮在渐变上的一堆线」。
-    // 上缘走 knitEdge 的波浪，下面三边直接贴到画布边
-    path.rewind()
-    path.moveTo(0f, knitEdge(0f) * h)
-    for (i in 1..KNIT_EDGE_SAMPLES) {
-        val fx = i / KNIT_EDGE_SAMPLES.toFloat()
-        path.lineTo(fx * w, knitEdge(fx) * h)
-    }
-    path.lineTo(w, h)
-    path.lineTo(0f, h)
-    path.close()
-    drawPath(path = path, color = mid, alpha = alpha * 0.17f)
-
-    // 收边罗纹：沿着同一条波浪描一道粗边。原先这里是一道贴满屏宽的 drawRect，
-    // 那条水平直边是第一轮最刺眼的缺陷
-    path.rewind()
-    path.moveTo(0f, knitEdge(0f) * h)
-    for (i in 1..KNIT_EDGE_SAMPLES) {
-        val fx = i / KNIT_EDGE_SAMPLES.toFloat()
-        path.lineTo(fx * w, knitEdge(fx) * h)
-    }
-    drawPath(
-        path = path,
-        color = deep,
-        alpha = alpha * PROP_ALPHA * 0.55f,
-        style = Stroke(width = stitchH * 0.85f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    )
-
-    // 全部 V 字塞进同一条 Path 一次画完：几百次 drawLine 会把绘制预算吃光
-    path.rewind()
-    var row = 0
-    // 从上缘波谷再往上起一行：这样最上面那几行是**部分**留下的，
-    // 织物的边界因此是按针脚锯齿的
-    var y = (KNIT_TOP - 0.034f) * h
-    while (y < h + stitchH) {
-        val j = jitter01(row * 7 + 3)
-        val rowH = stitchH * (0.90f + j * 0.20f)
-        val vDepth = stitchH * (0.52f + jitter01(row * 13 + 5) * 0.22f)
-        // 隔行错半针，这是平针织物的样子；不错行就成了菱形网格。
-        // 再叠一点行级抖动，免得整片是一张规整贴图
-        val offsetX = (if (row % 2 == 0) 0f else stitchW / 2f) + (j - 0.5f) * stitchW * 0.22f
-        var x = -stitchW + offsetX
-        while (x < w + stitchW) {
-            // 逐针裁：这一针整个在上缘以上就不下笔
-            if (y >= knitEdge(x / w) * h) {
-                path.moveTo(x, y)
-                path.lineTo(x + stitchW / 2f, y + vDepth)
-                path.lineTo(x + stitchW, y)
-            }
-            x += stitchW
-        }
-        y += rowH
-        row++
-    }
-    drawPath(
-        path = path,
-        color = deep,
-        alpha = alpha * PROP_ALPHA * 0.75f,
-        style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    )
-
-    // 绞花麻花柱：两条相位相反的正弦股绞在一起，是粗棒针织最好认的那道花样。
-    // **三条**而不是一条 —— 左边孤零零一道读作「一根掉在布上的绳子」；
-    // 粗棒针织的绞花本来是成列排的，两侧还各有一道罗纹沟槽把它嵌在平针里。
-    //
-    // 绞距（freq 9–11）比第一轮的 5–7 密一倍、股也细了：绞得太松、股太粗的时候
-    // 三条柱子读作「三根挂在布上的粗麻绳」，而不是织在布里的花样
-    val braidAmp = stitchW * 0.45f
-    val gutter = braidAmp + stitchW * 0.40f
-    for (b in 0 until 3) {
-        val bx = w * (0.12f + b * 0.38f)
-        val bTop = knitEdge(bx / w) * h + stitchH * 0.4f
-        // 三条柱子的绞距各不相同：同一个频率排三列又回到「规整贴图」
-        val freq = 9f + b
-        val skew = jitter01(b * 31 + 11) * 0.2f
-        for (s in -1..1 step 2) {
-            drawLine(
-                color = deep,
-                start = Offset(bx + s * gutter, bTop),
-                end = Offset(bx + s * gutter, h),
-                strokeWidth = stitchW * 0.10f,
-                alpha = alpha * PROP_ALPHA * 0.5f
-            )
-        }
-        for (strand in 0..1) {
-            path.rewind()
-            var first = true
-            var by = bTop
-            while (by < h) {
-                val f = (by - bTop) / (h - bTop)
-                // 频率取整数，绞花在上下缘都收得住；strand 差半个周期即互绞
-                val x = bx + sin((f * freq + strand * 0.5f + skew) * TAU) * braidAmp
-                if (first) {
-                    path.moveTo(x, by)
-                    first = false
-                } else {
-                    path.lineTo(x, by)
-                }
-                by += h * 0.008f
-            }
-            drawPath(
-                path = path,
-                color = deep,
-                alpha = alpha * PROP_ALPHA * (if (strand == 0) 1.15f else 0.8f),
-                style = Stroke(width = stitchW * 0.30f, cap = StrokeCap.Round)
-            )
-        }
+    knit.update(size)
+    for (i in 0 until KNIT_FADE_STEPS) {
+        val strength = alpha * (i + 1f) / KNIT_FADE_STEPS
+        drawPath(knit.shadows[i], deep, alpha = strength * 0.16f)
+        drawPath(knit.leftYarn[i], top, alpha = strength * 0.075f)
+        drawPath(knit.rightYarn[i], top, alpha = strength * 0.045f)
     }
 
-    // 压在织物上缘那条波浪上的一层薄雾：让「布」与「天」之间是渐变而不是一条线。
-    // 上缘的锯齿已经不是直边了，再糊一层雾，那道过渡就彻底看不出是两个图层
     drawFogBand(KNIT_TOP - 0.01f - drift, 0.13f, mid, alpha * DISTANT_ALPHA)
 
     // ── 枯枝：枫叶得长在什么东西上，凭空飘着的五片就只是贴纸 ──
@@ -1935,19 +1875,11 @@ private fun DrawScope.drawKnitAutumn(
     drawKnitMaples(maple, mid, deep, alpha)
 }
 
-/** 织物上缘的基准高度。波浪在它上下各 0.027 屏高内摆。 */
+/** 织纹淡入起点的基准高度。 */
 private const val KNIT_TOP = 0.335f
+private const val KNIT_FADE_STEPS = 8
 
-/** 上缘波浪的采样段数。织物的边是柔的，多采样只是白烧 CPU。 */
-private const val KNIT_EDGE_SAMPLES = 26
-
-/**
- * 织物上缘在横向比例 [fx] 处的高度（占屏高）。
- *
- * **两个不成整数比的频率叠加**（1.6 与 3.7）：单频正弦一眼就看出是数学曲线，
- * 叠一个错拍的高频之后，波峰波谷的间距不再规律，读起来才是一条搭下来的布边。
- * 振幅合起来 0.027 屏高，最深的波谷仍在 Red 卡片顶边（0.455h）以上。
- */
+/** 淡入起点沿横向轻微起伏，不勾勒独立布边。 */
 private fun knitEdge(fx: Float): Float =
     KNIT_TOP + sin((fx * 1.6f + 0.12f) * TAU) * 0.020f + sin(fx * 3.7f * TAU) * 0.007f
 
