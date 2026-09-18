@@ -102,6 +102,7 @@ object ApkDownloader {
         onProgress: (bytesRead: Long, totalBytes: Long) -> Unit
     ): File? {
         var response: okhttp3.Response? = null
+        var file: File? = null
         return try {
             val request = Request.Builder().url(url).build()
             response = client.newCall(request).execute()
@@ -125,7 +126,7 @@ object ApkDownloader {
                 response.close()
                 return null
             }
-            val file = File(dir, fileName)
+            file = File(dir, fileName)
 
             if (file.exists()) file.delete()
 
@@ -145,7 +146,12 @@ object ApkDownloader {
             }
 
             file
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 协程取消不能吞：吞掉会把「用户取消」伪装成「下载失败」，外层还会继续走降级重试
+            file?.delete() // 清掉半截 APK，避免下次校验前误用
+            throw e
         } catch (e: Exception) {
+            file?.delete()
             null
         } finally {
             // response 在成功时由 body.use 关闭，失败时在此关闭
