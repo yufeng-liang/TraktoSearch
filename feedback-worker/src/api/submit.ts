@@ -67,10 +67,22 @@ export async function handleSubmit(
             throw new AppError('INVALID_REQUEST', 'Screenshot does not belong to user', 400);
         }
     }
+    // 类型防御：非字符串值直接 400，不能让 .trim is not a function 变 500
+    // （且 500 发生在 feedback_seq 自增之后，会空耗一个序号）
+    if (body.contact !== undefined && body.contact !== null && typeof body.contact !== 'string') {
+        throw new AppError('INVALID_REQUEST', 'contact must be a string', 400);
+    }
     const contact = body.contact ? body.contact.trim().slice(0, 128) : null;
-    const friendNickname = (body.friendNickname || '').trim();
+    const friendNickname = typeof body.friendNickname === 'string' ? body.friendNickname.trim() : '';
     if (!friendNickname || friendNickname.length > 64) {
         throw new AppError('INVALID_REQUEST', 'friendNickname is required', 400);
+    }
+    // username 与其它字段同一校验口径：非字符串/超长直接 400，防 D1 bind 类型错与超长落库
+    for (const field of ['traktUsername', 'doubanUsername'] as const) {
+        const value = body[field];
+        if (value !== undefined && value !== null && (typeof value !== 'string' || value.length > 64)) {
+            throw new AppError('INVALID_REQUEST', `${field} must be a string of at most 64 chars`, 400);
+        }
     }
     if (!body.appVersion || typeof body.appVersion !== 'string' || body.appVersion.length > 64) {
         throw new AppError('INVALID_REQUEST', 'appVersion is required', 400);

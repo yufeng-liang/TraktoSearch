@@ -43,8 +43,16 @@ export default {
 
             // 截图读取（无需 JWT，key 含随机 token 难穷举）
             if (path.startsWith('/feedback-api/screenshot/')) {
-                const key = decodeURIComponent(path.slice('/feedback-api/screenshot/'.length));
-                response = await handleScreenshot(request, env, key);
+                // 畸形编码（如结尾 %）会抛 URIError，应归为 400 而不是 500
+                const rawKey = path.slice('/feedback-api/screenshot/'.length);
+                if (/%(?![0-9A-Fa-f]{2})/.test(rawKey)) {
+                    response = new Response(JSON.stringify({ code: 'INVALID_REQUEST', message: 'Invalid key encoding' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                } else {
+                    response = await handleScreenshot(request, env, decodeURIComponent(rawKey));
+                }
             }
             // App API（需 App JWT）
             else if (path.startsWith('/feedback-api/')) {

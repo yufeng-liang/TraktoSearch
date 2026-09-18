@@ -29,6 +29,7 @@ export async function handleCleanupScreenshots(env: Env): Promise<void> {
     }
 
     const feedbackCutoff = Math.floor((Date.now() - FEEDBACK_RETENTION_MS) / 1000);
+    const rateLimitCutoff = Math.floor((Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000);
     const feedbackCleanup = await env.DB.batch([
         env.DB.prepare(`
             DELETE FROM feedback_conversations
@@ -48,8 +49,14 @@ export async function handleCleanupScreenshots(env: Env): Promise<void> {
             DELETE FROM feedbacks
             WHERE status = 'CLOSED' AND closed_at IS NOT NULL AND closed_at < ?
         `).bind(feedbackCutoff),
+        // 限流桶键含窗口起始时间，跨窗口即死行；只增不删会让表无界膨胀（索引已就绪）
+        env.DB.prepare(`
+            DELETE FROM feedback_rate_limits
+            WHERE updated_at < ?
+        `).bind(rateLimitCutoff),
     ]);
     const deletedFeedbacks = Number(feedbackCleanup[2]?.meta.changes || 0);
+    const deletedRateLimitBuckets = Number(feedbackCleanup[3]?.meta.changes || 0);
 
     console.log(JSON.stringify({
         event: 'feedback_retention_cleanup_completed',
@@ -57,5 +64,6 @@ export async function handleCleanupScreenshots(env: Env): Promise<void> {
         screenshotRetentionDays: SCREENSHOT_MAX_AGE_DAYS,
         deletedFeedbacks,
         feedbackRetentionDays: FEEDBACK_RETENTION_DAYS,
+        deletedRateLimitBuckets,
     }));
 }
