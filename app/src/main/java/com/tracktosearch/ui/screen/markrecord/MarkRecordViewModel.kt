@@ -20,6 +20,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -117,7 +118,8 @@ class MarkRecordViewModel @Inject constructor(
      * ALL 页把本地流水与 Trakt 历史并成一个列表，Trakt 整段失败时原来只是当成空列表，
      * [MarkRecordUiState.error] 照样是 null —— 屏幕上是一份看起来完整、实际缺了一半的列表。
      */
-    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    // tryEmit 遇缓冲占用会静默丢条，必须 DROP_OLDEST（与 HapticOutcomeEmitter 同配置）
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
 
     /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */

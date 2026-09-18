@@ -25,6 +25,7 @@ import com.tracktosearch.ui.haptic.HapticOutcome
 import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -85,7 +86,8 @@ class SearchViewModel @Inject constructor(
      * 用户点了一下，界面转了一圈，然后什么都没发生，也不知道是没找到还是自己没点到。
      * 文案沿用发现页/人物页同一套（card_resolve_*），三处点开失败手感一致。
      */
-    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    // tryEmit 遇缓冲占用会静默丢条，必须 DROP_OLDEST（与 HapticOutcomeEmitter 同配置）
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
 
     /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */

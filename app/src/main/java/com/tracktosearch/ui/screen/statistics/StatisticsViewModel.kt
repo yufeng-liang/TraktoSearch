@@ -25,6 +25,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -117,7 +118,8 @@ class StatisticsViewModel @Inject constructor(
      * 条目、缺失的评分、永远转着的词云骨架），[StatisticsUiState.error] 却是 null。
      * 一屏数字全是错的而一声不响，比整页报错更糟。这里只补一句提示，不挡着看已有内容。
      */
-    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    // tryEmit 遇缓冲占用会静默丢条，必须 DROP_OLDEST（与 HapticOutcomeEmitter 同配置）
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
 
     /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
