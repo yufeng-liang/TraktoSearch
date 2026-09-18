@@ -267,6 +267,10 @@ fun MainScreen(
     val swiftieEggVisible by cloudThemeManager.swiftieEggVisible.collectAsState()
     val swiftieUnlocked by cloudThemeManager.swiftieUnlocked.collectAsState()
     var showOnboarding by remember { mutableStateOf(false) }
+    // Tab 位置的普通暂存（非 state）：布局回调每次都覆盖写入不触发重组。
+    // 引导打开时才一次性读进 tabRects。历史上无条件写 tabRects state，
+    // GLASS 模式 Tab 选中弹簧动画逐帧改变 boundsInWindow，带动整个 MainScreen 逐帧重组
+    val tabRectsRaw = remember { mutableMapOf<Int, Rect>() }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
     val connectivityObserver = remember {
         EntryPointAccessors.fromApplication(
@@ -898,10 +902,7 @@ fun MainScreen(
                                 }
                             },
                             onPositioned = { rect ->
-                                val current = tabRects.value.toMutableList()
-                                while (current.size <= index) current.add(Rect.Zero)
-                                current[index] = rect
-                                tabRects.value = current
+                                tabRectsRaw[index] = rect
                             }
                         )
                     }
@@ -981,6 +982,12 @@ fun MainScreen(
             // Tab 位置量不到时原来直接不渲染引导，用户可能永远看不到、标记也不会重置。
             // 现在等一会儿再退化为无高亮的纯信息步骤，至少把四个 Tab 讲清楚。
             var onboardingMeasureTimedOut by remember { mutableStateOf(false) }
+            LaunchedEffect(showOnboarding) {
+                // 引导打开时把布局回调暂存的最新 Tab 位置一次性读入 state
+                if (showOnboarding) {
+                    tabRects.value = (0 until tabs.size).map { tabRectsRaw[it] ?: Rect.Zero }
+                }
+            }
             LaunchedEffect(showOnboarding, onboardingRectsReady) {
                 if (showOnboarding && !onboardingRectsReady) {
                     delay(1500)
