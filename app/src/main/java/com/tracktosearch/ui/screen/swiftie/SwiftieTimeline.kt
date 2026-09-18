@@ -10,7 +10,7 @@ package com.tracktosearch.ui.screen.swiftie
  *
  * 配乐末尾 1:58–2:02 唱的是 Lover，所以 [REWIND_START] 与 [LOVER_BLOOM_END] 是
  * **配乐钉死的两个点**，不能挪。绽放收在 2:03，离总长只剩 2998ms，而签名 5.4s +
- * 手链（与签名同场）+ 定格 10.59s 放不下 —— 于是终局整块排在倒滑之前，
+ * 手链（与签名同场）+ 定格放不下 —— 于是终局整块排在倒滑之前，
  * 倒滑与绽放成为收尾：12 个时代 → 终局（签名 + 手链 + 合影）→ 飞回 Lover → 绽放 → 淡出。
  *
  * ## 终局为什么只有一段
@@ -47,14 +47,26 @@ object SwiftieTimeline {
     /** 单张卡片的固定开销：400 长出 + 5000 停留 + 400 回落 + 100 段间停顿。 */
     const val CARD_BASE_MS: Long = 5_900L
 
-    /** 曲目逐行点亮的 stagger，每首一行。 */
+    /** 其余 11 张的曲目逐行点亮 stagger，每首一行。TTPD 另有放慢后的时间表。 */
     const val CARD_PER_TRACK_MS: Long = 130L
 
-    /** 第 1 张（起点）与第 7 张（归宿）多停 600ms。 */
+    /**
+     * Lover 段额外停留。
+     *
+     * 2026-09-18 定案：TS1 去掉这 600ms，只保留 Lover —— 起点与归宿不再对称加时。
+     */
     const val CARD_ANCHOR_BONUS_MS: Long = 600L
 
-    /** 加时的两张：索引 0 = Taylor Swift，6 = Lover。 */
+    /**
+     * 触感上的两张锚点：索引 0 = Taylor Swift，6 = Lover。
+     *
+     * 这两张落地仍用重档 `CONFIRM`。**它与时间加时不是同一集合**：
+     * TS1 保留重落，但不再多停 600ms。
+     */
     val ANCHOR_INDICES: Set<Int> = setOf(0, 6)
+
+    /** 真正获得额外停留的只有 Lover。 */
+    val CARD_ANCHOR_BONUS_INDICES: Set<Int> = setOf(6)
 
     /** TTPD 在 [ERA_TRACK_COUNTS] 里的位置。打字机那一拍要按索引认人。 */
     const val TTPD_INDEX: Int = 10
@@ -62,7 +74,7 @@ object SwiftieTimeline {
     /**
      * TTPD 段开头留给打字机独奏的前摇。
      *
-     * 这 2600ms 里屏幕上**没有卡片**：背景那台打字机自己敲两行词（`I love you,` /
+     * 这 3200ms 里屏幕上**没有卡片**：背景那台打字机自己敲两行词（`I love you,` /
      * `it's ruining my life`，见 `SwiftieEraBackdrop` 的 `rememberTypewriterStubLines`），
      * 然后纸才从滚筒出来 —— 卡片就是那张纸（见 `SwiftieEraCard` 的 `feedProgress`）。
      * 没有这一拍，纸是「凭空长出来的」，打字机白画。
@@ -71,8 +83,19 @@ object SwiftieTimeline {
      * 读不出打字机的样子。加在账本上而不是从 TTPD 自己的 5000ms 静置里挪：静置那段是
      * 31 行读完之后留给眼睛的，挪走就变成「行刚点完就收卡」。代价落在唯一的弹性段
      * [FINAL_HOLD_MS] 上（需求方已确认）。
+     *
+     * 2026-09-18：TS1 去掉的 600ms 转到这一段，2600 → 3200，让两行独奏再慢一点。
      */
-    const val TTPD_PREROLL_MS: Long = 2_600L
+    const val TTPD_PREROLL_MS: Long = 3_200L
+
+    /**
+     * TTPD 逐行打印额外占用的时间。
+     *
+     * 31 行仍按正常时间表占 `130 × 31 = 4030ms`，再从定格挪来的 3s 加在这里，
+     * 于是整列打印占 7030ms。**逐行时刻由 `SwiftieEraTracklist` 与触感谱共用同一个
+     * helper**，两边不再各算一份。
+     */
+    const val TTPD_TRACK_REVEAL_BONUS_MS: Long = 3_000L
 
     /**
      * 12 张专辑曲目数，顺序与 Eras 一致。
@@ -82,12 +105,17 @@ object SwiftieTimeline {
      */
     val ERA_TRACK_COUNTS: List<Int> = listOf(11, 13, 14, 16, 13, 15, 18, 16, 15, 13, 31, 12)
 
+    /** TTPD 整列打印的窗口长度：31 行普通时间表再加 [TTPD_TRACK_REVEAL_BONUS_MS]。 */
+    val TTPD_TRACK_REVEAL_MS: Long =
+        CARD_PER_TRACK_MS * ERA_TRACK_COUNTS[TTPD_INDEX] + TTPD_TRACK_REVEAL_BONUS_MS
+
     fun cardDurationMs(index: Int, trackCount: Int): Long =
         CARD_BASE_MS + CARD_PER_TRACK_MS * trackCount +
-            (if (index in ANCHOR_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
+            (if (index in CARD_ANCHOR_BONUS_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
+            (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
 
-    /** 12 张卡片合计 98910ms。 */
+    /** 12 张卡片合计 101910ms。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS
         .withIndex()
         .sumOf { (index, count) -> cardDurationMs(index, count) }
@@ -109,7 +137,7 @@ object SwiftieTimeline {
     const val ERAS_CARDS_START: Long = ERAS_INTRO_START + ERAS_INTRO_MS
 
     /**
-     * T102010：第 12 张卡片走完。
+     * T105010：第 12 张卡片走完。
      *
      * 与 [REWIND_START] **不再是同一个值** —— 终局插在两者之间，
      * 所以判「是否还在卡片段内」只能用这个常量。
@@ -119,7 +147,7 @@ object SwiftieTimeline {
     /**
      * 终局一整段：签名（写字 4400 + 抬笔停顿 300 + 收笔闪光 700）与手链同场。
      *
-     * T102010–107410。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
+     * T105010–110410。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
      * `SIGNATURE_PAUSE_TOTAL_MS` / `SIGNATURE_FLASH_MS`，**相加必须正好等于本值**
      * （`SwiftieTimelineTest` 守着）。
      *
@@ -143,7 +171,7 @@ object SwiftieTimeline {
     val BRACELET_ENTRY_MS: Long = 800L
 
     /**
-     * T107410–118000：定格合影，留出截图时间。
+     * T110410–118000：定格合影，留出截图时间。
      *
      * 这一段是账本里唯一的**弹性段**：前面各段都由内容决定长度，
      * 后面各段由配乐钉死，误差全落在这里。改曲目数、改手链进场时刻都只会让定格变长变短，
@@ -151,6 +179,9 @@ object SwiftieTimeline {
      *
      * 2026-09-13 从 3490ms 涨到 10590ms —— 终局整块从 12500ms 缩到 5400ms，
      * 省下的 7100ms 全部落在这里（需求方定案：给合影，不给卡片）。
+     *
+     * 2026-09-18 从中挪出 3000ms 给 TTPD 的逐行打印，10590 → 7590；
+     * TS1 去掉的 600ms 则转给 TTPD 前摇。两个配乐钉死的端点都没动。
      */
     val FINAL_HOLD_START: Long = SIGNATURE_START + SIGNATURE_MS
     val FINAL_HOLD_MS: Long = REWIND_START - FINAL_HOLD_START

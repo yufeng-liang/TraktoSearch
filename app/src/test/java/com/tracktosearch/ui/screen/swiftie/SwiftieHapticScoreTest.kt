@@ -6,9 +6,8 @@ import com.tracktosearch.ui.screen.swiftie.eras.AXIS_TICK_FADE_IN_AT
 import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SWIFTIE_ERA_EDGES
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
-import com.tracktosearch.ui.screen.swiftie.eras.TRACK_REVEAL_START_MS
-import com.tracktosearch.ui.screen.swiftie.eras.TRACK_STAGGER_MS
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieEraCenterFraction
+import com.tracktosearch.ui.screen.swiftie.eras.trackRowRevealAtMs
 import org.junit.Test
 import kotlin.math.roundToInt
 
@@ -76,10 +75,27 @@ class SwiftieHapticScoreTest {
                     it.kind != SwiftieHapticCueKind.TRACKLIST_DONE
             }
             assertThat(landing.atMs).isEqualTo(start + CARD_GROW_MS)
-            // 曲目列收尾压在最后一行淡入的起点上，与 SwiftieEraTracklist 同一个式子
+            // 曲目列收尾压在最后一行的窗口末沿，与 SwiftieEraTracklist 共用时间表
             assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE)[index].atMs)
-                .isEqualTo(start + TRACK_REVEAL_START_MS + TRACK_STAGGER_MS * trackCount)
+                .isEqualTo(start + trackRowRevealAtMs(index, trackCount, lowRam = false))
         }
+    }
+
+    @Test
+    fun ttpdTracklistGetsTheExtraThreeSecondsBeforeItsFinalCue() {
+        val index = SwiftieTimeline.TTPD_INDEX
+        val finalTrack = SwiftieTimeline.ERA_TRACK_COUNTS[index]
+        val cue = score.of(SwiftieHapticCueKind.TRACKLIST_DONE)[index]
+        // TTPD 的时间窗是 130 × 31 + 3000；从卡内 400ms 的逐行起点算起，
+        // 最后一记落在 400 + 7030ms
+        assertThat(SwiftieTimeline.TTPD_TRACK_REVEAL_MS).isEqualTo(7_030L)
+        assertThat(trackRowRevealAtMs(index, finalTrack, lowRam = false))
+            .isEqualTo(400L + SwiftieTimeline.TTPD_TRACK_REVEAL_MS)
+        assertThat(cue.atMs)
+            .isEqualTo(
+                SwiftieTimeline.eraStartMs(index) + 400L +
+                    SwiftieTimeline.TTPD_TRACK_REVEAL_MS
+            )
     }
 
     @Test

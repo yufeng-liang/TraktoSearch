@@ -27,9 +27,9 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.DIFFUSION_START).isEqualTo(400L)
         assertThat(SwiftieTimeline.ERAS_INTRO_START).isEqualTo(1_100L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START).isEqualTo(3_100L)
-        assertThat(SwiftieTimeline.ERAS_CARDS_END).isEqualTo(102_010L)
-        assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(102_010L)
-        assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(107_410L)
+        assertThat(SwiftieTimeline.ERAS_CARDS_END).isEqualTo(105_010L)
+        assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(105_010L)
+        assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(110_410L)
         assertThat(SwiftieTimeline.LOVER_BLOOM_START).isEqualTo(119_500L)
         assertThat(SwiftieTimeline.FADE_OUT_START).isEqualTo(123_000L)
     }
@@ -61,8 +61,8 @@ class SwiftieTimelineTest {
     @Test
     fun finalHoldAbsorbsTheSlackAndNeverGoesNegative() {
         // 唯一的弹性段：曲目数或 TTPD 前摇一改，误差全落在这里，不许把 Lover 绽放挤出配乐。
-        // 2026-09-13 手链并进签名、签名提速之后，这里从 4690 涨到 10590
-        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(10_590L)
+        // 2026-09-18：TTPD 逐行打印加 3000ms，从定格挪出同样长度，10590 → 7590
+        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(7_590L)
         assertThat(SwiftieTimeline.FINAL_HOLD_MS).isGreaterThan(0L)
         assertThat(SwiftieTimeline.FINAL_HOLD_START + SwiftieTimeline.FINAL_HOLD_MS)
             .isEqualTo(SwiftieTimeline.REWIND_START)
@@ -76,12 +76,12 @@ class SwiftieTimelineTest {
 
     @Test
     fun cardDurationsFollowTrackCountWithAnchorBonus() {
-        // 5900 + 130n；第 1、7 张 +600
-        assertThat(SwiftieTimeline.cardDurationMs(index = 0, trackCount = 11)).isEqualTo(7_930L)
+        // 5900 + 130n；只有 Lover 多停 600ms
+        assertThat(SwiftieTimeline.cardDurationMs(index = 0, trackCount = 11)).isEqualTo(7_330L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 1, trackCount = 13)).isEqualTo(7_590L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 6, trackCount = 18)).isEqualTo(8_840L)
-        // TTPD 用 Anthology 版 31 首，还要加 2600ms 打字机前摇，是最长的一张
-        assertThat(SwiftieTimeline.cardDurationMs(index = 10, trackCount = 31)).isEqualTo(12_530L)
+        // TTPD 用 Anthology 版 31 首，另有 3200ms 打字机前摇 + 3000ms 逐行放慢
+        assertThat(SwiftieTimeline.cardDurationMs(index = 10, trackCount = 31)).isEqualTo(16_130L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 11, trackCount = 12)).isEqualTo(7_460L)
     }
 
@@ -90,7 +90,7 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS).hasSize(12)
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS[10]).isEqualTo(31)
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(187)
-        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(98_910L)
+        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(101_910L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START + SwiftieTimeline.ERAS_CARDS_MS)
             .isEqualTo(SwiftieTimeline.ERAS_CARDS_END)
     }
@@ -98,22 +98,22 @@ class SwiftieTimelineTest {
     @Test
     fun eraLookupIsContiguousAndClamped() {
         assertThat(SwiftieTimeline.eraStartMs(0)).isEqualTo(3_100L)
-        assertThat(SwiftieTimeline.eraStartMs(1)).isEqualTo(3_100L + 7_930L)
+        assertThat(SwiftieTimeline.eraStartMs(1)).isEqualTo(3_100L + 7_330L)
         assertThat(SwiftieTimeline.eraIndexAt(0L)).isNull()
         assertThat(SwiftieTimeline.eraIndexAt(3_100L)).isEqualTo(0)
-        assertThat(SwiftieTimeline.eraIndexAt(3_100L + 7_929L)).isEqualTo(0)
-        assertThat(SwiftieTimeline.eraIndexAt(3_100L + 7_930L)).isEqualTo(1)
-        // 第 12 张（TTPD 之后那张）也变长了 —— 前摇加在 TTPD 身上，它后面那张跟着往后挪
-        assertThat(SwiftieTimeline.eraIndexAt(100_809L)).isEqualTo(11)
+        assertThat(SwiftieTimeline.eraIndexAt(3_100L + 7_329L)).isEqualTo(0)
+        assertThat(SwiftieTimeline.eraIndexAt(3_100L + 7_330L)).isEqualTo(1)
+        // 第 12 张（TTPD 之后那张）也变长了 —— TTPD 的加时加在它身上，它跟着往后挪
+        assertThat(SwiftieTimeline.eraIndexAt(104_000L)).isEqualTo(11)
         // 边界必须是卡片段末尾，不是 REWIND_START —— 终局夹在两者之间
-        assertThat(SwiftieTimeline.eraIndexAt(102_010L)).isNull()
+        assertThat(SwiftieTimeline.eraIndexAt(105_010L)).isNull()
         assertThat(SwiftieTimeline.eraIndexAt(112_000L)).isNull()
     }
 
     @Test
     fun motionPreheatSitsInsideTheSignatureSegment() {
-        // 106s 不出帧，写完签名前 1260ms 才预热运动
-        assertThat(SwiftieTimeline.MOTION_PREHEAT_AT).isEqualTo(106_150L)
+        // 签名段整体后移 3s，预热仍停在收笔前 260ms
+        assertThat(SwiftieTimeline.MOTION_PREHEAT_AT).isEqualTo(109_150L)
         assertThat(SwiftieTimeline.MOTION_PREHEAT_AT)
             .isGreaterThan(SwiftieTimeline.SIGNATURE_START)
         // 预热必须在终局段内跑完：写完之后就是定格合影，一帧都不该再出

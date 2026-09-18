@@ -34,6 +34,7 @@ import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /** 卡片长出用 400ms，曲目从第 400ms 起逐行点亮。 */
 const val TRACK_REVEAL_START_MS: Long = 400L
@@ -43,6 +44,30 @@ const val TRACK_STAGGER_MS: Long = 130L
 
 /** 低端机加快到 70ms。**单张卡片总时长不变**，省下的并进停留。 */
 const val TRACK_STAGGER_LOW_RAM_MS: Long = 70L
+
+/**
+ * 第 [rowIndex] 行的揭示起点（卡内毫秒）。
+ *
+ * 其余 11 张沿用固定 130ms；TTPD 走账本里放慢后的逐行时间表。
+ * [rowIndex] 允许等于曲目数；对 TTPD 来说返回值就是整列打印结束的时刻，
+ * 其余 11 张的第 N 行起点正是旧时间表里「最后一行的下一拍」。
+ */
+internal fun trackRowRevealAtMs(
+    eraIndex: Int,
+    rowIndex: Int,
+    lowRam: Boolean
+): Long {
+    if (eraIndex == SwiftieTimeline.TTPD_INDEX && !lowRam) {
+        // 取整只在这一处发生，UI 与触感拿到的是同一个毫秒数
+        return (
+            TRACK_REVEAL_START_MS +
+                SwiftieTimeline.TTPD_TRACK_REVEAL_MS.toDouble() * rowIndex /
+                SwiftieTimeline.ERA_TRACK_COUNTS[SwiftieTimeline.TTPD_INDEX]
+            ).roundToLong()
+    }
+    val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
+    return TRACK_REVEAL_START_MS + stagger * rowIndex
+}
 
 /** 单行淡入时长。 */
 private const val TRACK_FADE_MS: Float = 220f
@@ -108,7 +133,6 @@ internal fun SwiftieEraTracklist(
     modifier: Modifier = Modifier
 ) {
     val lowRam = rememberIsLowRamDevice()
-    val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
     val gildedRow = gildedRowIndex(eraIndex)
     // TTPD 那一张的曲目列是**打字机打的**：字号换 Special Elite（子集化的打字机字体），
     // 逐行点亮换成「打字头从左往右走过一行」。其余 11 张与压缩前逐像素一致
@@ -157,7 +181,10 @@ internal fun SwiftieEraTracklist(
         modifier = modifier.clearAndSetSemantics { }
     ) {
         era.tracks.forEachIndexed { index, title ->
-            val appearAt = TRACK_REVEAL_START_MS + stagger * index
+            val appearAt = trackRowRevealAtMs(eraIndex, index, lowRam)
+            val revealSpan = (
+                trackRowRevealAtMs(eraIndex, index + 1, lowRam) - appearAt
+                ).coerceAtLeast(1L)
             val gilded = index == gildedRow
             // 自下而上：末行先收，首行最后收。描金那一行不收 —— 它是留下来的那一行，
             // 上面几行收干净之后它自然贴到日期底下
@@ -194,7 +221,7 @@ internal fun SwiftieEraTracklist(
                                 }
                                 .typingRow(
                                     progress = {
-                                        ((elapsedInCard() - appearAt).toFloat() / stagger)
+                                        ((elapsedInCard() - appearAt).toFloat() / revealSpan)
                                             .coerceIn(0f, 1f)
                                     },
                                     numberWidth = numberWidth,

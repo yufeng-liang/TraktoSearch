@@ -1,7 +1,7 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.compose.animation.core.EaseInCubic
-import androidx.compose.animation.core.EaseOutBack
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
 
 /** 卡片自轴上长出。 */
@@ -88,7 +89,7 @@ private const val FEED_CLIP_OVERHANG_FRACTION = 0.10f
  */
 private val FEED_ROLLER_INK = Color(0xFF4A453E)
 
-/** 停留供阅读。第 1、7 张另有 `CARD_ANCHOR_BONUS_MS`，由 `durationMs` 带进来。 */
+/** 停留供阅读。Lover 另有 `CARD_ANCHOR_BONUS_MS`，由 `durationMs` 带进来。 */
 const val CARD_HOLD_MS: Long = 5_000L
 
 /** 卡片回落。 */
@@ -178,9 +179,13 @@ fun SwiftieEraCard(
     // 浅色时代主色印在白卡上读不出来，这里取压暗到 AA 的那一组（见 SwiftieEraContrast）
     val textColors = remember(era) { SwiftieEraTextColors(era) }
     val rowHeight = trackRowHeight(slotHeight, era.tracks.size)
-    // 曲目列的 stagger 必须与 `SwiftieEraTracklist` 用的同一个值 —— 让位窗口是按
-    // 「第几行正在点亮」算的，两边错开一档，压下去的就是隔壁那一行
-    val stagger = if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS
+    // 让位窗口的节拍必须与 `SwiftieEraTracklist` 用同一个来源 —— TTPD 走放慢后的时间表，
+    // 其余 11 张仍是 130ms；两边错开一档，压下去的就是隔壁那一行
+    val stagger = if (eraIndex == SwiftieTimeline.TTPD_INDEX && !lowRam) {
+        SwiftieTimeline.TTPD_TRACK_REVEAL_MS.toFloat() / era.tracks.size
+    } else {
+        (if (lowRam) TRACK_STAGGER_LOW_RAM_MS else TRACK_STAGGER_MS).toFloat()
+    }
     // era.tracks 是常量列表，「哪几行算长歌名」在组合阶段算一次，draw 阶段只查表
     val longTitles = remember(era) {
         BooleanArray(era.tracks.size) { era.tracks[it].length > LONG_TITLE_CHARS }
@@ -240,7 +245,7 @@ fun SwiftieEraCard(
         }
         Modifier.drawWithContent {
             val p = feedProgress().coerceIn(0f, 1f)
-            // 前摇那 1400ms 里 p 恒为 0：一笔不画，卡片连阴影都不存在
+            // 打字机前摇里 p 恒为 0：一笔不画，卡片连阴影都不存在
             if (p <= 0f) return@drawWithContent
             // 纸从底下那台机器里**往上**出来：下缘钉死在出口上，前沿（纸的上边）上移
             val frontier = size.height * (1f - p)
@@ -301,9 +306,10 @@ fun SwiftieEraCard(
                     scaleY = 1f - recede
                     alpha = 1f - recede
                 } else {
-                    // EaseOutBack 会冲过 1 再收回来，读起来像琴键被按下又弹起。
-                    // 峰值约 1.1，只持续几帧，12sp 文字的形变看不出来
-                    val grow = EaseOutBack.transform(
+                    // 2026-09-18：去掉 EaseOutBack 的过冲。卡片一次长大到位，
+                    // 不再冲过 1 再收回来的回弹。EaseOutCubic 单调收敛，仍保留起步快、
+                    // 收尾稳的手感
+                    val grow = EaseOutCubic.transform(
                         (elapsed.toFloat() / CARD_GROW_MS).coerceIn(0f, 1f)
                     )
                     scaleY = grow * (1f - recede)
@@ -513,12 +519,12 @@ private const val COLUMN_YIELD_HOLD_MS = 420f
  * 只回看 5 行：整个窗口 720ms，130ms 一行，`720 ÷ 130 ≈ 5.5`，
  * 所以**定长循环**就够，不用每帧扫 31 行。低端机不走这里（母题整块定格）。
  */
-private fun columnFadeAt(elapsed: Long, longTitles: BooleanArray, stagger: Long): Float {
+private fun columnFadeAt(elapsed: Long, longTitles: BooleanArray, stagger: Float): Float {
     val cursor = ((elapsed - TRACK_REVEAL_START_MS) / stagger).toInt()
     var strongest = 0f
     for (index in (cursor - 5)..(cursor + 1)) {
         if (index < 0 || index >= longTitles.size || !longTitles[index]) continue
-        val since = (elapsed - (TRACK_REVEAL_START_MS + stagger * index)).toFloat()
+        val since = elapsed - (TRACK_REVEAL_START_MS + stagger * index)
         val envelope = when {
             since < -COLUMN_YIELD_RAMP_MS -> 0f
             since < 0f -> 1f + since / COLUMN_YIELD_RAMP_MS

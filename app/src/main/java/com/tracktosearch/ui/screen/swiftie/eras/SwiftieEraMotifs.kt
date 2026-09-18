@@ -2833,8 +2833,13 @@ private const val QUILL_FILL_WEIGHT = 1f / PROP_ALPHA
  */
 private const val QUILL_SHAFT_WIDTH = 0.012f
 
-/** 那句话写完实际花掉的墙钟时长。写完墨就留在那儿，笔退场。 */
-private const val LETTER_WRITE_WALL_MS = 3_200L
+/**
+ * 那句话写完实际花掉的墙钟时长。写完墨就留在那儿，笔退场。
+ *
+ * 2026-09-18：3200 → 4700（同 1.5x），与 [LETTER_WRITE_MS] / [LETTER_PAUSE_MS]
+ * 的放慢保持一致。
+ */
+private const val LETTER_WRITE_WALL_MS = 4_700L
 
 /** 抬笔之后笔淡走的时长。 */
 private const val QUILL_RETIRE_MS = 420L

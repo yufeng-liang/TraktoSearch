@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.swiftie
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
 import org.junit.Test
 
 /**
@@ -68,13 +69,14 @@ class SwiftieHapticConductorTest {
         val dispatchedBeforeSeek = recorder.performed.size
 
         // 用户把轴线拖到第 7 张卡。拨过那一帧一记都不许发
-        val onSeek = conductor.onFrame(elapsedMs = 50_000L, seekEpoch = 1, muted = false)
+        val loverLanding = SwiftieTimeline.eraStartMs(6) + CARD_GROW_MS
+        val onSeek = conductor.onFrame(elapsedMs = loverLanding - 160L, seekEpoch = 1, muted = false)
         assertThat(onSeek).isEmpty()
-        // 跨过去的那 11 记（5 记落地 + 6 记曲目列收尾）就此作废，不排队等着
+        // 跨过去的那些记（5 记落地 + 6 记曲目列收尾）就此作废，不排队等着
         assertThat(recorder.performed).hasSize(dispatchedBeforeSeek)
 
-        // 拨完之后从新位置接着走：50160 是第 7 张（Lover，锚点）落地
-        val after = conductor.onFrame(elapsedMs = 50_200L, seekEpoch = 1, muted = false)
+        // 拨完之后从新位置接着走：Lover 的落地在它自己的段首 + 400ms
+        val after = conductor.onFrame(elapsedMs = loverLanding + 40L, seekEpoch = 1, muted = false)
         assertThat(after.map { it.kind })
             .containsExactly(SwiftieHapticCueKind.CARD_LAND_ANCHOR)
         assertThat(recorder.performed.last()).isEqualTo(HapticSemantic.CONFIRM)

@@ -5120,7 +5120,7 @@ private fun DrawScope.drawMidnightClock(
  *
  * ## 卡片就是这台机器吐上来的那张纸
  *
- * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 2600ms 里屏幕上没有卡片：机器把专辑名
+ * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 3200ms 里屏幕上没有卡片：机器把专辑名
  * 那两行**一个字一个字**打在露头的那截纸上（见 [drawTypewriterStub]），然后纸开始往上走
  * —— 那张纸就是曲目卡片（揭示由 `SwiftieEraCard` 的 `feedProgress` 做，下缘钉死在压纸杆
  * 上、上缘上移）。真机正是这个方向：印字点在压纸辊上不动、纸往上卷，越早打的行越靠上
@@ -5183,7 +5183,7 @@ private fun DrawScope.drawTypewriterDesk(
  * 打字机本体：底图 + 「正在打」的叠加层。
  *
  * [eraMs] 为负 = 待机（换张淡变期，本段还没开始）：两行字已经打完，灯下是一页静纸，
- * 不敲也不抖。整段 11.3s 里机器一直在打，打的就是屏幕上正在逐行点亮的那 31 首 ——
+ * 不敲也不抖。从前摇到 31 行打完，机器一直在打，打的就是屏幕上正在逐行点亮的那 31 首 ——
  * 节拍按 [TTPD_PREROLL_MS] 里的字符数均分，于是**前摇正好打完两行**，不多不少。
  */
 private fun DrawScope.drawTypewriter(

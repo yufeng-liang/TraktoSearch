@@ -51,16 +51,21 @@ private const val REF_FONT = 100f
 /**
  * 整句话的**书写**部分占用的毫秒。抬笔停顿另算（[LETTER_PAUSE_MS]）—— 两者相加才是墨的
  * 总时长（`SwiftieLetterArt.writeEndMs`），按写字进度映射时要按总时长收口。
+ *
+ * 2026-09-18：2600 → 3900（约 1.5x）。逐行打印和羽毛笔共用 TTPD 卡片新增的
+ * 3000ms，不再从定格额外扣时间。
  */
-internal const val LETTER_WRITE_MS: Long = 2_600L
+internal const val LETTER_WRITE_MS: Long = 3_900L
 
 /**
  * 抬笔停顿合计，按 `SwiftieLetterPath.PAUSE_WEIGHT` 分给 26 个间隙。
  *
  * 与那台打字机的手速对齐：它 86ms 打一个字符，这里的笔 93ms 写一个字符 ——
  * 同一张卡片上两处「正在写」的速度一样，才不会一处像快进、一处像慢放。
+ *
+ * 2026-09-18：500 → 750，和 [LETTER_WRITE_MS] 同一比例放慢。
  */
-internal const val LETTER_PAUSE_MS: Long = 500L
+internal const val LETTER_PAUSE_MS: Long = 750L
 
 /**
  * 一句话的墨：字形轮廓 + 分笔的中线 + 时间表。

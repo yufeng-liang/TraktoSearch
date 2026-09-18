@@ -5,9 +5,8 @@ import com.tracktosearch.ui.screen.swiftie.eras.AXIS_TICK_FADE_IN_AT
 import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SWIFTIE_ERA_EDGES
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
-import com.tracktosearch.ui.screen.swiftie.eras.TRACK_REVEAL_START_MS
-import com.tracktosearch.ui.screen.swiftie.eras.TRACK_STAGGER_MS
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieEraCenterFraction
+import com.tracktosearch.ui.screen.swiftie.eras.trackRowRevealAtMs
 import kotlin.math.roundToInt
 
 /**
@@ -317,14 +316,14 @@ private fun axisIntroCues(): List<SwiftieHapticCue> = listOf(
  * 卡片段：**总共 24 记**，12 张卡各一记落地 + 12 段曲目列铺完各一记收尾。
  *
  * - 落地落在长出走完那一刻（`eraStartMs(i) + CARD_GROW_MS`），不是起手那一刻：
- *   `SwiftieEraCard` 的 `EaseOutBack` 在这里才收住，手上那一记要和眼里那一下对齐。
+ *   `SwiftieEraCard` 的入场曲线在这里收住，手上那一记要和眼里那一下对齐。
  * - 锚点两张（`ANCHOR_INDICES` = Taylor Swift、Lover）用 `CONFIRM`，tier 1 上是
  *   `CLICK` + `THUD` 两笔，tier 0 上是 `CONFIRM`（退 `VIRTUAL_KEY`）；其余十张用
  *   `GESTURE_END`，tier 1 上是半幅 `THUD`，tier 0 上退到 `CLOCK_TICK`
  *   —— 正是设计文档给这两行标的「最低层」`tap()` 与 `lightTap()`。
  * - 曲目列收尾用 `FREQUENT_TICK`（整条梯度最轻的一档）：它是一句话的句号，
- *   不该盖过同一张卡的落地。时刻取自 `TRACK_REVEAL_START_MS + stagger × 曲目数`，
- *   与 `SwiftieEraTracklist` 里最后一行淡入的起点同一个式子。
+ *   不该盖过同一张卡的落地。时刻由 `trackRowRevealAtMs` 派生 —— TTPD 会走放慢后的
+ *   逐行时间表，其余 11 张仍是原来的 `TRACK_REVEAL_START_MS + stagger × 曲目数`。
  */
 private fun erasCardCues(): List<SwiftieHapticCue> =
     SwiftieTimeline.ERA_TRACK_COUNTS.flatMapIndexed { index, trackCount ->
@@ -341,7 +340,11 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
                 semantic = if (anchored) HapticSemantic.CONFIRM else HapticSemantic.GESTURE_END,
             ),
             SwiftieDiscreteCue(
-                atMs = start + TRACK_REVEAL_START_MS + TRACK_STAGGER_MS * trackCount,
+                atMs = start + trackRowRevealAtMs(
+                    eraIndex = index,
+                    rowIndex = trackCount,
+                    lowRam = false,
+                ),
                 kind = SwiftieHapticCueKind.TRACKLIST_DONE,
                 semantic = HapticSemantic.FREQUENT_TICK,
             ),

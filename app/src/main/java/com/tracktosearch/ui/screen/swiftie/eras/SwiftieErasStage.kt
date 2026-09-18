@@ -95,7 +95,7 @@ fun SwiftieErasStage(
     // 每帧变的量只在 draw lambda 里读；组合里只读这一个「翻转 12 次」的派生量
     val activeIndex by remember { derivedStateOf { activeEraIndexAt(clock.elapsedMs) } }
     val era = SwiftieErasData.ALL[activeIndex]
-    // TTPD 段头 1400ms 是打字机独奏，卡片的内部时钟整体后移这么多；
+    // TTPD 段头是打字机独奏，卡片的内部时钟按 `TTPD_PREROLL_MS` 整体后移；
     // 卡片自己的总时长因此要把前摇减掉，回落点才仍落在段末 500ms 处
     val prerollMs = if (activeIndex == SwiftieTimeline.TTPD_INDEX) {
         SwiftieTimeline.TTPD_PREROLL_MS
