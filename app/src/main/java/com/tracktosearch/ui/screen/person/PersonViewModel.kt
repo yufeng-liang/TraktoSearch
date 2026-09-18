@@ -195,6 +195,8 @@ class PersonViewModel @Inject constructor(
                 }
 
                 loaded = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _uiState.value = PersonUiState(error = context.getString(R.string.error_load_failed))
             }
@@ -346,6 +348,8 @@ class PersonViewModel @Inject constructor(
                         traktPersonFetchTime.put(tmdbId, System.currentTimeMillis())
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // 静默失败，不影响页面正常显示
                 _uiState.value = _uiState.value.copy(isLoadingTrakt = false)
@@ -382,6 +386,8 @@ class PersonViewModel @Inject constructor(
                     }
                     _uiState.value = _uiState.value.copy(personImages = existing)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
             } finally {
                 // 更新缓存为最终合并结果
@@ -410,6 +416,8 @@ class PersonViewModel @Inject constructor(
                     isLoadingMoreMovies = false,
                     loadMoreMoviesError = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingMoreMovies = false, loadMoreMoviesError = true)
             }
@@ -432,6 +440,8 @@ class PersonViewModel @Inject constructor(
                     isLoadingMoreTvShows = false,
                     loadMoreTvShowsError = false
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingMoreTvShows = false, loadMoreTvShowsError = true)
             }
@@ -470,6 +480,8 @@ class PersonViewModel @Inject constructor(
                         emitResultToastNow(R.string.card_resolve_not_found, HapticOutcome.FAILURE)
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // 忽略异常，确保 resolvingTmdbId 被清空
             } finally {

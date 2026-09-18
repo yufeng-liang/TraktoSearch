@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -372,9 +373,6 @@ fun PersonScreen(
                                             }
                                             if (uiState.movieCredits.isNotEmpty()) {
                                                 item(key = "movie_load_more") {
-                                                    if (uiState.hasMoreMovies && !uiState.isLoadingMoreMovies && !uiState.loadMoreMoviesError) {
-                                                        LaunchedEffect(Unit) { viewModel.loadMoreMovies() }
-                                                    }
                                                     LoadMoreFooter(
                                                         state = when {
                                                             uiState.isLoadingMoreMovies -> LoadMoreFooterState.Loading
@@ -387,6 +385,19 @@ fun PersonScreen(
                                                     )
                                                 }
                                             }
+                                        }
+                                        // 页脚滚进视口才触发翻页。历史上这里把 LaunchedEffect(Unit) 写在
+                                        // 「可加载」条件分支内：效果体置 isLoadingMore 后条件变假、效果被销毁，
+                                        // 请求一回来条件又变真、立即再拉——页脚路过一次就把所有页串行拉完
+                                        LaunchedEffect(movieCreditsRowState, uiState.movieCredits.size) {
+                                            snapshotFlow { movieCreditsRowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+                                                .collect { lastVisible ->
+                                                    if (lastVisible != null && lastVisible >= uiState.movieCredits.size &&
+                                                        uiState.hasMoreMovies && !uiState.isLoadingMoreMovies && !uiState.loadMoreMoviesError
+                                                    ) {
+                                                        viewModel.loadMoreMovies()
+                                                    }
+                                                }
                                         }
                                     }
                                 }
@@ -464,9 +475,6 @@ fun PersonScreen(
                                             }
                                             if (uiState.tvCredits.isNotEmpty()) {
                                                 item(key = "tv_load_more") {
-                                                    if (uiState.hasMoreTvShows && !uiState.isLoadingMoreTvShows && !uiState.loadMoreTvShowsError) {
-                                                        LaunchedEffect(Unit) { viewModel.loadMoreTvShows() }
-                                                    }
                                                     LoadMoreFooter(
                                                         state = when {
                                                             uiState.isLoadingMoreTvShows -> LoadMoreFooterState.Loading
@@ -479,6 +487,17 @@ fun PersonScreen(
                                                     )
                                                 }
                                             }
+                                        }
+                                        // 理由同电影行：页脚滚进视口才触发翻页，防自动续拉到底
+                                        LaunchedEffect(tvCreditsRowState, uiState.tvCredits.size) {
+                                            snapshotFlow { tvCreditsRowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+                                                .collect { lastVisible ->
+                                                    if (lastVisible != null && lastVisible >= uiState.tvCredits.size &&
+                                                        uiState.hasMoreTvShows && !uiState.isLoadingMoreTvShows && !uiState.loadMoreTvShowsError
+                                                    ) {
+                                                        viewModel.loadMoreTvShows()
+                                                    }
+                                                }
                                         }
                                     }
                                 }
