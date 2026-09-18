@@ -68,6 +68,9 @@ class DoubanBatchRemovalService : Service() {
         when (intent?.action) {
             ACTION_CANCEL -> {
                 batchRemovalManager.cancel()
+                // 取消是异步过程，保留 Service 直到 Manager 发布最终状态（与 DoubanSyncService、
+                // ConsistencyCheckService 同一约定）。历史上这里立即 stopSelf，服务撤下通知后
+                // Manager 发布的 CANCELLED/DONE 没有任何落点，取消失败项无从知晓
                 try {
                     val cancellingNotif = buildNotification(
                         batchRemovalManager.progress.value.current,
@@ -76,7 +79,6 @@ class DoubanBatchRemovalService : Service() {
                     )
                     getSystemService(NotificationManager::class.java).notify(NOTIF_ID, cancellingNotif)
                 } catch (_: Exception) {}
-                stopSelf()
                 return START_NOT_STICKY
             }
             ACTION_START -> {
