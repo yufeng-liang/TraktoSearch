@@ -99,6 +99,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1322,7 +1323,10 @@ fun DoubanItemDetailScreen(
                 derivedStateOf { listState.firstVisibleItemIndex >= 2 }
             }
             val pinnedBarColor = detailBarColor()
-            val barColor by animateColorAsState(
+            // 持有 State 不用 by 解包：吸顶瞬间颜色渐变 180ms，消费方在 drawBehind 里读 .value，
+            // 动画每帧只触发重绘；若在组合期读，stickyHeader 含 TabRow 的整块内容会逐帧重组
+            // （与 DetailScreen 同一修法，详见那边注释）。
+            val barColorState = animateColorAsState(
                 targetValue = if (isPinned) pinnedBarColor else Color.Transparent,
                 animationSpec = tween(durationMillis = 180),
                 label = "doubanBarColor"
@@ -1358,7 +1362,7 @@ fun DoubanItemDetailScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(barColor)
+                    .drawBehind { drawRect(barColorState.value) }
                     .align(Alignment.TopCenter)
             )
 
@@ -1431,7 +1435,7 @@ fun DoubanItemDetailScreen(
                         Column(
                             modifier = Modifier
                                 .alpha(contentAlpha)
-                                .background(barColor)
+                                .drawBehind { drawRect(barColorState.value) }
                         ) {
                             Box(
                                 modifier = Modifier
