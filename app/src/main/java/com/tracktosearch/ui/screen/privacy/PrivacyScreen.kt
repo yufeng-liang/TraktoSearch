@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -148,8 +149,8 @@ fun PrivacyScreen(
             )
         }
     }
-    val aiTasteEnabled by viewModel.aiTasteEnabled.collectAsStateWithLifecycle()
-    val crashLogEnabled by viewModel.crashLogEnabled.collectAsStateWithLifecycle()
+    val aiTasteState by viewModel.aiTasteState.collectAsStateWithLifecycle()
+    val crashLogState by viewModel.crashLogState.collectAsStateWithLifecycle()
     val aiProfileSettings by viewModel.aiProfileSettings.collectAsStateWithLifecycle()
     val privacyMessage by viewModel.message.collectAsStateWithLifecycle()
     var showClearAiProfileDialog by remember { mutableStateOf(false) }
@@ -205,7 +206,7 @@ fun PrivacyScreen(
                         ) {
                             AiDataSwitchGroup(
                                 settings = aiProfileSettings,
-                                aiTasteEnabled = aiTasteEnabled,
+                                aiTasteState = aiTasteState,
                                 onAiTasteChanged = viewModel::setAiTasteEnabled,
                                 onProfileConsentChanged = viewModel::setAiProfileConsent,
                                 onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
@@ -227,7 +228,9 @@ fun PrivacyScreen(
                             iconTint = MaterialTheme.colorScheme.error,
                             title = stringResource(R.string.settings_crash_log_title),
                             subtitle = stringResource(R.string.settings_crash_log_subtitle),
-                            checked = crashLogEnabled,
+                            checked = crashLogState.checked,
+                            loading = !crashLogState.isLoaded,
+                            enabled = crashLogState.isLoaded,
                             onToggle = { viewModel.setCrashLogEnabled(it) }
                         )
                         GroupDivider()
@@ -467,6 +470,7 @@ private fun PrivacySwitchRow(
     checked: Boolean,
     onToggle: (Boolean) -> Unit,
     enabled: Boolean = true,
+    loading: Boolean = false,
     indent: Boolean = false
 ) {
     val isDark = isAppDarkTheme()
@@ -474,12 +478,13 @@ private fun PrivacySwitchRow(
     val iconBoxSize = if (indent) 34.dp else 40.dp
     val iconSize = if (indent) 19.dp else 22.dp
     val titleSize = if (indent) 14.sp else 15.sp
+    val interactive = enabled && !loading
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (enabled) 1f else DISABLED_ROW_ALPHA)
+            .alpha(if (enabled || loading) 1f else DISABLED_ROW_ALPHA)
             .hapticClickable(
-                enabled = enabled,
+                enabled = interactive,
                 semantic = if (checked) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
             ) { onToggle(!checked) }
             .padding(
@@ -524,12 +529,27 @@ private fun PrivacySwitchRow(
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Switch(
-            checked = checked,
-            enabled = enabled,
-            onCheckedChange = { haptics.toggle(it); onToggle(it) },
-            colors = appSwitchColors()
-        )
+        if (loading) {
+            Box(
+                modifier = Modifier
+                    .width(52.dp)
+                    .height(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        } else {
+            Switch(
+                checked = checked,
+                enabled = enabled,
+                onCheckedChange = { haptics.toggle(it); onToggle(it) },
+                colors = appSwitchColors()
+            )
+        }
     }
 }
 
@@ -1268,7 +1288,7 @@ private fun PrivacyActionRow(
 @Composable
 private fun ColumnScope.AiDataSwitchGroup(
     settings: AiProfileSettingsState,
-    aiTasteEnabled: Boolean,
+    aiTasteState: PrivacySwitchState,
     onAiTasteChanged: (Boolean) -> Unit,
     onProfileConsentChanged: (Boolean) -> Unit,
     onPersonalizationChanged: (Boolean) -> Unit,
@@ -1276,6 +1296,7 @@ private fun ColumnScope.AiDataSwitchGroup(
     onSyncChanged: (Boolean) -> Unit
 ) {
     val isBusy = settings.isLoading || settings.isUpdating
+    val isInitialLoading = !settings.isLoaded
     PrivacySwitchRow(
         icon = Icons.Rounded.Psychology,
         iconTint = MaterialTheme.colorScheme.primary,
@@ -1286,7 +1307,8 @@ private fun ColumnScope.AiDataSwitchGroup(
         ),
         checked = settings.profileConsent,
         onToggle = onProfileConsentChanged,
-        enabled = settings.isAvailable && !isBusy
+        enabled = settings.isAvailable && !isBusy,
+        loading = isInitialLoading
     )
     GroupDivider()
     PrivacySwitchRow(
@@ -1304,6 +1326,7 @@ private fun ColumnScope.AiDataSwitchGroup(
         checked = settings.personalizationEnabled,
         onToggle = onPersonalizationChanged,
         enabled = settings.isAvailable && settings.profileConsent && !isBusy,
+        loading = isInitialLoading,
         indent = true
     )
     GroupDivider()
@@ -1314,7 +1337,8 @@ private fun ColumnScope.AiDataSwitchGroup(
         subtitle = stringResource(R.string.settings_ai_behavior_consent_desc),
         checked = settings.behaviorConsent,
         onToggle = onBehaviorConsentChanged,
-        enabled = settings.isAvailable && !isBusy
+        enabled = settings.isAvailable && !isBusy,
+        loading = isInitialLoading
     )
     GroupDivider()
     PrivacySwitchRow(
@@ -1324,7 +1348,8 @@ private fun ColumnScope.AiDataSwitchGroup(
         subtitle = stringResource(R.string.settings_ai_cloud_sync_desc),
         checked = settings.syncEnabled,
         onToggle = onSyncChanged,
-        enabled = settings.isAvailable && !isBusy
+        enabled = settings.isAvailable && !isBusy,
+        loading = isInitialLoading
     )
     GroupDivider()
     PrivacySwitchRow(
@@ -1332,7 +1357,9 @@ private fun ColumnScope.AiDataSwitchGroup(
         iconTint = MaterialTheme.colorScheme.primary,
         title = stringResource(R.string.ai_feature_taste),
         subtitle = stringResource(R.string.settings_ai_taste_subtitle),
-        checked = aiTasteEnabled,
-        onToggle = onAiTasteChanged
+        checked = aiTasteState.checked,
+        onToggle = onAiTasteChanged,
+        enabled = aiTasteState.isLoaded,
+        loading = !aiTasteState.isLoaded
     )
 }

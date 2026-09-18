@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -40,6 +42,18 @@ data class PrivacyMessage(
 )
 
 /**
+ * 本地偏好开关的界面状态。
+ *
+ * [isLoaded] 为 false 时 [checked] 只是占位值，界面必须展示加载态，
+ * 避免 DataStore 首值到达前先把默认 false 画成真实状态。
+ */
+@Immutable
+data class PrivacySwitchState(
+    val checked: Boolean = false,
+    val isLoaded: Boolean = false
+)
+
+/**
  * AI 画像开关组的界面状态。
  *
  * [isAvailable] 是「有没有可归属的 friendId」：画像、行为计数与同步批次都按
@@ -52,6 +66,7 @@ data class AiProfileSettingsState(
     val behaviorConsent: Boolean = false,
     val personalizationEnabled: Boolean = false,
     val syncEnabled: Boolean = true,
+    val isLoaded: Boolean = false,
     val isLoading: Boolean = false,
     val isUpdating: Boolean = false
 ) {
@@ -63,8 +78,8 @@ data class AiProfileSettingsState(
  *
  * 独立于 SettingsViewModel 自建（设置页原「AI 与隐私」分组与崩溃日志开关行
  * 迁入本页），逻辑与原 SettingsViewModel 中的实现保持一致：
- * - AI taste 开关：存储层是冷 Flow，stateIn 起来给开关绑定；首值落地前用默认 true 占位
- * - 崩溃日志开关：存储层已是 StateFlow（默认 false），直接透传
+ * - AI taste 开关：存储层是冷 Flow，首值落地前只做占位，界面显示加载态
+ * - 崩溃日志开关：存储层是 StateFlow，结合已加载标记避免首值前显示默认值
  * - AI 画像开关组：按 friendId 隔离，云端写入失败时整体回滚
  */
 @HiltViewModel
@@ -77,12 +92,29 @@ class PrivacyViewModel @Inject constructor(
     private val authManager: AuthManager
 ) : ViewModel() {
 
-    /** 「AI 锐评看单」数据上传开关（默认开启） */
-    val aiTasteEnabled: StateFlow<Boolean> = aiTasteStorage.tasteUploadEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    /** 「AI 锐评看单」数据上传开关（默认开启，DataStore 首值到达前显示加载态） */
+    val aiTasteState: StateFlow<PrivacySwitchState> = aiTasteStorage.tasteUploadEnabled
+        .map { PrivacySwitchState(checked = it, isLoaded = true) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            PrivacySwitchState(checked = true)
+        )
 
-    /** 崩溃日志上报开关（默认关闭，需用户授权） */
-    val crashLogEnabled: StateFlow<Boolean> = crashLogStorage.enabled
+    /** 崩溃日志上报开关（默认关闭，需用户授权且 DataStore 已读完） */
+    val crashLogState: StateFlow<PrivacySwitchState> = combine(
+        crashLogStorage.enabled,
+        crashLogStorage.loaded
+    ) { enabled, loaded ->
+        PrivacySwitchState(checked = enabled, isLoaded = loaded)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        PrivacySwitchState(
+            checked = crashLogStorage.enabled.value,
+            isLoaded = crashLogStorage.loaded.value
+        )
+    )
 
     private val _message = MutableStateFlow<PrivacyMessage?>(null)
     val message: StateFlow<PrivacyMessage?> = _message.asStateFlow()
@@ -96,7 +128,7 @@ class PrivacyViewModel @Inject constructor(
             authManager.friendId.collectLatest { rawFriendId ->
                 val friendId = rawFriendId?.trim()?.takeIf { it.isNotEmpty() }
                 if (friendId == null) {
-                    _aiProfileSettings.value = AiProfileSettingsState()
+                    _aiProfileSettings.value = AiProfileSettingsState(isLoaded = true)
                 } else {
                     loadAiProfileSettings(friendId)
                 }
@@ -237,6 +269,7 @@ class PrivacyViewModel @Inject constructor(
         val local = runCatching { aiProfileRepository.settings(friendId) }.getOrNull()
         _aiProfileSettings.value = local?.toUiState()?.copy(
             friendId = friendId,
+            isLoaded = true,
             isLoading = true,
             isUpdating = false
         ) ?: AiProfileSettingsState(friendId = friendId, isLoading = true)
@@ -249,9 +282,13 @@ class PrivacyViewModel @Inject constructor(
                 // 拉不到就停在本地镜像上：至少反映最后一次已知授权状态
                 _aiProfileSettings.value = local?.toUiState()?.copy(
                     friendId = friendId,
+                    isLoaded = true,
                     isLoading = false,
                     isUpdating = false
-                ) ?: AiProfileSettingsState(friendId = friendId)
+                ) ?: AiProfileSettingsState(
+                    friendId = friendId,
+                    isLoaded = true
+                )
             }
         )
     }
@@ -314,7 +351,8 @@ class PrivacyViewModel @Inject constructor(
         profileConsent = profileConsent,
         behaviorConsent = behaviorConsent,
         personalizationEnabled = personalizationEnabled,
-        syncEnabled = syncEnabled
+        syncEnabled = syncEnabled,
+        isLoaded = true
     )
 
     private fun AiProfileSettingsDto.toUiState(friendId: String): AiProfileSettingsState = AiProfileSettingsState(
@@ -322,6 +360,7 @@ class PrivacyViewModel @Inject constructor(
         profileConsent = profileConsent,
         behaviorConsent = behaviorConsent,
         personalizationEnabled = personalizationEnabled,
-        syncEnabled = syncEnabled
+        syncEnabled = syncEnabled,
+        isLoaded = true
     )
 }

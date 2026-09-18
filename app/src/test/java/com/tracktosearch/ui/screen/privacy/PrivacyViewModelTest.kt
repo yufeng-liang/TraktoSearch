@@ -18,9 +18,16 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -33,6 +40,7 @@ import org.junit.Test
  * 2. 云端写入失败要整体回滚，不能留下「服务端没改、本地显示改了」的错位
  * 3. 撤回画像授权要连带清本地镜像，否则残留的画像会在重新授权时被当成旧数据带上云
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PrivacyViewModelTest {
 
     @get:Rule
@@ -46,12 +54,16 @@ class PrivacyViewModelTest {
     private val authManager = mockk<AuthManager>(relaxed = true)
 
     private val friendId = MutableStateFlow<String?>(null)
+    private val aiTasteEnabledFlow = MutableStateFlow(true)
+    private val crashLogEnabledFlow = MutableStateFlow(false)
+    private val crashLogLoadedFlow = MutableStateFlow(false)
 
     @Before
     fun setup() {
         every { authManager.friendId } returns friendId
-        every { aiTasteStorage.tasteUploadEnabled } returns MutableStateFlow(true)
-        every { crashLogStorage.enabled } returns MutableStateFlow(false)
+        every { aiTasteStorage.tasteUploadEnabled } returns aiTasteEnabledFlow
+        every { crashLogStorage.enabled } returns crashLogEnabledFlow
+        every { crashLogStorage.loaded } returns crashLogLoadedFlow
     }
 
     private fun createViewModel(): PrivacyViewModel = PrivacyViewModel(
@@ -74,6 +86,34 @@ class PrivacyViewModelTest {
         personalizationEnabled = personalizationEnabled,
         syncEnabled = syncEnabled
     )
+
+    @Test
+    fun `本地开关首值到达前只暴露加载态`() = runTest {
+        crashLogEnabledFlow.value = true
+        every { aiTasteStorage.tasteUploadEnabled } returns emptyFlow()
+        val viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.crashLogState.collect()
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.aiTasteState.collect()
+        }
+
+        runCurrent()
+
+        // crash 已读出 true 但 DataStore 加载未完成，仍不能把 true 或默认 false 当成终态
+        assertThat(viewModel.crashLogState.value.checked).isTrue()
+        assertThat(viewModel.crashLogState.value.isLoaded).isFalse()
+        // taste 冷流尚未发首值，界面只能停留在加载态
+        assertThat(viewModel.aiTasteState.value.isLoaded).isFalse()
+
+        crashLogLoadedFlow.value = true
+        runCurrent()
+
+        assertThat(viewModel.crashLogState.value.isLoaded).isTrue()
+        // 永不发射仍保持加载态，避免用占位值冒充真实偏好
+        assertThat(viewModel.aiTasteState.value.isLoaded).isFalse()
+    }
 
     @Test
     fun `没有 friendId 时开关组只读且不请求云端`() = runTest {
@@ -118,6 +158,43 @@ class PrivacyViewModelTest {
         // 云端说开着同步，本地镜像说关着：以云端为准
         assertThat(state.syncEnabled).isTrue()
         assertThat(state.isLoading).isFalse()
+    }
+
+    @Test
+    fun `云端刷新期间先显示本地画像且保持只读加载态`() = runTest {
+        val remoteGate = CompletableDeferred<Result<AiProfileSettingsDto>>()
+        coEvery { aiProfileRepository.settings("friend-1") } returns AiProfileSettings(
+            friendId = "friend-1",
+            profileConsent = true,
+            behaviorConsent = true,
+            personalizationEnabled = true,
+            syncEnabled = false,
+            shouldAutoImport = false,
+            updatedAt = 0L,
+            clearedAt = null
+        )
+        coEvery { aiRepository.getProfileSettings("friend-1") } coAnswers {
+            remoteGate.await()
+        }
+
+        friendId.value = "friend-1"
+        val viewModel = createViewModel()
+        runCurrent()
+
+        val state = viewModel.aiProfileSettings.value
+        assertThat(state.isLoaded).isTrue()
+        assertThat(state.isLoading).isTrue()
+        assertThat(state.profileConsent).isTrue()
+        assertThat(state.personalizationEnabled).isTrue()
+        assertThat(state.syncEnabled).isFalse()
+
+        remoteGate.complete(
+            Result.success(remoteSettings(profileConsent = true, personalizationEnabled = true))
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.aiProfileSettings.value.syncEnabled).isTrue()
+        assertThat(viewModel.aiProfileSettings.value.isLoading).isFalse()
     }
 
     @Test
