@@ -872,8 +872,6 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.searchByTmdb(tmdbId, typeStr)
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
-                searchByTmdbCache.put(key, body)
-                // 如果无有效结果，记入负缓存
                 val hasValid = body.any { r ->
                         val id = when (type) {
                             MediaType.MOVIE -> r.movie?.ids?.trakt
@@ -882,15 +880,19 @@ class TraktRepository @Inject constructor(
                         }
                         id != null && id > 0
                     }
-                    if (!hasValid) {
-                        sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
-                            notFoundTmdbIds.add(key)
-                        }
-                    }
-                    Result.success(body)
+                // 空结果/无有效映射不写入永久缓存：Trakt 对新片索引有延迟，
+                // 持久化空映射会让该条目永远查不到 traktId（仅记负缓存，下次仍重查）
+                if (hasValid) {
+                    searchByTmdbCache.put(key, body)
                 } else {
-                    Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
+                    sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
+                        notFoundTmdbIds.add(key)
+                    }
                 }
+                Result.success(body)
+            } else {
+                Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
+            }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -912,8 +914,6 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.searchByImdb(imdbId, typeStr)
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
-                searchByImdbCache.put(key, body)
-                // 如果无有效结果，记入负缓存
                 val hasValid = body.any { r ->
                     val id = when (type) {
                         MediaType.MOVIE -> r.movie?.ids?.trakt
@@ -921,7 +921,11 @@ class TraktRepository @Inject constructor(
                     }
                     id != null && id > 0
                 }
-                if (!hasValid) {
+                // 空结果/无有效映射不写入永久缓存：Trakt 对新片索引有延迟，
+                // 持久化空映射会让豆瓣同步把该条目判为已完成且永不重查（仅记负缓存）
+                if (hasValid) {
+                    searchByImdbCache.put(key, body)
+                } else {
                     sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {
                         notFoundImdbIds.add(key)
                     }
