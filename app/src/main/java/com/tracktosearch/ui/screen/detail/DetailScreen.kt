@@ -698,6 +698,12 @@ fun DetailScreen(
                     detailAiViewModel.loadRecommendations(uiState.recommendations)
                 }
             }
+            // 评论 Tab 的两趟 O(n) 过滤在组合外记住：翻译进度 tick 等频繁重组时不重跑
+            // （LazyColumn 的 DSL 作用域不是 Composable 上下文，remember 只能提到这里）
+            val commentsTabLists = remember(uiState.comments, uiState.traktCommentId) {
+                val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
+                commentsToShow to commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
+            }
             // 单 LazyColumn：头部(item) + 顶栏/TabRow(stickyHeader) + 内容(根据Tab切换)
             // 吸顶栏不再染沉浸色，内部搜索源/网盘类型/找到xx个资源等文字统一走主题色
             androidx.compose.runtime.CompositionLocalProvider(
@@ -935,9 +941,9 @@ fun DetailScreen(
                 // ===== 评论 Tab 内容 =====
                 if (uiState.sectionVisible.comments && selectedTab == 1) {
                     val ownComment = uiState.userComment?.takeIf { it.isNotBlank() }
-                    val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
+                    val commentsToShow = commentsTabLists.first
                     // 豆瓣评论基本都是中文，无需翻译，只有存在非豆瓣评论时才显示全部翻译
-                    val translatableComments = commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
+                    val translatableComments = commentsTabLists.second
                     // 评论区工具行：「全部翻译」原先是右上角一枚孤立悬着的胶囊，
                     // 与下方卡片的左边界对不上，也看不出属于哪一段。改成左对齐的一条
                     // 工具行，与资源 Tab 的筛选器同一位置、同一内边距。
