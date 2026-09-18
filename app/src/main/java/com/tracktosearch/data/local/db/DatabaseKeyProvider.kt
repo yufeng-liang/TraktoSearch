@@ -62,6 +62,33 @@ object DatabaseKeyProvider {
     }
 
     /**
+     * 数据库文件是否为**明文** SQLite（文件头 16 字节 = "SQLite format 3\0"；
+     * SQLCipher 加密后文件头是密文，不可能命中）。
+     *
+     * 删库迁移前必须做这个校验：Keystore 损坏（系统还原等）时 EncryptedSharedPreferences
+     * 打开会抛异常，hasCipherKey 落到 catch 返回 false——若只凭 "文件存在 && 无密钥"
+     * 判定，会把用户的加密库当旧明文库删掉（含豆瓣同步回滚快照、本地评分等唯一数据）。
+     */
+    fun isPlaintextSqliteDb(context: Context): Boolean {
+        val dbFile = context.getDatabasePath("tracktosearch.db")
+        if (!dbFile.exists()) return false
+        return try {
+            dbFile.inputStream().use { input ->
+                val header = ByteArray(16)
+                var read = 0
+                while (read < header.size) {
+                    val n = input.read(header, read, header.size - read)
+                    if (n < 0) break
+                    read += n
+                }
+                read == 16 && String(header, Charsets.US_ASCII) == "SQLite format 3\u0000"
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * 删除旧明文数据库文件及其 WAL/SHM 辅助文件。
      * 仅在首次从明文迁移到 SQLCipher 时调用，调用前需确保尚未用密钥打开过数据库。
      */

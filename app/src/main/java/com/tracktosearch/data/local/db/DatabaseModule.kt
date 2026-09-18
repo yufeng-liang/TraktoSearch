@@ -580,8 +580,13 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        // 首次从明文库迁移到 SQLCipher：删除旧明文库（数据可从云端/Trakt 重新同步）
-        if (DatabaseKeyProvider.legacyPlaintextDbExists(context) && !DatabaseKeyProvider.hasCipherKey(context)) {
+        // 首次从明文库迁移到 SQLCipher：删除旧明文库（数据可从云端/Trakt 重新同步）。
+        // 文件头必须是明文 SQLite 才允许删：Keystore 损坏时 hasCipherKey 会误报 false，
+        // 仅凭"文件存在 && 无密钥"会把加密库当明文库删掉（见 isPlaintextSqliteDb 注释）
+        if (DatabaseKeyProvider.legacyPlaintextDbExists(context) &&
+            DatabaseKeyProvider.isPlaintextSqliteDb(context) &&
+            !DatabaseKeyProvider.hasCipherKey(context)
+        ) {
             DatabaseKeyProvider.deleteLegacyPlaintextDb(context)
         }
 
