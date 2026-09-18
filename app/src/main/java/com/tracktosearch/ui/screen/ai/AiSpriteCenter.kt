@@ -76,8 +76,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -716,9 +716,13 @@ private fun CharacterStage(
         Box(contentAlignment = Alignment.Center) {
             AiCharacterGlyph(
                 character = character,
+                // 呼吸缩放经 graphicsLayer 块延迟读：动画每帧只重绘，不让这张卡逐帧重组
                 modifier = Modifier
                     .size(168.dp)
-                    .scale(bob)
+                    .graphicsLayer {
+                        scaleX = bob
+                        scaleY = bob
+                    }
             )
             if (shouldShowActivationSuccessBadge(character.id, state.activatedCharacterId, state.isAuthorized)) {
                 Surface(
