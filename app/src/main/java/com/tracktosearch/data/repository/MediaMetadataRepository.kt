@@ -330,9 +330,14 @@ class MediaMetadataRepository @Inject constructor(
     ) {
         if (summaries.isEmpty()) return
         val now = System.currentTimeMillis()
+        // 写库前重读最新行：existingByKey 是发网络前拍的快照，网络期间详情页协程可能已用
+        // persistDetail 写入新 detail，若按快照 upsert 会把 detailJson 回滚成旧值/清空
+        val freshByKey = loadRows(summaries.map { summary ->
+            MediaKey(summary.mediaType, summary.tmdbId, summary.locale).normalized().cacheKey()
+        })
         val rows = summaries.map { summary ->
             val key = MediaKey(summary.mediaType, summary.tmdbId, summary.locale).normalized()
-            val existing = existingByKey[key.cacheKey()]
+            val existing = freshByKey[key.cacheKey()] ?: existingByKey[key.cacheKey()]
             (existing ?: newEntity(key)).copy(
                 mediaType = key.mediaType,
                 tmdbId = key.tmdbId,
