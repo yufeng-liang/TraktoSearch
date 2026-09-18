@@ -353,13 +353,19 @@ test('caches douban hot lists longer than dynamic endpoints and bypasses purge',
         const searchEntry = entries.get('https://tracktosearch-gateway.pages.dev/gateway-api/api/douban/search?q=test');
         assert.equal(searchEntry.headers.get('Cache-Control'), 'public, max-age=300');
 
-        // ?purge=1 是强制刷新入口，必须穿透边缘缓存直连上游
+        // ?purge=1 是强制刷新入口：穿透边缘缓存直连上游（X-Gateway-Cache=MISS），
+        // 且回源成功后把新数据写回「剥掉 purge 的 key」
         const purgeCalls = [];
         const purgeEnv = { AUTH_WORKER: serviceBinding(purgeCalls, { data: { purged: true } }) };
         const first = await onRequest(contextFor('/gateway-api/api/douban/api/chart?purge=1', {}, purgeEnv));
         const second = await onRequest(contextFor('/gateway-api/api/douban/api/chart?purge=1', {}, purgeEnv));
-        assert.equal(first.headers.get('X-Gateway-Cache'), 'BYPASS');
-        assert.equal(second.headers.get('X-Gateway-Cache'), 'BYPASS');
+        assert.equal(first.headers.get('X-Gateway-Cache'), 'MISS');
+        assert.equal(second.headers.get('X-Gateway-Cache'), 'MISS');
+        assert.equal(purgeCalls.length, 2);
+
+        // purge 写回后，后续普通请求（无 purge）命中刷新后的边缘条目
+        const refreshed = await onRequest(contextFor('/gateway-api/api/douban/api/chart', {}, purgeEnv));
+        assert.equal(refreshed.headers.get('X-Gateway-Cache'), 'HIT');
         assert.equal(purgeCalls.length, 2);
     } finally {
         globalThis.caches = originalCaches;

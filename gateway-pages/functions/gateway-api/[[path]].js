@@ -24,6 +24,15 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const upstreamPath = url.pathname.slice(PUBLIC_PREFIX.length) || '/';
 
+    // CORS 预检必须先于一切路由分支处理：tmdb-image 等分支对非 GET 返回 405，
+    // 若放在 OPTIONS 之前，浏览器预检会拿到 405 而失败
+    if (request.method === 'OPTIONS') {
+        return new Response(null, {
+            status: 204,
+            headers: { ...corsHeaders(), ...SECURITY_HEADERS },
+        });
+    }
+
     // 路由：/api/tmdb-image(-v2)/* → 直接代理 TMDB 图片（不经过 Service Binding）
     // v2：回源请求 WebP（Accept 协商），缓存 key 版本隔离，避免旧 JPEG 缓存（30 天 TTL）挡住新格式
     if (/^\/api\/tmdb-image(-v2)?\//.test(upstreamPath)) {
@@ -38,13 +47,6 @@ export async function onRequest(context) {
         return jsonResponse({ code: 'NOT_FOUND', message: 'Not found' }, 404);
     }
 
-    if (request.method === 'OPTIONS') {
-        return new Response(null, {
-            status: 204,
-            headers: { ...corsHeaders(), ...SECURITY_HEADERS },
-        });
-    }
-
     const worker = env?.[bindingName];
     if (!worker || typeof worker.fetch !== 'function') {
         return jsonResponse({
@@ -53,11 +55,17 @@ export async function onRequest(context) {
         }, 503);
     }
 
+    // ?purge=1 是 auth-worker 侧豆瓣热榜等公开数据的强制刷新入口：必须穿透边缘缓存
+    // 直连回源；回源成功后用「剥掉 purge 的 cacheKey」把新数据写回边缘，
+    // 否则普通请求会继续命中旧条目，手动刷新在 TTL 窗口内对任何人都不生效
+    const isPurge = url.searchParams.has('purge');
     const cachePlan = getPublicCachePlan(request, upstreamPath);
-    const cache = cachePlan ? globalThis.caches?.default : undefined;
+    const cache = cachePlan && !isPurge ? globalThis.caches?.default : undefined;
     // 缓存 key 只保留路径与查询串，剥离 Authorization / Cookie 等请求头：
     // 登录用户与访客请求同一公开资源时应共享同一份边缘缓存。
-    const cacheKey = cache ? new Request(publicCacheKey(url), { method: 'GET' }) : null;
+    const cacheKey = cachePlan
+        ? new Request(publicCacheKey(purgelessUrl(url)), { method: 'GET' })
+        : null;
     if (cache && cacheKey) {
         try {
             const cached = await cache.match(cacheKey);
@@ -118,11 +126,13 @@ export async function onRequest(context) {
     }
 
     try {
+        // 上游 service binding 调用必须有超时：挂起时 App 请求会跟随挂到平台超时
         const upstream = await worker.fetch(new Request(upstreamUrl, {
             method: request.method,
             headers,
             body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
             duplex: 'half',
+            signal: AbortSignal.timeout(30_000),
         }));
 
         const responseHeaders = new Headers(upstream.headers);
@@ -150,7 +160,11 @@ export async function onRequest(context) {
         const mediaPartial = upstreamPath.startsWith('/api/media/') &&
             response.headers.get('X-Media-Partial') === 'true';
         const canCacheUpstream = cachePlan && upstream.status === 200 && !mediaPartial;
-        if (cache && cacheKey && cachePlan && canCacheUpstream) {
+        // purge 回源也写回（cache 为 undefined 时手动取 caches.default）
+        const writeCache = cacheKey && canCacheUpstream
+            ? (cache || globalThis.caches?.default)
+            : undefined;
+        if (writeCache) {
             // 写入边缘缓存的条目单独覆盖 TTL：Workers Cache API 的 put() 只识别
             // Cache-Control（不识别 CDN-Cache-Control），且 max-age=0 / no-store 的响应会被拒绝写入。
             // 因此条目用 cachePlan 的 TTL，回给客户端的头仍保持 max-age=0。
@@ -162,7 +176,7 @@ export async function onRequest(context) {
                 statusText: cacheEntrySource.statusText,
                 headers: cacheEntryHeaders,
             });
-            const cacheWrite = cache.put(cacheKey, cacheEntry).catch(() => undefined);
+            const cacheWrite = writeCache.put(cacheKey, cacheEntry).catch(() => undefined);
             if (typeof context.waitUntil === 'function') {
                 context.waitUntil(cacheWrite);
             } else {
@@ -171,7 +185,13 @@ export async function onRequest(context) {
         }
 
         return response;
-    } catch {
+    } catch (err) {
+        // 记录上游错误摘要（不含请求头/响应体，避免敏感信息进日志），502 才有得排障
+        console.error(JSON.stringify({
+            event: 'gateway_upstream_error',
+            path: upstreamPath,
+            message: err instanceof Error ? err.message : String(err),
+        }));
         return jsonResponse({ code: 'UPSTREAM_UNAVAILABLE', message: 'Gateway unavailable' }, 502);
     }
 }
@@ -191,9 +211,8 @@ function getPublicCachePlan(request, path) {
     // TMDB 账号态端点靠 session_id / guest_session_id 标识身份（查询串或路径段），
     // 这类响应属于单个用户，绝不能写进所有人共享的边缘缓存（App 不使用这些端点）。
     if (hasUserScopedQuery(request.url) || hasUserScopedPath(path)) return null;
-    // ?purge=1 是 auth-worker 侧豆瓣热榜的强制刷新入口，必须穿透边缘缓存直连回源，
-    // 否则手动刷新只会命中旧边缘条目，抓取逻辑永远不执行。
-    if (new URL(request.url).searchParams.has('purge')) return null;
+    // ?purge=1 不在这里判定：主流程会穿透读缓存（isPurge），但仍按本 plan
+    // 把回源结果写回「剥掉 purge 的 key」，让后续普通请求拿到刷新后的数据。
 
     if (path.startsWith('/api/tmdb/')) return { ttlSeconds: 600 };
     if (path === '/api/media/summaries') return { ttlSeconds: 3600 };
@@ -242,6 +261,17 @@ function hasUserScopedPath(path) {
 /** 构造公开缓存 key：只保留路径与查询串，剥离所有凭据类请求头。 */
 function publicCacheKey(url) {
     return url.origin + url.pathname + url.search;
+}
+
+/** 缓存 key 用的 URL：剥掉 ?purge 强刷参数，普通请求与 purge 回源写回共用同一份条目。
+ * 必须字符串级过滤——走 URLSearchParams 会触发 query 重新序列化（`:` 变 `%3A` 等），
+ * 缓存 key 会与普通请求的原始 URL 对不上。 */
+function purgelessUrl(url) {
+    if (!url.search) return url;
+    const pairs = url.search.slice(1).split('&')
+        .filter((pair) => pair.split('=')[0] !== 'purge');
+    const search = pairs.length ? `?${pairs.join('&')}` : '';
+    return { origin: url.origin, pathname: url.pathname, search };
 }
 
 function corsHeaders() {
