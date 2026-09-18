@@ -276,6 +276,7 @@
     <string name="settings_accent_reset_default">デフォルトに戻す（壁紙）</string>
     <string name="settings_accent_add">カスタム色を追加</string>
     <string name="settings_accent_delete">この色を削除</string>
+    <string name="settings_accent_preview">プレビュー</string>
     <!-- アクセントカラー -->
     <string name="accent_renoir">ルノワールピンク</string>
     <string name="accent_poppy">ポピー赤</string>

@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.settings
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +59,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.theme.MonetAccent
 import com.tracktosearch.ui.theme.HctChromaSlider
+import com.tracktosearch.ui.theme.HctColorSchemePreviewGrid
 import com.tracktosearch.ui.theme.HctHueSlider
 import com.tracktosearch.ui.theme.HctToneGrid
 import com.tracktosearch.ui.theme.monetColorScheme
@@ -335,7 +335,9 @@ internal fun AccentColorDialog(
 
     // 壁纸取色后的真实主色预览（Android 12+），否则回退彩虹渐变
     val context = LocalContext.current
-    val darkTheme = isSystemInDarkTheme()
+    // 用应用实际配色判断深浅，而不是系统主题：本应用的明暗由 ThemeStorage 控制，
+    // 系统深色 + 应用浅色时 isSystemInDarkTheme() 会把预览算成深色，与弹窗实际底不一致。
+    val darkTheme = MaterialTheme.colorScheme.isDarkScheme
     val dynamicPrimaryColor = remember(darkTheme) {
         if (Build.VERSION.SDK_INT >= 31) {
             if (darkTheme) dynamicDarkColorScheme(context).primary
@@ -834,7 +836,9 @@ internal fun CustomAccentDialog(
     onColorConfirmed: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val darkTheme = isSystemInDarkTheme()
+    // 用应用实际配色判断深浅，而不是系统主题：本应用的明暗由 ThemeStorage 控制，
+    // 系统深色 + 应用浅色时 isSystemInDarkTheme() 会把预览算成深色，与弹窗实际底不一致。
+    val darkTheme = MaterialTheme.colorScheme.isDarkScheme
     // 三轴状态：编辑模式回填原色，添加模式 FlClash 同款中性灰起步
     val seedHct = remember(initialArgb) {
         if (initialArgb != null) Hct.fromInt(initialArgb.toInt())
@@ -875,7 +879,12 @@ internal fun CustomAccentDialog(
                     selectedTone = tone,
                     onToneSelected = { tone = it }
                 )
-                ColorRolePreviewGrid(scheme = previewScheme)
+                Text(
+                    text = stringResource(R.string.settings_accent_preview),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HctColorSchemePreviewGrid(scheme = previewScheme)
             }
         },
         confirmButton = {
@@ -893,47 +902,6 @@ internal fun CustomAccentDialog(
             }
         }
     )
-}
-
-/** 8 个 M3 role（含 on* 前景）的全 scheme 预览：4×2 网格，每格 44dp 高。 */
-@Composable
-private fun ColorRolePreviewGrid(scheme: androidx.compose.material3.ColorScheme) {
-    val roles = listOf(
-        Triple(scheme.primary, scheme.onPrimary, "Primary"),
-        Triple(scheme.secondary, scheme.onSecondary, "Secondary"),
-        Triple(scheme.tertiary, scheme.onTertiary, "Tertiary"),
-        Triple(scheme.error, scheme.onError, "Error"),
-        Triple(scheme.surface, scheme.onSurface, "Surface"),
-        Triple(scheme.primaryContainer, scheme.onPrimaryContainer, "P.Cont"),
-        Triple(scheme.secondaryContainer, scheme.onSecondaryContainer, "S.Cont"),
-        Triple(scheme.tertiaryContainer, scheme.onTertiaryContainer, "T.Cont")
-    )
-    roles.chunked(4).forEach { row ->
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            row.forEach { (bg, fg, label) ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(bg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        color = fg,
-                        fontSize = 9.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2
-                    )
-                }
-            }
-            repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
-        }
-    }
 }
 
 /** 语言选择对话框 */

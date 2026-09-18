@@ -276,6 +276,7 @@
     <string name="settings_accent_reset_default">기본값으로 재설정(배경화면)</string>
     <string name="settings_accent_add">사용자 지정 색상 추가</string>
     <string name="settings_accent_delete">이 색상 삭제</string>
+    <string name="settings_accent_preview">미리보기</string>
     <!-- 액센트 색상 -->
     <string name="accent_renoir">르누아르 분홍</string>
     <string name="accent_poppy">양귀비 빨강</string>
