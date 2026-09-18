@@ -213,7 +213,7 @@ class DoubanBatchRemovalManager @Inject constructor(
                                         return@runCatching null  // skip
                                     }
                                     // 2. 获取 ck
-                                    val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie)
+                                    val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie, respectAntiCrawlDelay = true)
                                     if (ck == null) {
                                         Log.w(TAG, "获取 ck 失败: $doubanId")
                                         return@runCatching false  // fail

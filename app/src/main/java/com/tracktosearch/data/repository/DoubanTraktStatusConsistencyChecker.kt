@@ -927,7 +927,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 async {
                     semaphore.withPermit {
                         runCatching {
-                            val ck = doubanRepository.fetchCsrfToken(update.doubanId, cred.cookie)
+                            val ck = doubanRepository.fetchCsrfToken(update.doubanId, cred.cookie, respectAntiCrawlDelay = true)
                             if (ck == null) {
                                 Log.w(TAG, "获取 ck 失败: ${update.doubanId}")
                                 return@runCatching false
@@ -981,7 +981,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     semaphore.withPermit {
                         runCatching {
                             _checkProgress.value = _checkProgress.value.copy(currentTitle = update.title)
-                            val ck = doubanRepository.fetchCsrfToken(update.doubanId, cred.cookie)
+                            val ck = doubanRepository.fetchCsrfToken(update.doubanId, cred.cookie, respectAntiCrawlDelay = true)
                             if (ck == null) {
                                 Log.w(TAG, "获取 ck 失败: ${update.doubanId}")
                                 return@runCatching false
@@ -1240,7 +1240,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     "DOUBAN_COLLECT", "DOUBAN_WISH" -> {
                         val cred = doubanAuthStorage.getCredentials() ?: return@runCatching false
                         val action = if (task.action == "DOUBAN_COLLECT") "collect" else "wish"
-                        val ck = doubanRepository.fetchCsrfToken(task.doubanId, cred.cookie) ?: return@runCatching false
+                        val ck = doubanRepository.fetchCsrfToken(task.doubanId, cred.cookie, respectAntiCrawlDelay = true) ?: return@runCatching false
                         val marked = doubanRepository.markInterestByCk(action, task.doubanId, cred.cookie, ck).success
                         if (marked) doubanSyncedItemDao.updateStatus(task.doubanId, action)
                         marked

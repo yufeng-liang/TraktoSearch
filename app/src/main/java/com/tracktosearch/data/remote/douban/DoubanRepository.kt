@@ -1136,8 +1136,18 @@ class DoubanRepository(
     /**
      * 抓取 PC 详情页 HTML(用于解析 ck 凭证)。
      * Cookie 失效时豆瓣会重定向到登录页,此时返回 null,由调用方提示重新登录。
+     *
+     * @param respectAntiCrawlDelay 批量链路的密集整页抓取必须走「爬前 3-5s」反爬延迟;
+     *   单次手动操作由用户操作节奏自然间隔,默认不强行等待
      */
-    suspend fun fetchDetailPageHtml(doubanId: String, cookie: String): String? = withContext(Dispatchers.IO) {
+    suspend fun fetchDetailPageHtml(
+        doubanId: String,
+        cookie: String,
+        respectAntiCrawlDelay: Boolean = false
+    ): String? = withContext(Dispatchers.IO) {
+        if (respectAntiCrawlDelay) {
+            delayWithEvent(DelayType.DOUBAN_DETAIL_CRAWL, 3000L..5000L)
+        }
         val html = fetchHtml("https://movie.douban.com/subject/$doubanId/", cookie)
         return@withContext if (DoubanSpider.isLoginPage(html)) null else html
     }
@@ -1146,8 +1156,12 @@ class DoubanRepository(
      * 抓取 PC 详情页并解析 csrf token(ck)。
      * Cookie 失效或解析失败均返回 null,由调用方区分提示。
      */
-    suspend fun fetchCsrfToken(doubanId: String, cookie: String): String? = withContext(Dispatchers.IO) {
-        val html = fetchDetailPageHtml(doubanId, cookie) ?: return@withContext null
+    suspend fun fetchCsrfToken(
+        doubanId: String,
+        cookie: String,
+        respectAntiCrawlDelay: Boolean = false
+    ): String? = withContext(Dispatchers.IO) {
+        val html = fetchDetailPageHtml(doubanId, cookie, respectAntiCrawlDelay) ?: return@withContext null
         DoubanSpider.parseCsrfToken(html)
     }
 
