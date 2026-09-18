@@ -60,7 +60,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.SharedOrigin
-import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -97,7 +98,8 @@ internal fun markRecordOrigin(item: MarkRecordItem): String =
  */
 @Composable
 fun MarkRecordItemSkeleton(modifier: Modifier = Modifier) {
-    val brush = rememberShimmerBrush()
+    // 绘制期失效的 shimmer：动画每帧只重画骨架块，不逐帧重组
+    val shimmerState = rememberShimmer()
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -110,8 +112,7 @@ fun MarkRecordItemSkeleton(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .width(80.dp)
                     .height(120.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(brush)
+                    .shimmer(shimmerState, RoundedCornerShape(8.dp))
             )
             Column(
                 modifier = Modifier
@@ -124,23 +125,20 @@ fun MarkRecordItemSkeleton(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
                         .height(15.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmerState, RoundedCornerShape(4.dp))
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
                         .height(11.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmerState, RoundedCornerShape(4.dp))
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.6f)
                         .height(11.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmerState, RoundedCornerShape(4.dp))
                 )
             }
         }

@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +21,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -101,34 +99,6 @@ fun Modifier.shimmer(
 }
 
 /**
- * Shimmer 动画刷子，用于骨架屏闪烁效果。
- *
- * 注意：进度在组合期读取，调用方会跟着动画逐帧重组。骨架方块多的页面用
- * [rememberShimmer] + [Modifier.shimmer]，只失效绘制。
- */
-@Composable
-fun rememberShimmerBrush(): Brush {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val progress = transition.animateFloat(
-        initialValue = -0.5f,
-        targetValue = 1.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerProgress"
-    )
-    val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-    val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
-
-    return Brush.linearGradient(
-        colors = listOf(shimmerColor, highlightColor, shimmerColor),
-        start = Offset(progress.value * 600f, 0f),
-        end = Offset(progress.value * 600f + 300f, 0f)
-    )
-}
-
-/**
  * 影视卡片骨架屏 - 用于想看列表加载态
  *
  * 一屏能排下十来个，所以走 [ShimmerState]：动画只失效绘制，不会让每个骨架卡每帧重组。
@@ -169,12 +139,15 @@ fun MovieCardSkeleton(
 
 /**
  * 榜单小卡片骨架屏 - 用于豆瓣热榜加载态
+ *
+ * 与 [MovieCardSkeleton] 同走 [ShimmerState]：动画只失效绘制；调用方骨架多时共享一份 [shimmer]。
  */
 @Composable
 fun DoubanHotCardSkeleton(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    shimmer: ShimmerState? = null
 ) {
-    val brush = rememberShimmerBrush()
+    val state = shimmer ?: rememberShimmer()
     // 与加载完成后的豆瓣卡片（DoubanHotCard）统一 13.dp 圆角
     val shape = RoundedCornerShape(13.dp)
 
@@ -183,16 +156,14 @@ fun DoubanHotCardSkeleton(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(shape)
-                .background(brush)
+                .shimmer(state, shape)
         )
         Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(brush)
+                    .shimmer(state, RoundedCornerShape(4.dp))
             )
         }
     }

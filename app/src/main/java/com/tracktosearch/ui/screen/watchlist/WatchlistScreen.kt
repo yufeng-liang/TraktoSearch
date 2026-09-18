@@ -204,7 +204,8 @@ import com.tracktosearch.ui.component.rememberAppPullToRefreshState
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterColorExtraction
 import com.tracktosearch.ui.component.rememberPosterPrefetch
-import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.navigation.NotificationNavigator
 import com.tracktosearch.ui.navigation.NotificationTarget
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
@@ -2191,7 +2192,8 @@ private fun WatchlistPosterCard(
 /** 骨架屏网格 - 3列，海报占位 + 标题条 + 类型条，呼吸动画 */
 @Composable
 private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
-    val brush = rememberShimmerBrush()
+    // 共享一份绘制期失效的 shimmer：动画每帧只重画骨架块，不逐帧重组
+    val shimmerState = rememberShimmer()
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 0.dp, bottom = 80.dp),
@@ -2206,8 +2208,7 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(brush)
+                        .shimmer(shimmerState, RoundedCornerShape(8.dp))
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 // 标题条
@@ -2215,8 +2216,7 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth(0.8f)
                         .height(12.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmerState, RoundedCornerShape(4.dp))
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 // 类型条
@@ -2224,8 +2224,7 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
                         .height(10.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(brush)
+                        .shimmer(shimmerState, RoundedCornerShape(4.dp))
                 )
             }
         }
