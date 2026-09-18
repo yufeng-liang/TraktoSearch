@@ -180,7 +180,9 @@ internal fun TmdbAllSheet(
 ) {
     val listState = rememberLazyGridState()
     // 滚动到底部时自动加载更多
-    LaunchedEffect(listState, items.size) {
+    // key 必须带上全部闸门条件：翻页失败后 VM 置 hasMore=false/error 且 items.size 不变，
+    // 若只按 items.size 重启，收集器会一直捕获旧的 hasMore/error，滚动一格就重发一次必败请求
+    LaunchedEffect(listState, items.size, hasMore, isLoading, errorMessage) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisibleIndex ->
                 if (lastVisibleIndex != null &&
@@ -303,7 +305,9 @@ internal fun TraktMovieAllSheet(
     onRetry: (() -> Unit)? = null
 ) {
     val listState = rememberLazyGridState()
-    LaunchedEffect(listState, items.size) {
+    // key 必须带上全部闸门条件：翻页失败后 VM 置 hasMore=false/error 且 items.size 不变，
+    // 若只按 items.size 重启，收集器会一直捕获旧的 hasMore/error，滚动一格就重发一次必败请求
+    LaunchedEffect(listState, items.size, hasMore, isLoading, errorMessage) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisibleIndex ->
                 if (lastVisibleIndex != null &&
