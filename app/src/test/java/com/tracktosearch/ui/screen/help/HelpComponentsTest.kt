@@ -7,7 +7,8 @@ import org.junit.Test
 /**
  * 帮助页编号与命中高亮的单测。
  *
- * 章节编号不再按语言分支；正文条目号统一阿拉伯数字（视觉由 HelpItem 的圆形徽章承载）。
+ * 章节编号不再按语言分支，统一补成两位；正文条目号统一阿拉伯数字
+ * （视觉由 HelpItem 的轻量圆形徽章承载）。
  */
 class HelpComponentsTest {
 
@@ -15,7 +16,7 @@ class HelpComponentsTest {
 
     @Test
     fun `章节统一使用阿拉伯数字`() {
-        assertThat(helpSectionNumeral(0)).isEqualTo("1")
+        assertThat(helpSectionNumeral(0)).isEqualTo("01")
         assertThat(helpSectionNumeral(9)).isEqualTo("10")
         assertThat(helpSectionNumeral(13)).isEqualTo("14")
     }

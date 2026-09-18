@@ -9,6 +9,7 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -48,8 +49,8 @@ import androidx.compose.ui.unit.sp
  * 排版与卡片，规格对齐搜索源管理页（[com.tracktosearch.ui.screen.searchsource]）。
  */
 
-/** 段落编号，[index] 从 0 起；所有语言统一使用阿拉伯数字。 */
-internal fun helpSectionNumeral(index: Int): String = (index + 1).toString()
+/** 段落编号，[index] 从 0 起；所有语言统一使用两位阿拉伯数字。 */
+internal fun helpSectionNumeral(index: Int): String = (index + 1).toString().padStart(2, '0')
 
 /** 条目编号，[index] 从 0 起；统一阿拉伯数字，展示由 HelpItem 的圆形徽章承载。 */
 internal fun helpItemNumeral(index: Int): String = (index + 1).toString()
@@ -94,7 +95,7 @@ internal fun HelpGroupLabel(label: String) {
 }
 
 /**
- * 段落标题行：编号 + 标题 + 折角。编号走主题强调色，构成全页稳定的视觉骨架。
+ * 段落标题行：编号块 + 标题 + 折角。编号走浅色强调底，构成全页稳定的视觉骨架。
  *
  * 折角图标只做旋转不做换图：换图（ExpandMore ↔ ExpandLess）中间会闪一帧，
  * 旋转是连续的。
@@ -127,12 +128,17 @@ internal fun HelpSectionHeader(
     ) {
         Text(
             text = numeral,
-            // 段号 14sp（titleSmall 档），右对齐：编号右缘与条目徽章的右缘对齐成同一条垂直轴
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            // 段号用浅色小胶囊承载，和标题之间留出明确呼吸；固定宽度让不同标题的起点对齐
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(22.dp),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .width(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                .padding(vertical = 3.dp),
         )
+        Spacer(Modifier.width(10.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
@@ -161,9 +167,8 @@ internal fun HelpItem(numeral: String, text: AnnotatedString) {
             .padding(bottom = 8.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // 圆形数字徽章：20dp 主色圆底 + 12sp 白字。圈号（①…）字形依赖系统字体，
-        // 换用纯图形绘制：圆底在 22dp 编号列内右对齐，右缘与段标题号右缘对齐；
-        // 首行文字左缘固定在 22dp 处，换行时正文与编号列互不干扰。
+        // 轻量数字徽章：18dp 浅色圆底 + 10sp 主色数字。保留固定编号列，
+        // 但降低视觉重量，避免连续条目像一排按钮。
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -172,13 +177,13 @@ internal fun HelpItem(numeral: String, text: AnnotatedString) {
         ) {
             Text(
                 text = numeral,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = primary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(18.dp)
                     .clip(CircleShape)
-                    .background(primary),
+                    .background(primary.copy(alpha = 0.12f)),
             )
         }
         Text(
