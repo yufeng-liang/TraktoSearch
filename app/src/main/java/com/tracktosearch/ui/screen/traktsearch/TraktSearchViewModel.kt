@@ -95,12 +95,14 @@ data class TraktSearchUiState(
     val diskState: DiskSearchState = DiskSearchState()
 ) {
     val currentTabState: SearchTabState
-        get() = when (selectedTab) {
-            MediaType.MOVIE -> movieState
-            MediaType.SHOW -> showState
-            MediaType.PERSON -> personState
-            MediaType.DISK -> SearchTabState()
-        }
+        get() = tabStateFor(selectedTab)
+
+    fun tabStateFor(type: MediaType): SearchTabState = when (type) {
+        MediaType.MOVIE -> movieState
+        MediaType.SHOW -> showState
+        MediaType.PERSON -> personState
+        MediaType.DISK -> SearchTabState()
+    }
 }
 
 @HiltViewModel
@@ -219,10 +221,8 @@ class TraktSearchViewModel @Inject constructor(
         // 更新 query 到状态中，确保 loadMore 等使用最新查询词
         _uiState.value = _uiState.value.copy(query = query)
 
-        val tabState = _uiState.value.currentTabState
-        if (tabState.isLoading) return
-
-        // 取消上一次未完成的搜索，避免旧结果覆盖新结果
+        // 无论上一轮是否在加载都必须取消旧任务：搜索中换词若直接早退，
+        // 旧协程会把旧词结果写回、与状态里的新词错配成「新词配旧结果」
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             updateTabState(searchType, SearchTabState(
@@ -544,28 +544,38 @@ class TraktSearchViewModel @Inject constructor(
         val current = _uiState.value
         // 网盘搜索不支持加载更多
         if (current.selectedTab == MediaType.DISK) return
+        val loadTab = current.selectedTab
+        val loadQuery = current.query
         val tabState = current.currentTabState
         if (tabState.isLoading || tabState.isLoadingMore || !tabState.hasMore) return
 
-        viewModelScope.launch {
+        // 翻页协程纳入 searchJob 统一管理：换词/新搜索时旧翻页一并取消，
+        // 否则旧词下一页会合入新词结果并污染新搜索的分页游标
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             val nextPage = tabState.currentPage + 1
-            updateTabState(current.selectedTab, tabState.copy(isLoadingMore = true, loadMoreError = false))
+            updateTabState(loadTab, tabState.copy(isLoadingMore = true, loadMoreError = false))
 
-            val result = when (current.selectedTab) {
-                MediaType.MOVIE -> traktRepository.searchMovies(current.query, page = nextPage)
-                MediaType.SHOW -> traktRepository.searchShows(current.query, page = nextPage)
-                MediaType.PERSON -> traktRepository.searchPeople(current.query, page = nextPage)
+            val result = when (loadTab) {
+                MediaType.MOVIE -> traktRepository.searchMovies(loadQuery, page = nextPage)
+                MediaType.SHOW -> traktRepository.searchShows(loadQuery, page = nextPage)
+                MediaType.PERSON -> traktRepository.searchPeople(loadQuery, page = nextPage)
                 MediaType.DISK -> Result.failure(Exception("DISK not supported"))
             }
 
+            // 写回前校验：期间换词或切 tab，本次翻页作废（不写任何 tab 状态）
+            val latest = _uiState.value
+            if (latest.query != loadQuery || latest.selectedTab != loadTab) return@launch
+
             result.onSuccess { (searchResults, totalCount) ->
                 val newItems = searchResults.map { item ->
-                    async { withTimeoutOrNull(8_000) { enrichSearchResult(item, current.selectedTab) } }
+                    async { withTimeoutOrNull(8_000) { enrichSearchResult(item, loadTab) } }
                 }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
-                val updatedState = _uiState.value.currentTabState
+                // enrich 期间用户可能又切走，写回前再校验一次
+                val updatedState = latest.tabStateFor(loadTab)
                 val mergedResults = updatedState.results + newItems
                 val effectiveTotal = if (mergedResults.isEmpty()) 0 else totalCount
-                updateTabState(current.selectedTab, updatedState.copy(
+                updateTabState(loadTab, updatedState.copy(
                     results = mergedResults,
                     isLoadingMore = false,
                     loadMoreError = false,
@@ -574,8 +584,8 @@ class TraktSearchViewModel @Inject constructor(
                     hasMore = mergedResults.size < effectiveTotal
                 ))
             }.onFailure {
-                val updatedState = _uiState.value.currentTabState
-                updateTabState(current.selectedTab, updatedState.copy(isLoadingMore = false, loadMoreError = true))
+                val updatedState = latest.tabStateFor(loadTab)
+                updateTabState(loadTab, updatedState.copy(isLoadingMore = false, loadMoreError = true))
             }
         }
     }
