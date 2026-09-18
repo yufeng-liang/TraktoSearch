@@ -496,11 +496,13 @@ fun SearchScreen(
     }
 
     LaunchedEffect(searchContentScrollState) {
-        var previousValue = searchContentScrollState.value
-        snapshotFlow { searchContentScrollState.value }.collect { value ->
-            if (value != previousValue) {
-                previousValue = value
+        // 精灵中断只挂「开始/结束滚动」两个事件：逐帧滚动量会把中断变成每帧状态写、整页重组
+        snapshotFlow { searchContentScrollState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) {
                 interruptAiSprite(AiSpriteInterruptReason.SCROLL)
+            } else {
+                // 滚动结束刷新空闲计时起点，语义对齐原先逐帧刷新 lastInteractionAt
+                lastInteractionAt = System.currentTimeMillis()
             }
         }
     }

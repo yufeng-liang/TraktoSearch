@@ -248,7 +248,17 @@ fun TraktSearchScreen(
         mutableStateOf(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date()))
     }
     val resultAnchorKey = "${uiState.selectedTab.name}:${uiState.query}"
-    val currentFirstResultBounds = firstResultBounds.takeIf { firstResultAnchorKey == resultAnchorKey }
+    // 第一张结果卡的 onGloballyPositioned 在滚动期间每帧写 firstResultBounds，边界一律经 lambda
+    // 延迟读、组合期不落地（与 DetailScreen 传 DetailSpriteLayer 的做法一致），否则整页跟着每帧重组
+    val currentFirstResultBounds: () -> Rect? = {
+        firstResultBounds.takeIf { firstResultAnchorKey == resultAnchorKey }
+    }
+    // effect 键与 overlay 显隐用「锚点是否就位」的派生布尔：滚动逐帧改 bounds 时布尔不变，
+    // 不重启大 effect 也不重组页面
+    val hasFreshResultBounds by remember(resultAnchorKey) {
+        derivedStateOf { firstResultBounds != null && firstResultAnchorKey == resultAnchorKey }
+    }
+    val hasSearchBoxBounds by remember { derivedStateOf { searchBoxBounds != null } }
 
     fun interruptAiSprite(reason: AiSpriteInterruptReason) {
         lastInteractionAt = System.currentTimeMillis()
@@ -284,9 +294,8 @@ fun TraktSearchScreen(
         showAiSpriteCenter,
         showAiSpriteMotion,
         lastInteractionAt,
-        firstResultBounds,
-        firstResultAnchorKey,
-        searchBoxBounds
+        hasFreshResultBounds,
+        hasSearchBoxBounds
     ) {
         val isLoading = if (uiState.selectedTab == MediaType.DISK) {
             uiState.diskState.isLoading
@@ -321,15 +330,15 @@ fun TraktSearchScreen(
                 } else {
                     blocked || searchQuery.isNotBlank()
                 },
-                hasAnchorBounds = searchBoxBounds != null,
-                hasResultAnchor = currentFirstResultBounds != null,
+                hasAnchorBounds = hasSearchBoxBounds,
+                hasResultAnchor = hasFreshResultBounds,
                 motionVisible = showAiSpriteMotion
             )
         ) {
             if (trigger == AiSpriteOverlayTrigger.FIRST_ENTRY) overlayEntryHandled = true
             activeSpriteAnchor = searchAnchorFor(
                 trigger,
-                hasResultAnchor = currentFirstResultBounds != null
+                hasResultAnchor = hasFreshResultBounds
             )
             activeSceneEvent = sceneEventForSearch(trigger)
             if (spriteViewModel.tryConsumeOverlay(trigger, overlayDayKey)) {
@@ -361,11 +370,13 @@ fun TraktSearchScreen(
             }
         }
     }
+    // 磁盘计数是 O(n) 双重 filter，仅结果集变化时重算，不随每次重组重跑
+    val diskFilteredCount = remember(uiState.diskState) { getFilteredDiskCount(uiState.diskState) }
     val searchContentCount = when (uiState.selectedTab) {
         MediaType.MOVIE -> uiState.movieState.results.size
         MediaType.SHOW -> uiState.showState.results.size
         MediaType.PERSON -> uiState.personState.results.size
-        MediaType.DISK -> getFilteredDiskCount(uiState.diskState)
+        MediaType.DISK -> diskFilteredCount
     }
     val traktSearchGlassScene = glassSceneForContent(
         contentCount = searchContentCount,
@@ -376,7 +387,9 @@ fun TraktSearchScreen(
             else -> 0.34f
         },
         ambientColor = rememberCachedPosterAmbientColor(
-            posterUrls = uiState.currentTabState.results.mapNotNull { it.posterUrl },
+            posterUrls = remember(uiState.currentTabState.results) {
+                uiState.currentTabState.results.mapNotNull { it.posterUrl }
+            },
             fallback = MaterialTheme.colorScheme.background
         ),
         contentCapacity = 36,
@@ -412,9 +425,6 @@ fun TraktSearchScreen(
     LaunchedEffect(currentGridState) {
         snapshotFlow { currentGridState.firstVisibleItemIndex to currentGridState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->
-                if (index != prevScrollIndex || offset != prevScrollOffset) {
-                    interruptAiSprite(AiSpriteInterruptReason.SCROLL)
-                }
                 val scrollingUp = index < prevScrollIndex || (index == prevScrollIndex && offset < prevScrollOffset)
                 if (scrollingUp && index > 5) showScrollToTop = true
                 else if (index <= 5) showScrollToTop = false
@@ -423,15 +433,27 @@ fun TraktSearchScreen(
             }
     }
 
-    LaunchedEffect(diskListState) {
-        var previousValue = diskListState.firstVisibleItemIndex to diskListState.firstVisibleItemScrollOffset
-        snapshotFlow { diskListState.firstVisibleItemIndex to diskListState.firstVisibleItemScrollOffset }
-            .collect { value ->
-                if (value != previousValue) {
-                    previousValue = value
-                    interruptAiSprite(AiSpriteInterruptReason.SCROLL)
-                }
+    LaunchedEffect(currentGridState) {
+        // 精灵中断只挂「开始/结束滚动」两个事件：逐帧滚动量会把中断变成每帧状态写，
+        // 连带整页重组与精灵 overlay 大 effect 每帧 cancel+restart
+        snapshotFlow { currentGridState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) {
+                interruptAiSprite(AiSpriteInterruptReason.SCROLL)
+            } else {
+                // 滚动结束刷新空闲计时起点，语义对齐原先逐帧刷新 lastInteractionAt
+                lastInteractionAt = System.currentTimeMillis()
             }
+        }
+    }
+
+    LaunchedEffect(diskListState) {
+        snapshotFlow { diskListState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) {
+                interruptAiSprite(AiSpriteInterruptReason.SCROLL)
+            } else {
+                lastInteractionAt = System.currentTimeMillis()
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -923,7 +945,7 @@ fun TraktSearchScreen(
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.trakt_search_tab_disk), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-                                val filteredCount = getFilteredDiskCount(uiState.diskState)
+                                val filteredCount = remember(uiState.diskState) { getFilteredDiskCount(uiState.diskState) }
                                 if (filteredCount > 0 && uiState.diskState.hasSearched) {
                                     Text("($filteredCount)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -982,18 +1004,19 @@ fun TraktSearchScreen(
                 }
             }
 
+            // 精灵未出场时绝不就地读边界状态：滚动逐帧写 firstResultBounds，读进组合会把
+            // 整页拖成每帧重组；只有 overlay 真正可见时才读一次
+            val spriteOverlayActive = showAiSpriteMotion && !showAiSpriteCenter
             AiSpriteMotion(
                 characterId = spriteState.activatedCharacterId.orEmpty(),
                 anchor = activeSpriteAnchor,
-                anchorBounds = when (activeSpriteAnchor) {
-                    AiSpriteAnchor.ResultCard -> currentFirstResultBounds
+                anchorBounds = when {
+                    !spriteOverlayActive -> null
+                    activeSpriteAnchor == AiSpriteAnchor.ResultCard -> currentFirstResultBounds()
                     else -> searchBoxBounds
                 },
-                visible = showAiSpriteMotion && !showAiSpriteCenter &&
-                    (when (activeSpriteAnchor) {
-                        AiSpriteAnchor.ResultCard -> currentFirstResultBounds
-                        else -> searchBoxBounds
-                    } != null),
+                visible = spriteOverlayActive &&
+                    if (activeSpriteAnchor == AiSpriteAnchor.ResultCard) hasFreshResultBounds else hasSearchBoxBounds,
                 onClick = {
                     interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                     setAiSpriteCenterVisible(true)
