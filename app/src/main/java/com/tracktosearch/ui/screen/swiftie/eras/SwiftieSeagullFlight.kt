@@ -34,13 +34,20 @@ internal class SeagullPose {
     var effort = 0f
 }
 
-/** 按远到近绘制；低配保留一远一近，不把所有鸟一起缩成白点。 */
+/**
+ * 按远到近绘制；低配保留一远一近，不把所有鸟一起缩成白点。
+ *
+ * 上面两只（明信片旁那两只）改从**右上角空白**起步向左飞：offset 按 1989 开场
+ * （eraStart 33720ms → travelPhase≈0.124）标定，两张卡片期间跨过整条上天。
+ * 标定值写死在注释与测试里，时间轴大改时这两只的起步位置会整体平移 —— 那时
+ * 要一起重标。近处两只维持原来的下半屏航线，不跟明信片那片抢视觉。
+ */
 internal fun seagullFlights(lowRam: Boolean): List<SeagullFlight> {
-    val distant = SeagullFlight(2, 0.13f, 0.065f, 0.175f, 0.036f, -1f, 0.16f)
+    val distant = SeagullFlight(2, 0.015f, 0.065f, 0.130f, 0.030f, -1f, 0.16f)
     val near = SeagullFlight(2, 0.78f, 0.118f, 0.355f, -0.046f, 1f, 0.63f)
     return if (lowRam) listOf(distant, near) else listOf(
         distant,
-        SeagullFlight(3, 0.37f, 0.078f, 0.235f, -0.026f, 1f, 0.41f),
+        SeagullFlight(3, 0.885f, 0.078f, 0.228f, -0.024f, -1f, 0.41f),
         SeagullFlight(2, 0.56f, 0.094f, 0.305f, 0.038f, -1f, 0.87f),
         near
     )

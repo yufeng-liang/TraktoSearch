@@ -80,6 +80,24 @@ class SwiftieSeagullFlightTest {
     }
 
     @Test
+    fun 明信片旁的两只海鸥从右上方错层向左飞() {
+        val birds = seagullFlights(false).take(2)
+        val startTravelPhase = 33_720f % 30_000f / 30_000f
+        val startY = mutableListOf<Float>()
+        for (bird in birds) {
+            val start = updateSeagullPose(bird, 0f, startTravelPhase, 900f, 2000f)
+            val x = start.x
+            startY += start.y
+            assertThat(x).isGreaterThan(0.80f)
+            assertThat(start.y >= 0.12f && start.y <= 0.23f).isTrue()
+            assertThat(bird.direction).isEqualTo(-1f)
+            val later = updateSeagullPose(bird, 0.1f, startTravelPhase + 1f / 30f, 900f, 2000f)
+            assertThat(later.x).isLessThan(x)
+        }
+        assertThat(abs(startY[1] - startY[0])).isGreaterThan(0.055f)
+    }
+
+    @Test
     fun 低配仍有远近两只且姿态对象复用() {
         val birds = seagullFlights(true)
         assertThat(birds).hasSize(2)
