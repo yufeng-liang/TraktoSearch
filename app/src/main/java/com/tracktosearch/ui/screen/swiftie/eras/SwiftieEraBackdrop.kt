@@ -4965,8 +4965,8 @@ private fun DrawScope.drawMidnightClock(
     }
 
     // 钟：表盘 + 表圈 + 60 格分刻度（整点加粗）+ 罗马数字 + 指向 3 点的星形指针。
-    // 钟与右下方月牙错开；所有线宽随表盘等比缩小。
-    val clockCenter = Offset(w * 0.35f, h * 0.21f)
+    // 钟再收向左上角，给右下方的月牙与抱枕动作让出整片天。
+    val clockCenter = Offset(w * 0.30f, h * 0.175f)
     val clockR = w * 0.176f
     val clockUnit = clockR / 0.26f
     // 盘面先压暗一档，再用薰衣草描圈与刻度。
