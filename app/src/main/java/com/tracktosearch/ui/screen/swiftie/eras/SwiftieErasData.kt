@@ -58,7 +58,7 @@ enum class SwiftieEraBackdrop {
     GOLDEN_CASTLE,
     /** 3 · 三层紫色薄纱正弦波 + 两侧垂落的帷幕 + 一束追光 */
     VEIL_SPOTLIGHT,
-    /** 4 · 大幅红色针织横纹（毛线绞花与 V 字编织）+ 秋景 */
+    /** 4 · 低对比红色平针织纹 + 秋景 */
     KNIT_AUTUMN,
     /** 5 · 纽约天际线剪影 + 海岸线海浪 + 数张散落的宝丽来 */
     SKYLINE_POLAROIDS,
