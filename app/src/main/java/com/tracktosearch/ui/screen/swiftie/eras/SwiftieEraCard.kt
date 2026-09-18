@@ -346,7 +346,7 @@ fun SwiftieEraCard(
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = era.releaseDate,
+                text = if (eraIndex == SwiftieErasData.LOVER_INDEX) "TS7" else era.releaseDate,
                 style = TextStyle(
                     fontSize = with(density) { 11.dp.toSp() },
                     color = textColors.date.copy(alpha = SwiftieEraContrast.DATE_ALPHA)

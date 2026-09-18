@@ -4,7 +4,6 @@ import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutBack
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -286,22 +284,19 @@ private val SOFT_SHADOW: Brush = Brush.radialGradient(
     radius = 0.5f
 )
 
-// Lover House：粉蓝配色，取 SwiftiePalette 的 CloudPink / SkyBlue 一带再分明暗档。
-private val HOUSE_WALL_TOP = Color(0xFFFDF1F6)
-private val HOUSE_WALL_BOTTOM = Color(0xFFEFD0DF)
-private val HOUSE_ANNEX_TOP = Color(0xFFF4DCE7)
-private val HOUSE_ANNEX_BOTTOM = Color(0xFFE3BDD0)
-private val HOUSE_TRIM = Color(0xFFD49FB7)
-private val ROOF_TOP = Color(0xFF9AD0EC)
-private val ROOF_BOTTOM = Color(0xFF5E9FC9)
-private val ROOF_EDGE = Color(0xFF43789B)
-private val BRICK = Color(0xFFC98A9E)
-private val BRICK_LINE = Color(0xFFA96C81)
-private val SNOW_WHITE = Color(0xFFFDFAFC)
-private val SNOW_SHADE = Color(0xFFE8EEF6)
-private val WINDOW_WARM = Color(0xFFFFD79A)
-private val WINDOW_MULLION = Color(0xFFB07C55)
-private val DOOR_COLOR = Color(0xFFB4436A)
+private val HOUSE_WALL_TOP = Color(0xFFFFF8F5)
+private val HOUSE_WALL_BOTTOM = Color(0xFFF4D1D8)
+private val HOUSE_TRIM = Color(0xFFD78BA5)
+private val ROOF_TOP = Color(0xFFF49AB7)
+private val ROOF_BOTTOM = Color(0xFFC95A83)
+private val ROOF_EDGE = Color(0xFF9E3F68)
+private val FLOWER_PINK = Color(0xFFF29AB6)
+private val FLOWER_DEEP = Color(0xFFC84C78)
+private val SNOW_WHITE = Color(0xFFFFFBFC)
+private val SNOW_SHADE = Color(0xFFE9D8E2)
+private val WINDOW_WARM = Color(0xFFFFD98D)
+private val WINDOW_MULLION = Color(0xFFB87863)
+private val DOOR_COLOR = Color(0xFFB84970)
 
 /** 描金：印章、底座金线共用一个金。 */
 private val GOLD = Color(0xFFD4AF37)
@@ -384,7 +379,7 @@ half4 main(float2 coord) {
  * |---|---|---|
  * | [SwiftieTimeline.REWIND_START] | 1500 | 卷收期：只有 [content] 在自己变矮；末 200ms 浮出引子光弧 |
  * | [FORM_START] | [FORM_MS] | 小卡转体 0→−12°→0；玻璃自球心成型；底座自下升起 |
- * | [SNOW_START] | [SNOW_MS] | 金箔雪开洒；Lover House 后景淡入；小卡缩到 0.66 沉进球下半 |
+ * | [SNOW_START] | [SNOW_MS] | 金箔雪开洒；Lover House 后景淡入；小卡缩到 0.56 沉进球下半 |
  * | [HEART_START] | [HEART_MS] | 心自球心升起：描边 → 自下灌满 → 呼吸一次 + 光晕 |
  * | [SEAL_START] | [SEAL_MS] | `7·3` 描金小印落在底座上；球起 ±6° 极慢自转 |
  * | [SwiftieTimeline.FADE_OUT_START] | 2998 | 整只球淡出并缓慢上浮，金箔雪落到最后一帧 |
@@ -455,13 +450,17 @@ fun SwiftieLoverSnowGlobe(
                     }
                 )
             }
-            // 底座声明在球之后 = 画在球之上，座顶那圈唇口才能压住球下缘
             GlobeBase(
                 elapsedMs = elapsedMs,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(diameter * BASE_HEIGHT_RATIO)
+            )
+            GlobeDateTrail(
+                elapsedMs = elapsedMs,
+                diameter = diameter,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
@@ -943,177 +942,106 @@ private class LoverHouseParts(size: Size) {
     /** 球内裁剪。雪地、栅栏、墙角都要被玻璃切掉，否则会画到球外面去。 */
     val clip = Path().apply { addOval(Rect(cx - ballR, cy - ballR, cx + ballR, cy + ballR)) }
 
-    val roof = trianglePath(x(-0.92f), y(-0.02f), x(-0.31f), y(-0.58f), x(0.30f), y(-0.02f))
-
-    /** 屋脊积雪：屋顶上段再来一枚窄三角，雪才是"堆在脊上"而不是刷了道白边。 */
-    val roofSnow = trianglePath(x(-0.55f), y(-0.30f), x(-0.31f), y(-0.61f), x(-0.07f), y(-0.30f))
-
-    val annexRoof = trianglePath(x(0.06f), y(0.14f), x(0.44f), y(-0.16f), x(0.86f), y(0.14f))
-    val annexRoofSnow = trianglePath(x(0.28f), y(0.01f), x(0.44f), y(-0.19f), x(0.60f), y(0.01f))
-
-    /** 拱门。用 cubicTo 起拱，不用 quadraticTo —— 前者的名字从来没改过。 */
+    /** 一栋居中的婚礼庄园：单屋顶、心形窗、门廊与花拱。 */
+    val roof = trianglePath(x(-0.72f), y(0.12f), x(0f), y(-0.58f), x(0.72f), y(0.12f))
+    val roofHighlight = trianglePath(x(-0.55f), y(0.08f), x(0f), y(-0.49f), x(0.18f), y(0.08f))
     val door = Path().apply {
-        val left = x(-0.50f)
-        val right = x(-0.30f)
-        moveTo(left, y(0.58f))
-        lineTo(left, y(0.31f))
-        cubicTo(left, y(0.22f), right, y(0.22f), right, y(0.31f))
-        lineTo(right, y(0.58f))
+        val left = x(-0.16f)
+        val right = x(0.16f)
+        moveTo(left, y(0.64f))
+        lineTo(left, y(0.38f))
+        cubicTo(left, y(0.24f), right, y(0.24f), right, y(0.38f))
+        lineTo(right, y(0.64f))
         close()
     }
-
-    /** 栅栏共用一条 Path，逐根 `rewind()`（循环里绝不 new Path）。 */
-    val picket = Path()
-
+    val groundBrush = Brush.verticalGradient(
+        0f to SNOW_WHITE,
+        1f to SNOW_SHADE,
+        startY = y(0.42f),
+        endY = y(1.0f)
+    )
     val wallBrush = Brush.verticalGradient(
         0f to HOUSE_WALL_TOP,
         1f to HOUSE_WALL_BOTTOM,
-        startY = y(-0.06f),
-        endY = y(0.58f)
-    )
-    val annexBrush = Brush.verticalGradient(
-        0f to HOUSE_ANNEX_TOP,
-        1f to HOUSE_ANNEX_BOTTOM,
-        startY = y(0.10f),
-        endY = y(0.58f)
+        startY = y(0.08f),
+        endY = y(0.66f)
     )
     val roofBrush = Brush.verticalGradient(
         0f to ROOF_TOP,
         1f to ROOF_BOTTOM,
         startY = y(-0.58f),
-        endY = y(-0.02f)
-    )
-    /** 雪地：上白下带一点冷影，才有"地面往里凹"的体积。 */
-    val groundBrush = Brush.verticalGradient(
-        0f to SNOW_WHITE,
-        1f to SNOW_SHADE,
-        startY = y(0.34f),
-        endY = y(1.0f)
+        endY = y(0.12f)
     )
 }
 
-/**
- * 画 Lover House。绘制顺序就是遮挡关系：雪地 → 烟囱 → 墙 → 屋顶 → 窗门 → 前雪堆 → 栅栏。
- * 烟囱必须在屋顶之前，屋顶才能压住它的根；前雪堆必须在墙之后，房子的脚才是"埋在雪里"。
- */
+/** 婚礼庄园：一栋粉白小屋，暖灯、心形阁楼窗与门前花拱。 */
 private fun DrawScope.drawLoverHouse(parts: LoverHouseParts) {
     val r = parts.r
     clipPath(parts.clip) {
-        // 雪地用一枚扁椭圆而不是矩形：矩形会在圆里得到一条平直的地平线，像水位
         drawOval(
             brush = parts.groundBrush,
-            topLeft = Offset(parts.x(-1.25f), parts.y(0.34f)),
-            size = Size(2.5f * r, 1.6f * r)
+            topLeft = Offset(parts.x(-1.15f), parts.y(0.42f)),
+            size = Size(2.3f * r, 1.45f * r)
         )
 
-        // 烟囱（含砖缝与雪帽）
-        drawRect(
-            color = BRICK,
-            topLeft = Offset(parts.x(-0.62f), parts.y(-0.66f)),
-            size = Size(0.13f * r, 0.42f * r)
-        )
-        listOf(-0.56f, -0.46f).forEach { v ->
-            drawLine(
-                color = BRICK_LINE,
-                start = Offset(parts.x(-0.62f), parts.y(v)),
-                end = Offset(parts.x(-0.49f), parts.y(v)),
-                strokeWidth = r * 0.008f,
-                alpha = 0.7f
-            )
-        }
-        drawRoundRect(
-            color = SNOW_WHITE,
-            topLeft = Offset(parts.x(-0.655f), parts.y(-0.71f)),
-            size = Size(0.20f * r, 0.075f * r),
-            cornerRadius = CornerRadius(r * 0.025f)
-        )
-
-        // 主体墙 + 背光那侧的暗边（光源与球面高光一致，在左上）
         drawRect(
             brush = parts.wallBrush,
-            topLeft = Offset(parts.x(-0.78f), parts.y(-0.06f)),
-            size = Size(0.94f * r, 0.64f * r)
-        )
-        drawRect(
-            color = HOUSE_TRIM,
-            topLeft = Offset(parts.x(0.08f), parts.y(-0.06f)),
-            size = Size(0.08f * r, 0.64f * r),
-            alpha = 0.32f
+            topLeft = Offset(parts.x(-0.56f), parts.y(0.08f)),
+            size = Size(1.12f * r, 0.58f * r)
         )
         drawLine(
             color = HOUSE_TRIM,
-            start = Offset(parts.x(-0.78f), parts.y(0.22f)),
-            end = Offset(parts.x(0.16f), parts.y(0.22f)),
+            start = Offset(parts.x(-0.56f), parts.y(0.29f)),
+            end = Offset(parts.x(0.56f), parts.y(0.29f)),
             strokeWidth = r * 0.014f,
-            alpha = 0.6f
+            alpha = 0.65f
         )
 
-        // 右翼（annex）：一栋房子有主体也有小翼，才不是一个梯形加两个方块
-        drawRect(
-            brush = parts.annexBrush,
-            topLeft = Offset(parts.x(0.16f), parts.y(0.10f)),
-            size = Size(0.64f * r, 0.48f * r)
-        )
-        drawPath(path = parts.annexRoof, brush = parts.roofBrush)
-        drawPath(path = parts.annexRoof, color = ROOF_EDGE, style = Stroke(width = r * 0.012f))
-        drawPath(path = parts.annexRoofSnow, color = SNOW_WHITE, alpha = 0.88f)
-
-        // 主屋顶：檐板描一遍边，瓦面才有厚度
         drawPath(path = parts.roof, brush = parts.roofBrush)
         drawPath(path = parts.roof, color = ROOF_EDGE, style = Stroke(width = r * 0.016f))
-        drawPath(path = parts.roofSnow, color = SNOW_WHITE, alpha = 0.90f)
+        drawPath(path = parts.roofHighlight, color = Color.White, alpha = 0.22f)
 
-        // 阁楼圆窗。位置刻意排在 v = −0.42：卡片压掉的是 |v| < 0.34，
-        // 这一格必须在那之上，否则"亮灯的窗"整场都看不见
-        val atticCenter = Offset(parts.x(-0.31f), parts.y(-0.42f))
-        val atticRadius = r * 0.075f
-        drawHalo(atticCenter, atticRadius * 3.4f, 0.85f)
-        drawCircle(color = WINDOW_WARM, radius = atticRadius, center = atticCenter)
-        drawCircle(
-            color = WINDOW_MULLION,
-            radius = atticRadius,
-            center = atticCenter,
-            style = Stroke(width = r * 0.010f)
-        )
-        drawLine(
-            color = WINDOW_MULLION,
-            start = Offset(atticCenter.x - atticRadius, atticCenter.y),
-            end = Offset(atticCenter.x + atticRadius, atticCenter.y),
-            strokeWidth = r * 0.007f
-        )
-        drawLine(
-            color = WINDOW_MULLION,
-            start = Offset(atticCenter.x, atticCenter.y - atticRadius),
-            end = Offset(atticCenter.x, atticCenter.y + atticRadius),
-            strokeWidth = r * 0.007f
-        )
+        val atticCenter = Offset(parts.x(0f), parts.y(-0.27f))
+        val atticRadius = r * 0.105f
+        drawHalo(atticCenter, atticRadius * 3.5f, 0.90f)
+        withTransform({
+            translate(atticCenter.x - atticRadius, atticCenter.y - atticRadius)
+            scale(atticRadius * 2f, atticRadius * 2f, pivot = Offset.Zero)
+        }) {
+            drawPath(path = unitHeartPath(), color = WINDOW_WARM, alpha = 0.95f)
+            drawPath(path = unitHeartPath(), color = WINDOW_MULLION, style = Stroke(width = 0.055f))
+        }
 
-        // 门 + 铜把手
         drawPath(path = parts.door, color = DOOR_COLOR)
-        drawPath(
-            path = parts.door,
-            color = ROOF_EDGE,
-            alpha = 0.35f,
-            style = Stroke(width = r * 0.010f)
-        )
-        drawCircle(
-            color = GOLD_LIGHT,
-            radius = r * 0.016f,
-            center = Offset(parts.x(-0.33f), parts.y(0.44f))
-        )
+        drawPath(path = parts.door, color = ROOF_EDGE, alpha = 0.36f, style = Stroke(width = r * 0.010f))
+        drawCircle(color = GOLD_LIGHT, radius = r * 0.018f, center = Offset(parts.x(0.10f), parts.y(0.49f)))
+        drawLitWindow(parts, -0.42f, 0.34f, 0.22f, 0.17f)
+        drawLitWindow(parts, 0.20f, 0.34f, 0.22f, 0.17f)
 
-        // 一楼两扇亮窗，同样排在卡片下方（v = 0.36..0.51）
-        drawLitWindow(parts, -0.22f, 0.36f, 0.18f, 0.15f)
-        drawLitWindow(parts, 0.34f, 0.36f, 0.20f, 0.15f)
-
-        // 房子脚前的雪堆：没有这一枚，房子看着像贴在雪地画片上
+        // 门前花拱：粉色花簇沿弧线排布，避免小屋像一块平面贴纸。
+        var angle = PI.toFloat()
+        while (angle <= TAU) {
+            val x = parts.x(0.48f * cos(angle))
+            val y = parts.y(0.56f - 0.18f * sin(angle))
+            drawHalo(Offset(x, y), r * 0.13f, 0.32f)
+            drawCircle(color = FLOWER_DEEP, radius = r * 0.034f, center = Offset(x, y))
+            drawCircle(color = FLOWER_PINK, radius = r * 0.020f, center = Offset(x - r * 0.018f, y - r * 0.014f))
+            angle += PI.toFloat() / 6f
+        }
+        drawLine(
+            color = FLOWER_DEEP,
+            start = Offset(parts.x(-0.48f), parts.y(0.56f)),
+            end = Offset(parts.x(0.48f), parts.y(0.56f)),
+            strokeWidth = r * 0.022f,
+            alpha = 0.80f,
+            cap = StrokeCap.Round
+        )
         drawOval(
             color = SNOW_WHITE,
-            topLeft = Offset(parts.x(-1.0f), parts.y(0.54f)),
-            size = Size(2.0f * r, 0.34f * r),
+            topLeft = Offset(parts.x(-0.92f), parts.y(0.58f)),
+            size = Size(1.84f * r, 0.30f * r),
             alpha = 0.96f
         )
-        drawFence(parts)
     }
 }
 
@@ -1189,75 +1117,29 @@ private fun DrawScope.drawLitWindow(
     )
 }
 
-/**
- * 前院栅栏。横档先画、竖条后画（真栅栏的档是钉在背面的），尖顶让它不是一排火柴。
- * 两端由球的裁剪自然切断 —— 这正是"东西摆在球底、地面往上翻"该有的样子。
- *
- * 竖条 0.052 宽、步距 0.074（缝 0.022 ≈ 条宽的 0.42）。原先步距 0.115 时缝比条还宽，
- * 而横档是画在竖条**背面**的，只在缝里露出来 —— 缝 + 横档正好凑成 "E"／"F" 的字形，
- * 截图上那一排读作一行小字。缝收窄到条宽的四成、横档再压到 0.55 透明度之后，
- * 露出来的是横档的**影子**而不是横档本身，一排就读作栅栏了。真的尖桩篱缝隙也比桩窄。
- */
-private fun DrawScope.drawFence(parts: LoverHouseParts) {
-    val r = parts.r
-    val top = parts.y(0.62f)
-    val bottom = parts.y(0.82f)
-    listOf(0.665f, 0.745f).forEach { v ->
-        drawRect(
-            color = SNOW_SHADE,
-            topLeft = Offset(parts.x(-0.92f), parts.y(v)),
-            size = Size(1.84f * r, 0.022f * r),
-            alpha = 0.55f
-        )
-    }
-    val pickWidth = 0.052f
-    var u = -0.88f
-    while (u <= 0.88f) {
-        val left = parts.x(u)
-        val right = parts.x(u + pickWidth)
-        val shoulder = top + pickWidth * r * 0.6f
-        parts.picket.rewind()
-        parts.picket.moveTo(left, bottom)
-        parts.picket.lineTo(left, shoulder)
-        parts.picket.lineTo((left + right) / 2f, top)
-        parts.picket.lineTo(right, shoulder)
-        parts.picket.lineTo(right, bottom)
-        parts.picket.close()
-        drawPath(path = parts.picket, color = SNOW_WHITE)
-        // 右侧一条冷影，竖条才有厚度
-        drawLine(
-            color = SNOW_SHADE,
-            start = Offset(right - r * 0.006f, shoulder),
-            end = Offset(right - r * 0.006f, bottom),
-            strokeWidth = r * 0.010f
-        )
-        u += 0.074f
-    }
-}
-
-/**
- * 印章数字的参考字号（px）。绘制时按底座实际尺寸缩放 —— 底座尺寸要到 draw 阶段才知道，
- * 而 `TextMeasurer` 只能在组合阶段用（与手链字母珠 `BEAD_LETTER_REFERENCE_PX` 同一套路）。
- */
+/** 底座铭牌与卡片的两枚来源数字，使用同一套参考字号以便做平滑变形。 */
 private const val SEAL_REFERENCE_PX = 96f
 
-/**
- * 数字可见高 / em。行盒（`layout.size.height`）含 ascent + descent，比可见字高大出近一半，
- * 直接拿它折算会得到一枚只有 13dp 的小印。截图迭代时先调这个值。
- */
+/** 数字行程占总拍程的比例：走完就把位置交给铭牌，之后只做戒指与牵手的依次登场。 */
+private const val TRAIL_LAND = 0.72f
+
+/** 数字可见高 / em。 */
 private const val SEAL_CAP_RATIO = 0.70f
 
-private const val SEAL_LAND = 0.55f
-private const val SEAL_BOUNCE_END = 0.84f
+/** 7、3 先抵达，再依次出现戒指与男女牵手。 */
+private const val RING_START = 0.74f
+private const val RING_END = 0.88f
+private const val HANDS_START = 0.86f
 
-/** 压印微亮的衰减长度（占印章那一拍的比例）。 */
-private const val SEAL_GLOW_DECAY = 0.20f
+/** 戒指钻石只闪一次。 */
+private const val RING_GLINT_START = 0.80f
+private const val RING_GLINT_END = 0.96f
 
-/** 印记显影的长度。落下途中它还是半透的，压到座上才实 —— 像一枚正在落定的印。 */
-private const val SEAL_INK_FADE = 0.28f
+/** 过渡数字从卡片原色切换到暖白金色的强度。 */
+private const val SOURCE_DIGIT_ALPHA = 0.94f
 
-/** 起落高度（占底座高）。再高就会从玻璃球正中间穿下来，那不叫落印。 */
-private const val SEAL_DROP_RATIO = 1.0f
+/** 日期铭牌整体相对底座中心的高度。 */
+private const val SEAL_CENTER_RATIO = 0.58f
 
 /**
  * 预排 `7` 与 `3`。
@@ -1282,13 +1164,95 @@ private fun rememberSealDigits(): List<TextLayoutResult> {
 }
 
 @Composable
-private fun GlobeBase(elapsedMs: () -> Long, modifier: Modifier) {
+private fun GlobeDateTrail(
+    elapsedMs: () -> Long,
+    diameter: Dp,
+    modifier: Modifier
+) {
     val digits = rememberSealDigits()
+    Spacer(
+        modifier = modifier.drawWithCache {
+            // DrawScope 本身就是 Density，直径在这里直接折成 px
+            val diameterPx = diameter.toPx()
+            onDrawBehind {
+                drawDateTrail(elapsedMs(), size, diameterPx, digits)
+            }
+        }
+    )
+}
+
+private fun DrawScope.drawDateTrail(
+    elapsed: Long,
+    stage: Size,
+    diameter: Float,
+    digits: List<TextLayoutResult>
+) {
+    val progress = span(elapsed, SEAL_START, SEAL_MS)
+    if (progress <= 0f) return
+    val glyph = (diameter * BASE_HEIGHT_RATIO) * SEAL_GLYPH_RATIO
+    val unitScale = glyph / (SEAL_CAP_RATIO * SEAL_REFERENCE_PX)
+    val width7 = digits[0].size.width * unitScale
+    val width3 = digits[1].size.width * unitScale
+    val gap = glyph * 0.16f
+    val dotRadius = glyph * 0.085f
+    val ringGap = glyph * 0.28f
+    val iconWidth = glyph * 0.70f
+    val total = width7 + gap * 2f + dotRadius * 2f + width3 + ringGap * 2f + iconWidth
+    val targetLeft = stage.width / 2f - total / 2f
+    val target7 = Offset(targetLeft, diameter + (stage.height - diameter) * SEAL_CENTER_RATIO + glyph / 2f)
+    val target3 = Offset(targetLeft + width7 + gap * 2f + dotRadius * 2f, target7.y)
+    val source7 = Offset(stage.width / 2f - width7 * 0.55f, diameter * 0.48f)
+    val source3 = Offset(stage.width / 2f - width3 * 0.20f, diameter * 0.58f)
+    val travel = EaseOutCubic.transform((progress / TRAIL_LAND).coerceIn(0f, 1f))
+    val colorMix = travel
+    val alpha = (progress / 0.10f).coerceIn(0f, 1f)
+    drawSourceDigit(digits[0], source7, target7, unitScale, travel, alpha, colorMix)
+    drawSourceDigit(digits[1], source3, target3, unitScale, travel, alpha, colorMix)
+    if (travel <= 0.01f) return
+    val dotCenter = Offset(target7.x + width7 + gap + dotRadius, target7.y - glyph * 0.42f)
+    drawCircle(color = SEAL_INK_SHADOW, radius = dotRadius * 1.3f, center = Offset(dotCenter.x + dotRadius * 0.12f, dotCenter.y + dotRadius * 0.18f), alpha = 0.8f * alpha)
+    drawCircle(color = GOLD, radius = dotRadius, center = dotCenter, alpha = alpha)
+    drawDateIcons(target3.x + width3 + ringGap + glyph * 0.18f, target7.y - glyph * 0.42f, glyph, progress, alpha)
+}
+
+private fun DrawScope.drawDateIcons(
+    ringX: Float,
+    centerY: Float,
+    glyph: Float,
+    progress: Float,
+    alpha: Float
+) {
+    val ringP = ((progress - RING_START) / (RING_END - RING_START)).coerceIn(0f, 1f)
+    val handsP = ((progress - HANDS_START) / (1f - HANDS_START)).coerceIn(0f, 1f)
+    val ringCenter = Offset(ringX, centerY)
+    if (ringP > 0f) {
+        drawCircle(color = GOLD_LIGHT, radius = glyph * 0.22f, center = ringCenter, style = Stroke(width = glyph * 0.075f), alpha = alpha * ringP)
+        drawLine(color = GOLD, start = Offset(ringCenter.x + glyph * 0.11f, ringCenter.y - glyph * 0.19f), end = Offset(ringCenter.x + glyph * 0.21f, ringCenter.y - glyph * 0.34f), strokeWidth = glyph * 0.055f, alpha = alpha * ringP, cap = StrokeCap.Round)
+        val glint = ((progress - RING_GLINT_START) / (RING_GLINT_END - RING_GLINT_START)).coerceIn(0f, 1f)
+        if (glint > 0f && glint < 1f) {
+            val flash = sin(PI.toFloat() * glint)
+            drawLine(color = Color.White, start = Offset(ringCenter.x + glyph * 0.08f, ringCenter.y - glyph * 0.33f), end = Offset(ringCenter.x + glyph * 0.08f, ringCenter.y - glyph * 0.55f), strokeWidth = glyph * 0.045f, alpha = alpha * flash, cap = StrokeCap.Round)
+            drawLine(color = Color.White, start = Offset(ringCenter.x - glyph * 0.03f, ringCenter.y - glyph * 0.44f), end = Offset(ringCenter.x + glyph * 0.19f, ringCenter.y - glyph * 0.44f), strokeWidth = glyph * 0.045f, alpha = alpha * flash, cap = StrokeCap.Round)
+        }
+    }
+    if (handsP > 0f) {
+        val handCenter = Offset(ringX + glyph * 0.70f, centerY)
+        drawCircle(color = Color(0xFFFFD0B7), radius = glyph * 0.15f, center = Offset(handCenter.x - glyph * 0.16f, handCenter.y - glyph * 0.13f), alpha = alpha * handsP)
+        drawCircle(color = Color(0xFFFFE0C7), radius = glyph * 0.15f, center = Offset(handCenter.x + glyph * 0.16f, handCenter.y - glyph * 0.13f), alpha = alpha * handsP)
+        drawLine(color = Color(0xFFFFC09E), start = Offset(handCenter.x - glyph * 0.22f, handCenter.y + glyph * 0.05f), end = Offset(handCenter.x + glyph * 0.22f, handCenter.y + glyph * 0.05f), strokeWidth = glyph * 0.13f, alpha = alpha * handsP, cap = StrokeCap.Round)
+        drawLine(color = Color(0xFFD46C83), start = Offset(handCenter.x - glyph * 0.16f, handCenter.y + glyph * 0.12f), end = Offset(handCenter.x - glyph * 0.16f, handCenter.y + glyph * 0.34f), strokeWidth = glyph * 0.11f, alpha = alpha * handsP, cap = StrokeCap.Round)
+        drawLine(color = Color(0xFF7C5A71), start = Offset(handCenter.x + glyph * 0.16f, handCenter.y + glyph * 0.12f), end = Offset(handCenter.x + glyph * 0.16f, handCenter.y + glyph * 0.34f), strokeWidth = glyph * 0.11f, alpha = alpha * handsP, cap = StrokeCap.Round)
+    }
+}
+
+
+@Composable
+private fun GlobeBase(elapsedMs: () -> Long, modifier: Modifier) {
     Spacer(
         modifier = modifier.drawWithCache {
             // 渐变只跟尺寸有关，建在缓存块里；时钟只在 onDrawBehind 里读
             val parts = GlobeBaseParts(size)
-            onDrawBehind { drawGlobeBase(elapsedMs(), parts, digits) }
+            onDrawBehind { drawGlobeBase(elapsedMs(), parts) }
         }
     )
 }
@@ -1305,8 +1269,6 @@ private class GlobeBaseParts(size: Size) {
     val bodyTop = height * 0.07f
     val corner = CornerRadius(height * 0.20f)
     val socketWidth = width * BASE_SOCKET_WIDTH_RATIO
-    val sealGlyph = height * SEAL_GLYPH_RATIO
-    val sealCenterY = height * 0.58f
 
     val bodyBrush = Brush.verticalGradient(
         0f to BASE_TOP_COLOR,
@@ -1324,15 +1286,17 @@ private class GlobeBaseParts(size: Size) {
 }
 
 /**
- * 底座：落地影 + 座体 + 顶面唇口/凹槽 + 两道金线 + 高光 + 压印微亮 + `7·3`。
+ * 底座：落地影 + 座体 + 顶面唇口/凹槽 + 两道金线 + 高光。
+ *
+ * 日期铭牌（7.3 + 戒指 + 牵手）由全舞台的 [GlobeDateTrail] 绘制 ——
+ * 数字要从球内卡片飞到底座，跨两个局部坐标系，留在任何一侧都会被裁断。
  *
  * 座体自下升起用 EaseOutBack：冲过终点再收回来，落座那一下才有重量
  * （与 `SwiftieEraCard` 长出时同一条缓动，两处的"落地感"才是一致的）。
  */
 private fun DrawScope.drawGlobeBase(
     elapsed: Long,
-    parts: GlobeBaseParts,
-    digits: List<TextLayoutResult>
+    parts: GlobeBaseParts
 ) {
     val dim = 1f - fadeProgress(elapsed)
     val appear = span(elapsed, FORM_START, FORM_MS)
@@ -1389,12 +1353,12 @@ private fun DrawScope.drawGlobeBase(
             )
         }
 
-        val sealProgress = span(elapsed, SEAL_START, SEAL_MS)
-        // 压印那一刻底座微亮，之后 20% 拍程内衰减掉
-        val impact = if (sealProgress < SEAL_LAND) {
+        // 数字落定那一刻底座微亮，随后 0.14 拍程内衰减掉。
+        val landProgress = span(elapsed, SEAL_START, SEAL_MS)
+        val impact = if (landProgress < TRAIL_LAND) {
             0f
         } else {
-            (1f - (sealProgress - SEAL_LAND) / SEAL_GLOW_DECAY).coerceIn(0f, 1f)
+            (1f - (landProgress - TRAIL_LAND) / 0.14f).coerceIn(0f, 1f)
         }
         if (impact > 0f) {
             drawRoundRect(
@@ -1405,95 +1369,42 @@ private fun DrawScope.drawGlobeBase(
                 alpha = 0.13f * impact * alpha
             )
         }
-        drawSeal(parts, digits, sealProgress, alpha)
     }
 }
 
 /**
- * `7·3`：自上落下 + 一次轻微弹跳，落在底座正面。
- *
- * 婚礼在 **7 月 3 日**，Lover 是第 **7** 张专辑、`Lover` 是其中第 **3** 首。
- * 不写年份、不写任何解释文字。
- *
+ * 一枚来源数字：从卡片原位移动到铭牌，途中从卡片原色渐变为暖白金色。
+ */
+private fun DrawScope.drawSourceDigit(
+    layout: TextLayoutResult,
+    source: Offset,
+    target: Offset,
+    unitScale: Float,
+    travel: Float,
+    alpha: Float,
+    colorMix: Float
+) {
+    val position = Offset(
+        source.x + (target.x - source.x) * travel,
+        source.y + (target.y - source.y) * travel
+    )
+    val sourceColor = SwiftiePalette.Glitter.copy(alpha = SOURCE_DIGIT_ALPHA * (1f - colorMix))
+    val targetColor = GOLD_LIGHT.copy(alpha = colorMix)
+    withTransform({
+        translate(position.x, position.y - layout.firstBaseline * unitScale)
+        scale(unitScale, unitScale, pivot = Offset.Zero)
+    }) {
+        drawText(textLayoutResult = layout, color = sourceColor, alpha = alpha)
+        if (colorMix > 0.01f) {
+            drawText(textLayoutResult = layout, color = SEAL_INK_SHADOW, alpha = 0.82f * alpha * colorMix, drawStyle = Stroke(width = 3.2f))
+            drawText(textLayoutResult = layout, color = targetColor, alpha = alpha * colorMix)
+        }
+    }
+}
+
+/**
  * 分隔符**自己画一个圆点**，不排 `·`：本仓三只彩蛋字体的 cmap 都没有 U+00B7
  *（Marker 只有 `0-9 + = ? X` 和空格），排出来只能靠系统兜底字体，那个点的字重和
  * 手写数字对不上；画圆点还能把大小和离地高度调准。也**不用** `/` —— `7/3` 是日期格式，
- * `7·3` 才是刻在纪念品上的。
+ * `7.3` 才是刻在纪念品上的。
  */
-private fun DrawScope.drawSeal(
-    parts: GlobeBaseParts,
-    digits: List<TextLayoutResult>,
-    progress: Float,
-    dim: Float
-) {
-    if (progress <= 0f) return
-    val glyph = parts.sealGlyph
-    val unitScale = glyph / (SEAL_CAP_RATIO * SEAL_REFERENCE_PX)
-    val alpha = dim * (progress / SEAL_INK_FADE).coerceAtMost(1f)
-    // 下落按 1 − t³：起手几乎不动、越落越快，这才是重力；线性掉下来像被人放下去的
-    val fall = if (progress >= SEAL_LAND) 0f else 1f - EaseInCubic.transform(progress / SEAL_LAND)
-    val bounce = if (progress in SEAL_LAND..SEAL_BOUNCE_END) {
-        sin(PI.toFloat() * (progress - SEAL_LAND) / (SEAL_BOUNCE_END - SEAL_LAND))
-    } else {
-        0f
-    }
-    val dy = -fall * parts.height * SEAL_DROP_RATIO - bounce * glyph * 0.30f
-
-    val width7 = digits[0].size.width * unitScale
-    val width3 = digits[1].size.width * unitScale
-    val dotRadius = glyph * 0.085f
-    val gap = glyph * 0.16f
-    val total = width7 + gap * 2f + dotRadius * 2f + width3
-    val left = parts.cx - total / 2f
-    val baseline = parts.sealCenterY + glyph / 2f + dy
-    val dotCenter = Offset(left + width7 + gap + dotRadius, baseline - glyph * 0.42f)
-
-    drawSealGlyph(digits[0], left, baseline, unitScale, alpha)
-    // 圆点同样先压一层深影再描金，和数字的做法保持一致
-    drawCircle(
-        color = SEAL_INK_SHADOW,
-        radius = dotRadius * 1.3f,
-        center = Offset(dotCenter.x + dotRadius * 0.12f, dotCenter.y + dotRadius * 0.18f),
-        alpha = 0.8f * alpha
-    )
-    drawCircle(color = GOLD, radius = dotRadius, center = dotCenter, alpha = alpha)
-    drawSealGlyph(digits[1], left + width7 + gap * 2f + dotRadius * 2f, baseline, unitScale, alpha)
-}
-
-/**
- * 一枚描金数字：深色描边 + 描金填充 + 一层极淡投影。
- *
- * 描边宽度与投影偏移写在**参考字号那套坐标里**，所以数值看着偏大 ——
- * `withTransform` 会把线宽一起缩放（unitScale 约 0.9），落到屏上不到 1dp。
- * 底座是深玫瑰木，金字没有这圈深边就咬不住背景。
- */
-private fun DrawScope.drawSealGlyph(
-    layout: TextLayoutResult,
-    left: Float,
-    baseline: Float,
-    unitScale: Float,
-    alpha: Float
-) {
-    withTransform({
-        // 按基线对齐，不按行盒顶端：行盒含 ascent，按它摆会整体偏高
-        translate(left, baseline - layout.firstBaseline * unitScale)
-        scale(unitScale, unitScale, pivot = Offset.Zero)
-    }) {
-        drawText(
-            textLayoutResult = layout,
-            color = SEAL_INK_SHADOW,
-            alpha = 0.85f * alpha,
-            drawStyle = Stroke(width = 3.2f)
-        )
-        drawText(
-            textLayoutResult = layout,
-            color = GOLD,
-            alpha = alpha,
-            shadow = Shadow(
-                color = SEAL_INK_SHADOW,
-                offset = Offset(1.6f, 2.4f),
-                blurRadius = 2.4f
-            )
-        )
-    }
-}

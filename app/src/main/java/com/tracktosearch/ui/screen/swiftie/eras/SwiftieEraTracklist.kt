@@ -177,7 +177,11 @@ internal fun SwiftieEraTracklist(
             ) {
                 Text(
                     // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
-                    text = String.format(Locale.US, "%02d", index + 1),
+                    text = if (eraIndex == SwiftieErasData.LOVER_INDEX && index == 2) {
+                        "3"
+                    } else {
+                        String.format(Locale.US, "%02d", index + 1)
+                    },
                     style = numberStyle,
                     // 列宽是定死的 rowHeight×1.375，不禁止折行的话
                     // 「01」会在放大档位折成两行、被行高裁掉下半截
