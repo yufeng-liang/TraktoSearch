@@ -2657,7 +2657,7 @@ class TraktRepository @Inject constructor(
             username = detailed.username.ifBlank { profile.username },
             name = detailed.name.ifBlank { profile.name },
             vip = detailed.vip || profile.vip,
-            vip_ep = detailed.vip_ep || profile.vip
+            vip_ep = detailed.vip_ep || profile.vip_ep
         ) ?: profile
     }
 
