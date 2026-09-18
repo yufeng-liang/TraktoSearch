@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
 import com.google.common.truth.Truth.assertThat
+import kotlin.math.abs
 import org.junit.Test
 
 class SwiftieMidnightMoonTest {
@@ -80,5 +81,37 @@ class SwiftieMidnightMoonTest {
         midnightMoonPose(8_000L)
         assertThat(midnightMoonPose(1_200L)).isEqualTo(before)
         assertThat(midnightMoonPose(-1L)).isEqualTo(MidnightMoonPose(0f, 0f, 0f, 0f, 0f, 0f))
+    }
+
+    @Test
+    fun 起手缺口正对时钟() {
+        // 缺口朝向 = 把月牙从「缺口朝屏幕右侧」扳到指向钟心，角度由两个点现算
+        val look = 47f
+        assertThat(midnightMoonRotationDeg(look, 0f)).isWithin(1e-4f).of(-look)
+    }
+
+    @Test
+    fun 抱枕只回转十五度() {
+        // 回满是「把月亮转正」，读起来像素材自转；这里钉住只回 15° 这一条
+        val look = 47f
+        val settled = midnightMoonRotationDeg(look, 1f)
+        assertThat(settled - midnightMoonRotationDeg(look, 0f))
+            .isWithin(1e-4f).of(MIDNIGHT_MOON_CUDDLE_TURN_DEG)
+        assertThat(MIDNIGHT_MOON_CUDDLE_TURN_DEG).isWithin(0.001f).of(15f)
+        // 转过 15° 之后缺口仍朝着时钟那一侧，不允许扳到反向去
+        assertThat(abs(settled)).isGreaterThan(abs(look) / 2f)
+    }
+
+    @Test
+    fun 回转随抱枕进度单调且不越界() {
+        var last = midnightMoonRotationDeg(47f, 0f)
+        for (step in 0..20) {
+            val value = midnightMoonRotationDeg(47f, step / 20f)
+            assertThat(value).isAtLeast(last - 1e-4f)
+            last = value
+        }
+        // 进度超出定义域也不许继续转
+        assertThat(midnightMoonRotationDeg(47f, 5f)).isWithin(1e-4f).of(midnightMoonRotationDeg(47f, 1f))
+        assertThat(midnightMoonRotationDeg(47f, -3f)).isWithin(1e-4f).of(midnightMoonRotationDeg(47f, 0f))
     }
 }

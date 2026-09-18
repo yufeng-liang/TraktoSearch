@@ -100,16 +100,39 @@ private val PILLOW_SEAM: Path by lazy(LazyThreadSafetyMode.NONE) { Path().apply 
     close()
 } }
 
+/**
+ * 月牙在自己坐标系里相对「缺口朝钟」姿态的回转角（度）。
+ *
+ * 抱枕只回 [MIDNIGHT_MOON_CUDDLE_TURN_DEG] 这么一点：整段动作是**躺着换个抱的姿势**，
+ * 不是把月亮转正 —— 回满意味着月牙在众目睽睽下掉了半圈，读起来像素材在自转。
+ */
+internal fun midnightMoonRotationDeg(lookAngleDeg: Float, cuddle: Float): Float =
+    -lookAngleDeg + MIDNIGHT_MOON_CUDDLE_TURN_DEG * cuddle.coerceIn(0f, 1f)
+
+/** 抱枕时回正的角度。只回这一点，缺口始终朝着时钟那一侧。 */
+internal const val MIDNIGHT_MOON_CUDDLE_TURN_DEG: Float = 15f
+
+/**
+ * 月牙的基准缩放。1.45 是「刚好不与卡片打架」的那一版，再收 10% 让缺口那两只尖角
+ * 不至于顶到钟面上。
+ */
+internal const val MIDNIGHT_MOON_SCALE: Float = 1.305f
+
+/**
+ * 月牙中心的纵向位置（屏高比例）。取 0.352 而不是让抱枕时往下沉：
+ * 回转只有 15° 之后，轮廓本来就比原来收得高，再沉下去反而离卡片太远。
+ */
+internal const val MOON_CENTER_Y: Float = 0.352f
+
 internal fun DrawScope.drawMidnightMoon(path: Path, eraMs: Long, alpha: Float, clockCenter: Offset) {
     val pose = midnightMoonPose(eraMs)
-    // 放大仍保留下缘留白；缺口朝向从钟心求角度，不按固定屏幕比例猜。
-    val unit = minOf(size.width * 0.001695f, size.height * 0.00096f) * 1.45f
-    val moonCenter = Offset(size.width * 0.65f, size.height * (0.342f + pose.cuddle * 0.036f))
+    val unit = minOf(size.width * 0.001695f, size.height * 0.00096f) * MIDNIGHT_MOON_SCALE
+    val moonCenter = Offset(size.width * 0.65f, size.height * MOON_CENTER_Y)
     val lookAngle = atan2(moonCenter.y - clockCenter.y, moonCenter.x - clockCenter.x) * 180f / PI.toFloat()
     withTransform({
         translate(moonCenter.x, moonCenter.y + pose.breath * unit * 1.3f)
         scale(-unit, unit, pivot = Offset.Zero)
-        rotate(-lookAngle * (1f - pose.cuddle), pivot = Offset.Zero)
+        rotate(midnightMoonRotationDeg(lookAngle, pose.cuddle), pivot = Offset.Zero)
     }) {
         drawCircle(MOON_GLOW, radius = 155f, center = Offset(-20f, 0f), alpha = alpha)
         val pillowX = -60f + pose.pillowLift * 85f
