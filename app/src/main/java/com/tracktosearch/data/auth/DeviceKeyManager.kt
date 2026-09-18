@@ -33,7 +33,10 @@ class DeviceKeyManager @Inject constructor(
         KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
     }
 
-    // 获取或生成密钥对
+    // 获取或生成密钥对。
+    // 签名可能来自 OkHttp 拦截器的 runBlocking 线程与协程并发调用，containsAlias→generate
+    // 无原子性，并发时会在同一 alias 上重复生成/互相覆盖，必须串行化
+    @Synchronized
     private fun getOrCreateKeyPair(): java.security.KeyPair {
         if (keyStore.containsAlias(KEY_ALIAS)) {
             val entry = keyStore.getCertificate(KEY_ALIAS)
