@@ -4897,9 +4897,10 @@ private fun DrawScope.drawMidnightClock(
     }
 
     // 钟：表盘 + 表圈 + 60 格分刻度（整点加粗）+ 罗马数字 + 指向 3 点的星形指针。
-    // 钟心抬到 0.24h：半径 0.26w 时表盘占 0.12–0.36h，整面都在 HERO_BOTTOM 以内
-    val clockCenter = Offset(w * 0.50f, h * 0.24f)
-    val clockR = w * 0.26f
+    // 钟再收向左上角，给右下方的月牙与抱枕动作让出整片天。
+    val clockCenter = Offset(w * 0.30f, h * 0.175f)
+    val clockR = w * 0.176f
+    val clockUnit = clockR / 0.26f
     // 盘面先压暗一档，再用薰衣草描圈与刻度。
     // 表圈与刻度**不能用 top**（#2A3A6B）：那是这张舞台的首档底色，
     // 画在同一片深蓝上等于没画，第四轮截图里整面钟只剩两根指针，读作一支温度计。
@@ -4914,14 +4915,14 @@ private fun DrawScope.drawMidnightClock(
         radius = clockR * 0.86f,
         center = clockCenter,
         alpha = alpha * 0.22f,
-        style = Stroke(width = (w * 0.0025f).coerceAtLeast(1f))
+        style = Stroke(width = (clockUnit * 0.0025f).coerceAtLeast(1f))
     )
     drawCircle(
         color = SwiftiePalette.Lavender,
         radius = clockR,
         center = clockCenter,
         alpha = alpha * 0.55f,
-        style = Stroke(width = w * 0.010f)
+        style = Stroke(width = clockUnit * 0.010f)
     )
     // 60 格分刻度。**这是「表盘」与「圆环加十二道杠」的分界** ——
     // 只有 12 道刻度的圆盘读作罗盘或方向舵，钟面的特征是那一圈细密的分格
@@ -4932,7 +4933,7 @@ private fun DrawScope.drawMidnightClock(
             color = SwiftiePalette.Lavender,
             start = Offset(clockCenter.x + cos(a) * clockR * 0.90f, clockCenter.y + sin(a) * clockR * 0.90f),
             end = Offset(clockCenter.x + cos(a) * clockR * 0.94f, clockCenter.y + sin(a) * clockR * 0.94f),
-            strokeWidth = (w * 0.002f).coerceAtLeast(1f),
+            strokeWidth = (clockUnit * 0.002f).coerceAtLeast(1f),
             alpha = alpha * 0.34f
         )
     }
@@ -4944,7 +4945,7 @@ private fun DrawScope.drawMidnightClock(
             color = SwiftiePalette.Lavender,
             start = Offset(clockCenter.x + cos(a) * r0, clockCenter.y + sin(a) * r0),
             end = Offset(clockCenter.x + cos(a) * clockR * 0.94f, clockCenter.y + sin(a) * clockR * 0.94f),
-            strokeWidth = if (major) w * 0.008f else w * 0.004f,
+            strokeWidth = if (major) clockUnit * 0.008f else clockUnit * 0.004f,
             alpha = alpha * (if (major) 0.75f else 0.5f),
             cap = StrokeCap.Round
         )
@@ -5013,14 +5014,14 @@ private fun DrawScope.drawMidnightClock(
             color = SwiftiePalette.Lavender,
             start = clockCenter,
             end = end,
-            strokeWidth = w * thick,
+            strokeWidth = clockUnit * thick,
             alpha = alpha * 0.62f,
             cap = StrokeCap.Round
         )
-        starInto(path, end.x, end.y, w * 0.026f, phase * 360f / 5f)
+        starInto(path, end.x, end.y, clockUnit * 0.026f, phase * 360f / 5f)
         drawPath(path = path, color = Color.White, alpha = alpha * 0.68f)
     }
-    drawCircle(color = SwiftiePalette.Lavender, radius = w * 0.012f, center = clockCenter, alpha = alpha * 0.7f)
+    drawCircle(color = SwiftiePalette.Lavender, radius = clockUnit * 0.012f, center = clockCenter, alpha = alpha * 0.7f)
     drawUnitGlow(GLOW_WHITE, clockCenter, clockR * 2.6f, alpha * 0.14f)
 
     // 薰衣草雾：两条斜过画面。旋转一个固定角度再铺横带，比写一条斜向渐变省事 ——
@@ -5035,6 +5036,7 @@ private fun DrawScope.drawMidnightClock(
             mid, alpha * DISTANT_ALPHA * 1.3f, overscanX = 0.35f
         )
     }
+    drawMidnightMoon(path, eraMs, alpha, clockCenter)
 }
 
 // ─────────────────────── 11 · The Tortured Poets Department ───────────────────────
