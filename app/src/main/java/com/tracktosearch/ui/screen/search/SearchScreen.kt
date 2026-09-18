@@ -1014,23 +1014,29 @@ private fun SearchBarTopNew(
         readableOn(SearchTypeUnknown, typeColorSurface)
     }
     // 搜索类型菜单：标签映射与固定宽度（最长文字 + 打勾 + 间隔 + 内边距，多语言适配）
+    // 标签与量宽都 remember 住：打字每个字符都重组本组件，不记就要每个字符重查 4 次资源、重测 4 段文字
     val orderedTypes = listOf(SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON, SearchSourceType.DISK)
-    val typeLabelMap = orderedTypes.associateWith { type ->
-        stringResource(
-            when (type) {
-                SearchSourceType.DISK -> R.string.search_type_disk
-                SearchSourceType.MOVIE -> R.string.search_type_movie
-                SearchSourceType.SHOW -> R.string.search_type_show
-                SearchSourceType.PERSON -> R.string.search_type_person
-            }
-        )
+    val context = LocalContext.current
+    val typeLabelMap = remember(orderedTypes, context) {
+        orderedTypes.associateWith { type ->
+            context.getString(
+                when (type) {
+                    SearchSourceType.DISK -> R.string.search_type_disk
+                    SearchSourceType.MOVIE -> R.string.search_type_movie
+                    SearchSourceType.SHOW -> R.string.search_type_show
+                    SearchSourceType.PERSON -> R.string.search_type_person
+                }
+            )
+        }
     }
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val typeLabelStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
-    val typeMenuWidth = with(density) {
-        typeLabelMap.values.maxOf { textMeasurer.measure(AnnotatedString(it), typeLabelStyle).size.width }.toDp()
-    } + 24.dp + 8.dp + 16.dp
+    val typeMenuWidth = remember(typeLabelMap, typeLabelStyle) {
+        with(density) {
+            typeLabelMap.values.maxOf { textMeasurer.measure(AnnotatedString(it), typeLabelStyle).size.width }.toDp()
+        } + 24.dp + 8.dp + 16.dp
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
