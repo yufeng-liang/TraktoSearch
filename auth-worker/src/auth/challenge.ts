@@ -3,6 +3,8 @@
 import { AppError, successResponse, now } from '../util/errors.ts';
 import { generateSecureToken, sha256 } from '../util/crypto.ts';
 import { firstRow } from '../util/db.ts';
+import { clientIp } from '../util/client-ip.ts';
+import { consumeRateLimit } from '../util/rate-limit.ts';
 
 export type AuthChallengeType = 'REFRESH' | 'RECOVERY';
 
@@ -70,7 +72,16 @@ export async function handleChallenge(
     env: { DB: D1Database },
     requestId: string
 ): Promise<Response> {
-    const body = await request.json() as ChallengeRequest;
+    // 匿名端点且每次成功都向 auth_challenges 插一行（10 分钟过期），必须按 IP 限流：
+    // 随机 deviceId 字典可无限 INSERT，直接烧掉 D1 每日写配额。档位与 recover 一致偏严
+    const ip = clientIp(request) || 'unknown';
+    const ipHash = await sha256(`challenge:${ip}`);
+    const allowed = await consumeRateLimit(env.DB, `challenge-rate:${ipHash}`, 30, 3600);
+    if (!allowed) {
+        throw new AppError('RATE_LIMITED', 'Too many challenge requests', 429);
+    }
+
+    const body = await readJson<ChallengeRequest>(request);
 
     if (!body.deviceId) {
         throw new AppError('INVALID_REQUEST', 'deviceId is required', 400);
@@ -92,4 +103,10 @@ export async function handleChallenge(
 
     const response: ChallengeResponse = { nonce, expiresAt };
     return successResponse(response, requestId);
+}
+
+function readJson<T>(request: Request): Promise<T> {
+    return request.json().catch(() => {
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON request', 400);
+    }) as Promise<T>;
 }

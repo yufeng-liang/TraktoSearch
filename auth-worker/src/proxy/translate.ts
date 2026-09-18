@@ -11,7 +11,9 @@
 // 客户端请求体统一为 { q, from, to } ，worker 注入 appid / api_key / sign。
 
 import type { Env } from '../index.ts';
+import type { JWTPayload } from '../util/jwt.ts';
 import { AppError } from '../util/errors.ts';
+import { consumeRateLimit } from '../util/rate-limit.ts';
 
 const BAIDU_AI_URL = 'https://fanyi-api.baidu.com/ait/api/aiTextTranslate';
 const BAIDU_GENERAL_URL = 'https://fanyi-api.baidu.com/api/trans/vip/translate';
@@ -30,7 +32,16 @@ export async function handleTranslateProxy(
     env: Env,
     path: string,
     ctx: ExecutionContext,
+    payload: JWTPayload,
 ): Promise<Response> {
+    // 翻译结果落 KV 缓存：每次唯一文本必然 miss 必然 KV.put，无限流会被单账号
+    // 刷爆 KV 每日写配额（连带打挂共享配额的 key-pool 冷却、配额计数等写入）
+    const subject = payload?.sub || 'anonymous';
+    const allowed = await consumeRateLimit(env.DB, `translate:${subject}`, 60, 3600);
+    if (!allowed) {
+        throw new AppError('RATE_LIMITED', 'Too many translation requests', 429);
+    }
+
     if (path === '/api/translate/ai' && request.method === 'POST') {
         return translateWithBaiduAI(request, env, ctx);
     }

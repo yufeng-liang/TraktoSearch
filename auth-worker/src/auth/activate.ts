@@ -60,7 +60,7 @@ export async function handleActivate(
     env: { DB: D1Database; JWT_SIGNING_KEY: string; DEVICE_RECOVERY_HMAC_KEY: string },
     requestId: string
 ): Promise<Response> {
-    const body = await request.json() as ActivateRequest;
+    const body = await readJson<ActivateRequest>(request);
 
     // 参数校验
     if (!body.inviteCode || !body.publicKey) {
@@ -410,4 +410,10 @@ async function logAndThrowActivationFailure(
         // 审计写入失败时仍返回原始激活错误，不能掩盖用户可处理的原因。
     }
     throw new AppError(errorCode, message, 400);
+}
+
+function readJson<T>(request: Request): Promise<T> {
+    return request.json().catch(() => {
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON request', 400);
+    }) as Promise<T>;
 }

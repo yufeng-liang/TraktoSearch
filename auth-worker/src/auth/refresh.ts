@@ -40,7 +40,7 @@ export async function handleRefresh(
     env: { DB: D1Database; JWT_SIGNING_KEY: string },
     requestId: string
 ): Promise<Response> {
-    const body = await request.json() as RefreshRequest;
+    const body = await readJson<RefreshRequest>(request);
 
     if (!body.deviceId || !body.refreshToken || !body.nonce || !body.signature) {
         throw new AppError('INVALID_REQUEST', 'deviceId, refreshToken, nonce, signature are required', 400);
@@ -561,4 +561,10 @@ function copyScalar(value: Uint8Array, output: Uint8Array, offset: number): bool
     if (scalar.length > 32) return false;
     output.set(scalar, offset + 32 - scalar.length);
     return true;
+}
+
+function readJson<T>(request: Request): Promise<T> {
+    return request.json().catch(() => {
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON request', 400);
+    }) as Promise<T>;
 }

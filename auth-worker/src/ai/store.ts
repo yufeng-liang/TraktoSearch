@@ -65,8 +65,11 @@ export async function readAiCache(env: AiStoreEnvironment, key: string): Promise
         `).bind(key, now()).first<CachedRow>();
         if (!row) return null;
         return JSON.parse(row.payload_json) as unknown;
-    } catch {
-        throw new AppError('AI_STORAGE_ERROR', 'AI storage is unavailable', 503);
+    } catch (err) {
+        // 读失败按缓存 miss 降级（重新生成），而不是 503 打死整条路由：
+        // 一条损坏缓存行或一次 D1 抖动不该让用户在整段 TTL 内都拿不到服务
+        console.error(`[ai-store] readAiCache miss fallback for ${key}:`, err instanceof Error ? err.message : err);
+        return null;
     }
 }
 
@@ -96,8 +99,10 @@ export async function writeAiCache(
                 expires_at = excluded.expires_at,
                 updated_at = excluded.updated_at
         `).bind(key, friendId, kind, JSON.stringify(payload), expiresAt, now(), now()).run();
-    } catch {
-        throw new AppError('AI_STORAGE_ERROR', 'AI storage is unavailable', 503);
+    } catch (err) {
+        // 写缓存失败只告警不抛：调用点在生成已成功、配额已扣之后，
+        // 这里抛 503 会把已生成结果连同配额一起丢掉
+        console.error(`[ai-store] writeAiCache failed for ${key}:`, err instanceof Error ? err.message : err);
     }
 }
 

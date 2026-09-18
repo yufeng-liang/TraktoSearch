@@ -4,7 +4,7 @@ import { timingSafeEqual } from './crypto.ts';
 
 const alg = { name: 'HMAC', hash: 'SHA-256' };
 
-interface JWTPayload {
+export interface JWTPayload {
     sub: string;        // 朋友 ID
     device: string;     // 设备 ID
     iat: number;        // 签发时间

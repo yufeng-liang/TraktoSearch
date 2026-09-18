@@ -198,7 +198,7 @@ function handleCors(): Response {
         status: 204,
         headers: {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Invite-Test-Key',
             'Access-Control-Max-Age': '86400',
         },
@@ -319,6 +319,12 @@ async function handleAuthApi(
     if (!payload) {
         throw new AppError('INVALID_TOKEN', 'Invalid or expired token', 401);
     }
+    // scope 校验：audio/illustration 短时 token（10 分钟、且出现在 URL 路径里，
+    // 会进浏览器历史/代理日志）与普通 API token 共用同一把签名密钥，只验签名
+    // 不验 scope 时，持有任一媒体 URL token 即可冒充 API token 调全部端点
+    if (!Array.isArray(payload.scope) || !payload.scope.includes('api')) {
+        throw new AppError('INVALID_TOKEN', 'Token scope does not permit API access', 403);
+    }
 
     // AI 角色与能力统一由 Worker 代理，客户端不接触 MiMo 密钥或音色样本。
     if (path === '/api/ai' || path.startsWith('/api/ai/')) {
@@ -355,11 +361,11 @@ async function handleAuthApi(
         return handleGithubProxy(request, env, path);
     }
     if (path.startsWith('/api/translate/')) {
-        return handleTranslateProxy(request, env, path, ctx);
+        return handleTranslateProxy(request, env, path, ctx, payload);
     }
     // 兼容客户端 Retrofit baseUrl 尾斜杠拼出的 /api/crash-logs/ 路径
     if ((path === '/api/crash-logs' || path === '/api/crash-logs/') && request.method === 'POST') {
-        return handleCrashLogProxy(request, env);
+        return handleCrashLogProxy(request, env, payload);
     }
 
     // 云端配置代理（需 JWT）：worker 服务端解密后返回明文

@@ -75,7 +75,7 @@ async function traktExchange(
     env: Env,
     friendId: string
 ): Promise<Response> {
-    const body = await request.json() as { code: string };
+    const body = await readJson<{ code: string }>(request);
 
     if (!body.code) {
         throw new AppError('INVALID_REQUEST', 'code is required', 400);
@@ -343,4 +343,10 @@ async function classifyTokenResponse(response: Response) {
         code: classification.code,
     });
     return classification;
+}
+
+function readJson<T>(request: Request): Promise<T> {
+    return request.json().catch(() => {
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON request', 400);
+    }) as Promise<T>;
 }
