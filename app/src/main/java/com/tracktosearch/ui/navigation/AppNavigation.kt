@@ -252,7 +252,7 @@ object Routes {
         if (section == null) "help" else "help?section=$section"
 
     fun searchSourceEditorRoute(mode: String, payload: String = ""): String =
-        "searchSourceEditor/$mode/${java.net.URLEncoder.encode(payload.ifBlank { " " }, "UTF-8")}"
+        "searchSourceEditor/$mode/${android.net.Uri.encode(payload.ifBlank { " " }, "")}"
 
     fun feedbackDetailRoute(feedbackId: String, replyId: String? = null): String =
         "feedbackDetail/$feedbackId?replyId=${replyId ?: ""}"
@@ -264,8 +264,8 @@ object Routes {
     /** morph 见 [LIST_DETAIL]：只有发现页那几张列表卡片点进来时为 true。 */
     fun listDetailRoute(listId: Int, listName: String, morph: Boolean = false): String {
         // 空名要占住路径段，否则拼出 `listDetail/1//true`，连续斜杠匹配不上任何 destination。
-        // 与 searchSourceEditorRoute 同一处理：空白填一个空格，编码后是 `+`。
-        val encodedName = java.net.URLEncoder.encode(listName.ifBlank { " " }, "UTF-8")
+        // 与 searchSourceEditorRoute 同一处理：空白填一个空格，Uri.encode 后是 `%20`。
+        val encodedName = android.net.Uri.encode(listName.ifBlank { " " }, "")
         return "listDetail/$listId/$encodedName/$morph"
     }
 
@@ -273,7 +273,7 @@ object Routes {
     fun discoverFilterRoute(entry: String): String = "discoverFilter/$entry"
 
     fun traktSearchRoute(type: String, query: String): String {
-        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        val encodedQuery = android.net.Uri.encode(query, "")
         return "traktSearch/$type/$encodedQuery"
     }
 
@@ -285,11 +285,11 @@ object Routes {
      * 两者都可省略，省略时详情页退回同步 peek TMDB 内存缓存。
      */
     fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false, doubanId: String? = null, posterUrl: String? = null, year: Int? = null): String {
-        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
-        val encodedImdbId = java.net.URLEncoder.encode(imdbId, "UTF-8")
-        val encodedDoubanId = doubanId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
+        val encodedTitle = android.net.Uri.encode(title, "")
+        val encodedImdbId = android.net.Uri.encode(imdbId, "")
+        val encodedDoubanId = doubanId?.let { android.net.Uri.encode(it, "") }
         val encodedPosterUrl = posterUrl?.takeIf { it.isNotBlank() }
-            ?.let { java.net.URLEncoder.encode(it, "UTF-8") }
+            ?.let { android.net.Uri.encode(it, "") }
         var route = "detail/$type/$traktId/$tmdbId/$encodedTitle/$encodedImdbId/$traktRating"
         if (inWatchlist || isWatched || encodedDoubanId != null || encodedPosterUrl != null || year != null) {
             val params = mutableListOf<String>()
@@ -304,13 +304,13 @@ object Routes {
     }
 
     fun searchRoute(keyword: String): String {
-        val encodedKeyword = java.net.URLEncoder.encode(keyword, "UTF-8")
+        val encodedKeyword = android.net.Uri.encode(keyword, "")
         return "search/$encodedKeyword"
     }
 
     fun personRoute(personId: Int, personName: String, profileUrl: String): String {
-        val encodedName = java.net.URLEncoder.encode(personName, "UTF-8")
-        val encodedProfileUrl = java.net.URLEncoder.encode(profileUrl, "UTF-8")
+        val encodedName = android.net.Uri.encode(personName, "")
+        val encodedProfileUrl = android.net.Uri.encode(profileUrl, "")
         return "person/$personId/$encodedName/$encodedProfileUrl"
     }
 }
@@ -465,12 +465,18 @@ fun AppNavigation(
             .connectivityObserver()
     }
     // 页面变化追踪（错误日志上下文）
-    navController.addOnDestinationChangedListener { _, destination, _ ->
-        val route = destination.route ?: ""
-        CurrentPageHolder.currentRoute = route
-        val pageName = simplifyRouteName(route)
-        CurrentPageHolder.currentPageName = pageName
-        UserActionTracker.record("nav", "to_page", pageName)
+    // 必须放 DisposableEffect：直接写在组合体里会随每次重组重复注册且永不注销，
+    // navController 强持有监听器，会话越长重复回调越多
+    DisposableEffect(navController) {
+        val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
+            val route = destination.route ?: ""
+            CurrentPageHolder.currentRoute = route
+            val pageName = simplifyRouteName(route)
+            CurrentPageHolder.currentPageName = pageName
+            UserActionTracker.record("nav", "to_page", pageName)
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
     }
     var currentStartDest by remember { mutableStateOf(startDestination) }
     // 读取默认启动页设置
@@ -1099,8 +1105,8 @@ fun AppNavigation(
                         val type = backStackEntry.arguments?.getString("type") ?: "movie"
                         val traktId = backStackEntry.arguments?.getInt("traktId") ?: 0
                         val tmdbId = backStackEntry.arguments?.getInt("tmdbId") ?: 0
-                        val title = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
-                        val imdbId = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("imdbId") ?: "", "UTF-8")
+                        val title = backStackEntry.arguments?.getString("title") ?: ""
+                        val imdbId = backStackEntry.arguments?.getString("imdbId") ?: ""
                         val traktRating = backStackEntry.arguments?.getFloat("traktRating")?.toDouble() ?: 0.0
                          val inWatchlist = backStackEntry.arguments?.getBoolean("inWatchlist") ?: false
                          val isWatched = backStackEntry.arguments?.getBoolean("isWatched") ?: false
@@ -1108,7 +1114,6 @@ fun AppNavigation(
                          // 首帧种子：列表卡片已知的海报与年份，缺省时为空串/0
                          val seedPosterUrl = backStackEntry.arguments?.getString("posterUrl")
                              ?.takeIf { it.isNotBlank() }
-                             ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
                          val seedYear = backStackEntry.arguments?.getInt("year")?.takeIf { it > 0 }
 
                         // 用于在标记已看/想看后通知上级列表页刷新
@@ -1202,12 +1207,8 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         VintagePaperPage {
                         val personId = backStackEntry.arguments?.getInt("personId") ?: 0
-                        val personName = java.net.URLDecoder.decode(
-                            backStackEntry.arguments?.getString("personName") ?: "", "UTF-8"
-                        )
-                        val profileUrl = java.net.URLDecoder.decode(
-                            backStackEntry.arguments?.getString("profileUrl") ?: "", "UTF-8"
-                        ).takeIf { it.isNotEmpty() }
+                        val personName = backStackEntry.arguments?.getString("personName") ?: ""
+                        val profileUrl = backStackEntry.arguments?.getString("profileUrl")?.takeIf { it.isNotEmpty() }
                         PersonScreen(
                             personId = personId,
                             personName = personName,
@@ -1313,9 +1314,7 @@ fun AppNavigation(
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val typeStr = backStackEntry.arguments?.getString("type") ?: "movie"
-                        val query = java.net.URLDecoder.decode(
-                            backStackEntry.arguments?.getString("query") ?: "", "UTF-8"
-                        )
+                        val query = backStackEntry.arguments?.getString("query") ?: ""
                         val mediaType = when (typeStr) {
                             "show" -> MediaType.SHOW
                             "person" -> MediaType.PERSON
@@ -1578,9 +1577,7 @@ fun AppNavigation(
                 composable(Routes.SEARCH_SOURCE_EDITOR) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val mode = backStackEntry.arguments?.getString("mode")
-                        val payload = backStackEntry.arguments?.getString("payload")?.let {
-                            java.net.URLDecoder.decode(it, "UTF-8")
-                        }.orEmpty()
+                        val payload = backStackEntry.arguments?.getString("payload").orEmpty()
                         val editorViewModel: SearchSourceEditorViewModel = hiltViewModel(backStackEntry)
                         LaunchedEffect(mode, payload) {
                             editorViewModel.initMode(

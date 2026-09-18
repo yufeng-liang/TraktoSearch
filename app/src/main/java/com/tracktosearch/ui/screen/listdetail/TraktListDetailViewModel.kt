@@ -96,16 +96,12 @@ class TraktListDetailViewModel @Inject constructor(
     private val listId: Int = savedStateHandle.get<Int>("listId") ?: 0
 
     /**
-     * 榜单名。
-     *
-     * 导航时经 [java.net.URLEncoder] 编码进路由（空格编成 `+`、非 ASCII 编成 `%XX`），这里必须解回来，
-     * 否则顶栏标题会显示成 `MARVEL+Cinematic+Universe`。Nav 组件对路径参数只做 `Uri.decode`，
-     * 它不把 `+` 当空格，所以这一步不能省。
-     * 解码失败（榜单名里有未转义的 `%`）时退回原串，标题难看好过整页崩掉。
+     * 榜单名。路由构建侧用 `Uri.encode(name, "")` 编码，Nav 组件对路径参数恰好做一次
+     * percent-decode，到这里已是原文，直接使用即可。
+     * （历史上这里曾二次 `URLDecoder.decode`，与 Nav 的内置解码叠加，
+     * 榜单名含字面 `%` 时会抛 IllegalArgumentException 崩掉整页，已移除。）
      */
-    private val listName: String = (savedStateHandle.get<String>("listName") ?: "").let { raw ->
-        runCatching { java.net.URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
-    }
+    private val listName: String = savedStateHandle.get<String>("listName") ?: ""
 
     private val _uiState = MutableStateFlow(ListDetailUiState(listId = listId, listName = listName))
     val uiState: StateFlow<ListDetailUiState> = _uiState

@@ -692,14 +692,14 @@ class DetailViewModel @Inject constructor(
         // 原名同样以种子链为准：摘要/富化缓存没有时用列表卡片暂存的原名补上。
         // 不补的话首帧不显示原名，富化回来后那一行插入会把评分卡连同下方内容推下去。
         // 与主标题相同的值不当作原名，避免中文片名在原名行重复显示一遍。
-        val seededDisplayTitle = (seed?.displayTitle ?: title).replace("+", " ")
+        val seededDisplayTitle = seed?.displayTitle ?: title
         val seededOriginalTitle = (seed?.originalTitle?.takeIf { it.isNotBlank() } ?: cachedOriginalTitle)
             ?.takeIf { it != seededDisplayTitle }
             .orEmpty()
         _uiState.value = DetailUiState(
             isLoading = true,
             isSearching = true,
-            title = title.replace("+", " "),
+            title = title,
             displayTitle = seededDisplayTitle,
             originalTitle = seededOriginalTitle,
             genres = seed?.genres.orEmpty(),
@@ -853,7 +853,7 @@ class DetailViewModel @Inject constructor(
                     ?: ""
                 val displayOriginalTitle = currentOriginalTitle.ifEmpty {
                     // 如果 TMDB 没返回 originalTitle 或与中文标题相同，使用 Trakt 原始标题
-                    title.takeIf { it.isNotEmpty() && it != chineseTitle.replace("+", " ") } ?: ""
+                    title.takeIf { it.isNotEmpty() && it != chineseTitle } ?: ""
                 }
                 // 富化失败时不能用「摘要说过有系列」把骨架永久挂住；有系列 ID 就继续加载，
                 // 没有才退出占位。
@@ -865,7 +865,7 @@ class DetailViewModel @Inject constructor(
                 // peek 到的类型/日期/状态甚至海报统统清成空 —— 头部内容当着用户的面消失一遍。
                 _uiState.value = beforeEnrichment.copy(
                     isLoading = false,
-                    displayTitle = chineseTitle.replace("+", " "),
+                    displayTitle = chineseTitle,
                     originalTitle = displayOriginalTitle,
                     overview = doubanSupplement?.overview
                         ?: enrichment?.overview?.takeIf { it.isNotBlank() }
