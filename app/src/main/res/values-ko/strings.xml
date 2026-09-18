@@ -2126,7 +2126,6 @@
     <string name="opensource_use_backdrop">리퀴드 글래스 효과의 화면 단위 샘플링 배경</string>
     <string name="opensource_use_mesh_gradient">Android 12 이하 배경 글로우 대체 구현(메시 그라데이션 애니메이션)</string>
     <string name="opensource_use_mirage">Android 13 이상 배경 글로우 구현(AGSL 셰이더 애니메이션)</string>
-    <string name="opensource_use_colorpicker">테마 사용자 지정 색상 피커</string>
     <string name="opensource_use_kotlin">코루틴 비동기 처리와 JSON 직렬화</string>
     <string name="opensource_use_hilt">의존성 주입(Repository, ViewModel 조립)</string>
     <string name="opensource_use_square">HTTP 네트워크 요청(Trakt, TMDB, 인증 게이트웨이 등)</string>

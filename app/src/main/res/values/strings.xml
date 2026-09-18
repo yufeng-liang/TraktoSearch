@@ -2121,7 +2121,6 @@ Config:
     <string name="opensource_use_backdrop">Screen-level sampling backdrop for the liquid glass effect</string>
     <string name="opensource_use_mesh_gradient">Mesh gradient animation fallback for background glow on Android 12 and below</string>
     <string name="opensource_use_mirage">AGSL shader animation for background glow on Android 13 and above</string>
-    <string name="opensource_use_colorpicker">Color picker for custom theme colors</string>
     <string name="opensource_use_kotlin">Coroutine-based async dispatch and JSON serialization</string>
     <string name="opensource_use_hilt">Dependency injection wiring repositories and view models</string>
     <string name="opensource_use_square">HTTP networking (Trakt, TMDB, auth gateway APIs)</string>

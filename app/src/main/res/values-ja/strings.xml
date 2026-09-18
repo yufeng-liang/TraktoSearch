@@ -2126,7 +2126,6 @@
     <string name="opensource_use_backdrop">リキッドガラス効果のための画面単位サンプリング基盤</string>
     <string name="opensource_use_mesh_gradient">Android 12 以下での背景グロー代替（メッシュグラデーションアニメーション）</string>
     <string name="opensource_use_mirage">Android 13 以上の背景グロー（AGSL シェーダーアニメーション）</string>
-    <string name="opensource_use_colorpicker">テーマカラーのカラーピッカー</string>
     <string name="opensource_use_kotlin">コルーチンによる非同期処理と JSON シリアライズ</string>
     <string name="opensource_use_hilt">依存性注入（Repository や ViewModel の組み立て）</string>
     <string name="opensource_use_square">HTTP 通信（Trakt・TMDB・認証ゲートウェイなど）</string>

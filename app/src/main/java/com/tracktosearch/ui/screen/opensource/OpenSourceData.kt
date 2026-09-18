@@ -152,14 +152,6 @@ object OpenSourceData {
                 usageRes = R.string.opensource_use_mirage,
                 repoUrl = "https://github.com/androidpoet/Mirage"
             ),
-            OssLibrary(
-                name = "ColorPicker Compose",
-                versionAliases = versionAliases("skydovesColorPicker"),
-                license = APACHE,
-                developer = "skydoves",
-                usageRes = R.string.opensource_use_colorpicker,
-                repoUrl = "https://github.com/skydoves/colorpicker-compose"
-            )
         )),
         OssGroup(R.string.opensource_group_framework, listOf(
             OssLibrary(

@@ -2114,7 +2114,6 @@
     <string name="opensource_use_backdrop">液态玻璃效果的屏幕级采样背板</string>
     <string name="opensource_use_mesh_gradient">Android 12 及以下背景光晕的网格渐变动画回退实现</string>
     <string name="opensource_use_mirage">Android 13 及以上背景光晕的 AGSL 着色器动画实现</string>
-    <string name="opensource_use_colorpicker">主题自定义配色的取色器</string>
     <string name="opensource_use_kotlin">协程异步调度与 JSON 序列化</string>
     <string name="opensource_use_hilt">依赖注入，组装 Repository、ViewModel 等组件</string>
     <string name="opensource_use_square">HTTP 网络请求（Trakt、TMDB、授权网关等接口）</string>
