@@ -181,10 +181,14 @@ fun MarkRecordScreen(
     //
     // 位置要在新列表上屏那一帧才钉：重定位就发生在那次测量里，提前调用会被这次测量吃掉。
     // requestScrollToItem 会丢掉 key 锚点，所以钉住之后不会再被重定位带走。
+    //
+    // 不能用 snapshotFlow 等 items 变化：切到命中结果缓存的 Tab 时 VM 在同一次 update 里
+    // 同时写 currentTab 与 items，effect 重启后首个发射已是新列表、被 drop(1) 丢掉，
+    // 回顶永不执行。token 变化即钉 0 —— requestScrollToItem 作用于下一次测量，
+    // 且钉住后锚点已清，items 先后到达的两种时序下都不会被重定位带走。
     val markRecordListToken = "${uiState.currentTab}|${uiState.filterMediaTypes}|" +
         "${uiState.filterDatePreset}|${uiState.filterDateRange}|${uiState.sortAscending}|${uiState.searchQuery}"
     LaunchedEffect(markRecordListToken) {
-        snapshotFlow { uiState.items }.drop(1).first()
         listState.requestScrollToItem(0)
     }
     var showFilterSheet by remember { mutableStateOf(false) }
