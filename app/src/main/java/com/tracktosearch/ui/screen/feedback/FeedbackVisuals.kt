@@ -346,6 +346,11 @@ internal class FeedbackTimeLabels(
         }
     }
 
+    // SimpleDateFormat 构造不便宜；本类只在组合（主线程）里逐条格式化，实例级复用即可
+    private val mdFormat by lazy { SimpleDateFormat("MM-dd", Locale.getDefault()) }
+    private val ymdFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    private val hmFormat by lazy { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
     /** 日期分隔标签：今天 / 昨天 / 本年 MM-dd / 往年 yyyy-MM-dd。 */
     fun dayLabel(epochSeconds: Long): String {
         val target = Calendar.getInstance().apply { timeInMillis = epochSeconds * 1000 }
@@ -355,14 +360,13 @@ internal class FeedbackTimeLabels(
         return when {
             dayDiff == 0 -> today
             dayDiff == 1 -> yesterday
-            sameYear -> SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(epochSeconds * 1000))
-            else -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(epochSeconds * 1000))
+            sameYear -> mdFormat.format(Date(epochSeconds * 1000))
+            else -> ymdFormat.format(Date(epochSeconds * 1000))
         }
     }
 
     /** 时刻 HH:mm。 */
-    fun clock(epochSeconds: Long): String =
-        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(epochSeconds * 1000))
+    fun clock(epochSeconds: Long): String = hmFormat.format(Date(epochSeconds * 1000))
 
     /** 两个日历实例相差几个自然日（只比日期，不比时刻）。 */
     private fun daysBetween(target: Calendar, now: Calendar): Int {
