@@ -9,6 +9,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -210,18 +212,41 @@ object Routes {
      * 集合就悄悄失配，而失配的表现只是转场观感退回去，编译和运行都不报错。
      */
     val ContainerMorphRouteIds = setOf(
-        "statistics",
-        "markRecords",
-        "searchSources",
         "listDetail",
         "discoverFilter",
+    )
+
+    /**
+     * 设置页子树的 route 首个路径段。
+     *
+     * 设置层级是一路向下的普通子页，不用共享容器变形；这一组统一走短距离水平滑动 + 淡入淡出，
+     * 既让用户感知到前进/返回方向，又避免全宽滑动与 haze、Mesh 背景叠加造成掉帧。
+     */
+    val SettingsSubtreeRouteIds = setOf(
+        "statistics",
+        "dailyStamp",
+        "markRecords",
+        "help",
+        "openSource",
+        "privacy",
+        "splashQuote",
+        "feedback",
+        "newFeedback",
         "feedbackDetail",
         "crashLogDetail",
+        "messages",
+        "searchSources",
+        "searchSourceEditor",
+        "glassPilot",
     )
 
     /** 取 route 的首个路径段，用于与 [ContainerMorphRouteIds] 比对。 */
     fun routeId(route: String?): String? =
         route?.substringBefore('?')?.substringBefore('/')?.takeIf { it.isNotBlank() }
+
+    /** 当前 route 是否属于设置页子树。 */
+    fun isSettingsSubtreeRoute(route: String?): Boolean =
+        routeId(route) in SettingsSubtreeRouteIds
 
     fun helpRoute(section: String? = null): String =
         if (section == null) "help" else "help?section=$section"
@@ -679,17 +704,34 @@ fun AppNavigation(
             NavHost(
                 navController = navController,
                 startDestination = currentStartDest,
-                // 全局默认转场：统一 220ms 纯 fade（返回 pop 为 300ms，见下）。
+                // 全局默认转场：统一 220ms 纯 fade（返回 pop 为 300ms，见下）；设置页子树单独使用
+                // 短距离水平滑动 + 淡入淡出，避免全宽滑动与 haze、Mesh 背景叠加导致掉帧。
                 // 原默认 700ms fadeIn/fadeOut 转场期间新旧两页同时组合，各页全屏 hazeSource
                 // 与多个 blur 节点同时渲染导致切换掉帧；纯 fade 无水平偏移，时长缩短为 220ms
                 // 可减少转场重叠开销，且与详情页共享元素 spring 动画对齐，避免违和。
-                enterTransition = { fadeIn(animationSpec = tween(220)) },
+                enterTransition = {
+                    if (Routes.isSettingsSubtreeRoute(targetState.destination.route)) {
+                        fadeIn(animationSpec = tween(180)) +
+                            slideInHorizontally(animationSpec = tween(220)) { fullWidth ->
+                                fullWidth / 10
+                            }
+                    } else {
+                        fadeIn(animationSpec = tween(220))
+                    }
+                },
                 // 去容器变形页时不给来源页叠淡出：目标页第一帧就不透明地盖住它，这层全屏 alpha
                 // 白画一遍。返回方向见下面的 popEnterTransition，那一侧是真的会看出问题。
                 exitTransition = {
-                    if (Routes.routeId(targetState.destination.route) in Routes.ContainerMorphRouteIds)
-                        ExitTransition.None
-                    else fadeOut(animationSpec = tween(220))
+                    when {
+                        Routes.routeId(targetState.destination.route) in Routes.ContainerMorphRouteIds ->
+                            ExitTransition.None
+                        Routes.isSettingsSubtreeRoute(targetState.destination.route) ->
+                            fadeOut(animationSpec = tween(160)) +
+                                slideOutHorizontally(animationSpec = tween(220)) { fullWidth ->
+                                    -fullWidth / 20
+                                }
+                        else -> fadeOut(animationSpec = tween(220))
+                    }
                 },
                 // 从容器变形页返回时不给目标页叠淡入：整页收回成卡片的动画由 SharedTransitionLayout
                 // 接管，目标页应当立即完整可见。再叠 120ms 淡入就是两层半透明相叠，收缩中的整页
@@ -702,11 +744,27 @@ fun AppNavigation(
                 // 共享元素的 bounds spring 被直接 seek 到终点，用户看到的就是「没有回缩动画」。
                 // 300ms 给首帧留约两倍余量。改小前先跑 build/qa/person-return 的往返录屏。
                 popEnterTransition = {
-                    if (Routes.routeId(initialState.destination.route) in Routes.ContainerMorphRouteIds)
-                        EnterTransition.None
-                    else fadeIn(animationSpec = tween(300))
+                    when {
+                        Routes.routeId(initialState.destination.route) in Routes.ContainerMorphRouteIds ->
+                            EnterTransition.None
+                        Routes.isSettingsSubtreeRoute(initialState.destination.route) ->
+                            fadeIn(animationSpec = tween(180)) +
+                                slideInHorizontally(animationSpec = tween(220)) { fullWidth ->
+                                    -fullWidth / 10
+                                }
+                        else -> fadeIn(animationSpec = tween(300))
+                    }
                 },
-                popExitTransition = { fadeOut(animationSpec = tween(300)) },
+                popExitTransition = {
+                    if (Routes.isSettingsSubtreeRoute(initialState.destination.route)) {
+                        fadeOut(animationSpec = tween(160)) +
+                            slideOutHorizontally(animationSpec = tween(220)) { fullWidth ->
+                                fullWidth / 10
+                            }
+                    } else {
+                        fadeOut(animationSpec = tween(300))
+                    }
+                },
                 // 尺寸动画本身无视觉效果（两页都全屏、尺寸不变），但它的时长同样卡着过渡进度，
                 // 所以与 pop 一起放宽到 300ms（留 120ms 会让共享元素动画重新变回一帧到位）。
                 // 也不能用默认的 StiffnessMediumLow 弹簧：尺寸动画要 2~3 秒才判停，
@@ -1215,11 +1273,7 @@ fun AppNavigation(
                 }
 
                 composable(
-                    route = Routes.STATISTICS,
-                    // 容器变形自带进出：卡片长成整页的过程已经把页面「显示」出来了，
-                    // NavHost 再叠一层淡入等于同一个页面淡两次，落地时能看出一层灰。
-                    enterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None }
+                    route = Routes.STATISTICS
                 ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         StatisticsScreen(
@@ -1479,10 +1533,7 @@ fun AppNavigation(
                 }
 
                 composable(
-                    route = Routes.MARK_RECORDS,
-                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
-                    enterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None }
+                    route = Routes.MARK_RECORDS
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         MarkRecordScreen(
@@ -1501,10 +1552,7 @@ fun AppNavigation(
                 }
 
                 composable(
-                    route = Routes.SEARCH_SOURCES,
-                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
-                    enterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None }
+                    route = Routes.SEARCH_SOURCES
                 ) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         SearchSourcesScreen(
@@ -1595,11 +1643,7 @@ fun AppNavigation(
                     route = Routes.CRASH_LOG_DETAIL,
                     arguments = listOf(
                         navArgument("recordId") { type = NavType.StringType }
-                    ),
-                    // 同 Routes.STATISTICS：卡片长成整页的容器变形已经把页面显示出来了，不再叠 NavHost 淡入。
-                    // 这个页面只有反馈页崩溃日志卡片一个入口，去掉淡入不会让别的入口失去动画。
-                    enterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None }
+                    )
                 ) { backStackEntry ->
                     val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -1614,20 +1658,7 @@ fun AppNavigation(
                     arguments = listOf(
                         navArgument("feedbackId") { type = NavType.StringType },
                         navArgument("replyId") { type = NavType.StringType; defaultValue = "" }
-                    ),
-                    // 只有从反馈页那张卡片进来才是容器变形，那条路不再叠 NavHost 淡入。
-                    // 消息页也通向这个详情页，那条路没有可配对的源侧卡片，必须保留常规淡入。
-                    enterTransition = {
-                        if (initialState.destination.route == Routes.FEEDBACK)
-                            EnterTransition.None
-                        else null
-                    },
-                    // 返回同理：收回成卡片时整页若还跟着淡出，收缩中的页面会半透明地透出反馈页
-                    popExitTransition = {
-                        if (targetState.destination.route == Routes.FEEDBACK)
-                            ExitTransition.None
-                        else null
-                    }
+                    )
                 ) { backStackEntry ->
                     val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {

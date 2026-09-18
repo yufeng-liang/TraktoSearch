@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.feedback
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,13 +37,7 @@ import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.FeedbackListCardCorner
 import com.tracktosearch.ui.component.LoadMoreFooter
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.SharedCorner
 import com.tracktosearch.ui.component.ShimmerState
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
-import com.tracktosearch.ui.component.crashLogCardSharedKey
-import com.tracktosearch.ui.component.feedbackCardSharedKey
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -60,7 +53,7 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedbackScreen(
     onBack: () -> Unit,
@@ -69,9 +62,6 @@ fun FeedbackScreen(
     onCrashLogClick: (String) -> Unit,
     viewModel: FeedbackViewModel = hiltViewModel()
 ) {
-    // 共享元素转场作用域：两种列表卡片分别与反馈详情页、崩溃日志详情页配对。
-    // 取在 composable 顶层，列表每一项直接复用同一个实例，不在 items lambda 里逐项重新读取。
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val haptics = rememberAppHaptics()
     val listState by viewModel.listState.collectAsStateWithLifecycle()
     val crashLogRecords by viewModel.crashLogRecords.collectAsStateWithLifecycle()
@@ -175,16 +165,7 @@ fun FeedbackScreen(
                         CrashLogRecordCard(
                             record = record,
                             timeLabels = timeLabels,
-                            onClick = { onCrashLogClick(record.id) },
-                            // 目标侧走 RemeasureToBounds，动画边界会一路长到整页，本侧内容若跟着
-                            // 重测就会在淡出的那 200ms 里被拉散。按自己的落定尺寸布局，被裁剪着淡出即可。
-                            modifier = Modifier
-                                .appSharedBounds(
-                                    key = crashLogCardSharedKey(record.id),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    corner = SharedCorner.uniform(FeedbackListCardCorner),
-                                )
-                                .appSkipToLookaheadSize()
+                            onClick = { onCrashLogClick(record.id) }
                         )
                     }
                 }
@@ -232,15 +213,7 @@ fun FeedbackScreen(
                                     item = item,
                                     hasUnreadReply = item.id in unreadFeedbackIds,
                                     timeLabels = timeLabels,
-                                    onClick = { onFeedbackClick(item.id) },
-                                    // 同上：本侧按落定尺寸布局，不跟着长到整页的动画边界重测。
-                                    modifier = Modifier
-                                        .appSharedBounds(
-                                            key = feedbackCardSharedKey(item.id),
-                                            animatedVisibilityScope = animatedVisibilityScope,
-                                            corner = SharedCorner.uniform(FeedbackListCardCorner),
-                                        )
-                                        .appSkipToLookaheadSize()
+                                    onClick = { onFeedbackClick(item.id) }
                                 )
                             }
                             if (state.hasMore) {
@@ -380,8 +353,7 @@ private fun FeedbackCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            // 调用方的修饰符挂在卡片本体上：容器变形要量的是这张卡片可见的那块圆角面，
-            // 列表的项间距由 LazyColumn 负责，这里没有外边距需要跳过。
+            // 调用方的修饰符挂在卡片本体上，列表项间距仍由 LazyColumn 负责。
             .then(modifier)
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
         shape = RoundedCornerShape(FeedbackListCardCorner),

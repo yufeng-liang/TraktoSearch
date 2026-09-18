@@ -6,8 +6,6 @@ import android.net.Uri
 import android.widget.ImageView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.repeatable
@@ -60,14 +58,6 @@ import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.FeedbackListCardCorner
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.SharedCorner
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
-import com.tracktosearch.ui.component.appMorphContentFade
-import com.tracktosearch.ui.component.feedbackCardSharedKey
-import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import dev.chrisbanes.haze.HazeState
@@ -96,7 +86,7 @@ internal fun feedbackDetailScaffoldContentWindowInsets(): WindowInsets = WindowI
  */
 internal fun conversationReplyListItemIndex(replyIndex: Int): Int = replyIndex + 2
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedbackDetailScreen(
     feedbackId: String,
@@ -105,8 +95,6 @@ fun FeedbackDetailScreen(
     onNewFeedback: () -> Unit,
     viewModel: FeedbackViewModel = hiltViewModel()
 ) {
-    // 共享元素转场作用域：与反馈列表里那张卡片配对，整页作为容器一起变形。
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val replyState by viewModel.replyState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -178,37 +166,15 @@ fun FeedbackDetailScreen(
 
     Scaffold(
         contentWindowInsets = feedbackDetailScaffoldContentWindowInsets(),
-        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
-        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
-        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // 与反馈列表卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
-                // 挂在这个 Box 上是因为它是加载/错误/成功三个状态分支唯一的公共节点。
-                // 卡片侧圆角 FeedbackListCardCorner，页面侧是 0，转场期间在两者之间插值。
-                .appSharedBounds(
-                    key = feedbackCardSharedKey(feedbackId),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    corner = SharedCorner.flattenFrom(FeedbackListCardCorner),
-                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
-                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
-                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                )
-                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
-                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
-                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
-                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
-                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .appMorphContentFade()
+                modifier = Modifier.fillMaxSize()
             ) {
             // 内容从顶栏下面穿过去，靠 contentPadding 让首屏不被压住
             val topBarHeight = 64.dp +
@@ -256,9 +222,6 @@ fun FeedbackDetailScreen(
                             state = listState,
                             modifier = Modifier
                                 .weight(1f)
-                                // 整页参与容器变形时按落定尺寸布局：否则列表会跟着容器逐帧变宽，
-                                // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
-                                .appSkipToLookaheadSize()
                                 .hazeSource(state = hazeState),
                             contentPadding = PaddingValues(
                                 start = 16.dp,
@@ -347,9 +310,6 @@ fun FeedbackDetailScreen(
                     ?.data?.feedback?.display_id,
                 onBack = onBack,
                 onNewFeedback = onNewFeedback,
-                // 顶栏不参与配对，但从第一帧就在：与内容一样按落定尺寸布局，跟着容器裁剪逐渐露出。
-                // 延迟入场会让容器长大的那段时间顶栏位置空着，落位时再整片闪出来。
-                modifier = Modifier.appSkipToLookaheadSize()
             )
             }
         }
@@ -369,20 +329,16 @@ private fun FeedbackDetailTopBar(
     onNewFeedback: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 容器变形期间每帧背景都在变，此时还做实时模糊采样正是掉帧最集中的地方，先让 haze 停下来。
-    val transitionActive = isAppSharedTransitionActive()
     val haptics = rememberAppHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-            // 调用点因此传的是延迟入场的修饰符，观感上是「卡片先长成页面，页面再把顶栏放上来」。
             .then(modifier)
             .hazeTopBar(
                 state = hazeState,
                 style = hazeStyle,
                 blurRadius = 24.dp,
-                isContentUnderTopBar = isContentUnderTopBar && !transitionActive
+                isContentUnderTopBar = isContentUnderTopBar
             )
             // 顶栏覆盖列表，拦截空白区域点击，避免穿透到下面的卡片
             .clickable(enabled = false, onClick = {})

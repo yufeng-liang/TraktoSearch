@@ -97,11 +97,8 @@ object SharedOrigin {
     const val DETAIL = "detail"
     const val DISCOVER = "discover"
     const val SEARCH = "search"
-    const val SETTINGS = "settings"
-    const val STATISTICS = "statistics"
     const val TRAKT_LIST = "trakt-list"
     const val DISCOVER_FILTER = "discover-filter"
-    const val FEEDBACK = "feedback"
 
     /**
      * 全屏图片查看器的缩略图/全屏配对。
@@ -141,38 +138,13 @@ val DiscoverFilterCardKey = SharedKey("filter-entry-card", SharedOrigin.DISCOVER
 /** 发现页筛选入口卡片的圆角；与 [SettingsEntryCardCorner] 同理，两端必须取同一个数。 */
 val DiscoverFilterCardCorner = 20.dp
 
-/** 设置页观看统计入口卡片与统计页。 */
-val StatisticsEntryKey = SharedKey("statistics-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
-
-/** 设置页标记记录入口卡片与标记记录页。 */
-val MarkRecordsEntryKey = SharedKey("mark-records-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
-
-/** 设置页搜索源入口卡片与搜索源页。 */
-val SearchSourcesEntryKey = SharedKey("search-sources-entry", SharedOrigin.SETTINGS, SharedElementType.Bounds)
-
-/**
- * 反馈列表卡片与反馈详情页。
- *
- * id 必须带上具体那一条：同一屏还有消息列表也通向这个详情页，两条路的源侧不同，
- * 只有点中的那张卡片该参与配对。
- */
-fun feedbackCardSharedKey(feedbackId: String): SharedKey? =
-    if (feedbackId.isBlank()) null
-    else SharedKey("feedback-$feedbackId", SharedOrigin.FEEDBACK, SharedElementType.Bounds)
-
-/** 崩溃日志卡片与崩溃日志详情页。id 是日志文件名。 */
-fun crashLogCardSharedKey(recordId: String): SharedKey? =
-    if (recordId.isBlank()) null
-    else SharedKey("crash-log-$recordId", SharedOrigin.FEEDBACK, SharedElementType.Bounds)
-
-/** 反馈页两种列表卡片的圆角；两端必须取同一个数，见 [SettingsEntryCardCorner]。 */
+/** 反馈页两种列表卡片的圆角。 */
 val FeedbackListCardCorner = 16.dp
 
 /**
  * 设置页入口卡片的圆角。
  *
- * 容器变形的两端要拿同一个数：卡片侧的稳定态是它，页面侧的对端值也是它，中间才插得平。
- * 写死在这里而不是各自 hardcode，是因为两处对不上时看到的不是编译错误，而是落地那一帧圆角跳一下。
+ * 与搜索源页、统计页的列表卡片规格保持统一，写在这里方便几处入口复用同一个值。
  */
 val SettingsEntryCardCorner = 20.dp
 

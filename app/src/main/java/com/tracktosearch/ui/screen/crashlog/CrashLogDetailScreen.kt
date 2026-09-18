@@ -1,7 +1,5 @@
 package com.tracktosearch.ui.screen.crashlog
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -49,13 +46,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CrashLogRecord
-import com.tracktosearch.ui.component.FeedbackListCardCorner
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.SharedCorner
-import com.tracktosearch.ui.component.appMorphContentFade
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
-import com.tracktosearch.ui.component.crashLogCardSharedKey
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,15 +54,13 @@ import java.util.Locale
 /** M3 small TopAppBar 的固定高度。顶栏改为叠放在内容之上后，列表要自己避让这一段。 */
 private val TopAppBarHeight = 64.dp
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CrashLogDetailScreen(
     recordId: String,
     onBack: () -> Unit,
     viewModel: CrashLogDetailViewModel = hiltViewModel(),
 ) {
-    // 共享元素转场作用域：与反馈页崩溃日志卡片配对，整页作为容器一起变形。
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // remember 固定按 recordId 复用一个 StateFlow，避免重组时反复新建 stateIn 共享协程
     val record by remember(recordId) { viewModel.record(recordId) }.collectAsStateWithLifecycle()
     // 本地加载态：Store 异步加载完成前 record 为 null，区分「加载中」与「记录不存在」；
@@ -82,39 +70,17 @@ fun CrashLogDetailScreen(
     val haptics = rememberAppHaptics()
 
     Scaffold(
-        // 容器色置透明、底色改由下面那个共享节点自己画，理由见该处注释。
-        // contentColor 显式写成 onBackground：Scaffold 默认取 contentColorFor(containerColor)，
-        // 而 contentColorFor(Transparent) 是 Unspecified，会让整页文字颜色退回外层 LocalContentColor。
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onBackground,
+        containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { _ ->
         val current = record
         val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        // 与反馈页崩溃日志卡片配对的是整页容器。加载中、记录不存在、正常三个分支之间没有公共父节点，
-        // 这里补一个只负责承载共享边界的 Box。顶栏也放在这个 Box 里（不再走 Scaffold 的 topBar 槽）：
-        // 顶栏必须跟着容器一起被裁剪，否则容器还是一张小卡片时屏幕顶部就已经压着一条实心色带。
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .appSharedBounds(
-                    key = crashLogCardSharedKey(recordId),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    corner = SharedCorner.flattenFrom(FeedbackListCardCorner),
-                    // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
-                    // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
-                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                )
-                // 页面底色挪进共享节点内侧，并把 Scaffold 的容器色置透明。
-                // 否则 Scaffold 会在共享节点之外先铺满一整屏不透明底色，转场第一帧整屏就已经是本页的背景，
-                // 「卡片长成页面」退化成「页面已经在了，只是内容从一个小矩形里长出来」。
-                // 挪进来之后底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
-                .background(MaterialTheme.colorScheme.background)
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .appMorphContentFade()
+                modifier = Modifier.fillMaxSize()
             ) {
                 when {
                     current == null -> {
@@ -130,11 +96,7 @@ fun CrashLogDetailScreen(
                         }
                     }
                     else -> LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            // 容器变形的必需搭档：容器逐帧按动画尺寸重新测量，列表按落定尺寸布局一次，
-                            // 于是内容全程保持最终位置与字号，被容器边界裁剪着逐渐露出。
-                            .appSkipToLookaheadSize(),
+                        modifier = Modifier.fillMaxSize(),
                         // 顶栏改为叠在本列表之上，避让高度自己算：TopAppBar 64dp + 状态栏
                         contentPadding = PaddingValues(
                             start = 16.dp,
@@ -186,11 +148,7 @@ fun CrashLogDetailScreen(
                     }
                 }
 
-                // 顶栏不参与配对，与内容一起由外层 appMorphContentFade 控制：
-                // 容器展开后统一延迟淡入，返回时先淡出再收容器。
-                // 不放进 Scaffold 的 topBar 槽，就是为了让它落在共享容器内侧 —— 否则容器还是一张小卡片
-                // 的时候，屏幕顶部就已经压着一条与卡片无关的实心色带。
-                Box(modifier = Modifier.appSkipToLookaheadSize()) {
+                Box {
                     TopAppBar(
                         title = { Text(stringResource(R.string.crash_detail_title), fontWeight = FontWeight.ExtraBold) },
                         navigationIcon = {

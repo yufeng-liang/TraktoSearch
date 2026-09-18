@@ -2,8 +2,6 @@ package com.tracktosearch.ui.screen.markrecord
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -119,14 +117,6 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.MarkRecordsEntryKey
-import com.tracktosearch.ui.component.SettingsEntryCardCorner
-import com.tracktosearch.ui.component.SharedCorner
-import com.tracktosearch.ui.component.appMorphContentFade
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
-import com.tracktosearch.ui.component.isAppSharedTransitionActive
 import com.tracktosearch.ui.theme.GlassBorderDark
 import com.tracktosearch.ui.theme.GlassFillDark
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -156,7 +146,7 @@ class MarkRecordSessionViewModel @Inject constructor(
     val traktConnected: StateFlow<Boolean> = sessionModeManager.traktConnected
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarkRecordScreen(
     onBack: () -> Unit,
@@ -172,9 +162,6 @@ fun MarkRecordScreen(
     // ALL 页只有 Trakt 那一半失败时提示一句「列表可能不全」——原来这种失败一个字都不报
     ToastEffect(viewModel.toastEvent)
     HapticOutcomeEffect(viewModel.hapticOutcomes)
-    // 共享元素转场 scope（与设置页标记记录入口卡片配对）。本页没有 Scaffold，作用域自己从
-    // CompositionLocal 取，与 StatisticsScreen 的取法一致。
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
@@ -289,23 +276,9 @@ fun MarkRecordScreen(
         }
     }
 
-    // 与设置页标记记录入口卡片配对的是整页，而不是顶栏：卡片放大成页面、返回时收回成卡片。
-    // 卡片侧圆角 SettingsEntryCardCorner，页面侧是 0，转场期间在两者之间插值。
-    val transitionActive = isAppSharedTransitionActive()
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .appSharedBounds(
-                key = MarkRecordsEntryKey,
-                animatedVisibilityScope = animatedVisibilityScope,
-                corner = SharedCorner.flattenFrom(SettingsEntryCardCorner),
-                // 容器变形要的是「内容不变形、被裁剪逐渐露出」，默认的 scaleToBounds 会把内容
-                // 跟着容器一起缩放绘制。逐帧重测的代价由内容侧的 appSkipToLookaheadSize 挡掉。
-                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-            )
-            // 页面底色挪进共享节点内侧：容器变形靠裁剪揭示，容器里必须是不透明的，
-            // 否则变形期这一片能直接看到下面那一页 —— 打开的瞬间设置页内容会叠在本页上。
-            // 底色跟着动画边界一起长大，且被上面那层圆角动画裁剪，落定后与原来逐像素相同。
             .background(MaterialTheme.colorScheme.background)
             .onGloballyPositioned { rootPositionInRoot = it.positionInRoot() }
             .pointerInput(searchExpanded) {
@@ -319,20 +292,12 @@ fun MarkRecordScreen(
                 }
             }
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .appMorphContentFade()
-        ) {
             // ========== 网格内容 ==========
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    // 整页参与容器变形时按落定尺寸布局：否则网格会跟着容器逐帧变宽，
-                    // 一次转场里重复决定「哪些项可见、每项多宽」几十遍
-                    .appSkipToLookaheadSize()
                     .hazeSource(state = hazeState)
                     .backdropContentSource(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -467,18 +432,14 @@ fun MarkRecordScreen(
             }
 
             // ========== 吸顶栏（Blur + 半透明背景） ==========
-            // 顶栏不参与配对：来源侧那张卡片上没有对应的标题栏，硬配对会把一行标题从卡片尺寸拉过来。
-            // 但它必须从第一帧就在，与网格一样按落定尺寸布局，跟着容器裁剪逐渐露出；延迟入场会让容器
-            // 长大的那段时间顶栏位置空着，落位时再整片闪出来。转场期间仍让 haze 停采样。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .appSkipToLookaheadSize()
                     .hazeTopBar(
                         state = hazeState,
                         style = hazeStyle,
                         blurRadius = 24.dp,
-                        isContentUnderTopBar = if (transitionActive) false else hasContentUnderTopBar,
+                        isContentUnderTopBar = hasContentUnderTopBar,
                         scene = markRecordGlassScene
                     )
                     // 拦截点击：顶栏覆盖可滚动网格，不消费会让点击穿透到下方列表项
@@ -700,7 +661,6 @@ fun MarkRecordScreen(
                 hazeStyle = hazeStyle,
                 scene = markRecordGlassScene
             )
-        }
     }
 
     // 筛选弹窗

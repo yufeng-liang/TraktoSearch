@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -112,7 +111,6 @@ import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.haptic.HapticModeSummary
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.PopupShowEffect
@@ -146,13 +144,7 @@ import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.theme.floatingDialogColor
-import com.tracktosearch.ui.component.MarkRecordsEntryKey
-import com.tracktosearch.ui.component.SearchSourcesEntryKey
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
-import com.tracktosearch.ui.component.SharedCorner
-import com.tracktosearch.ui.component.StatisticsEntryKey
-import com.tracktosearch.ui.component.appSharedBounds
-import com.tracktosearch.ui.component.appSkipToLookaheadSize
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -213,7 +205,6 @@ private fun formatFileSize(bytes: Long): String {
 @OptIn(
     ExperimentalMaterial3Api::class,
     kotlinx.coroutines.FlowPreview::class,
-    ExperimentalSharedTransitionApi::class,
 )
 @Composable
 fun SettingsScreen(
@@ -258,9 +249,6 @@ fun SettingsScreen(
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     val isLoadingChangelog by viewModel.isLoadingChangelog.collectAsStateWithLifecycle()
-    // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-
     // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
     // 增量同步冷却期状态(跨设备同步显示)
@@ -580,21 +568,11 @@ fun SettingsScreen(
                         )
                     ) {
             // 观看统计（第一位，独占整行卡片，无类目 Header）—— Trakt 已连接或豆瓣独立模式可见
-            // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
             // 豆瓣独立模式: StatisticsViewModel 支持基于豆瓣本地同步数据的统计，与 Trakt 统计同等可用
             if (isLoggedIn && (isDoubanMode || isTraktConnected)) {
                 item(key = "statistics_entry") {
-                    val statisticsEntryModifier = Modifier
-                        .appSharedBounds(
-                            key = StatisticsEntryKey,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            corner = SharedCorner.uniform(SettingsEntryCardCorner),
-                        )
-                        // 目标侧走 RemeasureToBounds，动画边界会一路长到整页，本侧内容若跟着重测
-                        // 就会在淡出的那 200ms 里被拉散。按自己的落定尺寸布局，被裁剪着淡出即可。
-                        .appSkipToLookaheadSize()
                     StatisticsCard(
-                        modifier = statisticsEntryModifier,
+                        modifier = Modifier,
                         hazeState = settingsHazeState,
                         onClick = onStatisticsClick
                     )
@@ -605,16 +583,8 @@ fun SettingsScreen(
             // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
             if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
-                    val markRecordsEntryModifier = Modifier
-                        .appSharedBounds(
-                            key = MarkRecordsEntryKey,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            corner = SharedCorner.uniform(SettingsEntryCardCorner),
-                        )
-                        // 同统计入口：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
-                        .appSkipToLookaheadSize()
                     MarkRecordsEntryCard(
-                        modifier = markRecordsEntryModifier,
+                        modifier = Modifier,
                         onClick = onMarkRecordsClick,
                         hazeState = settingsHazeState
                     )
@@ -668,16 +638,8 @@ fun SettingsScreen(
 
             // 搜索源（独立管理页入口，与标记记录入口卡片同构）
             item(key = "search_sources_entry") {
-                val searchSourcesEntryModifier = Modifier
-                    .appSharedBounds(
-                        key = SearchSourcesEntryKey,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        corner = SharedCorner.uniform(SettingsEntryCardCorner),
-                    )
-                    // 同统计入口：本侧按落定尺寸布局，不跟着长到整页的动画边界重测
-                    .appSkipToLookaheadSize()
                 SearchSourcesEntryCard(
-                    modifier = searchSourcesEntryModifier,
+                    modifier = Modifier,
                     onClick = onSearchSourcesClick,
                     hazeState = settingsHazeState
                 )
@@ -1448,8 +1410,7 @@ private fun MarkRecordsEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
-            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            // 调用方的修饰符挂在外边距之内，量到的是卡片可见区域而不是整行宽度。
             .then(modifier)
             .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
@@ -1533,8 +1494,7 @@ private fun SearchSourcesEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            // 调用方的修饰符挂在外边距之内：容器变形要量的是卡片可见的那块圆角面，
-            // 挂在 padding 之外量到的是整行宽度，转场起始矩形会比用户看到的卡片宽出两侧留白。
+            // 调用方的修饰符挂在外边距之内，量到的是卡片可见区域而不是整行宽度。
             .then(modifier)
             .clip(RoundedCornerShape(SettingsEntryCardCorner))
             .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() },
