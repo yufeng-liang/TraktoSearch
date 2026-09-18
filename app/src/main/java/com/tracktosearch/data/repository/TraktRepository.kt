@@ -2138,7 +2138,9 @@ class TraktRepository @Inject constructor(
         cacheUpdate: (Int, Int, MediaType) -> Unit,
         errorLabel: String,
         // 仅 addToHistory 时传递,Map<traktId, watchedAtIso>;空 Map 或 null 表示不传 watched_at
-        watchedAtByTraktId: Map<Int, String>? = null
+        // 电影与剧集 traktId 分属不同命名空间，watched_at 必须各用一张表，防同号互串
+        watchedAtByTraktId: Map<Int, String>? = null,
+        showWatchedAtByTraktId: Map<Int, String>? = null
     ): Result<TraktSyncResponse> {
         if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
         return try {
@@ -2147,7 +2149,7 @@ class TraktRepository @Inject constructor(
                     TraktSyncItem(TraktIds(trakt = it), watched_at = watchedAtByTraktId?.get(it))
                 },
                 shows = showTraktIds.takeIf { it.isNotEmpty() }?.map {
-                    TraktSyncItem(TraktIds(trakt = it), watched_at = watchedAtByTraktId?.get(it))
+                    TraktSyncItem(TraktIds(trakt = it), watched_at = showWatchedAtByTraktId?.get(it))
                 }
             )
             val response = apiCall(request)
@@ -2212,8 +2214,10 @@ class TraktRepository @Inject constructor(
         movieItems: List<Pair<Int, String?>>,
         showItems: List<Pair<Int, String?>>
     ): Result<TraktSyncResponse> {
-        val watchedAtMap = buildMap<Int, String> {
+        val movieWatchedAtMap = buildMap<Int, String> {
             movieItems.forEach { (id, ts) -> ts?.let { put(id, it) } }
+        }
+        val showWatchedAtMap = buildMap<Int, String> {
             showItems.forEach { (id, ts) -> ts?.let { put(id, it) } }
         }
         return batchSync(
@@ -2222,7 +2226,8 @@ class TraktRepository @Inject constructor(
             apiCall = traktApiService::addToHistory,
             cacheUpdate = ::addToWatchedCache,
             errorLabel = "batchMarkAsWatchedAt",
-            watchedAtByTraktId = watchedAtMap.takeIf { it.isNotEmpty() }
+            watchedAtByTraktId = movieWatchedAtMap.takeIf { it.isNotEmpty() },
+            showWatchedAtByTraktId = showWatchedAtMap.takeIf { it.isNotEmpty() }
         )
     }
 
