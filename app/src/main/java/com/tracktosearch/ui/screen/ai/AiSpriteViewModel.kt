@@ -1196,13 +1196,13 @@ class AiSpriteViewModel @Inject constructor(
     private suspend fun guardThenLoadTaste(forceRefresh: Boolean, guardGeneration: Long) {
         // DataStore 读取可能挂起；每次恢复后都重新确认页面、授权和网络仍然有效。
         if (!requireAiAccess() || !isTasteGuardCurrent(guardGeneration)) return
-        val consentDecided = aiTasteStorage.tasteConsentDecided.first()
+        val consentDecided = aiTasteStorage.awaitTasteConsentDecided()
         if (!isTasteGuardCurrent(guardGeneration)) return
         if (!consentDecided) {
             _uiState.update { it.copy(showTasteConsent = true, errorCode = null) }
             return
         }
-        val uploadEnabled = aiTasteStorage.tasteUploadEnabled.first()
+        val uploadEnabled = aiTasteStorage.awaitTasteUploadEnabled()
         if (!isTasteGuardCurrent(guardGeneration)) return
         if (!uploadEnabled) {
             _uiState.update { it.copy(showTasteDisabled = true, errorCode = null) }

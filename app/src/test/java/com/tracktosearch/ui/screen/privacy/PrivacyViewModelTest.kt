@@ -22,7 +22,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -56,14 +55,12 @@ class PrivacyViewModelTest {
     private val friendId = MutableStateFlow<String?>(null)
     private val aiTasteEnabledFlow = MutableStateFlow(true)
     private val crashLogEnabledFlow = MutableStateFlow(false)
-    private val crashLogLoadedFlow = MutableStateFlow(false)
 
     @Before
     fun setup() {
         every { authManager.friendId } returns friendId
         every { aiTasteStorage.tasteUploadEnabled } returns aiTasteEnabledFlow
         every { crashLogStorage.enabled } returns crashLogEnabledFlow
-        every { crashLogStorage.loaded } returns crashLogLoadedFlow
     }
 
     private fun createViewModel(): PrivacyViewModel = PrivacyViewModel(
@@ -88,31 +85,18 @@ class PrivacyViewModelTest {
     )
 
     @Test
-    fun `本地开关首值到达前只暴露加载态`() = runTest {
-        crashLogEnabledFlow.value = true
-        every { aiTasteStorage.tasteUploadEnabled } returns emptyFlow()
+    fun `本地开关订阅后直接读内存镜像`() = runTest {
         val viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.crashLogState.collect()
-        }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.aiTasteState.collect()
-        }
 
+        // 存储层是内存镜像：进入页面直接读当前值，不依赖冷 Flow 首值
+        assertThat(viewModel.crashLogEnabled.value).isFalse()
+        aiTasteEnabledFlow.value = false
         runCurrent()
-
-        // crash 已读出 true 但 DataStore 加载未完成，仍不能把 true 或默认 false 当成终态
-        assertThat(viewModel.crashLogState.value.checked).isTrue()
-        assertThat(viewModel.crashLogState.value.isLoaded).isFalse()
-        // taste 冷流尚未发首值，界面只能停留在加载态
-        assertThat(viewModel.aiTasteState.value.isLoaded).isFalse()
-
-        crashLogLoadedFlow.value = true
+        assertThat(viewModel.aiTasteEnabled.value).isFalse()
+        crashLogEnabledFlow.value = true
         runCurrent()
-
-        assertThat(viewModel.crashLogState.value.isLoaded).isTrue()
-        // 永不发射仍保持加载态，避免用占位值冒充真实偏好
-        assertThat(viewModel.aiTasteState.value.isLoaded).isFalse()
+        assertThat(viewModel.crashLogEnabled.value).isTrue()
+        assertThat(viewModel.aiTasteEnabled.value).isFalse()
     }
 
     @Test

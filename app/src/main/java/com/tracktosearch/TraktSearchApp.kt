@@ -54,6 +54,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
     // 开屏日签开关：系统 splash 的图标分两档，见 TraktSearchApp.onCreate 里的那次预读
     @Inject lateinit var splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage
+    // 锐评上传开关：启动即构造单例，让 DataStore 首值在用户进入隐私页前异步回填
+    @Inject lateinit var aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage
     @Inject lateinit var tmdbRepository: com.tracktosearch.data.repository.TmdbRepository
     @Inject lateinit var traktRepository: com.tracktosearch.data.repository.TraktRepository
     // 惰性 Provider：注入本身不触发数据库创建，仅在使用时才解析 @Singleton 实例

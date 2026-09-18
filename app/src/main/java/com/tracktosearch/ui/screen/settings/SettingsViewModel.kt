@@ -230,10 +230,9 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * 「锐评我的看单」数据上传开关（默认开启）。
-     * 存储层是冷 Flow，这里 stateIn 起来给设置页开关绑定；首值落地前用默认 true 占位。
+     * 存储层在 Application 启动时预加载磁盘首值，这里直接透传，不再用占位默认值覆盖。
      */
     val aiTasteEnabled: StateFlow<Boolean> = aiTasteStorage.tasteUploadEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()

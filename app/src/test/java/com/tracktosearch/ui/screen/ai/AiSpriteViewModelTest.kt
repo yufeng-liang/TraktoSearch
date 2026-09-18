@@ -1470,8 +1470,8 @@ class AiSpriteViewModelTest {
         every { languageStorage.language } returns language
         coEvery { aiRepository.listCharacters() } returns Result.success(emptyList())
         // 閿愯瘎闅愮瀹堝崼榛樿鏀捐锛氬凡鍚屾剰璇存槑寮圭獥涓斾笂浼犲紑鍏冲紑鍚?
-        every { aiTasteStorage.tasteConsentDecided } returns flowOf(true)
-        every { aiTasteStorage.tasteUploadEnabled } returns flowOf(true)
+        coEvery { aiTasteStorage.awaitTasteConsentDecided() } returns true
+        coEvery { aiTasteStorage.awaitTasteUploadEnabled() } returns true
         return AiSpriteViewModel(
             aiRepository,
             authManager,

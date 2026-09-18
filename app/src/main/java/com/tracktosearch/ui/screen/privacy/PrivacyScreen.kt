@@ -149,8 +149,8 @@ fun PrivacyScreen(
             )
         }
     }
-    val aiTasteState by viewModel.aiTasteState.collectAsStateWithLifecycle()
-    val crashLogState by viewModel.crashLogState.collectAsStateWithLifecycle()
+    val aiTasteEnabled by viewModel.aiTasteEnabled.collectAsStateWithLifecycle()
+    val crashLogEnabled by viewModel.crashLogEnabled.collectAsStateWithLifecycle()
     val aiProfileSettings by viewModel.aiProfileSettings.collectAsStateWithLifecycle()
     val privacyMessage by viewModel.message.collectAsStateWithLifecycle()
     var showClearAiProfileDialog by remember { mutableStateOf(false) }
@@ -206,7 +206,7 @@ fun PrivacyScreen(
                         ) {
                             AiDataSwitchGroup(
                                 settings = aiProfileSettings,
-                                aiTasteState = aiTasteState,
+                                aiTasteEnabled = aiTasteEnabled,
                                 onAiTasteChanged = viewModel::setAiTasteEnabled,
                                 onProfileConsentChanged = viewModel::setAiProfileConsent,
                                 onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
@@ -228,9 +228,7 @@ fun PrivacyScreen(
                             iconTint = MaterialTheme.colorScheme.error,
                             title = stringResource(R.string.settings_crash_log_title),
                             subtitle = stringResource(R.string.settings_crash_log_subtitle),
-                            checked = crashLogState.checked,
-                            loading = !crashLogState.isLoaded,
-                            enabled = crashLogState.isLoaded,
+                            checked = crashLogEnabled,
                             onToggle = { viewModel.setCrashLogEnabled(it) }
                         )
                         GroupDivider()
@@ -1288,7 +1286,7 @@ private fun PrivacyActionRow(
 @Composable
 private fun ColumnScope.AiDataSwitchGroup(
     settings: AiProfileSettingsState,
-    aiTasteState: PrivacySwitchState,
+    aiTasteEnabled: Boolean,
     onAiTasteChanged: (Boolean) -> Unit,
     onProfileConsentChanged: (Boolean) -> Unit,
     onPersonalizationChanged: (Boolean) -> Unit,
@@ -1357,9 +1355,7 @@ private fun ColumnScope.AiDataSwitchGroup(
         iconTint = MaterialTheme.colorScheme.primary,
         title = stringResource(R.string.ai_feature_taste),
         subtitle = stringResource(R.string.settings_ai_taste_subtitle),
-        checked = aiTasteState.checked,
-        onToggle = onAiTasteChanged,
-        enabled = aiTasteState.isLoaded,
-        loading = !aiTasteState.isLoaded
+        checked = aiTasteEnabled,
+        onToggle = onAiTasteChanged
     )
 }

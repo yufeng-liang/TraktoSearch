@@ -7,9 +7,15 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,22 +35,55 @@ private val Context.aiTasteDataStore: DataStore<Preferences> by preferencesDataS
 class AiTasteStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _tasteUploadEnabled = MutableStateFlow(true)
+    private val _tasteConsentDecided = MutableStateFlow(false)
+    private val initializationComplete = CompletableDeferred<Unit>()
+
     companion object {
         private val KEY_TASTE_UPLOAD_ENABLED = booleanPreferencesKey("ai_taste_upload_enabled")
         private val KEY_TASTE_CONSENT_DECIDED = booleanPreferencesKey("ai_taste_consent_decided")
     }
 
     /** 锐评功能是否允许上传已看数据（默认 true） */
-    val tasteUploadEnabled: Flow<Boolean> = context.aiTasteDataStore.data.map { prefs ->
-        prefs[KEY_TASTE_UPLOAD_ENABLED] ?: true
-    }
+    val tasteUploadEnabled: StateFlow<Boolean> = _tasteUploadEnabled.asStateFlow()
 
     /** 用户是否已对首次说明弹窗做出决定（默认 false：从未见过弹窗） */
-    val tasteConsentDecided: Flow<Boolean> = context.aiTasteDataStore.data.map { prefs ->
-        prefs[KEY_TASTE_CONSENT_DECIDED] ?: false
+    val tasteConsentDecided: StateFlow<Boolean> = _tasteConsentDecided.asStateFlow()
+
+    /**
+     * 等待 DataStore 首值后再读取上传开关。
+     *
+     * UI 可以先用 [tasteUploadEnabled] 的内存快照避免转圈；隐私守卫必须走这里，
+     * 否则冷启动早期会把默认值误判成用户已经保存的选择。
+     */
+    suspend fun awaitTasteUploadEnabled(): Boolean {
+        initializationComplete.await()
+        return _tasteUploadEnabled.value
+    }
+
+    /** 等待 DataStore 首值后再读取首次说明是否已决定。 */
+    suspend fun awaitTasteConsentDecided(): Boolean {
+        initializationComplete.await()
+        return _tasteConsentDecided.value
+    }
+
+    init {
+        scope.launch {
+            try {
+                val prefs = context.aiTasteDataStore.data.first()
+                _tasteUploadEnabled.value = prefs[KEY_TASTE_UPLOAD_ENABLED] ?: true
+                _tasteConsentDecided.value = prefs[KEY_TASTE_CONSENT_DECIDED] ?: false
+            } finally {
+                initializationComplete.complete(Unit)
+            }
+        }
     }
 
     suspend fun setTasteUploadEnabled(enabled: Boolean) {
+        initializationComplete.await()
+        _tasteUploadEnabled.value = enabled
         withContext(Dispatchers.IO) {
             context.aiTasteDataStore.edit { prefs ->
                 prefs[KEY_TASTE_UPLOAD_ENABLED] = enabled
@@ -53,6 +92,8 @@ class AiTasteStorage @Inject constructor(
     }
 
     suspend fun setConsentDecided(decided: Boolean) {
+        initializationComplete.await()
+        _tasteConsentDecided.value = decided
         withContext(Dispatchers.IO) {
             context.aiTasteDataStore.edit { prefs ->
                 prefs[KEY_TASTE_CONSENT_DECIDED] = decided

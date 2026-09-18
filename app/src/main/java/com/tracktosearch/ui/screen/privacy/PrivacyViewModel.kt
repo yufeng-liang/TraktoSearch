@@ -22,8 +22,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -39,18 +37,6 @@ data class PrivacyMessage(
     @StringRes val resId: Int,
     /** null 表示这条消息不该发触感 */
     val outcome: HapticOutcome?
-)
-
-/**
- * 本地偏好开关的界面状态。
- *
- * [isLoaded] 为 false 时 [checked] 只是占位值，界面必须展示加载态，
- * 避免 DataStore 首值到达前先把默认 false 画成真实状态。
- */
-@Immutable
-data class PrivacySwitchState(
-    val checked: Boolean = false,
-    val isLoaded: Boolean = false
 )
 
 /**
@@ -78,8 +64,7 @@ data class AiProfileSettingsState(
  *
  * 独立于 SettingsViewModel 自建（设置页原「AI 与隐私」分组与崩溃日志开关行
  * 迁入本页），逻辑与原 SettingsViewModel 中的实现保持一致：
- * - AI taste 开关：存储层是冷 Flow，首值落地前只做占位，界面显示加载态
- * - 崩溃日志开关：存储层是 StateFlow，结合已加载标记避免首值前显示默认值
+ * - AI taste / 崩溃日志开关：存储层是单例内存镜像，进入页面直接读当前值
  * - AI 画像开关组：按 friendId 隔离，云端写入失败时整体回滚
  */
 @HiltViewModel
@@ -92,29 +77,11 @@ class PrivacyViewModel @Inject constructor(
     private val authManager: AuthManager
 ) : ViewModel() {
 
-    /** 「AI 锐评看单」数据上传开关（默认开启，DataStore 首值到达前显示加载态） */
-    val aiTasteState: StateFlow<PrivacySwitchState> = aiTasteStorage.tasteUploadEnabled
-        .map { PrivacySwitchState(checked = it, isLoaded = true) }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            PrivacySwitchState(checked = true)
-        )
+    /** 「AI 锐评看单」数据上传开关（单例内存镜像，进入页面即有上次保存值） */
+    val aiTasteEnabled: StateFlow<Boolean> = aiTasteStorage.tasteUploadEnabled
 
-    /** 崩溃日志上报开关（默认关闭，需用户授权且 DataStore 已读完） */
-    val crashLogState: StateFlow<PrivacySwitchState> = combine(
-        crashLogStorage.enabled,
-        crashLogStorage.loaded
-    ) { enabled, loaded ->
-        PrivacySwitchState(checked = enabled, isLoaded = loaded)
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        PrivacySwitchState(
-            checked = crashLogStorage.enabled.value,
-            isLoaded = crashLogStorage.loaded.value
-        )
-    )
+    /** 崩溃日志上报开关（单例内存镜像，进入页面即有上次保存值） */
+    val crashLogEnabled: StateFlow<Boolean> = crashLogStorage.enabled
 
     private val _message = MutableStateFlow<PrivacyMessage?>(null)
     val message: StateFlow<PrivacyMessage?> = _message.asStateFlow()
