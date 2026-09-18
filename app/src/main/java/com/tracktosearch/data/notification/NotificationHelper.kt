@@ -45,6 +45,15 @@ class NotificationHelper @Inject constructor(
         }
     }
 
+    // 类型/条目/季联合哈希取正 Int 作为通知 id：原来按前缀分段（新季 = traktId*100+season），
+    // 会与其它剧的 release id 结构性相撞，且 traktId 较大时 *100 直接溢出 Int
+    private fun notificationIdFor(type: String, traktId: Int, season: Int = 0): Int {
+        var result = type.hashCode()
+        result = 31 * result + traktId
+        result = 31 * result + season
+        return result and Int.MAX_VALUE
+    }
+
     fun showReleaseNotification(
         title: String,
         releaseDate: String,
@@ -60,9 +69,7 @@ class NotificationHelper @Inject constructor(
             putExtra("tmdbId", tmdbId)
             putExtra("title", title)
         }
-        // movie/show 的 traktId 命名空间独立，用不同前缀避免 notification id 冲突
-        val baseId = if (mediaType == "show") 200000 else 100000
-        val notificationId = baseId + traktId
+        val notificationId = notificationIdFor(mediaType, traktId)
         val pendingIntent = PendingIntent.getActivity(
             context,
             notificationId,
@@ -99,8 +106,7 @@ class NotificationHelper @Inject constructor(
             putExtra("tmdbId", tmdbId)
             putExtra("title", title)
         }
-        // 新季通知属于 show，用 200000 前缀 + traktId*100 + seasonNumber 避免与 movie 冲突
-        val notificationId = 200000 + traktId * 100 + seasonNumber
+        val notificationId = notificationIdFor("show_season", traktId, seasonNumber)
         val pendingIntent = PendingIntent.getActivity(
             context,
             notificationId,
