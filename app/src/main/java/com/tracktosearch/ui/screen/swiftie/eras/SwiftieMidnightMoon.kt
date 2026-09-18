@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.sin
 
 internal data class MidnightMoonPose(
@@ -99,13 +100,16 @@ private val PILLOW_SEAM: Path by lazy(LazyThreadSafetyMode.NONE) { Path().apply 
     close()
 } }
 
-internal fun DrawScope.drawMidnightMoon(path: Path, eraMs: Long, alpha: Float) {
+internal fun DrawScope.drawMidnightMoon(path: Path, eraMs: Long, alpha: Float, clockCenter: Offset) {
     val pose = midnightMoonPose(eraMs)
-    // 下缘收在背景留白内；不与曲目卡争用底部空间。
-    val unit = minOf(size.width * 0.001695f, size.height * 0.00096f)
+    // 放大仍保留下缘留白；缺口朝向从钟心求角度，不按固定屏幕比例猜。
+    val unit = minOf(size.width * 0.001695f, size.height * 0.00096f) * 1.45f
+    val moonCenter = Offset(size.width * 0.65f, size.height * (0.342f + pose.cuddle * 0.036f))
+    val lookAngle = atan2(moonCenter.y - clockCenter.y, moonCenter.x - clockCenter.x) * 180f / PI.toFloat()
     withTransform({
-        translate(size.width * 0.74f, size.height * 0.414f + pose.breath * unit * 1.3f)
+        translate(moonCenter.x, moonCenter.y + pose.breath * unit * 1.3f)
         scale(-unit, unit, pivot = Offset.Zero)
+        rotate(-lookAngle * (1f - pose.cuddle), pivot = Offset.Zero)
     }) {
         drawCircle(MOON_GLOW, radius = 155f, center = Offset(-20f, 0f), alpha = alpha)
         val pillowX = -60f + pose.pillowLift * 85f

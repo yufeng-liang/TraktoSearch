@@ -5104,7 +5104,7 @@ private fun DrawScope.drawMidnightClock(
             mid, alpha * DISTANT_ALPHA * 1.3f, overscanX = 0.35f
         )
     }
-    drawMidnightMoon(path, eraMs, alpha)
+    drawMidnightMoon(path, eraMs, alpha, clockCenter)
 }
 
 // ─────────────────────── 11 · The Tortured Poets Department ───────────────────────
