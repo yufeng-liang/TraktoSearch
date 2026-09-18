@@ -79,6 +79,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -712,7 +713,9 @@ private fun PrivacyDataFlowCard() {
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
     val selectedFlow = flows[selectedIndex.coerceIn(0, flows.lastIndex)]
     val infiniteTransition = rememberInfiniteTransition(label = "privacy_flow_packet")
-    val packetProgress by infiniteTransition.animateFloat(
+    // 持有 State 不用 by 解包：动画唯一消费点是下方 Canvas（绘制期），传 State 进去
+    // 在 DrawScope 里读 .value，动画每帧只触发重绘；若在组合期读会带动整张数据流卡片逐帧重组
+    val packetProgressState = infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -759,7 +762,7 @@ private fun PrivacyDataFlowCard() {
             PrivacyFlowTrack(
                 middleNode = selectedFlow.middleNode,
                 endNode = selectedFlow.endNode,
-                packetProgress = packetProgress
+                packetProgress = packetProgressState
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -815,7 +818,7 @@ private fun PrivacyDataFlowCard() {
 private fun PrivacyFlowTrack(
     middleNode: String,
     endNode: String,
-    packetProgress: Float
+    packetProgress: State<Float>
 ) {
     val primary = MaterialTheme.colorScheme.primary
     Box(
@@ -834,7 +837,7 @@ private fun PrivacyFlowTrack(
             drawCircle(trackColor, 8.dp.toPx(), Offset(startX, y))
             drawCircle(trackColor, 8.dp.toPx(), Offset(middleX, y))
             drawCircle(trackColor, 8.dp.toPx(), Offset(endX, y))
-            val packetX = startX + (endX - startX) * packetProgress
+            val packetX = startX + (endX - startX) * packetProgress.value
             drawCircle(primary, 6.dp.toPx(), Offset(packetX, y))
         }
         Row(

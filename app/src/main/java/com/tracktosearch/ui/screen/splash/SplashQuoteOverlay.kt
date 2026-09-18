@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.State
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -550,6 +551,8 @@ private fun ProjectorBeam(
 ) {
     val grain = remember { grainBrush() }
     val motes = remember { dustMotes() }
+    // 持 State 不解包：动画值的读取留给下方 Canvas 的绘制 lambda（driftT.value 在 DrawScope 内读），
+    // 动画期间只失效绘制；组合期读会让整个 ProjectorBeam 子树在开屏全程逐帧重组
     val driftT = dustDrift(drift)
     Canvas(modifier = Modifier.fillMaxSize()) {
         drawProjectorBeam(
@@ -559,7 +562,7 @@ private fun ProjectorBeam(
             beamScale = beamScale,
             beamAlpha = beamAlpha,
             grainAlpha = grainAlpha,
-            driftT = driftT,
+            driftT = driftT.value,
         )
     }
 }
@@ -604,15 +607,18 @@ private fun DrawScope.drawProjectorBeam(
 /**
  * 尘埃缓慢下飘的进度，0 到 1 循环一遍要 [DUST_DRIFT_MS]。
  *
- * 关掉动效时直接返回 0，连动画都不起：这一层只活几秒，起一个每帧都要重画的循环动画
+ * 返回 [State] 而不是解包后的值：调用方要在 Canvas 绘制 lambda 里读 `.value`，
+ * 动画只失效绘制、不重组。
+ *
+ * 关掉动效时直接返回静态 0，连动画都不起：这一层只活几秒，起一个每帧都要重画的循环动画
  * 却没人看得到位移，纯是白烧。[enabled] 在这一层的整个生命里不会变（它由 reduceMotion 算出来），
  * 所以这里提前 return 不会让组合结构在两次重组之间跳来跳去。
  */
 @Composable
-private fun dustDrift(enabled: Boolean): Float {
-    if (!enabled) return 0f
+private fun dustDrift(enabled: Boolean): State<Float> {
+    if (!enabled) return remember { mutableStateOf(0f) }
     val transition = rememberInfiniteTransition(label = "splashDust")
-    val drift by transition.animateFloat(
+    return transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -620,7 +626,6 @@ private fun dustDrift(enabled: Boolean): Float {
         ),
         label = "splashDustDrift",
     )
-    return drift
 }
 
 /**
