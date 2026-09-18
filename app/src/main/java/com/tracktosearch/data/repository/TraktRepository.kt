@@ -2317,32 +2317,18 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 获取用户对某影视的评分，未评分返回 null */
+    /** 获取用户对某影视的评分，未评分返回 null。复用 getAllUserRatings 的 5 分钟 TTL 缓存，避免每次进详情页全量翻页直连 */
     suspend fun getUserRating(traktId: Int, type: MediaType): Int? {
         return try {
-            val typeStr = when (type) {
-                MediaType.MOVIE -> "movies"
-                MediaType.SHOW -> "shows"
-                MediaType.PERSON -> "movies" // fallback
+            val ratings = when (type) {
                 MediaType.DISK -> return null
+                // PERSON 无单条评分语义，与旧实现一致按电影条目兜底
+                else -> getAllUserRatings().getOrNull().orEmpty()
             }
-            // Trakt /sync/ratings 默认每页 10 条,需分页拉全量,否则评分超过一页时查不到(true rating, #21)
-            val limit = 100
-            val ratings = mutableListOf<TraktRatingItem>()
-            var page = 1
-            do {
-                val response = traktApiService.getRatings(typeStr, page = page, limit = limit)
-                if (!response.isSuccessful) return null
-                val body = response.body() ?: break
-                ratings.addAll(body)
-                if (body.size < limit) break // 本页不足 limit 即末页
-                page++
-            } while (true)
             ratings.find { item ->
                 when (type) {
-                    MediaType.MOVIE -> item.movie?.ids?.trakt == traktId
+                    MediaType.MOVIE, MediaType.PERSON -> item.movie?.ids?.trakt == traktId
                     MediaType.SHOW -> item.show?.ids?.trakt == traktId
-                    MediaType.PERSON -> item.movie?.ids?.trakt == traktId // fallback
                     MediaType.DISK -> false
                 }
             }?.rating
