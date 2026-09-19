@@ -206,7 +206,6 @@ class SettingsViewModelTest {
             splashQuoteStorage = mockk(relaxed = true),
             doubanSyncedItemDao = doubanSyncedItemDao,
             sessionModeManager = sessionModeManager,
-            imageTrafficStorage = mockk(relaxed = true),
             aiTasteStorage = aiTasteStorage,
             statisticsSnapshotStore = mockk(relaxed = true),
             swiftieEggStorage = mockk(relaxed = true),
@@ -397,14 +396,6 @@ class SettingsViewModelTest {
 
         assertThat(viewModel.exportImportState.value.message?.outcome)
             .isEqualTo(HapticOutcome.FAILURE)
-    }
-
-    @Test
-    fun `重置图片流量的 outcome 为 SUCCESS`() {
-        viewModel.clearImageTraffic()
-
-        assertThat(viewModel.exportImportState.value.message?.outcome)
-            .isEqualTo(HapticOutcome.SUCCESS)
     }
 
     @Test
