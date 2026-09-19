@@ -306,7 +306,9 @@ private fun HctGradientSlider(
             // FlClash `AppCorner.full` 在 24dp 轨道上等价于半高圆角：左右端头是完整
             // 胶囊，不是近似方角的超椭圆。用 roundRect 才能得到和原版一致的圆润端头。
             val trackRadius = CornerRadius(trackHeight / 2f)
-            val brush = trackBrush ?: return@Canvas
+            // 首帧宽度尚未经 onSizeChanged 回填时按当前尺寸现算，避免轨道空一帧
+            val brush = trackBrush
+                ?: Brush.horizontalGradient(gradientColors, rect.left, rect.right)
             drawRoundRect(
                 brush = brush,
                 topLeft = rect.topLeft,

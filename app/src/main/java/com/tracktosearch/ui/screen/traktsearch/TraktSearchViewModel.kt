@@ -555,37 +555,47 @@ class TraktSearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             val nextPage = tabState.currentPage + 1
             updateTabState(loadTab, tabState.copy(isLoadingMore = true, loadMoreError = false))
+            try {
+                val result = when (loadTab) {
+                    MediaType.MOVIE -> traktRepository.searchMovies(loadQuery, page = nextPage)
+                    MediaType.SHOW -> traktRepository.searchShows(loadQuery, page = nextPage)
+                    MediaType.PERSON -> traktRepository.searchPeople(loadQuery, page = nextPage)
+                    MediaType.DISK -> Result.failure(Exception("DISK not supported"))
+                }
 
-            val result = when (loadTab) {
-                MediaType.MOVIE -> traktRepository.searchMovies(loadQuery, page = nextPage)
-                MediaType.SHOW -> traktRepository.searchShows(loadQuery, page = nextPage)
-                MediaType.PERSON -> traktRepository.searchPeople(loadQuery, page = nextPage)
-                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
-            }
+                // 写回前校验：期间换词或切 tab，本次翻页作废（不写任何 tab 状态）；
+                // 取消由 catch 统一收尾，这里只处理查询与期间校验双通过的常规路径
+                val latest = _uiState.value
+                if (latest.query != loadQuery || latest.selectedTab != loadTab) return@launch
 
-            // 写回前校验：期间换词或切 tab，本次翻页作废（不写任何 tab 状态）
-            val latest = _uiState.value
-            if (latest.query != loadQuery || latest.selectedTab != loadTab) return@launch
-
-            result.onSuccess { (searchResults, totalCount) ->
-                val newItems = searchResults.map { item ->
-                    async { withTimeoutOrNull(8_000) { enrichSearchResult(item, loadTab) } }
-                }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
-                // enrich 期间用户可能又切走，写回前再校验一次
-                val updatedState = latest.tabStateFor(loadTab)
-                val mergedResults = updatedState.results + newItems
-                val effectiveTotal = if (mergedResults.isEmpty()) 0 else totalCount
-                updateTabState(loadTab, updatedState.copy(
-                    results = mergedResults,
-                    isLoadingMore = false,
-                    loadMoreError = false,
-                    totalCount = effectiveTotal,
-                    currentPage = nextPage,
-                    hasMore = mergedResults.size < effectiveTotal
-                ))
-            }.onFailure {
-                val updatedState = latest.tabStateFor(loadTab)
-                updateTabState(loadTab, updatedState.copy(isLoadingMore = false, loadMoreError = true))
+                result.onSuccess { (searchResults, totalCount) ->
+                    val newItems = searchResults.map { item ->
+                        async { withTimeoutOrNull(8_000) { enrichSearchResult(item, loadTab) } }
+                    }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                    // enrich 期间换词/切 tab 由 searchJob 取消打断 awaitAll，不会走到写回
+                    val updatedState = _uiState.value.tabStateFor(loadTab)
+                    val mergedResults = updatedState.results + newItems
+                    val effectiveTotal = if (mergedResults.isEmpty()) 0 else totalCount
+                    updateTabState(loadTab, updatedState.copy(
+                        results = mergedResults,
+                        isLoadingMore = false,
+                        loadMoreError = false,
+                        totalCount = effectiveTotal,
+                        currentPage = nextPage,
+                        hasMore = mergedResults.size < effectiveTotal
+                    ))
+                }.onFailure {
+                    val updatedState = _uiState.value.tabStateFor(loadTab)
+                    updateTabState(loadTab, updatedState.copy(isLoadingMore = false, loadMoreError = true))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 取消（换词/换 tab 触发的新搜索）时若目标 tab 未被新一轮搜索重置，
+                // 必须清掉 isLoadingMore，否则旧 tab 页脚恒 Loading、翻页永久失效
+                val current = _uiState.value
+                if (current.query == loadQuery && current.selectedTab == loadTab) {
+                    updateTabState(loadTab, current.tabStateFor(loadTab).copy(isLoadingMore = false))
+                }
+                throw e
             }
         }
     }

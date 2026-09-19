@@ -67,6 +67,20 @@ class DoubanBatchRemovalService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CANCEL -> {
+                // 进程被杀后点残留通知会以 CANCEL 动作拉起服务：前台通知已随旧进程消失，
+                // 必须重新 startForeground 否则触发 FGS 启动超时异常（旧实现立即 stopSelf 恰好豁免）
+                try {
+                    val cancelStart = buildNotification(
+                        batchRemovalManager.progress.value.current,
+                        batchRemovalManager.progress.value.total,
+                        BatchRemovalPhase.CANCELLING
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        startForeground(NOTIF_ID, cancelStart, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                    } else {
+                        startForeground(NOTIF_ID, cancelStart)
+                    }
+                } catch (_: Exception) {}
                 batchRemovalManager.cancel()
                 // 取消是异步过程，保留 Service 直到 Manager 发布最终状态（与 DoubanSyncService、
                 // ConsistencyCheckService 同一约定）。历史上这里立即 stopSelf，服务撤下通知后

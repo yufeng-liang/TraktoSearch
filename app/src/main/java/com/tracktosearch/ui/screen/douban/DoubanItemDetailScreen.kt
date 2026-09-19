@@ -197,6 +197,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -302,7 +303,8 @@ class DoubanItemDetailViewModel @Inject constructor(
     val markChanges: StateFlow<DoubanDetailMarkChanges> = _markChanges.asStateFlow()
 
     // 一次性 Toast 事件(传 R.string 资源 ID),用 extraBufferCapacity 避免背压丢消息
-    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 4)
+    private val _toastEvent = // tryEmit 遇缓冲占用静默丢条，DROP_OLDEST 保证最近一条必达
+        MutableSharedFlow<Int>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
 
     /**

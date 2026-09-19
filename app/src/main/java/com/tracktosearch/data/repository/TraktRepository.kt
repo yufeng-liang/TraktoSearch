@@ -876,6 +876,8 @@ class TraktRepository @Inject constructor(
                         val id = when (type) {
                             MediaType.MOVIE -> r.movie?.ids?.trakt
                             MediaType.SHOW -> r.show?.ids?.trakt
+                            // PERSON 结果同样可缓存：缺这个分支会让人名搜索永不命中缓存
+                            MediaType.PERSON -> r.person?.ids?.trakt
                             else -> null
                         }
                         id != null && id > 0
@@ -893,9 +895,9 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
             }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                Result.failure(e)
-            }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     /** 通过 imdbId 反查 Trakt 条目（用于豆瓣→Trakt 同步）。仅支持 movie/show */

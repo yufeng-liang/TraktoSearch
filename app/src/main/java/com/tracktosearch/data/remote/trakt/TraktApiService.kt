@@ -154,12 +154,6 @@ interface TraktApiService {
     @POST("sync/ratings/remove")
     suspend fun removeRating(@Body body: RatingRequest): Response<Unit>
 
-    @GET("sync/ratings/{type}")
-    suspend fun getRatings(
-        @Path("type") type: String,
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
-    ): Response<List<TraktRatingItem>>
 
     @GET("search/tmdb/{id}")
     suspend fun searchByTmdb(

@@ -389,7 +389,9 @@ fun PersonScreen(
                                         // 页脚滚进视口才触发翻页。历史上这里把 LaunchedEffect(Unit) 写在
                                         // 「可加载」条件分支内：效果体置 isLoadingMore 后条件变假、效果被销毁，
                                         // 请求一回来条件又变真、立即再拉——页脚路过一次就把所有页串行拉完
-                                        LaunchedEffect(movieCreditsRowState, uiState.movieCredits.size) {
+                                        // key 必须带全闸门条件：失败后 error 置位但 size 不变，
+                                        // 不补键时收集器读 stale 状态、滚动一格重发必败请求
+                                        LaunchedEffect(movieCreditsRowState, uiState.movieCredits.size, uiState.hasMoreMovies, uiState.isLoadingMoreMovies, uiState.loadMoreMoviesError) {
                                             snapshotFlow { movieCreditsRowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                                                 .collect { lastVisible ->
                                                     if (lastVisible != null && lastVisible >= uiState.movieCredits.size &&
@@ -489,7 +491,7 @@ fun PersonScreen(
                                             }
                                         }
                                         // 理由同电影行：页脚滚进视口才触发翻页，防自动续拉到底
-                                        LaunchedEffect(tvCreditsRowState, uiState.tvCredits.size) {
+                                        LaunchedEffect(tvCreditsRowState, uiState.tvCredits.size, uiState.hasMoreTvShows, uiState.isLoadingMoreTvShows, uiState.loadMoreTvShowsError) {
                                             snapshotFlow { tvCreditsRowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                                                 .collect { lastVisible ->
                                                     if (lastVisible != null && lastVisible >= uiState.tvCredits.size &&

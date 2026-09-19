@@ -58,7 +58,7 @@ class UserReviewMigrationTest {
                                 liked INTEGER,
                                 createdAt INTEGER,
                                 updatedAt INTEGER,
-                                syncedAt INTEGER NOT NULL
+                                syncedAt INTEGER NOT NULL DEFAULT 0
                             )
                             """.trimIndent()
                         )
