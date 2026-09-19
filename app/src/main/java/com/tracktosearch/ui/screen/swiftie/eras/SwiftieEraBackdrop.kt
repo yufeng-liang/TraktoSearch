@@ -243,6 +243,7 @@ fun SwiftieEraBackdropLayer(
     eraElapsedMs: () -> Long,
     cardBounds: () -> Rect,
     lowRam: Boolean,
+    loverHouseFade: () -> Float = { 1f },
     modifier: Modifier = Modifier
 ) {
     val shapes = remember(lowRam) { BackdropShapes(lowRam) }
@@ -261,13 +262,14 @@ fun SwiftieEraBackdropLayer(
             val t = phase()
             val eraMs = eraElapsedMs()
             val card = cardBounds()
+            val houseFade = loverHouseFade()
             if (mix <= 0f || from == to) {
-                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, houseFade)
             } else {
-                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam, houseFade)
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
-                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam)
+                drawStage(to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam, houseFade)
             }
         }
     )
@@ -278,6 +280,8 @@ fun SwiftieEraBackdropLayer(
  *
  * [alpha] 是换张淡变的权重，**乘进每一笔**而不是靠 `graphicsLayer` 隔离一层 ——
  * 两张舞台各开一次离屏合成，在换张那 500ms 里每帧要多两次全屏 blit。
+ *
+ * [houseFade] 只被 Lover 分支消费（见 [drawPastelRainbowHouse]），其余 11 张直接忽略。
  */
 private fun DrawScope.drawStage(
     index: Int,
@@ -289,7 +293,8 @@ private fun DrawScope.drawStage(
     path: Path,
     shapes: BackdropShapes,
     numerals: List<TextLayoutResult>,
-    lowRam: Boolean
+    lowRam: Boolean,
+    houseFade: Float
 ) {
     if (alpha <= 0.01f) return
     val stage = SwiftieErasData.STAGE[index]
@@ -308,7 +313,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.HALFTONE_THRONE ->
             drawHalftoneThrone(path, top, phase, alpha, eraMs, shapes)
         SwiftieEraBackdrop.PASTEL_RAINBOW_HOUSE ->
-            drawPastelRainbowHouse(path, top, mid, deep, phase, alpha, eraMs, card)
+            drawPastelRainbowHouse(path, top, mid, deep, phase, alpha, eraMs, card, houseFade)
         SwiftieEraBackdrop.PINE_MOSS_PIANO ->
             drawPineMossPiano(path, top, mid, deep, phase, alpha, shapes)
         SwiftieEraBackdrop.BRANCH_LANTERNS ->
@@ -2881,6 +2886,9 @@ private fun jitter01(i: Int): Float {
  * *Lover* MV 整支设定在那栋粉蓝小屋里。这里的房子是**远景**、只有轮廓与窗光 ——
  * 精细的那一栋在 `SwiftieSnowGlobe` 的球内，收尾那 6.5 秒才登场，两处不能长一样。
  * 屋顶那颗心按 [phase] 呼吸，命中之后带一支箭（见 [drawLoverHeart]）。
+ *
+ * [houseFade] 是房子/栅栏/心箭三组的保留系数（水晶球出场时收走它们，1 = 照常）；
+ * 彩虹、云海、雾带不归它管，任何时刻都照常画。
  */
 private fun DrawScope.drawPastelRainbowHouse(
     path: Path,
@@ -2890,7 +2898,8 @@ private fun DrawScope.drawPastelRainbowHouse(
     phase: Float,
     alpha: Float,
     eraMs: Long,
-    card: Rect
+    card: Rect,
+    houseFade: Float
 ) {
     val w = size.width
     val h = size.height
@@ -2943,11 +2952,13 @@ private fun DrawScope.drawPastelRainbowHouse(
     val houseX = w * 0.50f
     val eaveY = h * LOVER_EAVE_Y
     val wallH = h * 0.075f
+    // 房子三组（本体/栅栏/心箭）统一的系数：水晶球出场时整组收走，不逐笔各收各的
+    val propAlpha = alpha * houseFade
     drawRect(
         color = deep,
         topLeft = Offset(houseX - houseW / 2f, eaveY),
         size = Size(houseW, wallH),
-        alpha = alpha * 0.42f
+        alpha = propAlpha * 0.42f
     )
     // 烟囱先画在屋顶后面；底边改成屋顶右斜边的同一条线，避免水平矩形压进屋面。
     val chimneyLeftX = houseX + houseW * 0.255f
@@ -2964,20 +2975,20 @@ private fun DrawScope.drawPastelRainbowHouse(
     drawPath(
         path = path,
         color = HOUSE_CHIMNEY,
-        alpha = alpha * 0.72f
+        alpha = propAlpha * 0.72f
     )
     path.rewind()
     path.moveTo(houseX, eaveY - houseW * 0.42f)
     path.lineTo(houseX - houseW * 0.62f, eaveY)
     path.lineTo(houseX + houseW * 0.62f, eaveY)
     path.close()
-    drawPath(path = path, color = deep, alpha = alpha * 0.52f)
+    drawPath(path = path, color = deep, alpha = propAlpha * 0.52f)
     // 门
     drawRect(
         color = deep,
         topLeft = Offset(houseX - houseW * 0.07f, eaveY + wallH * 0.42f),
         size = Size(houseW * 0.14f, wallH * 0.58f),
-        alpha = alpha * 0.7f
+        alpha = propAlpha * 0.7f
     )
     for (i in HOUSE_WINDOWS.indices) {
         drawLitWindow(
@@ -2987,7 +2998,7 @@ private fun DrawScope.drawPastelRainbowHouse(
             height = wallH * 0.30f,
             frame = deep,
             lit = 1f,
-            alpha = alpha * 0.9f
+            alpha = propAlpha * 0.9f
         )
     }
     // 门上只留一条窄檐线和门把手，不再画宽大的梯形雨篷；
@@ -2997,14 +3008,14 @@ private fun DrawScope.drawPastelRainbowHouse(
         start = Offset(houseX - houseW * 0.105f, eaveY + wallH * 0.36f),
         end = Offset(houseX + houseW * 0.105f, eaveY + wallH * 0.36f),
         strokeWidth = (h * 0.0028f).coerceAtLeast(1f),
-        alpha = alpha * 0.48f,
+        alpha = propAlpha * 0.48f,
         cap = StrokeCap.Round
     )
     drawCircle(
         color = HOUSE_CHIMNEY,
         radius = (h * 0.0035f).coerceAtLeast(1f),
         center = Offset(houseX + houseW * 0.035f, eaveY + wallH * 0.68f),
-        alpha = alpha * 0.82f
+        alpha = propAlpha * 0.82f
     )
     // 栅栏：两道横杆 + 疏一点的立柱。第二轮立柱间距 0.075×屋宽、宽 0.016，
     // 屏幕上是一条拉链
@@ -3017,7 +3028,7 @@ private fun DrawScope.drawPastelRainbowHouse(
             start = Offset(fenceLeft, fenceY + wallH * (0.10f + rail * 0.11f)),
             end = Offset(fenceRight, fenceY + wallH * (0.10f + rail * 0.11f)),
             strokeWidth = (h * 0.0022f).coerceAtLeast(1f),
-            alpha = alpha * 0.40f
+            alpha = propAlpha * 0.40f
         )
     }
     var picket = fenceLeft
@@ -3026,14 +3037,15 @@ private fun DrawScope.drawPastelRainbowHouse(
             color = deep,
             topLeft = Offset(picket, fenceY + wallH * 0.04f),
             size = Size(houseW * 0.030f, wallH * 0.24f),
-            alpha = alpha * 0.40f
+            alpha = propAlpha * 0.40f
         )
         picket += houseW * 0.13f
     }
 
-    // 屋顶那颗心。呼吸用 sin(phase*TAU)，一倍频，绕回时连续
+    // 屋顶那颗心。呼吸用 sin(phase*TAU)，一倍频，绕回时连续。
+    // 心与箭随房子一起收走：球页上再挂在彩虹顶就抢水晶球的戏
     val pulse = 0.68f + 0.32f * sin(phase * TAU)
-    drawLoverHeart(path, swiftieLoverHeartBox(size), pulse, alpha, eraMs, card)
+    drawLoverHeart(path, swiftieLoverHeartBox(size), pulse, propAlpha, eraMs, card)
     drawFogBand(HERO_BOTTOM, 0.16f, top, alpha * DISTANT_ALPHA * 1.8f)
 }
 
