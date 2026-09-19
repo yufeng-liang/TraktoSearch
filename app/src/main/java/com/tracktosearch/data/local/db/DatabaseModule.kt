@@ -577,6 +577,53 @@ object DatabaseModule {
         }
     }
 
+    internal val MIGRATION_19_20 = object : Migration(19, 20) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v19 -> v20：user_review 主键从裸 traktId 改为 (traktId, mediaType)。
+            // Trakt 电影/剧集 ID 分属不同命名空间可能同号，裸主键会让电影/剧集的
+            // 评分/短评互相覆盖，traktCommentId 也可能指向另一部作品的线上评论。
+            // SQLite 无法改主键，标准做法：建新表 → 拷贝 → 删旧 → 改名。
+            // 注：迁移前已发生的同号覆盖只剩一行，无法找回，这里保证现有行无损。
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS user_review_new (
+                    traktId INTEGER NOT NULL,
+                    tmdbId INTEGER,
+                    imdbId TEXT,
+                    mediaType TEXT NOT NULL,
+                    title TEXT,
+                    year INTEGER,
+                    rating REAL,
+                    comment TEXT,
+                    traktCommentId INTEGER,
+                    commentCheckedAt INTEGER,
+                    liked INTEGER,
+                    createdAt INTEGER,
+                    updatedAt INTEGER,
+                    syncedAt INTEGER NOT NULL,
+                    PRIMARY KEY(traktId, mediaType)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO user_review_new
+                    (traktId, tmdbId, imdbId, mediaType, title, year, rating, comment,
+                     traktCommentId, commentCheckedAt, liked, createdAt, updatedAt, syncedAt)
+                SELECT
+                    traktId, tmdbId, imdbId, mediaType, title, year, rating, comment,
+                    traktCommentId, commentCheckedAt, liked, createdAt, updatedAt, syncedAt
+                FROM user_review
+                """.trimIndent()
+            )
+            db.execSQL("DROP TABLE user_review")
+            db.execSQL("ALTER TABLE user_review_new RENAME TO user_review")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_user_review_mediaType ON user_review(mediaType)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_user_review_tmdbId ON user_review(tmdbId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_user_review_imdbId ON user_review(imdbId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -603,7 +650,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
             .build()
     }
 

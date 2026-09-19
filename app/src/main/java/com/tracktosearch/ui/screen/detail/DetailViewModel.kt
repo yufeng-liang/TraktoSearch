@@ -621,7 +621,7 @@ class DetailViewModel @Inject constructor(
             // 未命中时降级到异步 fetchUserRating（走 Trakt 网络）
             if (visibility.myRating && currentTraktId > 0 && cached.uiState.userRating == null && currentDoubanUserRating == null) {
                 val localReview = withContext(Dispatchers.IO) {
-                    runCatching { userReviewRepository.getReview(currentTraktId.toLong()) }.getOrNull()
+                    runCatching { userReviewRepository.getReview(currentTraktId.toLong(), currentMediaTypeStr()) }.getOrNull()
                 }
                 if (localReview != null && (localReview.rating != null || !localReview.comment.isNullOrBlank())) {
                     _uiState.value = _uiState.value.copy(
@@ -1978,7 +1978,7 @@ class DetailViewModel @Inject constructor(
         }
         ownCommentJob = viewModelScope.launch {
             val local = withContext(Dispatchers.IO) {
-                runCatching { userReviewRepository.getReview(detailTraktId.toLong()) }.getOrNull()
+                runCatching { userReviewRepository.getReview(detailTraktId.toLong(), currentMediaTypeStr()) }.getOrNull()
             }
             if (detailTraktId != currentTraktId) return@launch
 
@@ -2032,7 +2032,7 @@ class DetailViewModel @Inject constructor(
 
     private suspend fun cacheOwnComment(comment: String?, traktCommentId: Int?, checkedAt: Long) {
         if (currentTraktId <= 0) return
-        val existing = userReviewRepository.getReview(currentTraktId.toLong())
+        val existing = userReviewRepository.getReview(currentTraktId.toLong(), currentMediaTypeStr())
         val state = _uiState.value
         val base = existing ?: UserReviewEntity(
             traktId = currentTraktId.toLong(),
@@ -2200,7 +2200,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRatingLoading = true)
             // 优先读取本地评分+短评缓存:命中且 rating/comment 非空则直接初始化 UI,不再走网络
-            val local = runCatching { userReviewRepository.getReview(currentTraktId.toLong()) }.getOrNull()
+            val local = runCatching { userReviewRepository.getReview(currentTraktId.toLong(), currentMediaTypeStr()) }.getOrNull()
             if (local != null && (local.rating != null || !local.comment.isNullOrBlank())) {
                 _uiState.value = _uiState.value.copy(
                     userRating = local.rating?.toInt(),
@@ -3993,7 +3993,7 @@ class DetailViewModel @Inject constructor(
         if (currentTraktId <= 0) return
         viewModelScope.launch {
             runCatching {
-                val existing = userReviewRepository.getReview(currentTraktId.toLong())
+                val existing = userReviewRepository.getReview(currentTraktId.toLong(), currentMediaTypeStr())
                 userReviewRepository.saveReview(
                     UserReviewEntity(
                         traktId = currentTraktId.toLong(),
@@ -4019,7 +4019,7 @@ class DetailViewModel @Inject constructor(
     private fun deleteUserReviewFromLocal() {
         if (currentTraktId <= 0) return
         viewModelScope.launch {
-            runCatching { userReviewRepository.deleteReview(currentTraktId.toLong()) }
+            runCatching { userReviewRepository.deleteReview(currentTraktId.toLong(), currentMediaTypeStr()) }
         }
     }
 }

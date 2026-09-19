@@ -15,7 +15,10 @@ import javax.inject.Singleton
 class UserReviewRepository @Inject constructor(
     private val userReviewDao: UserReviewDao
 ) {
-    suspend fun getReview(traktId: Long): UserReviewEntity? = userReviewDao.getByTraktId(traktId)
+    // mediaType 取 "movie"/"show"（与实体存储值一致）。电影/剧集 traktId 可能同号，
+    // 不带 mediaType 的查询会张冠李戴
+    suspend fun getReview(traktId: Long, mediaType: String): UserReviewEntity? =
+        userReviewDao.getByKey(traktId, mediaType)
 
     suspend fun saveReview(entity: UserReviewEntity): Unit = userReviewDao.upsert(
         entity.copy(syncedAt = System.currentTimeMillis())
@@ -25,5 +28,5 @@ class UserReviewRepository @Inject constructor(
 
     suspend fun getReviewsByType(mediaType: String): List<UserReviewEntity> = userReviewDao.getByMediaType(mediaType)
 
-    suspend fun deleteReview(traktId: Long): Unit = userReviewDao.deleteByTraktId(traktId)
+    suspend fun deleteReview(traktId: Long, mediaType: String): Unit = userReviewDao.deleteByKey(traktId, mediaType)
 }

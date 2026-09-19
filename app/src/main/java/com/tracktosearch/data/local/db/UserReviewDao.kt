@@ -14,8 +14,9 @@ interface UserReviewDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(list: List<UserReviewEntity>)
 
-    @Query("SELECT * FROM user_review WHERE traktId = :traktId")
-    suspend fun getByTraktId(traktId: Long): UserReviewEntity?
+    // 电影/剧集 traktId 分属不同命名空间，按 key 查询必须带 mediaType
+    @Query("SELECT * FROM user_review WHERE traktId = :traktId AND mediaType = :mediaType")
+    suspend fun getByKey(traktId: Long, mediaType: String): UserReviewEntity?
 
     @Query("SELECT * FROM user_review")
     suspend fun getAll(): List<UserReviewEntity>
@@ -23,8 +24,8 @@ interface UserReviewDao {
     @Query("SELECT * FROM user_review WHERE mediaType = :mediaType")
     suspend fun getByMediaType(mediaType: String): List<UserReviewEntity>
 
-    @Query("DELETE FROM user_review WHERE traktId = :traktId")
-    suspend fun deleteByTraktId(traktId: Long)
+    @Query("DELETE FROM user_review WHERE traktId = :traktId AND mediaType = :mediaType")
+    suspend fun deleteByKey(traktId: Long, mediaType: String)
 
     @Query("DELETE FROM user_review")
     suspend fun clear()
