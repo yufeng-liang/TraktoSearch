@@ -39,8 +39,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.VolunteerActivism
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -56,8 +54,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
@@ -75,6 +78,9 @@ import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /** 特别鸣谢外跳仓库：豆瓣同步爬取方式与反爬思路的参考来源，与 README 鸣谢口径一致。 */
 private const val SPECIAL_THANKS_REPO_URL = "https://github.com/Geetheshe/DoubanMovieListBackUpToNotion"
+
+/** 特别鸣谢正文中的项目名：作为超链接锚文本，四语文案均含此字面量。 */
+private const val SPECIAL_THANKS_PROJECT_NAME = "DoubanMovieListBackUpToNotion"
 
 /**
  * 开源相关页：按分组列出本 App 使用的第三方开源库（名称版本/许可/开发者），
@@ -255,49 +261,58 @@ private fun OssThanksCard(libraryTotal: Int, groupTotal: Int) {
 
 /**
  * 特别鸣谢卡：豆瓣同步（标记列表爬取/反爬思路）参考的开源项目，与库条目卡同族样式。
- * 整卡可点跳仓库；外跳 CustomTabs 不发触感（沿用隐私页权利按钮的惯例）。
+ * 标题水平居中、不带图标；整卡不可点，正文里的项目名是超链接（CustomTabs 外跳，不发触感）。
  */
 @Composable
 private fun OssSpecialThanksCard() {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    val bodyText = stringResource(R.string.opensource_special_thanks_body)
+    // 文案是纯字符串资源，项目名以子串定位加链接；四语文案均含项目名字面量
+    val linkedBody = buildAnnotatedString {
+        append(bodyText)
+        val start = bodyText.indexOf(SPECIAL_THANKS_PROJECT_NAME)
+        if (start >= 0) {
+            addLink(
+                LinkAnnotation.Url(
+                    url = SPECIAL_THANKS_REPO_URL,
+                    styles = TextLinkStyles(
+                        style = SpanStyle(
+                            color = scheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ),
+                    linkInteractionListener = { link ->
+                        val url = (link as? LinkAnnotation.Url)?.url ?: return@Url
+                        CustomTabsIntent.Builder().build()
+                            .launchUrl(context, url.toUri())
+                    }
+                ),
+                start,
+                start + SPECIAL_THANKS_PROJECT_NAME.length
+            )
+        }
+    }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = scheme.surfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clickable {
-                CustomTabsIntent.Builder().build()
-                    .launchUrl(context, SPECIAL_THANKS_REPO_URL.toUri())
-            }
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Sync,
-                    contentDescription = null,
-                    tint = scheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.opensource_special_thanks_title),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = scheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    imageVector = Icons.Rounded.OpenInNew,
-                    contentDescription = null,
-                    tint = scheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+            Text(
+                text = stringResource(R.string.opensource_special_thanks_title),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = scheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = stringResource(R.string.opensource_special_thanks_body),
+                text = linkedBody,
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
                 lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f
