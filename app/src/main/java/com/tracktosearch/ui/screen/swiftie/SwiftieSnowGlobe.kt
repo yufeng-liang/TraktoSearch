@@ -27,8 +27,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -38,11 +40,14 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.core.content.res.ResourcesCompat
+import com.tracktosearch.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
@@ -129,8 +134,8 @@ private const val STAGE_HEIGHT_RATIO = 1f + BASE_HEIGHT_RATIO - BASE_LIFT_RATIO
 private const val BASE_BODY_WIDTH_RATIO = 0.76f
 private const val BASE_SOCKET_WIDTH_RATIO = 0.70f
 
-/** 印章可见字高占底座高的比例。320dp 的球折算下来约 20dp。 */
-private const val SEAL_GLYPH_RATIO = 0.37f
+/** 印章可见字高占底座高的比例。320dp 的球折算下来约 18dp；emoji 图标随字高走。 */
+private const val SEAL_GLYPH_RATIO = 0.34f
 
 // ─────────────────────────── 运动 ───────────────────────────
 
@@ -157,8 +162,12 @@ private val CARD_SETTLE_ORIGIN = TransformOrigin(0.5f, 1f)
 /** 让位时额外下压的量，按小卡自己的高度算。与 [CARD_SETTLE_SCALE] 配对，别单改一个。 */
 private const val CARD_SETTLE_DROP = 0.50f
 
-/** 球自转的相机距离。球是圆的，透视强一点反而更有体积。 */
-private const val GLOBE_CAMERA_DISTANCE = 10f
+/**
+ * 球自转的相机距离。**必须够远**：rotationY 一转，近侧半边被透视放大、远侧缩小，
+ * 投影出来的圆心就整体向一侧漂 —— 相机 10f 时漂移可达 ±30px（占球半径 5%），
+ * 用户看到的就是"球没在底座上放正"。60f 后残余 ≤5px，透视的体积感还在。
+ */
+private const val GLOBE_CAMERA_DISTANCE = 60f
 
 /** 自转幅度：只摆不整圈。转过去球内的小卡就侧成一条线了。 */
 private const val SWING_DEG = 6f
@@ -206,7 +215,8 @@ private const val FLAKE_TUMBLE_RATE = 0.35f
 // ─────────────────────── 那颗心 ───────────────────────
 
 private const val HEART_SIDE_RATIO = 0.26f
-private const val HEART_U = -0.08f
+// 落点基本贴着屋脊正上方：偏得多了整颗球的重心被拽向一侧，读起来像球没摆正
+private const val HEART_U = -0.04f
 private const val HEART_FROM_V = 0.06f
 private const val HEART_TO_V = -0.70f
 private const val HEART_RISE_END = 0.72f
@@ -670,17 +680,19 @@ private fun DrawScope.drawGlassShell(
  * （镜面芯）。三条比 `Modifier.blur` 便宜得多，也比单条硬弧像玻璃 ——
  * 单条画出来就是一道白线，一眼假。
  *
- * 角度按 Compose 的约定：0° 是三点钟、顺时针增。196°..250° 从九点钟偏下扫到十一点钟。
+ * 角度按 Compose 的约定：0° 是三点钟、顺时针增。主弧 206°..256°：从九点钟偏上扫到
+ * 十一点钟 —— 刻意抬离水平中线，主光压在左上而不是正左，球的视觉重心才不会向左歪。
  */
 private fun DrawScope.drawSpecular(center: Offset, radius: Float, alpha: Float, bounce: Boolean) {
     if (alpha <= 0.01f) return
-    arcStroke(center, radius * 0.86f, 196f, 54f, radius * 0.090f, Color.White, 0.16f * alpha)
-    arcStroke(center, radius * 0.86f, 200f, 46f, radius * 0.050f, Color.White, 0.42f * alpha)
-    arcStroke(center, radius * 0.87f, 208f, 26f, radius * 0.024f, Color.White, 0.85f * alpha)
+    arcStroke(center, radius * 0.86f, 206f, 50f, radius * 0.075f, Color.White, 0.16f * alpha)
+    arcStroke(center, radius * 0.86f, 210f, 42f, radius * 0.045f, Color.White, 0.40f * alpha)
+    arcStroke(center, radius * 0.87f, 218f, 24f, radius * 0.022f, Color.White, 0.85f * alpha)
     if (!bounce) return
-    // 右下这条是从底座弹回来的反射，必须明显更弱：两条一样亮就读不出光源方向了
-    arcStroke(center, radius * 0.80f, 26f, 46f, radius * 0.040f, GLASS_BOUNCE, 0.26f * alpha)
-    arcStroke(center, radius * 0.90f, 96f, 30f, radius * 0.020f, GLASS_BOUNCE, 0.18f * alpha)
+    // 右下这条是从底座弹回来的反射。要弱于主弧，但完全压住又会把球的视觉重心
+    // 全让给左上那组 —— 保持"光源方向"的同时给右侧留一点配重
+    arcStroke(center, radius * 0.80f, 26f, 46f, radius * 0.044f, GLASS_BOUNCE, 0.32f * alpha)
+    arcStroke(center, radius * 0.90f, 96f, 30f, radius * 0.022f, GLASS_BOUNCE, 0.22f * alpha)
 }
 
 private fun DrawScope.arcStroke(
@@ -1001,17 +1013,6 @@ private fun DrawScope.drawLoverHouse(parts: LoverHouseParts) {
         drawPath(path = parts.roof, color = ROOF_EDGE, style = Stroke(width = r * 0.016f))
         drawPath(path = parts.roofHighlight, color = Color.White, alpha = 0.22f)
 
-        val atticCenter = Offset(parts.x(0f), parts.y(-0.27f))
-        val atticRadius = r * 0.105f
-        drawHalo(atticCenter, atticRadius * 3.5f, 0.90f)
-        withTransform({
-            translate(atticCenter.x - atticRadius, atticCenter.y - atticRadius)
-            scale(atticRadius * 2f, atticRadius * 2f, pivot = Offset.Zero)
-        }) {
-            drawPath(path = unitHeartPath(), color = WINDOW_WARM, alpha = 0.95f)
-            drawPath(path = unitHeartPath(), color = WINDOW_MULLION, style = Stroke(width = 0.055f))
-        }
-
         drawPath(path = parts.door, color = DOOR_COLOR)
         drawPath(path = parts.door, color = ROOF_EDGE, alpha = 0.36f, style = Stroke(width = r * 0.010f))
         drawCircle(color = GOLD_LIGHT, radius = r * 0.018f, center = Offset(parts.x(0.10f), parts.y(0.49f)))
@@ -1138,28 +1139,66 @@ private const val RING_GLINT_END = 0.96f
 /** 过渡数字从卡片原色切换到暖白金色的强度。 */
 private const val SOURCE_DIGIT_ALPHA = 0.94f
 
-/** 日期铭牌整体相对底座中心的高度。 */
-private const val SEAL_CENTER_RATIO = 0.58f
+/** 铭牌上的两枚 emoji（戒指 / 牵手）相对数字参考字号的倍数。 */
+private const val SEAL_EMOJI_SCALE = 1.05f
+
+/** 戒指 emoji 单独缩放：💍 的钻太大，与数字抢视觉（用户定 0.6x）。 */
+private const val SEAL_RING_SCALE = 0.6f
 
 /**
- * 预排 `7` 与 `3`。
+ * 预排 `7`、`3` 与两枚 emoji（💍 / 👫）。
  *
- * **字体是 [SwiftieFonts.Marker] 而不是 Script。** 本仓的 `swiftie_script.ttf`（Pacifico）是按
- * 灯箱标题子集化过的，cmap 里只有 `" !.CFHSTabcefgiklmnorstuvwy"` 这 27 个字形，
- * **没有数字** —— 拿它排 `7` 会掉到系统兜底字体或直接是豆腐块，和 `era_lover.ttf` 是同一个坑。
- * `swiftie_marker.ttf`（Gochi Hand）的子集含 `0-9`，而且彩蛋里所有数字（13 / 87 / X）都是
- * 这只手写体，印章跟着它才像"同一件东西上的字"。
+ * **数字必须是 Path 而不是 TextLayoutResult。** `swiftie_marker.ttf`（Gochi Hand）的字形
+ * 由多段手写笔画轮廓叠成，Skia 的文本填充按 even-odd 处理重叠区，笔画交叠处会被
+ * 挖成空心管 —— 同一只字体在出题页走的是 `drawPath`（SwiftiePoster 的 `art.fixed`，
+ * 手工描摹的实心路径）所以那边是实的。这里用 `Paint.getTextPath` 取轮廓后**显式按
+ * Winding 填充**，交叠区才是实的。
+ *
+ * emoji 走系统彩色字体（NotoColorEmoji），位图字形没有填充规则问题，直接
+ * TextLayoutResult 绘制；它们只用来取尺寸，出现/落位的节奏在绘制侧控制。
  */
+private class SealArt(
+    val digitPaths: List<Path>,
+    val digitAdvances: List<Float>,
+    val digitInkCenters: List<Float>,
+    val ring: TextLayoutResult,
+    val hands: TextLayoutResult
+)
+
 @Composable
-private fun rememberSealDigits(): List<TextLayoutResult> {
+private fun rememberSealArt(): SealArt {
+    val context = LocalContext.current
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(measurer, density) {
-        val style = TextStyle(
-            fontFamily = SwiftieFonts.Marker,
-            fontSize = with(density) { SEAL_REFERENCE_PX.toSp() }
+    return remember(context, measurer, density) {
+        val typeface = ResourcesCompat.getFont(context, R.font.swiftie_honey)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = SEAL_REFERENCE_PX
+        }
+        fun digit(text: String): Triple<Path, Float, Float> {
+            val outline = android.graphics.Path()
+            paint.getTextPath(text, 0, text.length, 0f, 0f, outline)
+            val bounds = android.graphics.RectF()
+            outline.computeBounds(bounds, true)
+            val path = Path().apply {
+                fillType = PathFillType.NonZero
+                addPath(outline.asComposePath())
+            }
+            return Triple(path, paint.measureText(text), bounds.centerY())
+        }
+        val (path7, advance7, inkCenter7) = digit("7")
+        val (path3, advance3, inkCenter3) = digit("3")
+        val emojiStyle = TextStyle(
+            fontSize = with(density) { (SEAL_REFERENCE_PX * SEAL_EMOJI_SCALE).toSp() }
         )
-        listOf(measurer.measure("7", style), measurer.measure("3", style))
+        SealArt(
+            digitPaths = listOf(path7, path3),
+            digitAdvances = listOf(advance7, advance3),
+            digitInkCenters = listOf(inkCenter7, inkCenter3),
+            ring = measurer.measure("💍", emojiStyle),
+            hands = measurer.measure("👫", emojiStyle)
+        )
     }
 }
 
@@ -1169,13 +1208,18 @@ private fun GlobeDateTrail(
     diameter: Dp,
     modifier: Modifier
 ) {
-    val digits = rememberSealDigits()
+    val art = rememberSealArt()
+    // 两个数字各取贴板不同区域的真闪粉（出题页算式同一张贴板）。
+    // 窗口必须整个落在贴板的闪粉带内部：贴板上是原海报的算式，
+    // 跨到带外的暗缝就会把"空心"印进字形里。两处都已裁图核验为实心闪粉
+    val glitter7 = rememberGlitterPatchBrush(0f, 40f)
+    val glitter3 = rememberGlitterPatchBrush(96f, 128f)
     Spacer(
         modifier = modifier.drawWithCache {
             // DrawScope 本身就是 Density，直径在这里直接折成 px
             val diameterPx = diameter.toPx()
             onDrawBehind {
-                drawDateTrail(elapsedMs(), size, diameterPx, digits)
+                drawDateTrail(elapsedMs(), size, diameterPx, art, glitter7, glitter3)
             }
         }
     )
@@ -1185,63 +1229,113 @@ private fun DrawScope.drawDateTrail(
     elapsed: Long,
     stage: Size,
     diameter: Float,
-    digits: List<TextLayoutResult>
+    art: SealArt,
+    glitter7: Brush,
+    glitter3: Brush
 ) {
     val progress = span(elapsed, SEAL_START, SEAL_MS)
     if (progress <= 0f) return
     val glyph = (diameter * BASE_HEIGHT_RATIO) * SEAL_GLYPH_RATIO
-    val unitScale = glyph / (SEAL_CAP_RATIO * SEAL_REFERENCE_PX)
-    val width7 = digits[0].size.width * unitScale
-    val width3 = digits[1].size.width * unitScale
+    val u = glyph / (SEAL_CAP_RATIO * SEAL_REFERENCE_PX)
+    val w7 = art.digitAdvances[0] * u
+    val w3 = art.digitAdvances[1] * u
     val gap = glyph * 0.16f
-    val dotRadius = glyph * 0.085f
-    val ringGap = glyph * 0.28f
-    val iconWidth = glyph * 0.70f
-    val total = width7 + gap * 2f + dotRadius * 2f + width3 + ringGap * 2f + iconWidth
-    val targetLeft = stage.width / 2f - total / 2f
-    val target7 = Offset(targetLeft, diameter + (stage.height - diameter) * SEAL_CENTER_RATIO + glyph / 2f)
-    val target3 = Offset(targetLeft + width7 + gap * 2f + dotRadius * 2f, target7.y)
-    val source7 = Offset(stage.width / 2f - width7 * 0.55f, diameter * 0.48f)
-    val source3 = Offset(stage.width / 2f - width3 * 0.20f, diameter * 0.58f)
+    val dotRadius = glyph * 0.095f
+    val emojiGap = glyph * 0.22f
+    val ringW = art.ring.size.width * u * SEAL_RING_SCALE
+    val handsW = art.hands.size.width * u
+    // 总宽算到每个元素的墨迹右缘（emoji 的布局盒即墨迹），整行才真正居中
+    val total = w7 + gap * 2f + dotRadius * 2f + w3 + emojiGap + ringW + emojiGap + handsW
+    val left = stage.width / 2f - total / 2f
+    // 两道金线画在底座高 34% 与 86% 处，铭牌墨迹中心锚在它们的正中（底座高 60%）
+    val baseHeight = diameter * BASE_HEIGHT_RATIO
+    val plaqueCenter = stage.height - 0.40f * baseHeight
+    val baseline7 = plaqueCenter - art.digitInkCenters[0] * u
+    val baseline3 = plaqueCenter - art.digitInkCenters[1] * u
+    val target7 = Offset(left, baseline7)
+    val target3 = Offset(left + w7 + gap * 2f + dotRadius * 2f, baseline3)
+    val source7 = Offset(stage.width / 2f - w7 * 0.55f, diameter * 0.48f)
+    val source3 = Offset(stage.width / 2f - w3 * 0.20f, diameter * 0.58f)
     val travel = EaseOutCubic.transform((progress / TRAIL_LAND).coerceIn(0f, 1f))
-    val colorMix = travel
     val alpha = (progress / 0.10f).coerceIn(0f, 1f)
-    drawSourceDigit(digits[0], source7, target7, unitScale, travel, alpha, colorMix)
-    drawSourceDigit(digits[1], source3, target3, unitScale, travel, alpha, colorMix)
+    drawDigit(art.digitPaths[0], source7, target7, u, travel, alpha, glitter7)
+    drawDigit(art.digitPaths[1], source3, target3, u, travel, alpha, glitter3)
     if (travel <= 0.01f) return
-    val dotCenter = Offset(target7.x + width7 + gap + dotRadius, target7.y - glyph * 0.42f)
+    val dotCenter = Offset(target7.x + w7 + gap + dotRadius, plaqueCenter)
     drawCircle(color = SEAL_INK_SHADOW, radius = dotRadius * 1.3f, center = Offset(dotCenter.x + dotRadius * 0.12f, dotCenter.y + dotRadius * 0.18f), alpha = 0.8f * alpha)
     drawCircle(color = GOLD, radius = dotRadius, center = dotCenter, alpha = alpha)
-    drawDateIcons(target3.x + width3 + ringGap + glyph * 0.18f, target7.y - glyph * 0.42f, glyph, progress, alpha)
-}
-
-private fun DrawScope.drawDateIcons(
-    ringX: Float,
-    centerY: Float,
-    glyph: Float,
-    progress: Float,
-    alpha: Float
-) {
     val ringP = ((progress - RING_START) / (RING_END - RING_START)).coerceIn(0f, 1f)
     val handsP = ((progress - HANDS_START) / (1f - HANDS_START)).coerceIn(0f, 1f)
-    val ringCenter = Offset(ringX, centerY)
-    if (ringP > 0f) {
-        drawCircle(color = GOLD_LIGHT, radius = glyph * 0.22f, center = ringCenter, style = Stroke(width = glyph * 0.075f), alpha = alpha * ringP)
-        drawLine(color = GOLD, start = Offset(ringCenter.x + glyph * 0.11f, ringCenter.y - glyph * 0.19f), end = Offset(ringCenter.x + glyph * 0.21f, ringCenter.y - glyph * 0.34f), strokeWidth = glyph * 0.055f, alpha = alpha * ringP, cap = StrokeCap.Round)
-        val glint = ((progress - RING_GLINT_START) / (RING_GLINT_END - RING_GLINT_START)).coerceIn(0f, 1f)
-        if (glint > 0f && glint < 1f) {
-            val flash = sin(PI.toFloat() * glint)
-            drawLine(color = Color.White, start = Offset(ringCenter.x + glyph * 0.08f, ringCenter.y - glyph * 0.33f), end = Offset(ringCenter.x + glyph * 0.08f, ringCenter.y - glyph * 0.55f), strokeWidth = glyph * 0.045f, alpha = alpha * flash, cap = StrokeCap.Round)
-            drawLine(color = Color.White, start = Offset(ringCenter.x - glyph * 0.03f, ringCenter.y - glyph * 0.44f), end = Offset(ringCenter.x + glyph * 0.19f, ringCenter.y - glyph * 0.44f), strokeWidth = glyph * 0.045f, alpha = alpha * flash, cap = StrokeCap.Round)
-        }
+    drawEmoji(
+        art.ring,
+        center = Offset(target3.x + w3 + emojiGap + ringW / 2f, plaqueCenter),
+        u = u,
+        scale = SEAL_RING_SCALE,
+        p = ringP,
+        alpha = alpha
+    )
+    drawEmoji(
+        art.hands,
+        center = Offset(target3.x + w3 + emojiGap + ringW + emojiGap + handsW / 2f, plaqueCenter),
+        u = u,
+        scale = 1f,
+        p = handsP,
+        alpha = alpha
+    )
+}
+
+/**
+ * 一枚 emoji 图标：以墨迹盒中心对齐铭牌中心，出现时用 EaseOutBack 弹一下
+ * （与底座落座同一条缓动，"啪地放上去"的重量感一致）。
+ */
+private fun DrawScope.drawEmoji(
+    layout: TextLayoutResult,
+    center: Offset,
+    u: Float,
+    scale: Float,
+    p: Float,
+    alpha: Float
+) {
+    if (p <= 0f) return
+    val appear = EaseOutBack.transform(p)
+    val w = layout.size.width * u * scale * appear
+    val h = layout.size.height * u * scale * appear
+    withTransform({
+        translate(center.x - w / 2f, center.y - h / 2f)
+        scale(u * scale * appear, u * scale * appear, pivot = Offset.Zero)
+    }) {
+        drawText(textLayoutResult = layout, alpha = alpha * p)
     }
-    if (handsP > 0f) {
-        val handCenter = Offset(ringX + glyph * 0.70f, centerY)
-        drawCircle(color = Color(0xFFFFD0B7), radius = glyph * 0.15f, center = Offset(handCenter.x - glyph * 0.16f, handCenter.y - glyph * 0.13f), alpha = alpha * handsP)
-        drawCircle(color = Color(0xFFFFE0C7), radius = glyph * 0.15f, center = Offset(handCenter.x + glyph * 0.16f, handCenter.y - glyph * 0.13f), alpha = alpha * handsP)
-        drawLine(color = Color(0xFFFFC09E), start = Offset(handCenter.x - glyph * 0.22f, handCenter.y + glyph * 0.05f), end = Offset(handCenter.x + glyph * 0.22f, handCenter.y + glyph * 0.05f), strokeWidth = glyph * 0.13f, alpha = alpha * handsP, cap = StrokeCap.Round)
-        drawLine(color = Color(0xFFD46C83), start = Offset(handCenter.x - glyph * 0.16f, handCenter.y + glyph * 0.12f), end = Offset(handCenter.x - glyph * 0.16f, handCenter.y + glyph * 0.34f), strokeWidth = glyph * 0.11f, alpha = alpha * handsP, cap = StrokeCap.Round)
-        drawLine(color = Color(0xFF7C5A71), start = Offset(handCenter.x + glyph * 0.16f, handCenter.y + glyph * 0.12f), end = Offset(handCenter.x + glyph * 0.16f, handCenter.y + glyph * 0.34f), strokeWidth = glyph * 0.11f, alpha = alpha * handsP, cap = StrokeCap.Round)
+}
+
+/**
+ * 一枚数字：飞行途中是卡片上的平粉，落定后交给真闪粉贴图（出题页算式同一块板）。
+ * 墨影先铺一遍，深木底上闪粉才托得住。
+ */
+private fun DrawScope.drawDigit(
+    path: Path,
+    source: Offset,
+    target: Offset,
+    u: Float,
+    travel: Float,
+    alpha: Float,
+    glitter: Brush
+) {
+    val px = source.x + (target.x - source.x) * travel
+    val py = source.y + (target.y - source.y) * travel
+    withTransform({
+        translate(px, py)
+        scale(u, u, pivot = Offset.Zero)
+    }) {
+        if (travel < 1f) {
+            drawPath(path, SwiftiePalette.Glitter, alpha = alpha * (1f - travel))
+        }
+        if (travel > 0f) {
+            withTransform({ translate(0.10f, 0.14f) }) {
+                drawPath(path, SEAL_INK_SHADOW, alpha = 0.85f * alpha * travel)
+            }
+            drawPath(path, brush = glitter, alpha = alpha * travel)
+        }
     }
 }
 
@@ -1368,36 +1462,6 @@ private fun DrawScope.drawGlobeBase(
                 cornerRadius = parts.corner,
                 alpha = 0.13f * impact * alpha
             )
-        }
-    }
-}
-
-/**
- * 一枚来源数字：从卡片原位移动到铭牌，途中从卡片原色渐变为暖白金色。
- */
-private fun DrawScope.drawSourceDigit(
-    layout: TextLayoutResult,
-    source: Offset,
-    target: Offset,
-    unitScale: Float,
-    travel: Float,
-    alpha: Float,
-    colorMix: Float
-) {
-    val position = Offset(
-        source.x + (target.x - source.x) * travel,
-        source.y + (target.y - source.y) * travel
-    )
-    val sourceColor = SwiftiePalette.Glitter.copy(alpha = SOURCE_DIGIT_ALPHA * (1f - colorMix))
-    val targetColor = GOLD_LIGHT.copy(alpha = colorMix)
-    withTransform({
-        translate(position.x, position.y - layout.firstBaseline * unitScale)
-        scale(unitScale, unitScale, pivot = Offset.Zero)
-    }) {
-        drawText(textLayoutResult = layout, color = sourceColor, alpha = alpha)
-        if (colorMix > 0.01f) {
-            drawText(textLayoutResult = layout, color = SEAL_INK_SHADOW, alpha = 0.82f * alpha * colorMix, drawStyle = Stroke(width = 3.2f))
-            drawText(textLayoutResult = layout, color = targetColor, alpha = alpha * colorMix)
         }
     }
 }
