@@ -1761,11 +1761,7 @@ class WatchlistViewModel @Inject constructor(
     ): MediaUiItem {
         val base = mapWatchlistMovie(item, null)
         if (summary == null) return base
-        val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
-            noneSourceCjkTitle(summary, base.title).ifBlank { base.displayTitle }
-        } else {
-            summary.title.ifBlank { base.displayTitle }
-        }
+        val resolvedTitle = resolveSummaryDisplayTitle(summary, base.title) ?: base.displayTitle
         return base.copy(
             displayTitle = resolvedTitle,
             year = base.year ?: summary.year,
@@ -1812,11 +1808,7 @@ class WatchlistViewModel @Inject constructor(
     ): MediaUiItem {
         val base = mapWatchlistShow(item, null)
         if (summary == null) return base
-        val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
-            noneSourceCjkTitle(summary, base.title).ifBlank { base.displayTitle }
-        } else {
-            summary.title.ifBlank { base.displayTitle }
-        }
+        val resolvedTitle = resolveSummaryDisplayTitle(summary, base.title) ?: base.displayTitle
         return base.copy(
             displayTitle = resolvedTitle,
             year = base.year ?: summary.year,
@@ -2075,13 +2067,33 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 共享摘要标题的最终采纳，返回 null 表示维持调用方已显示的标题。
+     *
+     * - 有译名（DETAIL/ALTERNATIVE）直接用译名；但 TMDB 部分国产条目的 zh-CN 标题字段
+     *   填的是英文发行名（如「爱情公寓」→ Apartment of Love），中文界面下译名不带 CJK
+     *   而原文带时退回 TMDB 原文，与详情页「原名」一致。
+     * - 无译名（NONE）时服务端已把 title 兜底为 TMDB 原文；国产/日韩影视的 Trakt 标题
+     *   常是拼音或罗马音，原文带 CJK 而 Trakt 标题不带时改用原文。
+     * - 以上 CJK 退回只在中文界面生效；西片维持 Trakt/TMDB 译名结论不变。
+     */
+    private fun resolveSummaryDisplayTitle(summary: MediaSummary, traktTitle: String): String? {
+        val localized = summary.title.trim()
+        val original = summary.originalTitle.trim()
+        val zhUi = tmdbRepository.currentLanguageTag().startsWith("zh", ignoreCase = true)
+        if (summary.titleSource == TitleSource.NONE || localized.isEmpty()) {
+            if (zhUi && original.isNotEmpty() && original.hasCjkChar() && !traktTitle.hasCjkChar()) {
+                return original
+            }
+            return null
+        }
+        if (zhUi && original.hasCjkChar() && !localized.hasCjkChar()) return original
+        return localized
+    }
+
     /** 把共享摘要写回当前列表条目与离线快照；标题、海报和类型只补空缺，不覆盖已经显示的值。 */
     private suspend fun applyVisibleMetadata(item: MediaUiItem, summary: MediaSummary) {
-        val title = if (summary.titleSource == TitleSource.NONE) {
-            noneSourceCjkTitle(summary, item.title)
-        } else {
-            summary.title.trim()
-        }
+        val title = resolveSummaryDisplayTitle(summary, item.title).orEmpty()
         val isMovie = when (item.mediaType) {
             WatchlistMediaType.MOVIE -> true
             WatchlistMediaType.SHOW -> false
@@ -2462,18 +2474,6 @@ private suspend fun <T> retryIO(times: Int, block: suspend () -> T): T {
 }
 
 // ========== 离线缓存转换扩展 ==========
-
-/**
- * titleSource=NONE：TMDB 在当前语言下没有译名（详情标题与原文相同、地区别名也未命中），
- * 服务端此时把 title 兜底为 TMDB 原文。国产/日韩影视的 Trakt 标题常是拼音或罗马音，
- * TMDB 原文却是本土文字，与详情页「原名」一致——原文带 CJK 而 Trakt 标题不带时改用原文。
- * 其余情况返回空串，表示不覆盖调用方已显示的标题（西片维持 Trakt 英文发行名）。
- */
-private fun noneSourceCjkTitle(summary: MediaSummary, traktTitle: String): String {
-    val original = summary.originalTitle.trim()
-    if (original.isEmpty() || !original.hasCjkChar() || traktTitle.hasCjkChar()) return ""
-    return original
-}
 
 /** 是否含 CJK 表意/音节字符（汉字、假名、谚文），用于识别本土文字标题与拉丁转写。 */
 private fun String.hasCjkChar(): Boolean = any { ch ->
