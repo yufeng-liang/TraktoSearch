@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -62,6 +63,13 @@ class AuthManager @Inject constructor(
         // 冷启动授权等待硬上限：网络正常时 challenge+refresh 刷新链约 0.3-1s，2s 足够覆盖；
         // 超时走既有 OFFLINE 宽限路径（3 天）仍进主界面，不改变授权失败/离线场景行为。
         const val STARTUP_AUTH_TIMEOUT_MS = 2_000L
+
+        // OFFLINE 恢复退避序列（毫秒）。瞬时抖动（切网/DNS/代理切换）通常数秒内结束，
+        // 5s 首跳多数能赶在离线横幅（OFFLINE 稳定 3s 才弹）被察觉前恢复；
+        // 序列走完仍失败则停手，交给既有 15 分钟周期 worker 与回前台校验兜底。
+        internal val OFFLINE_RECOVERY_DELAYS_MS = longArrayOf(
+            5_000L, 15_000L, 30_000L, 60_000L, 120_000L, 300_000L, 600_000L
+        )
     }
 
     private val refreshCoordinator = AuthRefreshCoordinator()
@@ -72,6 +80,23 @@ class AuthManager @Inject constructor(
 
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    // OFFLINE 宽限的快速恢复：状态一进 OFFLINE 就按退避序列重试授权校验，状态离开
+    // OFFLINE（恢复 AUTHORIZED 或转入 UNAUTHORIZED/EXPIRED）即取消。背景：运行中校验只挂在
+    // 15 分钟周期 worker 上且 worker 失败也不 retry，一次瞬时抖动就会让网通着的用户
+    // 顶着「离线模式」横幅最长半个周期（onResume 校验只覆盖切后台再回来的场景）。
+    @Volatile
+    internal var offlineRecoveryDelaysMs: LongArray = OFFLINE_RECOVERY_DELAYS_MS
+    @Volatile
+    private var offlineRecoveryJob: Job? = null
+
+    init {
+        startupScope.launch {
+            _authState.collect { state ->
+                if (state == AuthState.OFFLINE) startOfflineRecovery() else stopOfflineRecovery()
+            }
+        }
+    }
 
     private val _recoveryFailure = MutableStateFlow<String?>(null)
     val recoveryFailure: StateFlow<String?> = _recoveryFailure.asStateFlow()
@@ -302,6 +327,32 @@ class AuthManager @Inject constructor(
             AuthState.OFFLINE
         }
         return Result.failure(Exception("Network error, offline grace: ${offlineGracePeriod - offlineDuration}s remaining"))
+    }
+
+    /** OFFLINE 期间的指数退避快速重试：抖动结束即恢复授权，不必等周期 worker。 */
+    private fun startOfflineRecovery() {
+        if (offlineRecoveryJob?.isActive == true) return
+        offlineRecoveryJob = startupScope.launch {
+            for (delayMs in offlineRecoveryDelaysMs) {
+                delay(delayMs)
+                if (_authState.value != AuthState.OFFLINE) return@launch
+                try {
+                    // forceNetworkCheck=true 绕过 nextCheckAt 缓存：token 有效走 check，
+                    // 已过期走 refresh 轮换，两条路成功都会回到 AUTHORIZED
+                    initialize(forceNetworkCheck = true)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // initialize 内部已按结果收敛状态；吞掉保证退避循环继续推进
+                }
+                if (_authState.value != AuthState.OFFLINE) return@launch
+            }
+        }
+    }
+
+    private fun stopOfflineRecovery() {
+        offlineRecoveryJob?.cancel()
+        offlineRecoveryJob = null
     }
 
     /** 启动时恢复本地会话并按需向网关校验。 */

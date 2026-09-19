@@ -178,6 +178,58 @@ class AuthManagerTest {
     }
 
     @Test
+    fun offline_recoveryRetriesAndConvergesBackToAuthorized() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, mockk<AiStorage>(relaxed = true), traktRepositoryProvider)
+        // 退避延迟覆写为 0：recovery 循环跑在真实 IO 线程上，0 延迟立即重试
+        manager.offlineRecoveryDelaysMs = longArrayOf(0L, 0L, 0L)
+        val now = System.currentTimeMillis() / 1000
+        val checkAttempts = java.util.concurrent.atomic.AtomicInteger(0)
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns 0L
+        every { storage.getCachedLastOnlineAt() } returns now
+        coEvery { storage.isTokenValid() } returns true
+        every { storage.getCachedAccessToken() } returns "access-token"
+        every { continuityManager.getAndroidId() } returns "android-id"
+        coEvery { storage.saveSessionMetadata(any(), any(), any()) } returns Unit
+        coEvery { api.check(CheckRequest("android-id")) } coAnswers {
+            // 第一次（正常校验路径）瞬时网络抖动，之后的 recovery 重试成功
+            if (checkAttempts.getAndIncrement() == 0) {
+                throw java.io.IOException("transient blip")
+            }
+            Response.success(
+                GatewayResponse(
+                    "SUCCESS",
+                    "OK",
+                    data = CheckResponse(
+                        authorized = true,
+                        friendId = "friend-id",
+                        deviceId = "device-id",
+                        nickname = "friend",
+                        deviceStatus = "ACTIVE",
+                        nextCheckAt = now + 86_400,
+                        configVersion = 1,
+                    ),
+                ),
+            )
+        }
+
+        manager.initialize()
+
+        // 瞬时抖动置 OFFLINE；recovery 循环重试成功后收敛回 AUTHORIZED
+        waitForState(manager, AuthState.OFFLINE)
+        waitForState(manager, AuthState.AUTHORIZED)
+        // initializeLocked 会先乐观置 AUTHORIZED 再发 check，waitForState 可能在第二次
+        // check 发起前就通过，用带 timeout 的轮询校验等 recovery 的重试真正落地
+        coVerify(timeout = 5_000, exactly = 2) { api.check(CheckRequest("android-id")) }
+    }
+
+    @Test
     fun initializeForStartup_timeoutWithoutSessionStaysUnauthorized() = runTest {
         val api = mockk<AuthApiService>()
         val keyManager = mockk<DeviceKeyManager>()
