@@ -6,9 +6,13 @@ import android.webkit.CookieManager
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +22,12 @@ import javax.inject.Singleton
  * 使用 EncryptedSharedPreferences，与 TokenStorage 同套加密方案。
  * 通过 isLoggedIn StateFlow 暴露登录态，供 UI 订阅。
  * 头像、昵称也持久化于此（登录后从 m.douban.com/people/{id}/ 抓取）。
+ *
+ * 启动性能：EncryptedSharedPreferences 首次创建要走 Keystore 解密（实测 100-500ms）。
+ * 构造期不再同步读 prefs（Hilt 主线程建图时触发会卡启动），改为 init 里先发后台预热；
+ * 全部读路径走 @Volatile 内存镜像，预热未及完成时的同步读取退化为「当场加载」，
+ * 与旧行为等价，不会读错。预热只在 loaded 翻转时发布一次 StateFlow，
+ * 写路径一律先 ensureLoaded 再写，保证不出现「后台旧值覆盖前台新值」。
  */
 @Singleton
 class DoubanAuthStorage @Inject constructor(
@@ -49,7 +59,15 @@ class DoubanAuthStorage @Inject constructor(
     private val _doubanProfile = MutableStateFlow<DoubanUserProfile?>(null)
     val doubanProfile: StateFlow<DoubanUserProfile?> = _doubanProfile.asStateFlow()
 
-    // lazy 初始化 EncryptedSharedPreferences，避免主线程阻塞（首次访问在 IO 线程或后台）
+    private val loadMutex = Any()
+
+    @Volatile private var loaded = false
+    @Volatile private var cachedUserId: String? = null
+    @Volatile private var cachedCookie: String? = null
+    @Volatile private var cachedNickname: String? = null
+    @Volatile private var cachedAvatar: String? = null
+
+    // lazy 初始化 EncryptedSharedPreferences（首次访问走 Keystore 解密，见类注释）
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -62,46 +80,65 @@ class DoubanAuthStorage @Inject constructor(
     }
 
     init {
-        // 初始化时同步读取登录态（prefs 首次访问会触发 Keystore 解密，但 init 在注入时即调用，
-        // 通常在 Application 创建期间，不在主线程关键路径上）
-        val userId = prefs.getString(KEY_USER_ID, null)
-        _isLoggedIn.value = userId != null
-        _cookieInvalid.value = userId != null && prefs.getBoolean(KEY_COOKIE_INVALID, false)
-        // 同步恢复已保存的用户头像/昵称（未抓取过则为 null）
-        if (userId != null) {
-            val nickname = prefs.getString(KEY_NICKNAME, null)
-            val avatar = prefs.getString(KEY_AVATAR, null)
-            if (nickname != null || avatar != null) {
+        // 把 Keystore 解密挪出主线程建图：init 在 Hilt 建图（主线程）时执行，
+        // 这里只发后台预热，绝不同步读 prefs
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { ensureLoaded() }
+    }
+
+    /** 确保镜像已从磁盘加载。预热未及完成时在调用线程当场加载（与旧行为等价）。 */
+    private fun ensureLoaded() {
+        if (loaded) return
+        synchronized(loadMutex) {
+            if (loaded) return
+            val p = prefs
+            val userId = p.getString(KEY_USER_ID, null)
+            val nickname = p.getString(KEY_NICKNAME, null)
+            val avatar = p.getString(KEY_AVATAR, null)
+            cachedUserId = userId
+            cachedCookie = p.getString(KEY_COOKIE, null)
+            val invalid = userId != null && p.getBoolean(KEY_COOKIE_INVALID, false)
+            cachedNickname = nickname
+            cachedAvatar = avatar
+            // 只此一次发布：此后 StateFlow 只由写路径更新，后台不会再回灌磁盘旧值
+            _isLoggedIn.value = userId != null
+            _cookieInvalid.value = invalid
+            if (userId != null && (nickname != null || avatar != null)) {
                 _doubanProfile.value = DoubanUserProfile(
                     userId = userId,
                     nickname = nickname,
                     avatarUrl = avatar
                 )
             }
+            loaded = true
         }
     }
 
     /** 获取已保存的豆瓣凭据，未登录返回 null */
     fun getCredentials(): DoubanCredentials? {
-        val userId = prefs.getString(KEY_USER_ID, null) ?: return null
-        val cookie = prefs.getString(KEY_COOKIE, null) ?: return null
+        ensureLoaded()
+        val userId = cachedUserId ?: return null
+        val cookie = cachedCookie ?: return null
         return DoubanCredentials(userId, cookie)
     }
 
     /** 保存豆瓣凭据（登录成功后调用） */
     fun saveCredentials(userId: String, cookie: String) {
+        ensureLoaded()
         prefs.edit().apply {
             putString(KEY_USER_ID, userId)
             putString(KEY_COOKIE, cookie)
             remove(KEY_COOKIE_INVALID)
         }.apply()
+        cachedUserId = userId
+        cachedCookie = cookie
         _isLoggedIn.value = true
         _cookieInvalid.value = false
     }
 
     /** 标记 Cookie 已失效（豆瓣返回 401/403 或登录页时调用） */
     fun markCookieInvalid() {
-        if (prefs.getString(KEY_USER_ID, null) == null) return
+        ensureLoaded()
+        if (cachedUserId == null) return
         prefs.edit().putBoolean(KEY_COOKIE_INVALID, true).apply()
         _cookieInvalid.value = true
     }
@@ -115,11 +152,14 @@ class DoubanAuthStorage @Inject constructor(
 
     /** 保存豆瓣用户资料（头像/昵称抓取成功后调用），需先登录 */
     fun saveUserProfile(nickname: String?, avatarUrl: String?) {
-        val userId = prefs.getString(KEY_USER_ID, null) ?: return
+        ensureLoaded()
+        val userId = cachedUserId ?: return
         prefs.edit().apply {
             if (nickname != null) putString(KEY_NICKNAME, nickname) else remove(KEY_NICKNAME)
             if (avatarUrl != null) putString(KEY_AVATAR, avatarUrl) else remove(KEY_AVATAR)
         }.apply()
+        cachedNickname = nickname
+        cachedAvatar = avatarUrl
         _doubanProfile.value = DoubanUserProfile(
             userId = userId,
             nickname = nickname,
@@ -129,6 +169,7 @@ class DoubanAuthStorage @Inject constructor(
 
     /** 清除豆瓣凭据（退出登录或 Cookie 过期时调用） */
     fun clearCredentials() {
+        ensureLoaded()
         // 按 key 删除，不清空整个 prefs 文件，避免误删其他可能的共享字段
         prefs.edit()
             .remove(KEY_USER_ID)
@@ -137,6 +178,10 @@ class DoubanAuthStorage @Inject constructor(
             .remove(KEY_AVATAR)
             .remove(KEY_COOKIE_INVALID)
             .apply()
+        cachedUserId = null
+        cachedCookie = null
+        cachedNickname = null
+        cachedAvatar = null
         _isLoggedIn.value = false
         _doubanProfile.value = null
         _cookieInvalid.value = false
