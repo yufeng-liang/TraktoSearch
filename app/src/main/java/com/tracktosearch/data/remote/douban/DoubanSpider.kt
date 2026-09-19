@@ -211,8 +211,12 @@ object DoubanSpider {
         val ratingDistribution = doc.select("div.ratings-on-weight span.rating_per")
             .mapNotNull { it.text().replace("%", "").toDoubleOrNull() }
 
-        // 剧情简介：<span property="v:summary" class="...">...</span>，需清理豆瓣的 <br> 和空白
-        val summary = doc.selectFirst("span[property=v:summary]")?.let { el ->
+        // 剧情简介：<span property="v:summary">，需清理豆瓣的 <br> 和空白。
+        // 豆瓣对长简介给两份节点：折叠短版（文本以「……」收尾）在前，
+        // 完整版在 <span class="all hidden"> 里 —— selectFirst 会拿到折叠版，
+        // 必须优先取 .all 完整节点，取不到（短简介只有一份）再退回第一个
+        val summary = (doc.selectFirst("span[property=v:summary].all")
+            ?: doc.selectFirst("span[property=v:summary]"))?.let { el ->
             el.html()
                 .replace("<br>", "\n")
                 .replace("<br/>", "\n")

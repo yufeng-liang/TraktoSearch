@@ -315,6 +315,15 @@ private data class DoubanDetailSupplement(
         get() = detail?.runtime?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
 }
 
+/**
+ * 豆瓣简介覆盖护栏：豆瓣网页对长简介渲染「折叠短版（文本以「……」收尾）+ 隐藏完整版」两份，
+ * 旧版爬取与已落盘缓存拿到的是折叠版。已有非空简介（TMDB 完整版）时折叠版不得降级覆盖 ——
+ * 否则用户会看到简介当面跳变成省略号截断版，且文本三行放得下后「展开」入口随之消失。
+ * 纯豆瓣条目（current 为空）没有降级问题，折叠版照常显示。
+ */
+private fun mergeDoubanOverview(douban: String?, current: String): String =
+    if (douban != null && (!douban.trimEnd().endsWith("……") || current.isBlank())) douban else current
+
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
@@ -772,7 +781,7 @@ class DetailViewModel @Inject constructor(
                         doubanSupplement.originalTitle ?: current.originalTitle
                     },
                     year = current.year ?: doubanSupplement.year,
-                    overview = doubanSupplement.overview ?: current.overview,
+                    overview = mergeDoubanOverview(doubanSupplement.overview, current.overview),
                     genres = if (preferTmdb) {
                         current.genres.ifBlank { doubanSupplement.genres.orEmpty() }
                     } else {
@@ -867,9 +876,11 @@ class DetailViewModel @Inject constructor(
                     isLoading = false,
                     displayTitle = chineseTitle,
                     originalTitle = displayOriginalTitle,
-                    overview = doubanSupplement?.overview
-                        ?: enrichment?.overview?.takeIf { it.isNotBlank() }
-                        ?: beforeEnrichment.overview,
+                    overview = mergeDoubanOverview(
+                        douban = doubanSupplement?.overview,
+                        current = enrichment?.overview?.takeIf { it.isNotBlank() }
+                            ?: beforeEnrichment.overview
+                    ),
                     // 类型以 TMDB 为准（与列表卡片 genres 一致），豆瓣类型仅作纯豆瓣条目兜底
                     genres = enrichment?.genres?.takeIf { it.isNotBlank() }
                         ?: beforeEnrichment.genres.ifBlank { doubanSupplement?.genres.orEmpty() },
@@ -1112,7 +1123,7 @@ class DetailViewModel @Inject constructor(
             releaseDate = current.releaseDate.ifBlank {
                 presentation.releaseDates.firstOrNull().orEmpty()
             },
-            overview = presentation.overview ?: current.overview,
+            overview = mergeDoubanOverview(presentation.overview, current.overview),
             // 类型保持列表一致的 TMDB 类型，rexxar 不再用豆瓣类型覆盖
             genres = current.genres.takeIf { it.isNotBlank() } ?: genres ?: "",
             country = current.country.ifBlank { country.orEmpty() },
