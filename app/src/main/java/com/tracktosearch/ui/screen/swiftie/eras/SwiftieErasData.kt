@@ -237,8 +237,8 @@ object SwiftieErasData {
     private val RED = SwiftieEra(
         name = "Red",
         releaseDate = "2012-10-22",
-        mainColor = Color(0xFFC81E30),
-        textColor = Color(0xFFC81E30),
+        mainColor = Color(0xFFEB3440),
+        textColor = Color(0xFFEB3440),
         fontResId = R.font.era_red,
         motif = SwiftieEraMotif.RED_SCARF,
         tracks = listOf(
@@ -265,8 +265,8 @@ object SwiftieErasData {
     private val NINETEEN_EIGHTY_NINE = SwiftieEra(
         name = "1989",
         releaseDate = "2014-10-27",
-        mainColor = Color(0xFFA8CDE0),
-        textColor = Color(0xFFA8CDE0),
+        mainColor = Color(0xFF92CFEA),
+        textColor = Color(0xFF92CFEA),
         fontResId = R.font.era_1989,
         motif = SwiftieEraMotif.POLAROID,
         tracks = listOf(
@@ -534,23 +534,29 @@ object SwiftieErasData {
             darkBottomInk = false
         ),
         // 4 · Red — 红。秋叶大幅翻转，正反异色
+        //
+        // 2026-09-19 提亮：中档曾是 #C81E30，需求方「主题红有点暗，要 Red 重录专辑那口
+        // 亮红」，提到 #EB3440（三档候选里最亮的猩红）；末档跟着同调 #6E0F1A → #981A28。
+        // 轴墨靠 `readableOnDark` 提亮，守着 `SwiftieEraContrastTest.axisInkMeetsAaOnEveryBackdropBottom`。
         SwiftieEraStage(
             backdrop = SwiftieEraBackdrop.KNIT_AUTUMN,
-            backdropColors = listOf(Color(0xFFFBE3E3), Color(0xFFC81E30), Color(0xFF6E0F1A)),
+            backdropColors = listOf(Color(0xFFFBE3E3), Color(0xFFEB3440), Color(0xFF981A28)),
             particle = SwiftieEraParticle.AUTUMN_LEAF,
             darkStatusBarIcons = true,
             darkBottomInk = false
         ),
-        // 5 · 1989 — 淡蓝。远处海鸥滑翔
+        // 5 · 1989 — 天蓝。远处海鸥滑翔
         //
-        // 末档刻意比封面那层雾蓝更深（原来是 #5B8CA8）：轴线、播放头与 TS1-12 标签都压在
-        // 屏幕下缘这一档上，而 #5B8CA8 的相对亮度是 0.238 —— 那个底色上**纯白**也只有
-        // 3.64:1，12 张里唯一一张连理论上限都到不了 AA 4.5:1 的。压到 #4A7590 之后白字
-        // 有 4.95:1，色相一度未动（仍是那层黄昏的雾蓝），换来的是这 6.4 秒里字读得出来。
+        // 2026-09-19 整组去灰：中档曾是 #A8CDE0 —— 饱和度只有 47% 的「黄昏雾蓝」，
+        // 需求方「主题蓝有点暗灰」，提到 #92CFEA（与拍立得照片的水色同向）；末档跟着同调，
+        // #4A7590 → #437A98。更早的历史：末档本来是 #5B8CA8，轴线、播放头与 TS1-12 标签
+        // 都压在屏幕下缘这一档上，而 #5B8CA8 的相对亮度是 0.238 —— 那个底色上**纯白**
+        // 也只有 3.64:1，12 张里唯一一张连理论上限都到不了 AA 4.5:1 的，当时压到 #4A7590
+        // （白字 4.95:1）。#437A98 白字 4.69:1 依然过线，
         // `SwiftieEraContrastTest.axisInkMeetsAaOnEveryBackdropBottom` 守着这条。
         SwiftieEraStage(
             backdrop = SwiftieEraBackdrop.SKYLINE_POLAROIDS,
-            backdropColors = listOf(Color(0xFFEAF4FA), Color(0xFFA8CDE0), Color(0xFF4A7590)),
+            backdropColors = listOf(Color(0xFFF0F7FB), Color(0xFF92CFEA), Color(0xFF437A98)),
             particle = SwiftieEraParticle.SEAGULL,
             darkStatusBarIcons = true,
             darkBottomInk = false
