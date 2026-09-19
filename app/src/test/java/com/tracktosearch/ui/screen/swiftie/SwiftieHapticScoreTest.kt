@@ -59,8 +59,8 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun tracklistCuesAreOnePerCardNotOnePerTrack() {
-        // 187 首曲目，逐曲目就是 96 秒里 180 多次震动 —— 手会麻，也什么都表达不了
-        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(187)
+        // 190 首曲目，逐曲目就是 96 秒里 190 次震动 —— 手会麻，也什么都表达不了
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(190)
         assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE))
             .hasSize(SwiftieTimeline.ERA_TRACK_COUNTS.size)
     }

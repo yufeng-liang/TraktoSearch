@@ -13,13 +13,13 @@ class SwiftieSequenceClockTest {
         assertThat(swiftiePhaseAt(1_100L)).isEqualTo(SwiftieSequencePhase.ERAS_INTRO)
         assertThat(swiftiePhaseAt(3_100L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
         assertThat(swiftiePhaseAt(104_999L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
-        // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放
-        assertThat(swiftiePhaseAt(105_010L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放（1989 豪华版 +390ms 后卡片段到 105400）
+        assertThat(swiftiePhaseAt(105_400L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
         // 手链在签名写到 800ms 时进场，但那不是一段 —— 相位还是 SIGNATURE
-        assertThat(swiftiePhaseAt(105_010L + SwiftieTimeline.BRACELET_ENTRY_MS))
+        assertThat(swiftiePhaseAt(105_400L + SwiftieTimeline.BRACELET_ENTRY_MS))
             .isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(110_409L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(110_410L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(110_799L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(110_800L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
         assertThat(swiftiePhaseAt(117_999L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
         assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.REWIND)
         assertThat(swiftiePhaseAt(119_500L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)

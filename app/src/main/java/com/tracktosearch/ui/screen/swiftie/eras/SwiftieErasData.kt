@@ -301,7 +301,12 @@ object SwiftieErasData {
             "How You Get the Girl",
             "This Love",
             "I Know Places",
-            "Clean"
+            "Clean",
+            // 豪华版三首（需求方定案 2026-09）：账本 [SwiftieTimeline.ERA_TRACK_COUNTS]
+            // 同步为 16，卡片多出的停留由定格弹性段吸收
+            "Wonderland",
+            "You Are In Love",
+            "New Romantics"
         )
     )
 

@@ -100,10 +100,11 @@ object SwiftieTimeline {
     /**
      * 12 张专辑曲目数，顺序与 Eras 一致。
      *
-     * 索引 10 的 TTPD 用 **The Anthology 版 31 首**（需求方指定），其余为标准版。
-     * Phase D 的 `SwiftieErasData` 必须与此逐项吻合，那边有交叉断言。
+     * 索引 4 的 1989 用 **2014 豪华版 16 首**（标准 13 + Wonderland / You Are In Love /
+     * New Romantics，需求方指定）；索引 10 的 TTPD 用 **The Anthology 版 31 首**（同），
+     * 其余为标准版。Phase D 的 `SwiftieErasData` 必须与此逐项吻合，那边有交叉断言。
      */
-    val ERA_TRACK_COUNTS: List<Int> = listOf(11, 13, 14, 16, 13, 15, 18, 16, 15, 13, 31, 12)
+    val ERA_TRACK_COUNTS: List<Int> = listOf(11, 13, 14, 16, 16, 15, 18, 16, 15, 13, 31, 12)
 
     /** TTPD 整列打印的窗口长度：31 行普通时间表再加 [TTPD_TRACK_REVEAL_BONUS_MS]。 */
     val TTPD_TRACK_REVEAL_MS: Long =
@@ -115,7 +116,7 @@ object SwiftieTimeline {
             (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
 
-    /** 12 张卡片合计 101910ms。 */
+    /** 12 张卡片合计 102300ms（1989 换豪华版 16 首，比标准版多 390ms，由定格吸收）。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS
         .withIndex()
         .sumOf { (index, count) -> cardDurationMs(index, count) }

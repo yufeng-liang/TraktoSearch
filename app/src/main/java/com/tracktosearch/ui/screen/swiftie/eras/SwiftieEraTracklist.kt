@@ -176,7 +176,7 @@ internal fun SwiftieEraTracklist(
     }
 
     Column(
-        // 187 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
+        // 190 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
         // 卡片自己有一条 contentDescription
         modifier = modifier.clearAndSetSemantics { }
     ) {
