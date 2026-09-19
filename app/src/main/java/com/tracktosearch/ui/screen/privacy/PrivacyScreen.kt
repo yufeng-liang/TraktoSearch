@@ -260,21 +260,16 @@ fun PrivacyScreen(
                 }
 
                 // 区块 D：隐私说明（本地/网络/技术细节折叠）
+                // 这两块长文内容自带内部小卡，不再包外层玻璃卡，小卡直接铺在页面底上
                 item {
-                    PrivacySectionCard(
-                        title = stringResource(R.string.privacy_section_statement),
-                        hazeState = hazeState
-                    ) {
+                    PrivacyPlainSection(title = stringResource(R.string.privacy_section_statement)) {
                         PrivacyStatementContent()
                     }
                 }
 
                 // 区块 E：使用与权利（5 节说明 + 权利请求卡片）
                 item {
-                    PrivacySectionCard(
-                        title = stringResource(R.string.privacy_section_legal),
-                        hazeState = hazeState
-                    ) {
+                    PrivacyPlainSection(title = stringResource(R.string.privacy_section_legal)) {
                         PrivacyLegalContent()
                     }
                 }
@@ -446,6 +441,33 @@ private fun PrivacySectionCard(
                 content = content
             )
         }
+    }
+}
+
+/**
+ * 无外卡分组：仅分组标题 + 内容，不包玻璃卡。用于「隐私说明」「使用与权利」这类
+ * 内容自带内部小卡的长文区块，小卡直接铺在页面底上，少一层嵌套卡片。
+ * 标题样式与 PrivacySectionCard 保持一致。
+ */
+@Composable
+private fun PrivacyPlainSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 0.3.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 6.dp)
+        )
+        Column(content = content)
     }
 }
 
@@ -946,13 +968,14 @@ private fun PrivacyStatementContent() {
         targetValue = if (techExpanded) 180f else 0f,
         label = "privacy_tech_expand"
     )
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+    // 原包在 PrivacySectionCard 里需要 20dp 内缩，现在小卡直接对齐页面 16dp 边距
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Text(
             text = stringResource(R.string.privacy_statement_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f,
-            modifier = Modifier.padding(bottom = 14.dp)
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 14.dp)
         )
 
         PrivacyInfoBlock(
@@ -1035,13 +1058,13 @@ private fun PrivacyStatementContent() {
 @Composable
 private fun PrivacyLegalContent() {
     val context = LocalContext.current
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Text(
             text = stringResource(R.string.privacy_legal_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f,
-            modifier = Modifier.padding(bottom = 14.dp)
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 14.dp)
         )
 
         PrivacyLegalSection(
