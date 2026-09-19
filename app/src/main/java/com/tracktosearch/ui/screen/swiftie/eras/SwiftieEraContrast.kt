@@ -7,7 +7,7 @@ import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
  * 卡片文字配色的对比度校正。
  *
  * Spec §6.2 原本要求「曲目名用该时代主色」，但 12 个时代主色里有 6 个是浅色
- * （`1989` 的 `#A8CDE0`、`Lover` 的 `#F7A8C4`、`Fearless` 的 `#D4AF37`……），
+ * （`1989` 的 `#92CFEA`、`Lover` 的 `#F7A8C4`、`Fearless` 的 `#D4AF37`……），
  * 直接印在半透明白卡上只有 1.57–2.97:1，12sp 的曲目名根本读不出来 —— 而这一段
  * 96.3 秒的全部意义就是让人**看清**整个历程。
  *
