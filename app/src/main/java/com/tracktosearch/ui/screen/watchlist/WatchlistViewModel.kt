@@ -1728,8 +1728,11 @@ class WatchlistViewModel @Inject constructor(
         val movie = item.movie
         val tmdbId = movie.ids.tmdb
         val title = movie.title.trim().ifEmpty { cached?.title.orEmpty() }
-        // 标题统一只由共享摘要决定；旧 TMDB 富化缓存不再抢占列表标题。
-        val displayTitle = title
+        // 标题统一由共享摘要校正；但 Trakt 响应晚于首帧落地时，离线快照里已校正过的
+        // displayTitle 必须沿用，不能打回 Trakt 原文——可见条目的摘要预取每会话只跑一次，
+        // 打回英文后不会再有第二批补正，英文标题会一直停到下次冷启。
+        // 快照 displayTitle 的唯一写入方是共享摘要（旧逐条富化链路已下线），不会带回旧别名。
+        val displayTitle = cached?.displayTitle?.takeIf { it.isNotBlank() } ?: title
         val genres = movie.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
         val posterUrl = movie.images.poster.firstOrNull()
             ?.takeIf { it.isNotBlank() }
@@ -1759,7 +1762,7 @@ class WatchlistViewModel @Inject constructor(
         val base = mapWatchlistMovie(item, null)
         if (summary == null) return base
         val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
-            base.displayTitle
+            noneSourceCjkTitle(summary, base.title).ifBlank { base.displayTitle }
         } else {
             summary.title.ifBlank { base.displayTitle }
         }
@@ -1779,8 +1782,8 @@ class WatchlistViewModel @Inject constructor(
         val show = item.show
         val tmdbId = show.ids.tmdb
         val title = show.title.trim().ifEmpty { cached?.title.orEmpty() }
-        // 标题统一只由共享摘要决定；旧 TMDB 富化缓存不再抢占列表标题。
-        val displayTitle = title
+        // 同 mapWatchlistMovie：Trakt 响应落地时沿用快照里已校正的 displayTitle
+        val displayTitle = cached?.displayTitle?.takeIf { it.isNotBlank() } ?: title
         val genres = show.genres.joinToString(" · ").ifEmpty { cached?.genres.orEmpty() }
         val posterUrl = show.images.poster.firstOrNull()
             ?.takeIf { it.isNotBlank() }
@@ -1810,7 +1813,7 @@ class WatchlistViewModel @Inject constructor(
         val base = mapWatchlistShow(item, null)
         if (summary == null) return base
         val resolvedTitle = if (summary.titleSource == TitleSource.NONE) {
-            base.displayTitle
+            noneSourceCjkTitle(summary, base.title).ifBlank { base.displayTitle }
         } else {
             summary.title.ifBlank { base.displayTitle }
         }
@@ -2075,7 +2078,7 @@ class WatchlistViewModel @Inject constructor(
     /** 把共享摘要写回当前列表条目与离线快照；标题、海报和类型只补空缺，不覆盖已经显示的值。 */
     private suspend fun applyVisibleMetadata(item: MediaUiItem, summary: MediaSummary) {
         val title = if (summary.titleSource == TitleSource.NONE) {
-            ""
+            noneSourceCjkTitle(summary, item.title)
         } else {
             summary.title.trim()
         }
@@ -2459,6 +2462,24 @@ private suspend fun <T> retryIO(times: Int, block: suspend () -> T): T {
 }
 
 // ========== 离线缓存转换扩展 ==========
+
+/**
+ * titleSource=NONE：TMDB 在当前语言下没有译名（详情标题与原文相同、地区别名也未命中），
+ * 服务端此时把 title 兜底为 TMDB 原文。国产/日韩影视的 Trakt 标题常是拼音或罗马音，
+ * TMDB 原文却是本土文字，与详情页「原名」一致——原文带 CJK 而 Trakt 标题不带时改用原文。
+ * 其余情况返回空串，表示不覆盖调用方已显示的标题（西片维持 Trakt 英文发行名）。
+ */
+private fun noneSourceCjkTitle(summary: MediaSummary, traktTitle: String): String {
+    val original = summary.originalTitle.trim()
+    if (original.isEmpty() || !original.hasCjkChar() || traktTitle.hasCjkChar()) return ""
+    return original
+}
+
+/** 是否含 CJK 表意/音节字符（汉字、假名、谚文），用于识别本土文字标题与拉丁转写。 */
+private fun String.hasCjkChar(): Boolean = any { ch ->
+    val code = ch.code
+    code in 0x2E80..0x9FFF || code in 0x3040..0x30FF || code in 0xAC00..0xD7AF
+}
 
 private fun MediaUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
     traktId = traktId,
