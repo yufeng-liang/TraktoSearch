@@ -205,7 +205,13 @@ internal fun SwiftieEraTracklist(
             val numberLayout = remember { arrayOfNulls<TextLayoutResult>(1) }
             val titleLayout = remember { arrayOfNulls<TextLayoutResult>(1) }
             // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
-            val numberText = String.format(Locale.US, "%02d", index + 1)
+            // Lover 第 3 首（曲名即专辑名）：编号排单字「3」，呼应底座铭牌的 7·3；
+            // 固定 Locale.US：某些地区会把 %02d 渲染成本地数字
+            val numberText = if (eraIndex == SwiftieErasData.LOVER_INDEX && index == 2) {
+                "3"
+            } else {
+                String.format(Locale.US, "%02d", index + 1)
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

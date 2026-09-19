@@ -695,6 +695,14 @@ private fun SwiftieEggContent(
         clock.elapsedMs.mod(FINALE_RING_CYCLE_MS).toFloat() / FINALE_RING_CYCLE_MS
     }
 
+    // 水晶球出场前把 Lover 背景里的房子、栅栏和爱心箭收走：倒滑这一段半淡完，
+    // 球在 LOVER_BLOOM_START 接手那正好全收，球页只剩彩虹云海垫着。
+    // 只影响 Lover 场景里这三组笔触，彩虹/云/雾带照旧
+    val loverHouseFade: () -> Float = {
+        1f - ((clock.elapsedMs - SwiftieTimeline.REWIND_START).toFloat() /
+            SwiftieTimeline.REWIND_MS).coerceIn(0f, 1f)
+    }
+
     // 答对之后底是逐张换色的专辑背景：浅底要深色图标，reputation 与 Midnights 要浅色图标。
     // barStage 为 null 表示底是水彩天空或终局那一环，两处都用深色
     DynamicSystemBarIconsWhile(
@@ -864,6 +872,7 @@ private fun SwiftieEggContent(
                 eraElapsedMs = backdropEraElapsed,
                 cardBounds = { heroCardBounds },
                 lowRam = lowRam,
+                loverHouseFade = loverHouseFade,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = albumBackdropAlpha() }

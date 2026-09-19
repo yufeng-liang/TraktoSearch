@@ -137,3 +137,25 @@ internal fun rememberGlitterBrush(poster: Size): Brush {
         }
     }
 }
+
+/**
+ * 原尺寸取贴板上一小块的画刷：不做任何缩放，只把采样窗口平移到 (offsetX, offsetY)。
+ *
+ * 给水晶球底座的 `7·3` 用 —— 出题页那条算式走 [rememberGlitterBrush] 是因为字形位置
+ * 与贴板一一对应；铭牌这两个数字不在贴板里，把整板压进一个字形会因过度缩小把闪粉
+ * 颗粒糊成平粉（贴板 640px 宽压到 50px 字形，1-3px 的亮粒全没了），所以按原分辨率
+ * 开窗，两个数字各取一块不同区域避免读出复制感。
+ */
+@Composable
+internal fun rememberGlitterPatchBrush(offsetX: Float, offsetY: Float): Brush {
+    val plate = ImageBitmap.imageResource(R.drawable.swiftie_glitter)
+    return remember(plate, offsetX, offsetY) {
+        val matrix = Matrix().apply { postTranslate(-offsetX, -offsetY) }
+        object : ShaderBrush() {
+            override fun createShader(size: Size): Shader =
+                ImageShader(plate, TileMode.Clamp, TileMode.Clamp).apply {
+                    setLocalMatrix(matrix)
+                }
+        }
+    }
+}

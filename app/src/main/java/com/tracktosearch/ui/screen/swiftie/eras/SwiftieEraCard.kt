@@ -473,7 +473,7 @@ fun SwiftieEraCard(
                 remember(res) { FontFamily(Font(res)) }
             }
             Text(
-                text = era.releaseDate,
+                text = if (eraIndex == SwiftieErasData.LOVER_INDEX) "TS7" else era.releaseDate,
                 style = TextStyle(
                     fontFamily = dateFamily,
                     fontSize = with(density) { 11.dp.toSp() },
