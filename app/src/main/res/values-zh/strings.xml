@@ -546,8 +546,8 @@
 
     <!-- Settings -->
     <string name="settings_title">设置</string>
-    <string name="settings_appearance">外观</string>
-    <string name="settings_splash_quote">开屏每日台词</string>
+    <string name="settings_appearance">外观与触感</string>
+    <string name="settings_splash_quote">每日台词</string>
     <string name="settings_splash_quote_subtitle">启动时展示一句经典电影台词和它的海报，轻触任意位置可跳过。</string>
     <string name="settings_haptic">触感反馈</string>
     <string name="settings_haptic_follow_system">跟随系统</string>
