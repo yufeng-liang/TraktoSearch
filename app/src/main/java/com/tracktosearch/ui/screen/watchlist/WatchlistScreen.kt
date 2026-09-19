@@ -1173,7 +1173,7 @@ fun WatchlistScreen(
                                                     imageVector = Icons.Rounded.CalendarMonth,
                                                     contentDescription = stringResource(R.string.daily_stamp_title),
                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(19.dp)
+                                                    modifier = Modifier.size(24.dp)
                                                 )
                                             }
                                         }
