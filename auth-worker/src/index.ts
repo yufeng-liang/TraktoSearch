@@ -83,6 +83,7 @@ export interface Env {
     EMAIL_FROM: string;
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
+    ADMIN_UI_ORIGIN?: string;
     AUDIO_PUBLIC_BASE_URL?: string;
     INVITE_TEST_BYPASS_KEY?: string;
     // MiMo 仅由 Worker 读取，生产环境通过 wrangler secret 注入。
@@ -394,8 +395,9 @@ async function handleAdminApi(
     if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
         const origin = request.headers.get('Origin');
         if (origin) {
+            // 运维后台域名可经 [vars] ADMIN_UI_ORIGIN 覆盖（换自定义域时不用改代码）
             const allowed = [
-                'https://app-config-1qe.pages.dev',   // 运维后台（app-config Pages）
+                env.ADMIN_UI_ORIGIN || 'https://app-config-1qe.pages.dev',
                 env.PUBLIC_SITE_ORIGIN,               // 官网
                 new URL(request.url).origin,          // worker 自身
             ];

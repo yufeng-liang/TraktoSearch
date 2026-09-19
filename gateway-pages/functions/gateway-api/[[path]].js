@@ -126,13 +126,17 @@ export async function onRequest(context) {
     }
 
     try {
-        // 上游 service binding 调用必须有超时：挂起时 App 请求会跟随挂到平台超时
+        // 上游 service binding 调用必须有超时：挂起时 App 请求会跟随挂到平台超时。
+        // 流式端点是设计内的长连接（NDJSON、10s 心跳、总时长可达数分钟），30s 绝对
+        // 计时会把响应体连同流一起掐断，result 事件永远到不了客户端——给 10 分钟上限
+        const isStreaming = upstreamPath === '/api/ai/quiz/stream'
+            || upstreamPath === '/api/ai/daily/stream';
         const upstream = await worker.fetch(new Request(upstreamUrl, {
             method: request.method,
             headers,
             body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
             duplex: 'half',
-            signal: AbortSignal.timeout(30_000),
+            signal: AbortSignal.timeout(isStreaming ? 600_000 : 30_000),
         }));
 
         const responseHeaders = new Headers(upstream.headers);
@@ -265,13 +269,25 @@ function publicCacheKey(url) {
 
 /** 缓存 key 用的 URL：剥掉 ?purge 强刷参数，普通请求与 purge 回源写回共用同一份条目。
  * 必须字符串级过滤——走 URLSearchParams 会触发 query 重新序列化（`:` 变 `%3A` 等），
- * 缓存 key 会与普通请求的原始 URL 对不上。 */
+ * 缓存 key 会与普通请求的原始 URL 对不上。参数名按解码后比较（挡 %70urge 变体），
+ * 剥空后残留的空对一并丢弃（尾随 & 会让 key 与普通请求不等）。 */
 function purgelessUrl(url) {
     if (!url.search) return url;
-    const pairs = url.search.slice(1).split('&')
-        .filter((pair) => pair.split('=')[0] !== 'purge');
+    const pairs = url.search.slice(1).split('&').filter((pair) => {
+        if (pair === '') return false;
+        const name = pair.split('=')[0];
+        return name !== 'purge' && safeDecode(name) !== 'purge';
+    });
     const search = pairs.length ? `?${pairs.join('&')}` : '';
     return { origin: url.origin, pathname: url.pathname, search };
+}
+
+function safeDecode(value) {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
 }
 
 function corsHeaders() {

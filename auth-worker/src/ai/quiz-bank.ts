@@ -247,6 +247,8 @@ export interface BankUsageStore {
     incrementAttempts(friendId: string, date: string): Promise<number | null>;
     /** 原子 generatedSets+1（生成成功后记一笔）。 */
     incrementGeneratedSets(friendId: string, date: string): Promise<void>;
+    /** 生成异常时回退 allocate 占掉的号（best-effort，行不存在或已为 0 时无操作）。 */
+    rollbackSetIndex(friendId: string, date: string): Promise<void>;
     /** 读当前用量；存储不可用返回 null（调用方降级 KV）。 */
     readUsage(friendId: string, date: string): Promise<BankUsage | null>;
 }
@@ -254,26 +256,19 @@ export interface BankUsageStore {
 const USAGE_TABLE = 'quiz_bank_usage';
 
 export function createD1BankUsageStore(db: D1Database): BankUsageStore {
-    const touch = (changes: string, paramValues: unknown[]): Promise<Record<string, unknown> | null> =>
-        (async () => {
-            const result = await db.prepare(
-                `INSERT INTO ${USAGE_TABLE} (friend_id, usage_date, used_sets, generated_sets, attempts, updated_at)
-                 VALUES (?1, ?2, 0, 0, 0, ?5)
-                 ON CONFLICT(friend_id, usage_date) DO UPDATE SET
-                     ${changes},
-                     updated_at = excluded.updated_at
-                 RETURNING used_sets, generated_sets, attempts`,
-            ).bind(...paramValues).first<Record<string, unknown>>();
-            return result ?? null;
-        })();
-
     return {
         async allocateSetIndex(friendId: string, date: string): Promise<number | null> {
             try {
-                const row = await touch(
-                    'used_sets = quiz_bank_usage.used_sets + 1',
-                    [friendId, date, 0, 0, now()],
-                );
+                // INSERT 分支必须写 used_sets=1：首插行 RETURNING 的就是插入值，
+                // 写 0 会让当天第一个请求拿到 null 回退旧值，并发首日仍会撞同一序号
+                const row = await db.prepare(
+                    `INSERT INTO ${USAGE_TABLE} (friend_id, usage_date, used_sets, generated_sets, attempts, updated_at)
+                     VALUES (?1, ?2, 1, 0, 0, ?3)
+                     ON CONFLICT(friend_id, usage_date) DO UPDATE SET
+                         used_sets = ${USAGE_TABLE}.used_sets + 1,
+                         updated_at = excluded.updated_at
+                     RETURNING used_sets`,
+                ).bind(friendId, date, now()).first<{ used_sets: unknown }>();
                 const usedSets = row?.used_sets;
                 return typeof usedSets === 'number' && usedSets > 0 ? usedSets : null;
             } catch {
@@ -283,10 +278,15 @@ export function createD1BankUsageStore(db: D1Database): BankUsageStore {
 
         async incrementAttempts(friendId: string, date: string): Promise<number | null> {
             try {
-                const row = await touch(
-                    'attempts = quiz_bank_usage.attempts + 1',
-                    [friendId, date, 0, 0, now()],
-                );
+                // 首插写 attempts=1：行不存在时本次就是第一次尝试，不能记 0（预算漏格）
+                const row = await db.prepare(
+                    `INSERT INTO ${USAGE_TABLE} (friend_id, usage_date, used_sets, generated_sets, attempts, updated_at)
+                     VALUES (?1, ?2, 0, 0, 1, ?3)
+                     ON CONFLICT(friend_id, usage_date) DO UPDATE SET
+                         attempts = ${USAGE_TABLE}.attempts + 1,
+                         updated_at = excluded.updated_at
+                     RETURNING attempts`,
+                ).bind(friendId, date, now()).first<{ attempts: unknown }>();
                 const attempts = row?.attempts;
                 return typeof attempts === 'number' && attempts >= 0 ? attempts : null;
             } catch {
@@ -296,12 +296,29 @@ export function createD1BankUsageStore(db: D1Database): BankUsageStore {
 
         async incrementGeneratedSets(friendId: string, date: string): Promise<void> {
             try {
-                await touch(
-                    'generated_sets = quiz_bank_usage.generated_sets + 1',
-                    [friendId, date, 0, 0, now()],
-                );
+                // 首插写 generated_sets=1，理由同 attempts
+                await db.prepare(
+                    `INSERT INTO ${USAGE_TABLE} (friend_id, usage_date, used_sets, generated_sets, attempts, updated_at)
+                     VALUES (?1, ?2, 0, 1, 0, ?3)
+                     ON CONFLICT(friend_id, usage_date) DO UPDATE SET
+                         generated_sets = ${USAGE_TABLE}.generated_sets + 1,
+                         updated_at = excluded.updated_at`,
+                ).bind(friendId, date, now()).run();
             } catch {
                 // 静默：成功计数丢失只影响统计
+            }
+        },
+
+        async rollbackSetIndex(friendId: string, date: string): Promise<void> {
+            try {
+                // 生成异常路径的 best-effort 回退：原语义是生成成功才占号
+                await db.prepare(
+                    `UPDATE ${USAGE_TABLE}
+                     SET used_sets = used_sets - 1, updated_at = ?3
+                     WHERE friend_id = ?1 AND usage_date = ?2 AND used_sets > 0`,
+                ).bind(friendId, date, now()).run();
+            } catch {
+                // 静默：回退失败只多占一个序号
             }
         },
 

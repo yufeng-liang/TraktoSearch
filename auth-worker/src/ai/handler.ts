@@ -794,6 +794,8 @@ async function handleQuizStream(
     }, Number.isFinite(configuredHeartbeat) && configuredHeartbeat > 0 ? configuredHeartbeat : 10_000);
 
     void (async () => {
+        // 占号回退闭包：allocate 成功后赋值，catch 块（与 try 不同作用域）执行
+        let quizSetRollback: (() => Promise<void>) | null = null;
         try {
             // 当天题库：片单只跟 (用户, 本地日期, 套序号) 有关，所以题库可以提前算好、命中即秒开。
             const todayIso = new Date().toISOString().slice(0, 10);
@@ -815,6 +817,7 @@ async function handleQuizStream(
                 if (typeof allocated === 'number' && allocated > 0) {
                     setIndex = allocated;
                     allocatedViaD1 = true;
+                    quizSetRollback = () => usageStore!.rollbackSetIndex(payload.sub, date);
                 } else {
                     setIndex = usage.usedSets + 1;
                 }
@@ -901,6 +904,11 @@ async function handleQuizStream(
             }
             await writeEvent({ type: 'result', quiz: publicQuiz(finalData), quota: quota ? publicQuota(quota) : undefined });
         } catch (error) {
+            // 生成异常时回退已原子占掉的序号（原语义是生成成功才消耗 usedSets；
+            // 预占是为了防并发撞车，失败路径补退避免白烧一个序号）
+            if (quizSetRollback) {
+                try { await quizSetRollback(); } catch { /* 回退失败只多占一个序号 */ }
+            }
             // 流内异常必须留痕：否则只能看到 App 端「生成失败」，无法区分存储、鉴权还是上游问题
             console.warn('[QUIZ_DIAG]', JSON.stringify({
                 stage: 'stream_error',

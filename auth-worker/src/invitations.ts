@@ -420,10 +420,11 @@ export async function issueInvitation(
                 WHERE id = ?
             `).bind(now(), request.id),
             // 邮件发送失败回滚时，前一步已插入的 SUCCESS 审计行成为悬挂记录
-            // （显示签发成功但邀请已删），在此标记为回滚，避免误导审计排查
+            // （显示签发成功但邀请已删），标记为 FAILURE——result 列有
+            // CHECK(result IN ('SUCCESS','FAILURE')) 约束，只能取这两个值
             env.DB.prepare(`
                 UPDATE audit_logs
-                SET result = 'ROLLED_BACK', detail = detail || ';email_send_failed'
+                SET result = 'FAILURE', detail = detail || ';email_send_failed_rolled_back'
                 WHERE event_type = 'PUBLIC_INVITE_ISSUE' AND friend_id = ? AND request_id = ? AND result = 'SUCCESS'
             `).bind(friendId, request.id),
         ]);

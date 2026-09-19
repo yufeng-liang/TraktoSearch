@@ -48,14 +48,15 @@ export async function handleCrashLogProxy(
     }
 
     const id = `crash_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    // 全字段统一截断：单靠 stackTrace 限长，其余字段仍可塞数 MB 进 KV.put
     const entry = {
         id,
-        timestamp: readString(payloadRecord, 'timestamp') || new Date().toISOString(),
-        appVersion: readString(payloadRecord, 'appVersion'),
-        androidVersion: readString(payloadRecord, 'androidVersion'),
-        device: readString(payloadRecord, 'device'),
-        currentPage: readString(payloadRecord, 'currentPage'),
-        recentActions: readString(payloadRecord, 'recentActions'),
+        timestamp: readString(payloadRecord, 'timestamp').slice(0, 64) || new Date().toISOString(),
+        appVersion: readString(payloadRecord, 'appVersion').slice(0, 64),
+        androidVersion: readString(payloadRecord, 'androidVersion').slice(0, 64),
+        device: readString(payloadRecord, 'device').slice(0, 128),
+        currentPage: readString(payloadRecord, 'currentPage').slice(0, 256),
+        recentActions: readString(payloadRecord, 'recentActions').slice(0, 2048),
         stackTrace,
     };
 

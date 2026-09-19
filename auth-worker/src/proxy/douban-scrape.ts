@@ -182,9 +182,11 @@ export async function refreshPublicDoubanLists(
     const paths = ['api/chart', 'api/weekly', 'api/nowplaying', 'api/top250'];
     const results = await Promise.allSettled(paths.map((path) => scrapeDouban(
         path,
+        // 内部预热调用可信，显式放行 purge（公开路由默认忽略 purge 后 cron 必须自带开关）
         new URLSearchParams([['purge', '1'], ...(path === 'api/top250' ? [['page', '1']] : [])]),
         env,
         ctx,
+        { allowPurge: true },
     )));
 
     results.forEach((result, index) => {
