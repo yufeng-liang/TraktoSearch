@@ -49,7 +49,12 @@ internal fun CastRowSkeleton(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         repeat(5) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // 列宽必须钉死 68dp：Row 子项里的 fillMaxWidth 会吃光整行宽度，
+            // 把后面 4 张挤成 0 宽、卡片在满宽列里居中（真机踩过）
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(68.dp)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(width = 68.dp, height = 95.dp)
