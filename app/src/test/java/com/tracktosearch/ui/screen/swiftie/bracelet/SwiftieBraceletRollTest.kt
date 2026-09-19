@@ -26,7 +26,7 @@ class SwiftieBraceletRollTest {
         // 第一颗在 0ms 出发：那一刻它还没进画面，下一毫秒才出现
         assertThat(braceletRollProgress(0L, 0, 0, count)).isNull()
         assertThat(braceletRollProgress(1L, 0, 0, count)).isNotNull()
-        // 第二颗要等一个发车间隔（100ms）
+        // 第二颗要等一个发车间隔（200ms）
         val second = releaseMs(count).toLong()
         assertThat(braceletRollProgress(second - 1L, 0, 1, count)).isNull()
         assertThat(braceletRollProgress(second + 1L, 0, 1, count)).isNotNull()
@@ -65,11 +65,11 @@ class SwiftieBraceletRollTest {
 
     @Test
     fun threeStrandsOverlapInsteadOfQueueingUp() {
-        // 出发间隔 100ms、单颗走 320ms ⇒ 同时有三颗在路上。这条钉住的是「流速」：
+        // 出发间隔 200ms、单颗走 640ms ⇒ 同时有三颗在路上。这条钉住的是「流速」：
         // 一旦有人把 RELEASE_RATIO 收到 1，同一时刻就只剩一颗在滚，整条会读成接力
         val count = 11
         val inFlight = (0 until count).count { index ->
-            val progress = braceletRollProgress(250L, 0, index, count)
+            val progress = braceletRollProgress(500L, 0, index, count)
             progress != null && progress < 1f
         }
         assertThat(inFlight).isAtLeast(3)
@@ -78,9 +78,10 @@ class SwiftieBraceletRollTest {
     @Test
     fun theSlowestStrandIsTheEvenNicknameOneNotTheLongerOne() {
         // 珠数少 ⇒ 间隔大 ⇒ 单颗走得更久。10 颗那条比 11 颗的更慢，所以结算时刻要按它取
+        // （发车间隔放慢一倍后：2200÷10=220 与 2200÷11=200）
         assertThat(braceletStrandSettleMs(10)).isGreaterThan(braceletStrandSettleMs(11))
-        assertThat(braceletStrandSettleMs(10)).isEqualTo(1_342L)
-        assertThat(braceletStrandSettleMs(11)).isEqualTo(1_320L)
+        assertThat(braceletStrandSettleMs(10)).isEqualTo(2_684L)
+        assertThat(braceletStrandSettleMs(11)).isEqualTo(2_640L)
         assertThat(braceletStrandSettleMs(0)).isEqualTo(0L)
     }
 

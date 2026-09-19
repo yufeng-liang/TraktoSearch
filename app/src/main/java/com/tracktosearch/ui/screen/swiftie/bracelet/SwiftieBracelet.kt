@@ -37,13 +37,14 @@ import kotlin.random.Random
 /**
  * 单颗珠子的**发车间隔基准**：这段时长按珠数均分，就是相邻两颗出发相隔多久。
  *
- * 1100 ÷ 11 = 100ms 一颗，肉眼刚好能跟上「这一颗、然后那一颗」，再快就糊成一条流。
- * 入场整套规则见 [SwiftieBracelet] 的类注释。
+ * 2200 ÷ 11 = 200ms 一颗。原先是 1100ms（100ms 一颗），2026-09-19 需求方定案整体放慢
+ * 一倍 —— 珠子一颗一颗滚的节奏读得更清，停住时刻仍在签名收笔之前（见
+ * `SwiftieTimeline.BRACELET_ENTRY_MS` 的注释），钉死的配乐点不受影响。
  */
-internal const val BRACELET_ROLL_SPAN_MS: Long = 1_100L
+internal const val BRACELET_ROLL_SPAN_MS: Long = 2_200L
 
-/** 三条链错开起步：后一条在前一条滚出四颗之后才进画面，眼睛才追得住每一条。 */
-internal const val BRACELET_STAGGER_MS: Long = 200L
+/** 三条链错开起步：后一条在前一条滚出几颗之后才进画面，眼睛才追得住每一条。与放慢前同比例翻倍。 */
+internal const val BRACELET_STAGGER_MS: Long = 400L
 
 /**
  * 单颗珠子走完全程用掉几个发车间隔。
@@ -65,7 +66,7 @@ private val BRACELET_ENTRY_FROM_RIGHT = listOf(false, true, false)
  *
  * 末颗珠子在第 `(珠数 − 1)` 个间隔出发，再走 [BRACELET_ROLL_RELEASE_RATIO] 个间隔到位。
  * 珠数一多间隔就短、珠数一少间隔就长，所以这个时长**不是**单调的：10 颗那条比 11 颗的
- * 还慢（1342ms 对 1320ms）。
+ * 还慢（2684ms 对 2640ms）。
  */
 internal fun braceletStrandSettleMs(beadCount: Int): Long {
     if (beadCount <= 0) return 0L
