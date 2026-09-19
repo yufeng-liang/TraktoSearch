@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -64,8 +63,10 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
+import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.personAvatarSharedKey
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.floatingSheetColor
@@ -78,6 +79,7 @@ import kotlinx.coroutines.launch
 internal fun CrewSection(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
+    shimmer: ShimmerState,
     onShowAll: () -> Unit = {},
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> }
 ) {
@@ -117,6 +119,7 @@ internal fun CrewSection(
                     role = stringResource(R.string.detail_director_tag),
                     profileUrl = profileUrl,
                     personId = person.id,
+                    shimmer = shimmer,
                     onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                     onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
@@ -129,6 +132,7 @@ internal fun CrewSection(
                     role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else stringResource(R.string.detail_actor),
                     profileUrl = profileUrl,
                     personId = person.id,
+                    shimmer = shimmer,
                     onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                     onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
@@ -141,6 +145,7 @@ internal fun CrewSection(
                     role = stringResource(R.string.detail_writer_tag),
                     profileUrl = profileUrl,
                     personId = person.id,
+                    shimmer = shimmer,
                     onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                     onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
@@ -153,6 +158,7 @@ internal fun CrewSection(
                     role = stringResource(R.string.detail_producer_tag),
                     profileUrl = profileUrl,
                     personId = person.id,
+                    shimmer = shimmer,
                     onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                     onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
@@ -168,6 +174,7 @@ internal fun CastCard(
     role: String,
     profileUrl: String?,
     personId: Int,
+    shimmer: ShimmerState,
     onClick: () -> Unit = {},
     onAvatarColorExtracted: ((Color) -> Unit)? = null
 ) {
@@ -247,6 +254,13 @@ internal fun CastCard(
                 )
                 val imageState = painter.state
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    // 加载中铺 shimmer 垫底（Surface 已按 6dp 圆角裁剪，无需再带 shape），
+                    // 与预告片/截图栏目及详情页骨架同一语言；图到后整张盖住，无需淡出
+                    if (imageState is AsyncImagePainter.State.Empty ||
+                        imageState is AsyncImagePainter.State.Loading
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().shimmer(shimmer))
+                    }
                     Image(
                         painter = painter,
                         contentDescription = name,
@@ -254,13 +268,6 @@ internal fun CastCard(
                         modifier = imageModifier,
                     )
                     when (imageState) {
-                        // Empty 是「请求还没开始」的过渡态，与原 SubcomposeAsyncImage 一样按加载中呈现，
-                        // 否则首帧会先空一格再出转圈
-                        is AsyncImagePainter.State.Empty,
-                        is AsyncImagePainter.State.Loading -> CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
                         is AsyncImagePainter.State.Error -> Icon(
                             Icons.Rounded.Person,
                             contentDescription = null,
@@ -307,6 +314,7 @@ internal fun CastCard(
 internal fun FullCastCrewSheet(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
+    shimmer: ShimmerState,
     onDismiss: () -> Unit,
     onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> }
 ) {
@@ -361,6 +369,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
+                            shimmer = shimmer,
                             onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
@@ -377,6 +386,7 @@ internal fun FullCastCrewSheet(
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
                             profileUrl = profileUrl,
                             personId = person.id,
+                            shimmer = shimmer,
                             onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
@@ -393,6 +403,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
+                            shimmer = shimmer,
                             onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
@@ -409,6 +420,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
+                            shimmer = shimmer,
                             onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
@@ -443,6 +455,7 @@ internal fun FullCastItem(
     role: String,
     profileUrl: String?,
     personId: Int,
+    shimmer: ShimmerState,
     onClick: () -> Unit = {},
     onAvatarColorExtracted: ((Color) -> Unit)? = null
 ) {
@@ -507,9 +520,8 @@ internal fun FullCastItem(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                     loading = {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        }
+                        // 与详情页栏目骨架同一语言：shimmer 垫底，Surface 负责圆角裁剪
+                        Box(modifier = Modifier.fillMaxSize().shimmer(shimmer))
                     },
                     error = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {

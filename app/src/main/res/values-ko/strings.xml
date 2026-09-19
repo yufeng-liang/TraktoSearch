@@ -252,7 +252,6 @@
 
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">로딩 중…</string>
-    <string name="detail_loading_base">로딩 중</string>
     <string name="empty_default">데이터 없음</string>
     <string name="error_retry">재시도</string>
 

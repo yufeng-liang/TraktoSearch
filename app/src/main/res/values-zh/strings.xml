@@ -337,7 +337,6 @@
 
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">加载中…</string>
-    <string name="detail_loading_base">加载中</string>
     <string name="empty_default">暂无数据</string>
     <string name="error_retry">重试</string>
 

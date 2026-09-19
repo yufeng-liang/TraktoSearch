@@ -405,8 +405,9 @@ internal fun DetailHeaderContent(
 
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
         // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
-        // 演职员/预告片/简介三处骨架共享一份 shimmer 动画，避免各跑一条无限动画
-        val headerShimmer = rememberShimmer()
+        // 演职员/预告片/简介三处骨架共享一份 shimmer 动画，避免各跑一条无限动画；
+        // subtle 低对比档——整屏多块骨架同时流动，流光压轻避免喧宾夺主
+        val headerShimmer = rememberShimmer(subtle = true)
         Column(modifier = Modifier.alpha(contentAlpha)) {
         // 纯豆瓣条目(tmdbId=0)没有 TMDB 演职员数据(cast/crew 只来自 TMDB),直接隐藏整栏,
         // 否则骨架卡与「全部」按钮永远等不到内容,永久空挂
@@ -420,6 +421,7 @@ internal fun DetailHeaderContent(
                 CrewSection(
                     cast = uiState.cast.take(10),
                     crew = uiState.crew,
+                    shimmer = headerShimmer,
                     onShowAll = { showFullCast = true },
                     onPersonClick = onPersonClick
                 )
@@ -437,13 +439,14 @@ internal fun DetailHeaderContent(
                         showDetail = false
                     )
                 } else {
-                    CastRowSkeleton()
+                    CastRowSkeleton(shimmer = headerShimmer)
                 }
             }
             if (showFullCast) {
                 FullCastCrewSheet(
                     cast = uiState.cast,
                     crew = uiState.crew,
+                    shimmer = headerShimmer,
                     onDismiss = { showFullCast = false },
                     onPersonClick = onPersonClick
                 )
@@ -480,7 +483,7 @@ internal fun DetailHeaderContent(
                 // 骨架屏占位，防止加载后内容跳变；栏目标题为静态文字直接显示，「全部」随数据到达后出现
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {
                     DetailSectionHeader(title = stringResource(R.string.detail_videos_section))
-                    VideosRowSkeleton()
+                    VideosRowSkeleton(shimmer = headerShimmer)
                 }
             }
         }

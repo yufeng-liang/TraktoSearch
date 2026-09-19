@@ -67,7 +67,7 @@ class ShimmerState internal constructor(
 
 /** 骨架块共享的 shimmer 动画状态，配合 [Modifier.shimmer] 使用。 */
 @Composable
-fun rememberShimmer(): ShimmerState {
+fun rememberShimmer(subtle: Boolean = false): ShimmerState {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val progress = transition.animateFloat(
         initialValue = -0.5f,
@@ -78,8 +78,9 @@ fun rememberShimmer(): ShimmerState {
         ),
         label = "shimmerProgress"
     )
-    val baseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-    val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+    // subtle 档：明暗差从 0.10 压到 0.06，流光更轻，适合详情页整屏多块骨架同时流动的场景
+    val baseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (subtle) 0.06f else 0.08f)
+    val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (subtle) 0.12f else 0.18f)
     return remember(progress, baseColor, highlightColor) {
         ShimmerState(progress, baseColor, highlightColor)
     }

@@ -363,8 +363,8 @@ internal fun FullVideosImagesSheet(
     ) {
         // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
         val sheetHaptics = rememberAppHaptics()
-        // 三列网格共享一条 shimmer，避免每格各跑一条无限动画
-        val sheetShimmer = rememberShimmer()
+        // 三列网格共享一条 shimmer，避免每格各跑一条无限动画；与详情页栏目骨架同用低对比档
+        val sheetShimmer = rememberShimmer(subtle = true)
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(

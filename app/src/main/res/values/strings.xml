@@ -337,7 +337,6 @@
 
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">Loading…</string>
-    <string name="detail_loading_base">Loading</string>
     <string name="empty_default">No data</string>
     <string name="error_retry">Retry</string>
 
