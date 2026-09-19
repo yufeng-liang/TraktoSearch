@@ -1704,8 +1704,11 @@ fun AppNavigation(
             // 延迟 0.8s：等首屏渲染稳定后再发起网络请求，避免与 UI 抢资源导致卡顿
             val updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
             val updateRepository = updateCheckViewModel.updateRepository
+            // 两个都用 remember（不用 saveable）：updateChecked 持久、updateInfo 不持久的话，
+            // 配置变更重建后 updateChecked=true 而 updateInfo=null，检查被短路，
+            // 本次会话永远不会再弹更新。都随重建归零，重建后重查一次即可。
             var updateInfo by remember { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
-            var updateChecked by rememberSaveable { mutableStateOf(false) }
+            var updateChecked by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(800)
                 if (!updateChecked) {
