@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,6 +39,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.VolunteerActivism
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -69,6 +72,9 @@ import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+
+/** 特别鸣谢外跳仓库：豆瓣同步爬取方式与反爬思路的参考来源，与 README 鸣谢口径一致。 */
+private const val SPECIAL_THANKS_REPO_URL = "https://github.com/Geetheshe/DoubanMovieListBackUpToNotion"
 
 /**
  * 开源相关页：按分组列出本 App 使用的第三方开源库（名称版本/许可/开发者），
@@ -117,6 +123,9 @@ fun OpenSourceScreen(
             ) {
                 item(key = "thanks_card") {
                     OssThanksCard(libraryTotal = libraryTotal, groupTotal = groups.size)
+                }
+                item(key = "special_thanks_card") {
+                    OssSpecialThanksCard()
                 }
                 groups.forEach { group ->
                     item(key = "group_${group.titleRes}") {
@@ -241,6 +250,59 @@ private fun OssThanksCard(libraryTotal: Int, groupTotal: Int) {
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant
             )
+    }
+}
+
+/**
+ * 特别鸣谢卡：豆瓣同步（标记列表爬取/反爬思路）参考的开源项目，与库条目卡同族样式。
+ * 整卡可点跳仓库；外跳 CustomTabs 不发触感（沿用隐私页权利按钮的惯例）。
+ */
+@Composable
+private fun OssSpecialThanksCard() {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = scheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clickable {
+                CustomTabsIntent.Builder().build()
+                    .launchUrl(context, SPECIAL_THANKS_REPO_URL.toUri())
+            }
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Sync,
+                    contentDescription = null,
+                    tint = scheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.opensource_special_thanks_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Rounded.OpenInNew,
+                    contentDescription = null,
+                    tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.opensource_special_thanks_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.35f
+            )
+        }
     }
 }
 

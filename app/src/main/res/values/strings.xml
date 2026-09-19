@@ -2100,6 +2100,8 @@ Config:
     <string name="opensource_thanks_line2">by these amazing open source libraries</string>
     <string name="opensource_thanks_line3">Thanks to every open source contributor 🎉</string>
     <string name="opensource_thanks_summary">%1$d libraries · %2$d categories</string>
+    <string name="opensource_special_thanks_title">Special Thanks</string>
+    <string name="opensource_special_thanks_body">The Douban sync in this app — how it fetches your marked lists (Want to Watch / Watching / Watched) and steers around anti-crawling — draws on the approach of DoubanMovieListBackUpToNotion by Geetheshe. Special thanks to the author for the open-source contribution.</string>
     <string name="opensource_group_count">%1$d libraries</string>
     <string name="opensource_group_ui">UI &amp; Effects</string>
     <string name="opensource_group_framework">Core Frameworks</string>
