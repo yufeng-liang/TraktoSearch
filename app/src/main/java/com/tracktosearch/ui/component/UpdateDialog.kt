@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -304,13 +305,17 @@ private fun parseChangelogSections(text: String): List<ChangelogSection> {
  * - 每版 section 标题作为 stickyHeader item 渲染，随内容滚动到顶部时变 sticky（不会遮住首行）
  * - 未到顶时标题仍在下面正常显示，便于用户区分各版本
  * - 滑到下一版时，新标题顶替旧标题
+ * - 标题区填充色由调用方传 [headerColor]，须与宿主容器同色：静态看不出色块，吸顶挡内容时也无异色
  *
  * 使用 LazyColumn 的 stickyHeader API 而非 overlay 浮层：
  * overlay 模式会遮住首行文字；stickyHeader 是标准吸顶，标题占位而非覆盖。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun StickyHeaderChangelogContent(text: String) {
+fun StickyHeaderChangelogContent(
+    text: String,
+    headerColor: Color
+) {
     val sections = remember(text) { parseChangelogSections(text) }
     val listState = rememberLazyListState()
 
@@ -323,7 +328,7 @@ fun StickyHeaderChangelogContent(text: String) {
             stickyHeader(key = "header_${sectionIdx}") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    color = headerColor
                 ) {
                     Column {
                         Row(
@@ -678,7 +683,9 @@ fun UpdateDialog(
                         StickyHeaderChangelogContent(
                             text = updateInfo.changelog.ifBlank {
                                 stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}"
-                            }
+                            },
+                            // 标题吸顶后的填充色跟日志区圆角盒同色
+                            headerColor = MaterialTheme.colorScheme.surface
                         )
                     }
                 }

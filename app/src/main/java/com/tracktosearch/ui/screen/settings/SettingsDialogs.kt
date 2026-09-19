@@ -1018,7 +1018,11 @@ fun ChangelogDialog(
                         }
                     }
                     changelog != null && changelog!!.isNotBlank() -> {
-                        StickyHeaderChangelogContent(text = changelog!!)
+                        StickyHeaderChangelogContent(
+                            text = changelog!!,
+                            // 标题吸顶后的填充色跟弹窗容器同色，静态看不出色块
+                            headerColor = floatingDialogColor()
+                        )
                     }
                     else -> {
                         Text(
