@@ -39,7 +39,7 @@ import { handleTranslateProxy } from './proxy/translate';
 import { handleCrashLogProxy } from './proxy/crash-logs';
 import { handleConfigProxy } from './proxy/config';
 import { handlePublicUpdateReleaseProxy, isPublicUpdateReleasePath } from './proxy/update';
-import { handleInviteRequest, handleInviteResend, handleInviteVerification } from './invitations';
+import { handleInviteRequest, handleInviteResend } from './invitations';
 import { handleLegalRequest } from './legal-requests';
 import { closeLegalRequest, listLegalRequests } from './admin/legal-requests';
 import { handleAiHealthList, handleAiHealthProbe, handleAiHealthSummary } from './admin/ai-health';
@@ -226,9 +226,6 @@ async function handleAuthApi(
     }
     if (path === '/api/invite-requests/resend' && request.method === 'POST') {
         return handleInviteResend(request, env, requestId);
-    }
-    if (path === '/api/invite-requests/verify' && request.method === 'GET') {
-        return handleInviteVerification(request, env, requestId);
     }
     if (path === '/api/legal-requests' && request.method === 'POST') {
         return handleLegalRequest(request, env, requestId, ctx);

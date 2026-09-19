@@ -71,7 +71,7 @@ test('direct public request issues an invitation without email verification', as
         assert.equal(payload.data.status, 'INVITE_SENT');
         assert.equal(payload.data.inviteCode, undefined);
         const body = JSON.parse(emailBody.init.body);
-        assert.match(body.subject, /邀请码已送达/);
+        assert.match(body.subject, /取票码已送达/);
         assert.match(body.htmlContent, /INVITATION CODE/);
         assert.doesNotMatch(body.htmlContent, /invite\/verify/);
     } finally {
@@ -419,15 +419,15 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
     assert.match(email.html, /直接帮助我改进后续版本/);
     assert.match(email.html, /App 内的反馈与建议提交/);
     assert.match(email.text, /App 内的反馈与建议提交/);
-    assert.doesNotMatch(email.html, /复制邀请码|onclick=|navigator\.clipboard/);
+    assert.doesNotMatch(email.html, /复制取票码|onclick=|navigator\.clipboard/);
     assert.doesNotMatch(email.html, /letter-spacing:\.2em;text-transform:uppercase;">TraktoSearch/);
     assert.match(email.html, /background:#E9E2D4;border-left:4px solid #D95532;text-align:center/);
     assert.match(email.html, /margin:0 0 12px;text-align:center/);
     assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-three-watching-email\.png/);
     assert.doesNotMatch(email.html, /app-icon-email/);
-    assert.match(email.html, /TraktoSearch 激活码已准备好，请打开邮件查看。/);
-    assert.match(email.html, /感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。/);
-    assert.match(email.text, /感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。/);
+    assert.match(email.html, /TraktoSearch 取票码已准备好，请打开邮件查看。/);
+    assert.match(email.html, /感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
+    assert.match(email.text, /感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
     assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);

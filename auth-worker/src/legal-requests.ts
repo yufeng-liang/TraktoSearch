@@ -164,8 +164,8 @@ async function notifyLegalRequest(
     notifications.push(sendEmail(env, {
         to: input.email,
         subject: '已收到你的 TraktoSearch 法律/隐私请求',
-        html: `<p>我们已收到你的请求。</p><p>请求编号：<strong>${escapeHtml(id)}</strong></p><p>我们会在需要时通过此邮箱联系你，并在完成必要的身份核验后处理请求。请不要通过邮件发送密码、Cookie、完整邀请码或身份证件。</p>`,
-        text: `我们已收到你的请求。\n请求编号：${id}\n我们会在需要时通过此邮箱联系你，并在完成必要的身份核验后处理请求。请不要通过邮件发送密码、Cookie、完整邀请码或身份证件。`,
+        html: `<p>我们已收到你的请求。</p><p>请求编号：<strong>${escapeHtml(id)}</strong></p><p>我们会在需要时通过此邮箱联系你，并在完成必要的身份核验后处理请求。请不要通过邮件发送密码、Cookie、完整取票码或身份证件。</p>`,
+        text: `我们已收到你的请求。\n请求编号：${id}\n我们会在需要时通过此邮箱联系你，并在完成必要的身份核验后处理请求。请不要通过邮件发送密码、Cookie、完整取票码或身份证件。`,
     }));
 
     const results = await Promise.allSettled(notifications);
