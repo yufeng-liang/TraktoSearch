@@ -64,10 +64,17 @@ export async function readAiCache(env: AiStoreEnvironment, key: string): Promise
             WHERE cache_key = ? AND expires_at > ?
         `).bind(key, now()).first<CachedRow>();
         if (!row) return null;
-        return JSON.parse(row.payload_json) as unknown;
+        try {
+            return JSON.parse(row.payload_json) as unknown;
+        } catch {
+            // 行内容损坏：删掉坏行，避免整段 TTL 内每次读取都走降级重生成
+            console.error(`[ai-store] readAiCache corrupt row deleted for ${key}`);
+            void env.DB.prepare(`DELETE FROM ai_cache WHERE cache_key = ?`).bind(key).run().catch(() => undefined);
+            return null;
+        }
     } catch (err) {
         // 读失败按缓存 miss 降级（重新生成），而不是 503 打死整条路由：
-        // 一条损坏缓存行或一次 D1 抖动不该让用户在整段 TTL 内都拿不到服务
+        // 一次 D1 抖动不该让用户在整段 TTL 内都拿不到服务
         console.error(`[ai-store] readAiCache miss fallback for ${key}:`, err instanceof Error ? err.message : err);
         return null;
     }

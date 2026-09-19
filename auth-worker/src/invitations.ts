@@ -419,6 +419,13 @@ export async function issueInvitation(
                 SET status = 'EMAIL_FAILED', friend_id = NULL, invite_id = NULL, updated_at = ?
                 WHERE id = ?
             `).bind(now(), request.id),
+            // 邮件发送失败回滚时，前一步已插入的 SUCCESS 审计行成为悬挂记录
+            // （显示签发成功但邀请已删），在此标记为回滚，避免误导审计排查
+            env.DB.prepare(`
+                UPDATE audit_logs
+                SET result = 'ROLLED_BACK', detail = detail || ';email_send_failed'
+                WHERE event_type = 'PUBLIC_INVITE_ISSUE' AND friend_id = ? AND request_id = ? AND result = 'SUCCESS'
+            `).bind(friendId, request.id),
         ]);
         throw new AppError('EMAIL_SEND_FAILED', 'Unable to send invitation email', 503);
     }

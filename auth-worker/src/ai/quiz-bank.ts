@@ -1,3 +1,5 @@
+import { now } from '../util/errors.ts';
+
 // 当天 AI 题库的「确定性」机制：抽片、quizId 派生、用量计数与预算判定。
 //
 // 只放纯函数与用量记录的 KV 读写，不碰题库正文 —— 正文由调用方用既有 quiz 缓存读写，
@@ -222,6 +224,104 @@ function resolveSetsPerDay(value: number | undefined): number {
     return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
         ? value
         : QUIZ_SETS_PER_DAY;
+}
+
+// ==================== D1 原子记账 ====================
+//
+// KV 的 get→put 读改写不是原子的：两个并发请求都读到同一 used_sets，算出同一
+// setIndex → 同一 quizId → 双双跑满一套上游调用，最终写回互相覆盖（attempts/
+// generatedSets 丢失），canGenerateSet 预算也被绕过。D1 侧用条件 UPSERT +
+// RETURNING 把「分配序号 / 记尝试 / 记成功」变成单语句原子操作，并发请求各拿到
+// 不同序号。D1 不可用或语句失败时返回 null，调用方降级回 KV 路径（可用性优先，
+// 记账是增强路径，不能让用户拿不到题）。
+
+export interface BankD1Env {
+    DB?: D1Database;
+    KV?: BankEnv['KV'];
+}
+
+export interface BankUsageStore {
+    /** 原子分配下一套序号（used_sets+1 并返回新值）。存储不可用返回 null。 */
+    allocateSetIndex(friendId: string, date: string): Promise<number | null>;
+    /** 原子 attempts+1，返回新值。存储不可用返回 null。 */
+    incrementAttempts(friendId: string, date: string): Promise<number | null>;
+    /** 原子 generatedSets+1（生成成功后记一笔）。 */
+    incrementGeneratedSets(friendId: string, date: string): Promise<void>;
+    /** 读当前用量；存储不可用返回 null（调用方降级 KV）。 */
+    readUsage(friendId: string, date: string): Promise<BankUsage | null>;
+}
+
+const USAGE_TABLE = 'quiz_bank_usage';
+
+export function createD1BankUsageStore(db: D1Database): BankUsageStore {
+    const touch = (changes: string, paramValues: unknown[]): Promise<Record<string, unknown> | null> =>
+        (async () => {
+            const result = await db.prepare(
+                `INSERT INTO ${USAGE_TABLE} (friend_id, usage_date, used_sets, generated_sets, attempts, updated_at)
+                 VALUES (?1, ?2, 0, 0, 0, ?5)
+                 ON CONFLICT(friend_id, usage_date) DO UPDATE SET
+                     ${changes},
+                     updated_at = excluded.updated_at
+                 RETURNING used_sets, generated_sets, attempts`,
+            ).bind(...paramValues).first<Record<string, unknown>>();
+            return result ?? null;
+        })();
+
+    return {
+        async allocateSetIndex(friendId: string, date: string): Promise<number | null> {
+            try {
+                const row = await touch(
+                    'used_sets = quiz_bank_usage.used_sets + 1',
+                    [friendId, date, 0, 0, now()],
+                );
+                const usedSets = row?.used_sets;
+                return typeof usedSets === 'number' && usedSets > 0 ? usedSets : null;
+            } catch {
+                return null;
+            }
+        },
+
+        async incrementAttempts(friendId: string, date: string): Promise<number | null> {
+            try {
+                const row = await touch(
+                    'attempts = quiz_bank_usage.attempts + 1',
+                    [friendId, date, 0, 0, now()],
+                );
+                const attempts = row?.attempts;
+                return typeof attempts === 'number' && attempts >= 0 ? attempts : null;
+            } catch {
+                return null;
+            }
+        },
+
+        async incrementGeneratedSets(friendId: string, date: string): Promise<void> {
+            try {
+                await touch(
+                    'generated_sets = quiz_bank_usage.generated_sets + 1',
+                    [friendId, date, 0, 0, now()],
+                );
+            } catch {
+                // 静默：成功计数丢失只影响统计
+            }
+        },
+
+        async readUsage(friendId: string, date: string): Promise<BankUsage | null> {
+            try {
+                const row = await db.prepare(
+                    `SELECT used_sets, generated_sets, attempts FROM ${USAGE_TABLE}
+                     WHERE friend_id = ?1 AND usage_date = ?2`,
+                ).bind(friendId, date).first<{ used_sets: unknown; generated_sets: unknown; attempts: unknown }>();
+                if (!row) return emptyUsage();
+                return {
+                    usedSets: countField(row.used_sets),
+                    generatedSets: countField(row.generated_sets),
+                    attempts: countField(row.attempts),
+                };
+            } catch {
+                return null;
+            }
+        },
+    };
 }
 
 /**

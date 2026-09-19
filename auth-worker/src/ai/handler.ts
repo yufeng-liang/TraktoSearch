@@ -103,7 +103,7 @@ import { handleAiDetailApi } from './detail-handler.ts';
 import { mapWithGate } from './async-pool.ts';
 import { QUIZ_UNIT_SLOT_COUNT, QUIZ_QUESTION_SLOT_COUNT, planUnitSlots, planQuestionSlots, rankMovieTitlesForSlots, type QuizAngleType, type UnitSlot, type QuestionSlot } from './quiz-slots.ts';
 import { questionSlotMessages, unitSlotMessages, type SlotMovie, type SlotUnit } from './quiz-slot-messages.ts';
-import { bankSeed, canGenerateSet, deriveBankQuizId, isLocalDate, isPreGeneratedSet, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
+import { bankSeed, canGenerateSet, createD1BankUsageStore, deriveBankQuizId, isLocalDate, isPreGeneratedSet, readBankUsage, selectDailyMovies, writeBankUsage } from './quiz-bank.ts';
 
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MOVIES = 60;
@@ -800,14 +800,33 @@ async function handleQuizStream(
             const requestedDate = typeof body.date === 'string' ? body.date : '';
             const date = isLocalDate(requestedDate, todayIso) ? requestedDate : todayIso;
             const prefetch = body.prefetch === true;
-            const usage = await readBankUsage(env, payload.sub, date);
+            // 用量记账迁 D1 原子 UPSERT（RETURNING）：KV 读改写非原子，并发双请求会算出
+            // 同一 setIndex → 同一 quizId → 双双跑满一套上游调用。D1 不可用时整段降级回
+            // 原 KV 路径（记账是增强路径，不能影响取题）。
+            const usageStore = env.DB ? createD1BankUsageStore(env.DB) : null;
+            const usage = (await usageStore?.readUsage(payload.sub, date)) ?? await readBankUsage(env, payload.sub, date);
             const explicitQuizId = body.quizId === undefined ? null : readOpaqueId(body.quizId, 'quizId');
-            const setIndex = usage.usedSets + 1;
+            // 正式游玩（无显式 quizId）原子占号：并发请求各拿到不同序号，不再撞车；
+            // 预生成与重玩（显式 quizId）只读旧值不占号，与原语义一致
+            let setIndex: number;
+            let allocatedViaD1 = false;
+            if (explicitQuizId === null && !prefetch) {
+                const allocated = await usageStore?.allocateSetIndex(payload.sub, date);
+                if (typeof allocated === 'number' && allocated > 0) {
+                    setIndex = allocated;
+                    allocatedViaD1 = true;
+                } else {
+                    setIndex = usage.usedSets + 1;
+                }
+            } else {
+                setIndex = usage.usedSets + 1;
+            }
             const quizId = explicitQuizId ?? deriveBankQuizId(payload.sub, date, setIndex);
             const cached = await readQuizCacheCompat(env, payload.sub, quizId);
             if (cached) {
-                // 命中当天题库：秒开。预生成是系统行为，不耗用「已玩套数」；正式游玩才记账。
-                if (!prefetch && explicitQuizId === null) {
+                // 命中当天题库：秒开。D1 路径正式游玩的记账已由 allocate 原子完成；
+                // KV 降级路径维持原读改写；预生成与重玩不耗「已玩套数」。
+                if (usageStore === null && !prefetch && explicitQuizId === null) {
                     await writeBankUsage(env, payload.sub, date, { ...usage, usedSets: usage.usedSets + 1 });
                 }
                 await writeEvent({ type: 'result', quiz: publicQuiz(parseQuizCache(cached)) });
@@ -832,8 +851,13 @@ async function handleQuizStream(
             // 片单当天固定：同一 (用户, 日期, 套序号) 必然抽到同一批片，预生成的题库才对得上。
             const selectedMovies = selectDailyMovies(movies, bankSeed(payload.sub, date, setIndex), QUIZ_MOVIE_COUNT);
             const difficultyHint = await readQuizDifficultyHint(env, payload.sub);
-            const attemptUsage = { ...usage, attempts: usage.attempts + 1 };
-            await writeBankUsage(env, payload.sub, date, attemptUsage);
+            const kvAttemptUsage = { ...usage, attempts: usage.attempts + 1 };
+            if (usageStore) {
+                // 原子 attempts+1：预算判定（canGenerateSet）不再可被并发写回绕过
+                await usageStore.incrementAttempts(payload.sub, date);
+            } else {
+                await writeBankUsage(env, payload.sub, date, kvAttemptUsage);
+            }
             const generated = await generateQuizBySlots(
                 env,
                 provider,
@@ -858,11 +882,23 @@ async function handleQuizStream(
             };
             const cacheKey = quizCacheKey(AI_TEXT_CACHE_VERSION, payload.sub, finalData.quizId);
             await writeAiCache(env, cacheKey, finalData, 24 * 60 * 60, payload.sub, 'quiz');
-            await writeBankUsage(env, payload.sub, date, {
-                ...attemptUsage,
-                generatedSets: attemptUsage.generatedSets + (generated ? 1 : 0),
-                usedSets: prefetch ? attemptUsage.usedSets : attemptUsage.usedSets + 1,
-            });
+            if (usageStore) {
+                // D1 原子路径：usedSets 已由 allocate 记账（allocatedViaD1），
+                // 这里只补 attempts 已由 incrementAttempts 记账、生成成功计数
+                if (generated && !allocatedViaD1 && !prefetch) {
+                    // 显式 quizId 未命中重建的罕见路径：占号没发生，成功后补 usedSets+1
+                    await usageStore.allocateSetIndex(payload.sub, date);
+                }
+                if (generated) {
+                    await usageStore.incrementGeneratedSets(payload.sub, date);
+                }
+            } else {
+                await writeBankUsage(env, payload.sub, date, {
+                    ...kvAttemptUsage,
+                    generatedSets: kvAttemptUsage.generatedSets + (generated ? 1 : 0),
+                    usedSets: prefetch ? kvAttemptUsage.usedSets : kvAttemptUsage.usedSets + 1,
+                });
+            }
             await writeEvent({ type: 'result', quiz: publicQuiz(finalData), quota: quota ? publicQuota(quota) : undefined });
         } catch (error) {
             // 流内异常必须留痕：否则只能看到 App 端「生成失败」，无法区分存储、鉴权还是上游问题

@@ -275,9 +275,10 @@ async function handleAuthApi(
 
     // 公开数据端点（无需 JWT）：访客模式下发现页/搜索页也能正常浏览
     // worker 仍注入上游 API Key，安全层从「用户鉴权」下沉到「网关密钥代理」
-    // 豆瓣热榜（chart/weekly/nowplaying/top250）——纯公开榜单数据
+    // 豆瓣热榜（chart/weekly/nowplaying/top250）——纯公开榜单数据。
+    // allowPurge=false：匿名路径忽略 ?purge=1，防刷爆回源（App 不使用 purge）
     if (path.startsWith('/api/douban/api/') && request.method === 'GET') {
-        return handleDoubanProxy(request, env, path, ctx);
+        return handleDoubanProxy(request, env, path, ctx, { allowPurge: false });
     }
     // TMDB —— 电影/剧集元数据、搜索、海报等全为公开数据
     if (path.startsWith('/api/tmdb/') && request.method === 'GET') {
@@ -346,7 +347,7 @@ async function handleAuthApi(
         return handleTraktProxy(request, env, path, payload.sub);
     }
     if (path.startsWith('/api/douban/')) {
-        return handleDoubanProxy(request, env, path, ctx);
+        return handleDoubanProxy(request, env, path, ctx, { allowPurge: true });
     }
     if (path.startsWith('/api/omdb/')) {
         return handleOmdbProxy(request, env, path);
@@ -386,6 +387,23 @@ async function handleAdminApi(
 ): Promise<Response> {
     // 验证 Cloudflare Access JWT
     await verifyAccessJWT(request, env);
+
+    // CSRF 防护：Access 的 CF_Authorization cookie 是 SameSite=None，恶意页面可借管理员
+    // 会话免预检发出简单请求。浏览器跨站请求必带 Origin——存在且不在白名单即拒绝；
+    // 缺失视为非浏览器客户端（curl 等脚本运维），不构成 CSRF 面，放行。
+    if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
+        const origin = request.headers.get('Origin');
+        if (origin) {
+            const allowed = [
+                'https://app-config-1qe.pages.dev',   // 运维后台（app-config Pages）
+                env.PUBLIC_SITE_ORIGIN,               // 官网
+                new URL(request.url).origin,          // worker 自身
+            ];
+            if (!allowed.includes(origin)) {
+                throw new AppError('FORBIDDEN', 'Admin API rejects cross-site requests', 403);
+            }
+        }
+    }
 
     // 朋友管理
     if (path === '/admin/friends' && request.method === 'GET') {

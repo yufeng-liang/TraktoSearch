@@ -23,9 +23,12 @@ export async function cleanupRetention(env: { DB: D1Database }): Promise<void> {
     const rateLimitCutoff = currentTime - 2 * 24 * 60 * 60;
     const expiredAiCacheCutoff = currentTime;
     const friendIpLogCutoff = currentTime - 30 * 24 * 60 * 60;
+    // 题库用量按天记账，覆盖跨天边界保留 2 天即可
+    const quizBankUsageCutoffDate = new Date((currentTime - 2 * 24 * 60 * 60) * 1000)
+        .toISOString().slice(0, 10);
 
     const [inviteResult, legalResult, auditResult, ttsRateLimitResult, healthResult,
-        challengesResult, rateLimitResult, aiCacheResult, friendIpLogResult] = await Promise.all([
+        challengesResult, rateLimitResult, aiCacheResult, friendIpLogResult, quizBankResult] = await Promise.all([
         env.DB.prepare(`
             DELETE FROM invite_requests
             WHERE status IN ('VERIFICATION_SENT', 'REPLACED', 'EXPIRED', 'EMAIL_FAILED')
@@ -64,6 +67,10 @@ export async function cleanupRetention(env: { DB: D1Database }): Promise<void> {
             DELETE FROM friend_ip_logs
             WHERE created_at < ?
         `).bind(friendIpLogCutoff).run(),
+        env.DB.prepare(`
+            DELETE FROM quiz_bank_usage
+            WHERE usage_date < ?
+        `).bind(quizBankUsageCutoffDate).run(),
     ]);
 
     console.log(JSON.stringify({
@@ -77,5 +84,6 @@ export async function cleanupRetention(env: { DB: D1Database }): Promise<void> {
         staleRateLimits: Number(rateLimitResult.meta.changes || 0),
         expiredAiCacheRows: Number(aiCacheResult.meta.changes || 0),
         staleFriendIpLogs: Number(friendIpLogResult.meta.changes || 0),
+        staleQuizBankUsage: Number(quizBankResult.meta.changes || 0),
     }));
 }

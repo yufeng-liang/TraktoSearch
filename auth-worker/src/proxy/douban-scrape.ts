@@ -100,11 +100,14 @@ export async function scrapeDouban(
     searchParams: URLSearchParams,
     env: Env,
     ctx?: Pick<ExecutionContext, 'waitUntil'>,
+    options?: { allowPurge?: boolean },
 ): Promise<Response> {
     const cacheKey = buildCacheKey(doubanPath, searchParams);
 
-    // 支持 ?purge=1 强制刷新缓存(用于部署新代码后立即生效)
-    const purge = searchParams.get('purge') === '1';
+    // ?purge=1 强制刷新缓存：仅限鉴权路径使用。匿名公开端点必须忽略 purge——
+    // 否则任何人循环 ?purge=1 可绕过 12h 缓存反复触发 4 类 HTML 抓取，
+    // 烧 CPU 配额并给豆瓣反爬递刀。App 端不使用 purge（下拉刷新由网关边缘缓存负责）。
+    const purge = options?.allowPurge === true && searchParams.get('purge') === '1';
     if (purge) {
         try {
             await caches.default.delete(cacheKey);
