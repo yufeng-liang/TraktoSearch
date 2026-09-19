@@ -34,6 +34,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -133,8 +134,8 @@ fun DrawScope.drawEraMotif(
     eraElapsedMs: Long,
     loverAimAngle: Float = LOVER_FALLBACK_AIM_ANGLE,
     /**
-     * 本母题的照片抠图。**只有两个母题用得上**：Red 的红围巾与 evermore 的背影 ——
-     * 其余母题一律传 null，那些函数根本不读这个参数，母题本身照旧画。
+     * 本母题的照片素材。**只有三个母题用得上**：Red 的红围巾、evermore 的背影与
+     * 1989 拍立得里的照面 —— 其余母题一律传 null，那些函数根本不读这个参数，母题本身照旧画。
      *
      * 位图只能在组合阶段读（draw 阶段拿不到 resources），所以由 `SwiftieEraCard` 传进来。
      */
@@ -159,7 +160,7 @@ fun DrawScope.drawEraMotif(
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
         SwiftieEraMotif.STAGE_CURTAIN -> drawStageCurtain(color, phase, alpha)
         SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer, propMapleInk)
-        SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha)
+        SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha, propPhoto)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
         SwiftieEraMotif.LOVER_ARCHER ->
             drawLoverArcher(color, phase, alpha, eraElapsedMs, loverAimAngle)
@@ -1626,17 +1627,27 @@ private val PROP_COFFEE = Color(0xFF6C4226)
  */
 private val PROP_ENGRAVE = Color(0xFF5C3A21)
 
-/** 5 · 1989：宝丽来白框 + 一只海鸥。轻微倾斜，像随手摆上去的。 */
-private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float) {
+/**
+ * 拍立得照面的显影强度：有效 alpha = 0.35 × 2.2 ≈ 0.77。
+ *
+ * 与 Red 围巾、evermore 背影两张照片同一条硬规则 —— 1.5 需求方看过嫌淡，2.2 定案：
+ * 照片细节都在、纸还透气，再往上就是一张实心贴纸（历史见 [RED_SCARF_PHOTO_GAIN]）。
+ */
+private const val POLAROID_PHOTO_GAIN = 2.2f
+
+/** 5 · 1989：宝丽来白框（照面是真实照片）+ 一只海鸥。轻微倾斜，像随手摆上去的。 */
+private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float, photo: ImageBitmap?) {
     skyBandTexture(color)
     val box = propBox()
     val w = box.width
     val h = box.height
     val u = min(w, h)
     translate(left = box.left, top = box.top) {
-        val frameW = w * 0.74f
+        // 0.74 → 0.88：整框放大（白框连照面一起，用户点名「拍立得整体变大」）。
+        // 中心横挪到 0.48w 找补：最大摆幅 8.5° 那一帧右缘还留约 0.4% 卡宽，照旧 0.50 会出卡
+        val frameW = w * 0.88f
         val frameH = frameW * 1.20f
-        val center = Offset(w * 0.50f, h * 0.64f)
+        val center = Offset(w * 0.48f, h * 0.64f)
         rotate(degrees = -7f + sin(phase * TAU) * 1.5f, pivot = center) {
             translate(left = center.x - frameW / 2f, top = center.y - frameH / 2f) {
                 // 影子：一张照片摆在卡片上就该有影子，右下偏 —— 光从左上来（与全彩蛋一致）。
@@ -1656,28 +1667,45 @@ private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float)
                 val photoInset = frameW * 0.07f
                 val photoW = frameW - photoInset * 2f
                 val photoH = frameH * 0.71f
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            color.copy(alpha = alpha * 2.2f),
-                            color.copy(alpha = alpha * 0.5f)
+                if (photo != null) {
+                    // 照面 = 真实照片，cover 铺满窗口：源图 1:1、窗口 0.86 框宽 × 0.85 框宽，
+                    // 中心裁掉的不满 1%。主色罩同样不能画 —— 位图是整块矩形，罩了在白框里留框
+                    val scale = max(photoW / photo.width, photoH / photo.height)
+                    val srcW = (photoW / scale).roundToInt().coerceAtMost(photo.width)
+                    val srcH = (photoH / scale).roundToInt().coerceAtMost(photo.height)
+                    drawImage(
+                        image = photo,
+                        srcOffset = IntOffset((photo.width - srcW) / 2, (photo.height - srcH) / 2),
+                        srcSize = IntSize(srcW, srcH),
+                        dstOffset = IntOffset(photoInset.roundToInt(), photoInset.roundToInt()),
+                        dstSize = IntSize(photoW.roundToInt(), photoH.roundToInt()),
+                        alpha = (alpha * POLAROID_PHOTO_GAIN).coerceAtMost(1f),
+                        filterQuality = FilterQuality.High
+                    )
+                } else {
+                    // 兜底（资源缺失才走）：原来的时代色渐变照面 + 一道地平线
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                color.copy(alpha = alpha * 2.2f),
+                                color.copy(alpha = alpha * 0.5f)
+                            ),
+                            startY = photoInset,
+                            endY = photoInset + photoH
                         ),
-                        startY = photoInset,
-                        endY = photoInset + photoH
-                    ),
-                    topLeft = Offset(photoInset, photoInset),
-                    size = Size(photoW, photoH)
-                )
-                // 照面里一道地平线加一片海，才像一张照片而不是一块渐变色卡
-                val horizon = photoInset + photoH * 0.62f
-                drawRect(
-                    color, Offset(photoInset, horizon),
-                    Size(photoW, photoInset + photoH - horizon), alpha = alpha * 0.6f
-                )
-                drawLine(
-                    color, Offset(photoInset, horizon), Offset(photoInset + photoW, horizon),
-                    u * 0.007f, alpha = alpha * 1.8f
-                )
+                        topLeft = Offset(photoInset, photoInset),
+                        size = Size(photoW, photoH)
+                    )
+                    val horizon = photoInset + photoH * 0.62f
+                    drawRect(
+                        color, Offset(photoInset, horizon),
+                        Size(photoW, photoInset + photoH - horizon), alpha = alpha * 0.6f
+                    )
+                    drawLine(
+                        color, Offset(photoInset, horizon), Offset(photoInset + photoW, horizon),
+                        u * 0.007f, alpha = alpha * 1.8f
+                    )
+                }
                 // 下白边上一道手写笔迹（写日期的那条），不写字：字会变成要翻译的内容
                 drawLine(
                     color, Offset(frameW * 0.18f, frameH * 0.90f), Offset(frameW * 0.60f, frameH * 0.90f),
