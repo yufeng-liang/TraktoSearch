@@ -14,7 +14,6 @@ import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.ai.AiProfileSyncScheduler
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.local.DoubanAuthStorage
-import com.tracktosearch.data.local.ImageTrafficStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.AppDatabase
 import com.tracktosearch.data.notification.NotificationScheduler
@@ -48,7 +47,6 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var splashPosterScheduler: SplashPosterScheduler
     @Inject lateinit var aiProfileSyncScheduler: AiProfileSyncScheduler
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
-    @Inject lateinit var imageTrafficStorage: ImageTrafficStorage
     @Inject lateinit var themeStorage: ThemeStorage
     // 海报主色持久化缓存：启动预热到内存，详情页首帧才能同步取到沉浸色
     @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
@@ -225,21 +223,10 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         // 3. 独立 Dispatcher 提升并发：默认 maxRequestsPerHost=5 是 3 列网格快速滚动的瓶颈，
         //    提升到 per-host 8 / 总 20（线程池 8 与 per-host 对齐）
         // 4. 显式声明 HTTP/2 优先：同一连接多路复用，批量海报下载更高效
-        // 5. 图片流量统计拦截器：仅统计图片 client 的实际下载字节（含压缩后 body 大小），
-        //    供设置页展示，判断是否值得接入国内 CDN
         val imageHttpClient = baseOkHttpClient.newBuilder()
             .addInterceptor(doubanRefererInterceptor)
             // 全屏大图查看器的下载进度：仅对被观察的 URL 生效，其余零开销透传
             .addInterceptor(ImageDownloadProgress.interceptor)
-            .addInterceptor { chain ->
-                val response = chain.proceed(chain.request())
-                val body = response.body
-                // body.contentLength() 对分块/压缩响应可能为 -1，此时无法精确计数，跳过
-                if (body != null && body.contentLength() >= 0) {
-                    imageTrafficStorage.record(body.contentLength())
-                }
-                response
-            }
             .dns(dnsCache)
             .dispatcher(
                 Dispatcher(Executors.newFixedThreadPool(8)).apply {

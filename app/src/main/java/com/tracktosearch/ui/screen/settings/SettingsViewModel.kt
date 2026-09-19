@@ -14,8 +14,6 @@ import com.tracktosearch.data.local.CloudFailureSyncMetaStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.CooldownStatus
-import com.tracktosearch.data.local.ImageTrafficStats
-import com.tracktosearch.data.local.ImageTrafficStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -161,7 +159,6 @@ class SettingsViewModel @Inject constructor(
     private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
-    private val imageTrafficStorage: ImageTrafficStorage,
     private val aiTasteStorage: com.tracktosearch.data.local.AiTasteStorage,
     private val statisticsSnapshotStore: com.tracktosearch.data.local.StatisticsSnapshotStore,
     private val swiftieEggStorage: SwiftieEggStorage,
@@ -620,17 +617,6 @@ class SettingsViewModel @Inject constructor(
 
     private val _cacheBreakdown = MutableStateFlow(CacheBreakdown())
     val cacheBreakdown: StateFlow<CacheBreakdown> = _cacheBreakdown.asStateFlow()
-
-    // ========== 图片下载流量统计 ==========
-    val imageTraffic: StateFlow<ImageTrafficStats> = imageTrafficStorage.stats
-
-    fun clearImageTraffic() {
-        imageTrafficStorage.clear()
-        // 成功反馈走与清缓存同一条 Snackbar 通道，之前重置后界面只有数字变化
-        _exportImportState.value = _exportImportState.value.copy(
-            message = ExportMessage.Plain(R.string.snackbar_image_traffic_reset, outcome = HapticOutcome.SUCCESS)
-        )
-    }
 
     /** 按类目清除缓存 */
     fun clearCategory(category: CacheCategory) {

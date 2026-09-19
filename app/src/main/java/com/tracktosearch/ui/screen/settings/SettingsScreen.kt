@@ -38,7 +38,6 @@ import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Email
@@ -69,7 +68,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -742,13 +740,6 @@ fun SettingsScreen(
                         onClearAll = { showClearCacheDialog = true },
                         containerColor = Color.Transparent
                     )
-                    // 图片下载流量统计：尚未发布，仅 debug 构建显示
-                    if (BuildConfig.DEBUG) {
-                        ImageTrafficSectionItem(
-                            viewModel = viewModel,
-                            containerColor = Color.Transparent
-                        )
-                    }
                 }
             }
 
@@ -2309,93 +2300,6 @@ private fun CacheManagementSectionItem(
         onClearAll = onClearAll,
         containerColor = containerColor
     )
-}
-
-/**
- * 图片下载流量统计 item：今日/累计字节 + 重置按钮。
- */
-@Composable
-private fun ImageTrafficSectionItem(
-    viewModel: SettingsViewModel,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
-) {
-    val stats by viewModel.imageTraffic.collectAsStateWithLifecycle()
-    val haptics = rememberAppHaptics()
-    // 重置是破坏性动作（计数归零不可恢复），原来点了就执行，既无确认也无反馈
-    var showResetConfirm by remember { mutableStateOf(false) }
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.CloudDownload,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_image_traffic_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = stringResource(R.string.settings_image_traffic_today, formatFileSize(stats.todayBytes)) +
-                        " · " +
-                        stringResource(R.string.settings_image_traffic_total, formatFileSize(stats.totalBytes)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            OutlinedButton(
-                onClick = { haptics.tap(); showResetConfirm = true },
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-            ) {
-                Text(stringResource(R.string.settings_image_traffic_clear))
-            }
-        }
-    }
-
-    if (showResetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirm = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.settings_image_traffic_reset_confirm)) },
-            text = {
-                Text(
-                    text = stringResource(R.string.settings_image_traffic_reset_impact),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            confirmButton = {
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    confirmHaptics.tap()
-                    showResetConfirm = false
-                    viewModel.clearImageTraffic()
-                }) {
-                    Text(stringResource(R.string.settings_image_traffic_clear))
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showResetConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
-        )
-    }
 }
 
 /**

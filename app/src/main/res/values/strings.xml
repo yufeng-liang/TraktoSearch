@@ -823,10 +823,6 @@ Config:
     <string name="settings_cache_category_http">Network request cache</string>
     <string name="settings_cache_category_http_desc">Network response cache (OkHttp)</string>
     <string name="settings_cache_clear_all">Clear All</string>
-    <string name="settings_image_traffic_title">Image Traffic</string>
-    <string name="settings_image_traffic_today">Today: %1$s</string>
-    <string name="settings_image_traffic_total">Total: %1$s</string>
-    <string name="settings_image_traffic_clear">Reset</string>
     <string name="settings_cache_clear_category_confirm">Clear this cache?</string>
     <string name="settings_cache_clear_all_impact">Clears all cached data. Images reload from network, movie/TV details and charts re-fetched, ID mappings rebuilt. App may feel slower until cache warms up again.</string>
     <string name="settings_cache_category_image_impact">Posters and avatars will be re-downloaded from network on next view. App may feel slower until images re-cache.</string>
@@ -2085,9 +2081,6 @@ Config:
     <string name="settings_notification_requires_trakt">Connect a Trakt account to use reminders — they are pushed from your Trakt watchlist.</string>
     <string name="settings_custom_section_subtitle_discover">Pick which lists show up on Discover and their order</string>
     <string name="settings_custom_section_subtitle_detail">Pick which blocks show up on a title page and their order</string>
-    <string name="settings_image_traffic_reset_confirm">Reset image traffic stats?</string>
-    <string name="settings_image_traffic_reset_impact">Today and total byte counters go back to zero. Cached images are not deleted.</string>
-    <string name="snackbar_image_traffic_reset">Image traffic stats reset</string>
     <string name="common_load_more_loading">Loading more…</string>
     <string name="common_load_more_failed">Failed to load more. Tap to retry</string>
     <string name="common_load_more_complete">Everything is loaded</string>

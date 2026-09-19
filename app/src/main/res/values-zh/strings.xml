@@ -816,10 +816,6 @@
     <string name="settings_cache_category_http">网络请求缓存</string>
     <string name="settings_cache_category_http_desc">网络响应临时缓存</string>
     <string name="settings_cache_clear_all">全部清除</string>
-    <string name="settings_image_traffic_title">图片流量</string>
-    <string name="settings_image_traffic_today">今日：%1$s</string>
-    <string name="settings_image_traffic_total">累计：%1$s</string>
-    <string name="settings_image_traffic_clear">重置</string>
     <string name="settings_cache_clear_category_confirm">清除此项缓存？</string>
     <string name="settings_cache_clear_all_impact">将清除所有缓存数据。海报/头像需重新下载，影视详情和榜单需重新请求，ID 映射需重建。缓存重新积累前 App 可能稍慢。</string>
     <string name="settings_cache_category_image_impact">海报和头像下次查看时需重新从网络下载。图片重新缓存前 App 可能稍慢。</string>
@@ -2078,9 +2074,6 @@
     <string name="settings_notification_requires_trakt">需要连接 Trakt 账号才能使用，通知基于 Trakt 想看列表推送。</string>
     <string name="settings_custom_section_subtitle_discover">选择发现页显示哪些榜单及顺序</string>
     <string name="settings_custom_section_subtitle_detail">选择详情页显示哪些区块及顺序</string>
-    <string name="settings_image_traffic_reset_confirm">重置图片流量统计？</string>
-    <string name="settings_image_traffic_reset_impact">今日与累计字节数归零，已缓存的图片不会被删除。</string>
-    <string name="snackbar_image_traffic_reset">图片流量统计已重置</string>
     <string name="common_load_more_loading">正在加载更多…</string>
     <string name="common_load_more_failed">加载更多失败，点击重试</string>
     <string name="common_load_more_complete">已加载全部</string>

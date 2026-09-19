@@ -362,10 +362,6 @@
     <string name="settings_cache_category_http">ネットワークリクエストキャッシュ</string>
     <string name="settings_cache_category_http_desc">ネットワーク応答キャッシュ（OkHttp）</string>
     <string name="settings_cache_clear_all">すべてクリア</string>
-    <string name="settings_image_traffic_title">画像トラフィック</string>
-    <string name="settings_image_traffic_today">今日：%1$s</string>
-    <string name="settings_image_traffic_total">累計：%1$s</string>
-    <string name="settings_image_traffic_clear">リセット</string>
     <string name="settings_cache_clear_category_confirm">このキャッシュをクリアしますか？</string>
     <string name="settings_cache_clear_all_impact">すべてのキャッシュデータをクリアします。ポスター/アバターは再ダウンロード、映画/TV詳細とランキングは再取得、IDマッピングは再構築されます。キャッシュが再蓄積されるまでアプリが少し遅くなる場合があります。</string>
     <string name="settings_cache_category_image_impact">ポスターとアバターは次回表示時にネットワークから再ダウンロードされます。画像が再キャッシュされるまでアプリが少し遅くなる場合があります。</string>
@@ -2090,9 +2086,6 @@
     <string name="settings_notification_requires_trakt">Trakt アカウントの接続が必要です。通知は Trakt の見たいリストを基に配信されます。</string>
     <string name="settings_custom_section_subtitle_discover">見つけるページに表示するランキングと並び順を選びます</string>
     <string name="settings_custom_section_subtitle_detail">詳細ページに表示するブロックと並び順を選びます</string>
-    <string name="settings_image_traffic_reset_confirm">画像通信量の統計をリセットしますか？</string>
-    <string name="settings_image_traffic_reset_impact">本日と累計のバイト数が 0 に戻ります。キャッシュ済みの画像は削除されません。</string>
-    <string name="snackbar_image_traffic_reset">画像通信量の統計をリセットしました</string>
     <string name="common_load_more_loading">さらに読み込み中…</string>
     <string name="common_load_more_failed">追加読み込みに失敗しました。タップして再試行</string>
     <string name="common_load_more_complete">すべて読み込みました</string>

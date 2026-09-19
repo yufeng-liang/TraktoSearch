@@ -362,10 +362,6 @@
     <string name="settings_cache_category_http">네트워크 요청 캐시</string>
     <string name="settings_cache_category_http_desc">네트워크 응답 캐시 (OkHttp)</string>
     <string name="settings_cache_clear_all">모두 지우기</string>
-    <string name="settings_image_traffic_title">이미지 트래픽</string>
-    <string name="settings_image_traffic_today">오늘: %1$s</string>
-    <string name="settings_image_traffic_total">누적: %1$s</string>
-    <string name="settings_image_traffic_clear">초기화</string>
     <string name="settings_cache_clear_category_confirm">이 캐시를 지우시겠습니까?</string>
     <string name="settings_cache_clear_all_impact">모든 캐시 데이터를 지웁니다. 포스터/아바타 재다운로드, 영화/TV 상세 및 차트 재요청, ID 매핑 재구축. 캐시가 다시 쌓이기 전까지 앱이 약간 느릴 수 있습니다.</string>
     <string name="settings_cache_category_image_impact">포스터와 아바타가 다음 조회 시 네트워크에서 재다운로드됩니다. 이미지가 재캐시되기 전까지 앱이 약간 느릴 수 있습니다.</string>
@@ -2090,9 +2086,6 @@
     <string name="settings_notification_requires_trakt">Trakt 계정 연결이 필요합니다. 알림은 Trakt 보고 싶은 목록을 기준으로 전송됩니다.</string>
     <string name="settings_custom_section_subtitle_discover">탐색 페이지에 표시할 목록과 순서를 고릅니다</string>
     <string name="settings_custom_section_subtitle_detail">상세 페이지에 표시할 블록과 순서를 고릅니다</string>
-    <string name="settings_image_traffic_reset_confirm">이미지 트래픽 통계를 초기화할까요?</string>
-    <string name="settings_image_traffic_reset_impact">오늘과 누적 바이트가 0으로 돌아갑니다. 캐시된 이미지는 삭제되지 않습니다.</string>
-    <string name="snackbar_image_traffic_reset">이미지 트래픽 통계를 초기화했습니다</string>
     <string name="common_load_more_loading">더 불러오는 중…</string>
     <string name="common_load_more_failed">더 불러오지 못했습니다. 탭하여 다시 시도</string>
     <string name="common_load_more_complete">모두 불러왔습니다</string>
