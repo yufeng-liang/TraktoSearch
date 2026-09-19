@@ -1,7 +1,7 @@
 name = "feedback-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
-workers_dev = true
+workers_dev = false  # 仅经 gateway service binding 调用，不开放 workers.dev 公网直连
 
 # D1：反馈数据
 [[d1_databases]]
