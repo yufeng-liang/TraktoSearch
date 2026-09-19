@@ -1485,8 +1485,9 @@ class DiscoverViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoadingRecommendationsAll = true, recommendationsAllError = null)
         viewModelScope.launch {
             try {
-                // 尝试 Trakt 推荐（分页）
-                val result = traktRepository.getRecommendations(limit = 20)
+                // 尝试 Trakt 推荐（分页）：page 必须透传，否则翻页永远拉回第一页，
+                // 去重后列表不增长而 hasMore 恒真，滚动到底会无限重复请求
+                val result = traktRepository.getRecommendations(limit = 20, page = page)
                 result.onSuccess { recommendations ->
                     if (recommendations.isNotEmpty()) {
                         // 通过 TMDB 获取本地化标题和海报

@@ -184,6 +184,7 @@ interface TraktApiService {
     @GET("recommendations/movies")
     suspend fun getMovieRecommendations(
         @Query("limit") limit: Int = 10,
+        @Query("page") page: Int = 1,
         @Query("extended") extended: String = "full"
     ): Response<List<TraktMovie>>
 

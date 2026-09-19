@@ -2371,9 +2371,9 @@ class TraktRepository @Inject constructor(
     suspend fun searchShows(query: String, page: Int = 1, limit: Int = 20) =
         searchPaginated(traktApiService::searchShows, query, page, limit, "search shows")
 
-    /** 个性化推荐（已登录用户） */
-    suspend fun getRecommendations(limit: Int = 10): Result<List<TraktMovie>> {
-        val key = "recommendations_${limit}"
+    /** 个性化推荐（已登录用户）。page 供「查看全部」弹窗翻页，缓存 key 按页隔离。 */
+    suspend fun getRecommendations(limit: Int = 10, page: Int = 1): Result<List<TraktMovie>> {
+        val key = "recommendations_${limit}_p${page}"
         val sessionGeneration = sessionCacheRegistry.currentGeneration()
         recommendationsCache.getAfterLoad(key)?.let { cached ->
             return Result.success(
@@ -2381,7 +2381,7 @@ class TraktRepository @Inject constructor(
             )
         }
         return try {
-            val response = traktApiService.getMovieRecommendations(limit = limit)
+            val response = traktApiService.getMovieRecommendations(limit = limit, page = page)
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
                 val acceptedBody = sessionCacheRegistry.requireCurrentGeneration(sessionGeneration) {

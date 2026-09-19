@@ -107,7 +107,7 @@ class DiscoverViewModelTest {
         viewModel.loadRecommendationsAll()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { traktRepository.getRecommendations(any()) }
+        coVerify(exactly = 0) { traktRepository.getRecommendations(any(), any()) }
         assertThat(viewModel.uiState.value.isLoadingRecommendationsAll).isFalse()
     }
 
@@ -224,7 +224,7 @@ class DiscoverViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.traktRecommendationsLoggedIn).isFalse()
-        coVerify(exactly = 0) { traktRepository.getRecommendations(any()) }
+        coVerify(exactly = 0) { traktRepository.getRecommendations(any(), any()) }
     }
 
     @Test
@@ -380,7 +380,7 @@ class DiscoverViewModelTest {
         coEvery { tmdbRepository.getTrendingMovies(any<String>()) } returns emptyList()
         coEvery { tmdbRepository.getUpcomingMovies() } returns emptyList()
         coEvery { tmdbRepository.getTopRatedMovies() } returns emptyList()
-        coEvery { traktRepository.getRecommendations(any()) } returns
+        coEvery { traktRepository.getRecommendations(any(), any()) } returns
             Result.success(emptyList<TraktMovie>())
         coEvery { traktRepository.getTrendingMovies(any(), any()) } returns
             Result.success(emptyList<TraktTrendingMovieResponse>() to 0)

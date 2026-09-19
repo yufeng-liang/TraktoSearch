@@ -260,7 +260,7 @@ class TraktRepositoryTest {
         val limit = 97
         val first = listOf(TraktMovie(title = "first account"))
         val second = listOf(TraktMovie(title = "second account"))
-        coEvery { traktApiService.getMovieRecommendations(limit, "full") } returns
+        coEvery { traktApiService.getMovieRecommendations(limit, any(), "full") } returns
             Response.success(first) andThen Response.success(second)
 
         repository.clearTraktAccountCaches()
@@ -268,7 +268,7 @@ class TraktRepositoryTest {
 
         repository.clearTraktAccountCaches()
         assertThat(repository.getRecommendations(limit).getOrThrow()).isEqualTo(second)
-        coVerify(exactly = 2) { traktApiService.getMovieRecommendations(limit, "full") }
+        coVerify(exactly = 2) { traktApiService.getMovieRecommendations(limit, any(), "full") }
     }
 
     @Test
@@ -279,7 +279,7 @@ class TraktRepositoryTest {
         val old = listOf(TraktMovie(title = "old account"))
         val current = listOf(TraktMovie(title = "current account"))
         var requestCount = 0
-        coEvery { traktApiService.getMovieRecommendations(limit, "full") } coAnswers {
+        coEvery { traktApiService.getMovieRecommendations(limit, any(), "full") } coAnswers {
             if (requestCount++ == 0) {
                 requestStarted.complete(Unit)
                 oldResponse.await()
@@ -296,7 +296,7 @@ class TraktRepositoryTest {
 
         assertThat(oldResult.exceptionOrNull()).isInstanceOf(CancellationException::class.java)
         assertThat(repository.getRecommendations(limit).getOrThrow()).isEqualTo(current)
-        coVerify(exactly = 2) { traktApiService.getMovieRecommendations(limit, "full") }
+        coVerify(exactly = 2) { traktApiService.getMovieRecommendations(limit, any(), "full") }
     }
 
     @Test
