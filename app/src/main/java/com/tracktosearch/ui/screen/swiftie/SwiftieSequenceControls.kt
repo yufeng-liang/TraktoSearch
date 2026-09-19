@@ -78,7 +78,7 @@ private val CAPSULE_INK = Color.White
  * 全屏背景每帧重采样一遍，而这一层待着的正是一段 126s、每帧都在动的背景 —— 那会是整条
  * 序列里最贵的一笔，换来的只是一个几秒就收回去的胶囊。
  *
- * 自动隐藏的计时**不在这里**（`SwiftieEggScreen` 管 3.5s 与 [visible]），
+ * 自动隐藏的计时**不在这里**（`SwiftieEggScreen` 管 2s 与 [visible]），
  * 本函数只负责「给了 [visible] 就正确显示」。
  *
  * @param paused true 时「暂停」变「继续」

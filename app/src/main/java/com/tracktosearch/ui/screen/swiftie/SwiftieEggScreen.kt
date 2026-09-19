@@ -138,10 +138,10 @@ private const val REDUCED_HOLD_MS = 1200L
 /**
  * 浮出控件无操作后自动收起的时长。
  *
- * 3.5s 而不是 3s：这一组是「暂停 / 跳过」两个选项，要读完两个标签再决定，
- * 比单个按钮多半秒才不会刚看清就没了。暂停态下这个计时**不启动**（见调用处）。
+ * 2s 是「看得清、不等人」的档：控件只是按暂停/跳过前的一瞥，再点屏幕随时能叫回来。
+ * 暂停态下这个计时**不启动**（见调用处）—— 藏掉唯一的「继续」等于把人困在定格里。
  */
-private const val CONTROLS_AUTO_HIDE_MS = 3_500L
+private const val CONTROLS_AUTO_HIDE_MS = 2_000L
 
 /**
  * 「跳过」在 T3000 之后才进这组控件 —— 前 3 秒先让惊喜落地，别一上来就劝人走。
@@ -513,7 +513,7 @@ private fun SwiftieEggContent(
         if (previewStartMs != null) clock.seekTo(previewStartMs)
     }
 
-    // 无操作 3.5s 自动收起。**暂停态不收** —— 藏掉唯一的出口等于把人困在定格里
+    // 无操作 2s 自动收起。**暂停态不收** —— 藏掉唯一的出口等于把人困在定格里
     LaunchedEffect(controlsVisible, controlsTick, framePaused) {
         if (!controlsVisible || framePaused) return@LaunchedEffect
         delay(CONTROLS_AUTO_HIDE_MS)
@@ -758,6 +758,11 @@ private fun SwiftieEggContent(
         if (phase == SwiftieSequencePhase.DONE) onDismiss(true)
     }
 
+    // ✕ 只在出题页保留，答对之后退出靠返回手势。这条接住 ✕ 原来的语义：
+    // T1100 之后/静态路径退出都算已通关（兜底提交解锁），出题期的返回仍由外层
+    // BackHandler 接（放弃、不消耗解题机会）—— 本条 enabled 更晚注册，答对后优先生效
+    BackHandler(enabled = quiz.solved) { onDismiss(themeCommitted || staticFinale) }
+
     SwiftieMusic(
         enabled = sequenceRunning && !audioGivenUp,
         paused = framePaused,
@@ -779,24 +784,31 @@ private fun SwiftieEggContent(
     )
 
     /**
-     * 点屏幕任意处**把控件叫出来**（不再是「点一下就暂停」，也不再有「按住暂停」）。
+     * 点屏幕任意处**把控件叫出来**；控件已在屏上时，点在**空白处**把它们收回去。
      *
-     * 走 Initial pass 且**不消费**事件，两个后果都是要的：
-     * 1. ✕、控件本身、时间轴照样点得到 —— 它们在更深的子节点上，Main pass 上先于本节点收到
-     * 2. 拖时间轴也会顺带把控件叫出来。轴的 `awaitFirstDown` 在 Main pass 上，
-     *    我们在 Initial pass 上先看到那一下，所以「拖动定格 → 控件带着『继续』浮出」
-     *    不需要再从轴那边回调一次
+     * 走 Main pass 且不消费事件，两个后果都是要的：
+     * 1. 控件本身、播放头照样点得到 —— 它们在更深的子节点上，Main pass 上先于本节点收到。
+     *    整段手势里只要出现过已消费的事件（点在按钮上、拖过播放头）就不算「再点一下」，
+     *    收起只认从头到尾没被任何子控件碰过的那次点击。
+     * 2. 拖播放头也会顺带把控件叫出来（叫出与收起是两件事：叫出只看按下，收起看整段手势）。
+     *
+     * 必须放在 [consumeStrayTouches] **之后**（更内层）：Main pass 上更内层先看到事件，
+     * 要赶在它把空白触摸吞掉之前读到抬起时的消费状态，否则空白点击和按钮点击无法区分。
      */
-    val revealGesture = if (sequenceRunning) {
+    val controlsTapGesture = if (sequenceRunning) {
         Modifier.pointerInput(Unit) {
             awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Main)
+                val startedVisible = controlsVisible
                 controlsVisible = true
                 controlsTick++
+                var consumedByChild = false
                 var event: PointerEvent
                 do {
-                    event = awaitPointerEvent(PointerEventPass.Initial)
+                    event = awaitPointerEvent(PointerEventPass.Main)
+                    if (event.changes.any { it.isConsumed }) consumedByChild = true
                 } while (event.changes.any { it.pressed })
+                if (startedVisible && !consumedByChild) controlsVisible = false
             }
         }
     } else {
@@ -814,10 +826,10 @@ private fun SwiftieEggContent(
                     SwiftieTimeline.FADE_OUT_MS).coerceIn(0f, 1f)
             }
             .background(MaterialTheme.colorScheme.surface)
-            .then(revealGesture)
             // 全屏页必须自己吞掉落在空白处的触摸，否则会穿到下层 MainScreen 的
             // 悬浮底栏上去 —— 题面阶段点键盘下缘那条带就能把 Pager 切到别的 Tab
             .consumeStrayTouches()
+            .then(controlsTapGesture)
     ) {
         // 最底层：答对那一帧就挂上几乎透明的 mesh，把 AGSL 编译付在确认窗口里。
         // 静态终态不需要预热，也没有扩散
@@ -945,7 +957,8 @@ private fun SwiftieEggContent(
             SwiftieStaticFinale(nickname = nickname)
         }
 
-        // 暂停 / 跳过合并成这一组浮出控件。点屏幕叫出来，无操作 3.5s 收起，暂停态转常驻。
+        // 暂停 / 跳过合并成这一组浮出控件。点屏幕叫出来、再点空白处收起，无操作 2s 自动收，
+        // 暂停态转常驻（自动收不跑，手动收可以）。
         //
         // 「继续」要**同时**清掉 userPaused 与 seekFrozen：拖过播放头之后两者都可能为真，
         // 只清一个的话按下去画面不动，读起来就是按钮坏了。focusPaused 不清 ——
@@ -977,6 +990,9 @@ private fun SwiftieEggContent(
             )
         }
 
+        // ✕ 只在出题页保留（那时序列没开始，没有暂停/跳过可代替退出）；答对之后的播放
+        // 与定格期不再常驻叉号，退出交给返回手势 —— 下面的 BackHandler 接住 ✕ 原来的语义。
+        //
         // T1100 之前按 ✕ 算放弃（不消耗解题机会），之后算已通关。
         // 静态路径里时钟从不推进，themeCommitted 永远是 false，所以要或上 staticFinale
         //
@@ -990,23 +1006,25 @@ private fun SwiftieEggContent(
         //
         // 复用状态栏图标的那个极性量 —— ✕ 就贴在状态栏下面，两者判断的是同一片底色：
         // reputation（顶部 #3A3A3A）与 Midnights（#2A3A6B）这两张深顶的用白，其余用深墨
-        val closeTint = if (barStage?.darkStatusBarIcons != false) {
-            Color(0xFF1F1B18)
-        } else {
-            Color.White
-        }
-        IconButton(
-            onClick = { onDismiss(themeCommitted || staticFinale) },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Close,
-                contentDescription = stringResource(R.string.common_close),
-                tint = closeTint
-            )
+        if (!quiz.solved) {
+            val closeTint = if (barStage?.darkStatusBarIcons != false) {
+                Color(0xFF1F1B18)
+            } else {
+                Color.White
+            }
+            IconButton(
+                onClick = { onDismiss(themeCommitted || staticFinale) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.common_close),
+                    tint = closeTint
+                )
+            }
         }
     }
 }
