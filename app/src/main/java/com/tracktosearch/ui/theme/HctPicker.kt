@@ -27,7 +27,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -257,9 +261,20 @@ private fun HctGradientSlider(
     val thumbCornerRadius = with(density) { 3.dp.toPx() }
     val strokeWidth = with(density) { 1.dp.toPx() }
 
+    // 轨道 Brush 与 thumb 颜色预计算：历史上都在 Canvas 绘制 lambda 内每帧新建
+    // Brush（37 色 gradient 对象）并重跑 HCT 色彩数学，拖动掉帧时全压在 Draw 阶段。
+    // 宽度经 onSizeChanged 缓存，颜色变化（拖 hue/chroma）只在重组期重算一次。
+    var canvasWidthPx by remember { mutableIntStateOf(0) }
+    val trackBrush = remember(gradientColors, canvasWidthPx) {
+        if (canvasWidthPx <= 0) null
+        else Brush.horizontalGradient(gradientColors, 0f, canvasWidthPx.toFloat())
+    }
+    val resolvedThumbColor = remember(value) { thumbColor(value) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .onSizeChanged { canvasWidthPx = it.width }
             .height(48.dp)
             .pointerInput(min, max) {
                 awaitEachGesture {
@@ -291,12 +306,9 @@ private fun HctGradientSlider(
             // FlClash `AppCorner.full` 在 24dp 轨道上等价于半高圆角：左右端头是完整
             // 胶囊，不是近似方角的超椭圆。用 roundRect 才能得到和原版一致的圆润端头。
             val trackRadius = CornerRadius(trackHeight / 2f)
+            val brush = trackBrush ?: return@Canvas
             drawRoundRect(
-                brush = Brush.horizontalGradient(
-                    colors = gradientColors,
-                    startX = rect.left,
-                    endX = rect.right,
-                ),
+                brush = brush,
                 topLeft = rect.topLeft,
                 size = rect.size,
                 cornerRadius = trackRadius,
@@ -319,7 +331,7 @@ private fun HctGradientSlider(
             val left = thumbSize.width / 2f + fraction * usableWidth - thumbSize.width / 2f
             val top = (size.height - thumbSize.height) / 2f
             drawRoundRect(
-                color = thumbColor(value),
+                color = resolvedThumbColor,
                 topLeft = Offset(left, top),
                 size = thumbSize,
                 cornerRadius = CornerRadius(thumbCornerRadius),
