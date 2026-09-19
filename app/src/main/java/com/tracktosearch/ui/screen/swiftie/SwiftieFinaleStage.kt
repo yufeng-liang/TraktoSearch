@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -20,8 +21,15 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.bracelet.BRACELET_SETTLED_MS
@@ -29,24 +37,19 @@ import com.tracktosearch.ui.screen.swiftie.bracelet.SwiftieBracelet
 import com.tracktosearch.ui.screen.swiftie.bracelet.braceletHeightFor
 
 /**
- * 纪念页最下面那句话。
+ * 纪念页最下面那句话（无昵称时的整行回退）。
  *
  * 刻意**不本地化** —— 它是这张纪念品上印的字，不是界面文案；`swiftie_script`
  * （子集化的 Pacifico）也只有这一句和 `Taylor Swift` 的字母，换成中日韩会整行豆腐块。
  * 读屏用户拿不到它，所以另有一份本地化的 `R.string.swiftie_finale_a11y`。
+ *
+ * 有昵称时只把手写体的 `Me` 换成昵称（见 [SwiftieTagline]），「Taylor & 」与句尾
+ * 用到的字形原句里都有，不用重跑子集脚本；昵称那一段走系统字体，不吃子集的限制。
  */
 internal const val FINALE_TAGLINE = "Taylor & Me — forever & always."
 
-/**
- * [FINALE_TAGLINE] 在 `swiftie_script` 里的宽度（em），字号按可用宽度反推。
- *
- * 是**排版后**的宽度：这份子集保留了 GPOS `kern`，字距会收，量 advance 之和会偏大。
- * 改这句话就要重量一次（`scripts/fetch-swiftie-fonts.sh` 那行子集字符集也要同步）。
- */
-private const val TAGLINE_EM = 14.53f
-
 /** 字号上限，**dp 当量**（见 [SwiftieTagline] 里为什么不是 sp）。 */
-private val TAGLINE_MAX_SIZE = 18.dp
+private val TAGLINE_MAX_SIZE = 22.dp
 
 /** 两侧至少留出的空。 */
 private val TAGLINE_SIDE_ROOM = 32.dp
@@ -114,6 +117,7 @@ fun SwiftieFinaleStage(
         Spacer(modifier = Modifier.height(TAGLINE_GAP))
 
         SwiftieTagline(
+            nickname = nickname,
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
@@ -143,19 +147,39 @@ internal fun finaleSemantics(nickname: String?): Modifier {
 /**
  * 那句手写体文案。
  *
- * 字号按可用宽度反推，并且**换算成不随系统字号缩放的 sp**：这是一句装饰性的单行手写体，
- * 跟着字号放大只会被裁掉半句 —— 内容由 `contentDescription` 负责，读屏用户不吃这个亏。
+ * 有昵称时把手写体的 `Me` 换成昵称：昵称是动态内容，子集字体里没有它的字形
+ * （见 [SwiftieFonts.Script]），那一段换**系统字体加粗** —— 手链珠子上的昵称也是
+ * 系统字体画的，两处一致；「Taylor & 」与句尾仍走 Pacifico。昵称取不到就整行
+ * 回退 [FINALE_TAGLINE] 原句。
+ *
+ * 字号用 [rememberTextMeasurer] 按可用宽度反推（字号与排版宽成正比，量一次等比缩放），
+ * 并且**换算成不随系统字号缩放的 sp**：这是一句装饰性的单行手写体，跟着字号放大只会
+ * 被裁掉半句 —— 内容由 `contentDescription` 负责，读屏用户不吃这个亏。
  */
 @Composable
-internal fun SwiftieTagline(modifier: Modifier = Modifier) {
+internal fun SwiftieTagline(nickname: String?, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val tagline = taglineAnnotated(nickname)
     BoxWithConstraints(modifier = modifier) {
-        val fitted = minOf(TAGLINE_MAX_SIZE, (maxWidth - TAGLINE_SIDE_ROOM) / TAGLINE_EM)
+        // 上限 dp 换成 sp 当量（原文件约定，不随系统字号缩放的排版基准）
+        val reference = with(density) { TAGLINE_MAX_SIZE.toSp() }
+        val measuredPx = remember(tagline, reference) {
+            textMeasurer.measure(tagline, TextStyle(fontSize = reference)).size.width
+        }
+        val availablePx = with(density) { (maxWidth - TAGLINE_SIDE_ROOM).toPx() }
+        // 排版宽比可用宽窄时字号封在上限；放不下时按比例收到刚好放满
+        val fontSize = if (measuredPx > 0) {
+            val referencePx = with(density) { reference.toPx() }
+            with(density) { (referencePx * (availablePx / measuredPx)).coerceAtMost(referencePx).toSp() }
+        } else {
+            reference
+        }
         Text(
-            text = FINALE_TAGLINE,
+            text = tagline,
             style = TextStyle(
                 fontFamily = SwiftieFonts.Script,
-                fontSize = with(density) { fitted.toSp() },
+                fontSize = fontSize,
                 color = SwiftiePalette.RoyalBlue,
                 textAlign = TextAlign.Center
             ),
@@ -164,3 +188,17 @@ internal fun SwiftieTagline(modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** 有昵称：「Taylor & 昵称 — forever & always.」；没有：整行原句。 */
+private fun taglineAnnotated(nickname: String?): AnnotatedString =
+    if (nickname.isNullOrBlank()) {
+        AnnotatedString(FINALE_TAGLINE)
+    } else {
+        buildAnnotatedString {
+            append("Taylor & ")
+            withStyle(SpanStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold)) {
+                append(nickname.trim())
+            }
+            append(" — forever & always.")
+        }
+    }

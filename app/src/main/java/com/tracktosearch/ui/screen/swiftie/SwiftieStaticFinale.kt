@@ -87,7 +87,7 @@ fun SwiftieStaticFinale(nickname: String?, modifier: Modifier = Modifier) {
                     )
                 }
 
-                SwiftieTagline(modifier = Modifier.fillMaxWidth())
+                SwiftieTagline(nickname = nickname, modifier = Modifier.fillMaxWidth())
             }
 
             Spacer(modifier = Modifier.height(4.dp))
