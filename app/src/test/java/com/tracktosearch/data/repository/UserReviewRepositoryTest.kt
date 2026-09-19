@@ -45,19 +45,19 @@ class UserReviewRepositoryTest {
     @Test
     fun getReview_exists_returnsEntity() = runTest {
         val entity = sampleEntity(traktId = 1L)
-        coEvery { dao.getByTraktId(1L) } returns entity
+        coEvery { dao.getByKey(1L, "movie") } returns entity
 
-        val result = repo.getReview(1L)
+        val result = repo.getReview(1L, "movie")
 
         assertThat(result).isEqualTo(entity)
-        coVerify { dao.getByTraktId(1L) }
+        coVerify { dao.getByKey(1L, "movie") }
     }
 
     @Test
     fun getReview_notExists_returnsNull() = runTest {
-        coEvery { dao.getByTraktId(99L) } returns null
+        coEvery { dao.getByKey(99L, "movie") } returns null
 
-        val result = repo.getReview(99L)
+        val result = repo.getReview(99L, "movie")
 
         assertThat(result).isNull()
     }
@@ -143,15 +143,15 @@ class UserReviewRepositoryTest {
 
     @Test
     fun deleteReview_callsDaoDeleteByTraktId() = runTest {
-        repo.deleteReview(1L)
+        repo.deleteReview(1L, "movie")
 
-        coVerify { dao.deleteByTraktId(1L) }
+        coVerify { dao.deleteByKey(1L, "movie") }
     }
 
     @Test
     fun deleteReview_nonExistentId_doesNotThrow() = runTest {
         // relaxed mock 的 deleteByTraktId 默认返回 Unit，不会抛异常
         // 验证不存在的 id 也能安全调用
-        repo.deleteReview(999L)
+        repo.deleteReview(999L, "movie")
     }
 }

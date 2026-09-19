@@ -214,7 +214,7 @@ class DetailViewModelTest {
         )
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { userReviewRepository.getReview(any()) }
+        coVerify(exactly = 0) { userReviewRepository.getReview(any(), any()) }
         coVerify(exactly = 0) { traktRepository.getUserRating(any(), any()) }
     }
 

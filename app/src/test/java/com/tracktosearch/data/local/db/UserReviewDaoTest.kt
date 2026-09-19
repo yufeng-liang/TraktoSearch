@@ -15,7 +15,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// application 用系统空 Application：默认会起真 TraktSearchApp，Hilt 成员注入
+// traktRepository 时直接解析 AppDatabase，SQLCipher loadLibs 在 JVM 无 native 库必炸。
+// 本文件只测 Room schema/迁移 SQL，不需要 Hilt 图。
+@Config(sdk = [33], application = android.app.Application::class)
 class UserReviewDaoTest {
 
     private lateinit var db: AppDatabase
@@ -59,7 +62,7 @@ class UserReviewDaoTest {
     @Test
     fun upsert_新增_可查到() = runTest {
         dao.upsert(sample(traktId = 1L, title = "电影A"))
-        val result = dao.getByTraktId(1L)
+        val result = dao.getByKey(1L, "movie")
         assertThat(result).isNotNull()
         assertThat(result!!.title).isEqualTo("电影A")
     }
@@ -68,7 +71,7 @@ class UserReviewDaoTest {
     fun upsert_已有记录_覆盖更新() = runTest {
         dao.upsert(sample(traktId = 1L, rating = 7f, comment = "旧评"))
         dao.upsert(sample(traktId = 1L, rating = 9f, comment = "新评"))
-        val result = dao.getByTraktId(1L)
+        val result = dao.getByKey(1L, "movie")
         assertThat(result!!.rating).isEqualTo(9f)
         assertThat(result.comment).isEqualTo("新评")
     }
@@ -80,7 +83,7 @@ class UserReviewDaoTest {
             commentCheckedAt = 1_700_000_000_000L
         ))
 
-        val result = dao.getByTraktId(1L)
+        val result = dao.getByKey(1L, "movie")
 
         assertThat(result!!.traktCommentId).isEqualTo(12345)
         assertThat(result.commentCheckedAt).isEqualTo(1_700_000_000_000L)
@@ -192,9 +195,23 @@ class UserReviewDaoTest {
             sample(traktId = 2L),
             sample(traktId = 3L)
         ))
-        dao.deleteByTraktId(2L)
+        dao.deleteByKey(2L, "movie")
         assertThat(dao.getAll()).hasSize(2)
-        assertThat(dao.getByTraktId(2L)).isNull()
+        assertThat(dao.getByKey(2L, "movie")).isNull()
+    }
+
+    @Test
+    fun 同号跨分类_互不覆盖() = runTest {
+        // §5 防回归：电影/剧集 traktId 分属不同命名空间可能同号，
+        // 复合主键 (traktId, mediaType) 下两边必须各自成行
+        dao.upsert(sample(traktId = 1L, mediaType = "movie", title = "电影A", rating = 8f))
+        dao.upsert(sample(traktId = 1L, mediaType = "show", title = "剧集A", rating = 5f))
+        assertThat(dao.getByKey(1L, "movie")!!.rating).isEqualTo(8f)
+        assertThat(dao.getByKey(1L, "show")!!.rating).isEqualTo(5f)
+        dao.upsert(sample(traktId = 1L, mediaType = "movie", title = "电影A新", rating = 9f))
+        assertThat(dao.getByKey(1L, "movie")!!.rating).isEqualTo(9f)
+        assertThat(dao.getByKey(1L, "show")!!.rating).isEqualTo(5f)
+        assertThat(dao.getAll()).hasSize(2)
     }
 
     @Test
@@ -216,7 +233,7 @@ class UserReviewDaoTest {
             rating = null, comment = null,
             liked = null, createdAt = null, updatedAt = null
         ))
-        val result = dao.getByTraktId(1L)
+        val result = dao.getByKey(1L, "movie")
         assertThat(result).isNotNull()
         assertThat(result!!.tmdbId).isNull()
         assertThat(result.imdbId).isNull()

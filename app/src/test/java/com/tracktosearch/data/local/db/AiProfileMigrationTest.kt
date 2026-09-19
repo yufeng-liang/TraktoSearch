@@ -13,7 +13,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// application 用系统空 Application：默认会起真 TraktSearchApp，Hilt 成员注入
+// traktRepository 时直接解析 AppDatabase，SQLCipher loadLibs 在 JVM 无 native 库必炸。
+// 本文件只测 Room schema/迁移 SQL，不需要 Hilt 图。
+@Config(sdk = [33], application = android.app.Application::class)
 class AiProfileMigrationTest {
 
     private var helper: SupportSQLiteOpenHelper? = null
