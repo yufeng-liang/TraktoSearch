@@ -556,7 +556,7 @@
     <string name="settings_haptic_light">Light</string>
     <string name="settings_haptic_boost">Strong</string>
     <string name="settings_haptic_follow_system_desc">Normal app haptics, at the strength set in your system settings.</string>
-    <string name="settings_haptic_off_desc">No vibration anywhere in the app, including the easter egg.</string>
+    <string name="settings_haptic_off_desc">No vibration anywhere in the app.</string>
     <string name="settings_haptic_light_desc">All haptics one step lighter, for when vibrations feel too strong.</string>
     <string name="settings_haptic_boost_desc">All haptics one step heavier, still limited by the system haptic switch.</string>
     <string name="settings_haptic_system_disabled">System haptics are off, so the app cannot vibrate.</string>
