@@ -67,7 +67,7 @@
 
     <!-- Search Screen -->
     <string name="search_title">검색</string>
-    <string name="hot_search">인기 검색</string>
+    <string name="hot_search">추천 검색</string>
     <string name="search_back">뒤로</string>
     <string name="search_placeholder">영화 제목을 입력하여 클라우드 리소스 검색</string>
     <string name="search_placeholder_movie">영화 제목을 입력하여 영화 검색</string>
