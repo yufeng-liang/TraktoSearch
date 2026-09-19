@@ -6,7 +6,6 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.db.NotificationRecordDao
-import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -29,7 +28,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
     private val traktRepository: TraktRepository,
-    private val tmdbApiService: TmdbApiService,
+    private val tmdbRepository: com.tracktosearch.data.repository.TmdbRepository,
     private val notificationStorage: NotificationStorage,
     private val notificationRecordDao: NotificationRecordDao,
     private val notificationHelper: NotificationHelper
@@ -118,9 +117,10 @@ class ReleaseCheckWorker @AssistedInject constructor(
                 val traktId = item.movie.ids.trakt
                 async {
                     try {
-                        val response = apiSemaphore.withPermit { tmdbApiService.getMovieDetail(tmdbId) }
-                        if (!response.isSuccessful) return@async
-                        val detail = response.body() ?: return@async
+                        // 走 TmdbRepository 的持久缓存：想看列表的详情早已被详情页拉过，
+                        // 绝大多数条目零网络请求（旧实现直连接口每 12h 全量重打）
+                        val detail = apiSemaphore.withPermit { tmdbRepository.getMovieDetail(tmdbId) }
+                            ?: return@async
                         val releaseDateStr = detail.release_date.takeIf { it.isNotBlank() } ?: return@async
 
                         val releaseDate = try {
@@ -176,9 +176,9 @@ class ReleaseCheckWorker @AssistedInject constructor(
                 val traktId = item.show.ids.trakt
                 async {
                     try {
-                        val response = apiSemaphore.withPermit { tmdbApiService.getTvDetail(tmdbId) }
-                        if (!response.isSuccessful) return@async
-                        val detail = response.body() ?: return@async
+                        // 同电影：走持久缓存，命中零网络
+                        val detail = apiSemaphore.withPermit { tmdbRepository.getTvDetail(tmdbId) }
+                            ?: return@async
                         val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: return@async
 
                         val airDate = try {
@@ -243,10 +243,10 @@ class ReleaseCheckWorker @AssistedInject constructor(
 
                         // 取 TMDB 本土化剧名（接口默认 language=zh-CN），失败降级 Trakt 原标题
                         val localizedTitle = if (tmdbId != null && tmdbId > 0) {
-                            val tvResp = runCatching {
-                                apiSemaphore.withPermit { tmdbApiService.getTvDetail(tmdbId) }
+                            val tvDetail = runCatching {
+                                apiSemaphore.withPermit { tmdbRepository.getTvDetail(tmdbId) }
                             }.getOrNull()
-                            resolveLocalizedTitle(tvResp?.body()?.name ?: "", item.show.title)
+                            resolveLocalizedTitle(tvDetail?.name ?: "", item.show.title)
                         } else {
                             item.show.title
                         }
