@@ -98,7 +98,7 @@ import com.tracktosearch.ui.screen.messages.MessagesScreen
 import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
 import com.tracktosearch.ui.screen.douban.DoubanSpiderTestScreen
-import com.tracktosearch.ui.screen.pilot.GlassEnginePilotScreen
+import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.searchsource.EditorMode
 import com.tracktosearch.ui.screen.searchsource.ImportSourceDialog
 import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorScreen
@@ -188,7 +188,6 @@ object Routes {
     const val DOUBAN_LOGIN = "doubanLogin"
     const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
     const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
-    const val GLASS_PILOT = "glassPilot"
     const val MARK_RECORDS = "markRecords"
     const val FEEDBACK = "feedback"
     const val FEEDBACK_DETAIL = "feedbackDetail/{feedbackId}?replyId={replyId}"
@@ -238,7 +237,6 @@ object Routes {
         "messages",
         "searchSources",
         "searchSourceEditor",
-        "glassPilot",
     )
 
     /** 取 route 的首个路径段，用于与 [ContainerMorphRouteIds] 比对。 */
@@ -1063,12 +1061,6 @@ fun AppNavigation(
                                         navController.navigate(Routes.DOUBAN_SPIDER_TEST)
                                     }
                                 },
-                                onGlassPilot = {
-                                    // 仅 DEBUG 构建允许进入玻璃引擎试点页
-                                    if (BuildConfig.DEBUG) {
-                                        navController.navigate(Routes.GLASS_PILOT)
-                                    }
-                                },
                                 onFeedbackClick = {
                                     navController.navigate(Routes.FEEDBACK)
                                 },
@@ -1520,17 +1512,6 @@ fun AppNavigation(
                     composable(Routes.DOUBAN_SPIDER_TEST) {
                         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                             DoubanSpiderTestScreen(
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                    }
-                }
-
-                // 玻璃引擎试点页(对比 haze / backdrop)仅在 DEBUG 构建注册
-                if (BuildConfig.DEBUG) {
-                    composable(Routes.GLASS_PILOT) {
-                        CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                            GlassEnginePilotScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }

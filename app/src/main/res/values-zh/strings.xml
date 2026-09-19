@@ -2078,8 +2078,6 @@
     <string name="settings_notification_requires_trakt">需要连接 Trakt 账号才能使用，通知基于 Trakt 想看列表推送。</string>
     <string name="settings_custom_section_subtitle_discover">选择发现页显示哪些榜单及顺序</string>
     <string name="settings_custom_section_subtitle_detail">选择详情页显示哪些区块及顺序</string>
-    <string name="settings_developer_section">开发者选项</string>
-    <string name="settings_glass_pilot_entry">玻璃引擎试点（对比 haze / backdrop）</string>
     <string name="settings_image_traffic_reset_confirm">重置图片流量统计？</string>
     <string name="settings_image_traffic_reset_impact">今日与累计字节数归零，已缓存的图片不会被删除。</string>
     <string name="snackbar_image_traffic_reset">图片流量统计已重置</string>

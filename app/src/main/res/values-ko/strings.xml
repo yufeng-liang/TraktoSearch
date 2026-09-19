@@ -2090,8 +2090,6 @@
     <string name="settings_notification_requires_trakt">Trakt 계정 연결이 필요합니다. 알림은 Trakt 보고 싶은 목록을 기준으로 전송됩니다.</string>
     <string name="settings_custom_section_subtitle_discover">탐색 페이지에 표시할 목록과 순서를 고릅니다</string>
     <string name="settings_custom_section_subtitle_detail">상세 페이지에 표시할 블록과 순서를 고릅니다</string>
-    <string name="settings_developer_section">개발자 옵션</string>
-    <string name="settings_glass_pilot_entry">글래스 엔진 시험 (haze / backdrop 비교)</string>
     <string name="settings_image_traffic_reset_confirm">이미지 트래픽 통계를 초기화할까요?</string>
     <string name="settings_image_traffic_reset_impact">오늘과 누적 바이트가 0으로 돌아갑니다. 캐시된 이미지는 삭제되지 않습니다.</string>
     <string name="snackbar_image_traffic_reset">이미지 트래픽 통계를 초기화했습니다</string>

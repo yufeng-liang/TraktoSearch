@@ -226,7 +226,6 @@ fun SettingsScreen(
     onMarkRecordsClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
     onMessagesClick: () -> Unit = {},
-    onGlassPilot: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
     onPrivacyClick: () -> Unit = {},
     onSplashQuoteClick: () -> Unit = {},
@@ -603,37 +602,6 @@ fun SettingsScreen(
                     onHapticClick = { showHapticDialog = true },
                     onSplashQuoteClick = onSplashQuoteClick
                 )
-            }
-
-            // 开发者选项（仅 DEBUG）：与正式条目分组隔开，文案也走资源不再硬编码中文
-            if (BuildConfig.DEBUG) {
-                item(key = "group_developer") {
-                    SettingsGroupCard(
-                        title = stringResource(R.string.settings_developer_section),
-                        hazeState = settingsHazeState
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                // 与其他分组入口行同档：次级入口取轻一档
-                                .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onGlassPilot() }
-                                .padding(horizontal = 14.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_glass_pilot_entry),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
             }
 
             // 搜索源（独立管理页入口，与标记记录入口卡片同构）

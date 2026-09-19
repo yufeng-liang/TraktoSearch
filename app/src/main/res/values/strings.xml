@@ -2085,8 +2085,6 @@ Config:
     <string name="settings_notification_requires_trakt">Connect a Trakt account to use reminders — they are pushed from your Trakt watchlist.</string>
     <string name="settings_custom_section_subtitle_discover">Pick which lists show up on Discover and their order</string>
     <string name="settings_custom_section_subtitle_detail">Pick which blocks show up on a title page and their order</string>
-    <string name="settings_developer_section">Developer options</string>
-    <string name="settings_glass_pilot_entry">Glass engine pilot (compare haze / backdrop)</string>
     <string name="settings_image_traffic_reset_confirm">Reset image traffic stats?</string>
     <string name="settings_image_traffic_reset_impact">Today and total byte counters go back to zero. Cached images are not deleted.</string>
     <string name="snackbar_image_traffic_reset">Image traffic stats reset</string>

@@ -2090,8 +2090,6 @@
     <string name="settings_notification_requires_trakt">Trakt アカウントの接続が必要です。通知は Trakt の見たいリストを基に配信されます。</string>
     <string name="settings_custom_section_subtitle_discover">見つけるページに表示するランキングと並び順を選びます</string>
     <string name="settings_custom_section_subtitle_detail">詳細ページに表示するブロックと並び順を選びます</string>
-    <string name="settings_developer_section">開発者向けオプション</string>
-    <string name="settings_glass_pilot_entry">ガラスエンジンの試験（haze / backdrop の比較）</string>
     <string name="settings_image_traffic_reset_confirm">画像通信量の統計をリセットしますか？</string>
     <string name="settings_image_traffic_reset_impact">本日と累計のバイト数が 0 に戻ります。キャッシュ済みの画像は削除されません。</string>
     <string name="snackbar_image_traffic_reset">画像通信量の統計をリセットしました</string>
