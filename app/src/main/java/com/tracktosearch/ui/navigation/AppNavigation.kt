@@ -133,6 +133,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -682,9 +683,14 @@ fun AppNavigation(
 
     // 监听通知深链路导航指令（上映/新季通知点击后跳转详情页）
     // 直接读 StateFlow.value 避免 Compose 状态捕获问题
+    // 合并 authState 作为触发条件：冷启动时 handleIntent 先写 pendingNavigation、
+    // 授权校验后完成，若只 collect pendingNavigation，未授权时跳过会把值永久滞留
+    // （StateFlow 不重发）——用户点通知毫无反应。combine 后授权就绪会带着滞留目标重发
     LaunchedEffect(Unit) {
-        DeepLinkNavigator.pendingNavigation.collect { target ->
-            if (target != null && (authStateHolder.authState.value == AuthState.AUTHORIZED || authStateHolder.authState.value == AuthState.OFFLINE)) {
+        DeepLinkNavigator.pendingNavigation.combine(authStateHolder.authState) { target, authState ->
+            target to authState
+        }.collect { (target, authState) ->
+            if (target != null && (authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE)) {
                 navController.navigate(
                     Routes.detailRoute(target.type, target.traktId, target.tmdbId, target.title)
                 )
