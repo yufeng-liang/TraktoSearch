@@ -72,7 +72,7 @@ test('direct public request issues an invitation without email verification', as
         assert.equal(payload.data.inviteCode, undefined);
         const body = JSON.parse(emailBody.init.body);
         assert.match(body.subject, /取票码已送达/);
-        assert.match(body.htmlContent, /INVITATION CODE/);
+        assert.match(body.htmlContent, /TICKET CODE/);
         assert.doesNotMatch(body.htmlContent, /invite\/verify/);
     } finally {
         globalThis.fetch = originalFetch;
@@ -222,7 +222,7 @@ test('public resend atomically revokes the old code and creates a new code', asy
         assert.match(batches[0][3].sql, /PUBLIC_INVITE_RESEND/);
         const body = JSON.parse(emailBody.init.body);
         assert.equal(body.to[0].email, 'user@example.com');
-        assert.match(body.htmlContent, /INVITATION CODE/);
+        assert.match(body.htmlContent, /TICKET CODE/);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -411,7 +411,7 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
 
     assert.match(email.html, /ABCD2345EFGH/);
     assert.match(email.html, /text-align:center/);
-    const labelIndex = email.html.indexOf('INVITATION CODE');
+    const labelIndex = email.html.indexOf('TICKET CODE');
     const cardIndex = email.html.indexOf('background:#E9E2D4');
     assert.ok(labelIndex >= 0 && labelIndex < cardIndex);
     assert.match(email.html, /欢迎加入 TraktoSearch！/);

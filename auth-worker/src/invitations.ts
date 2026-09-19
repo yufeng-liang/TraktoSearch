@@ -89,6 +89,7 @@ export async function handleInviteRequest(
 
     const currentTime = now();
     const requestIdValue = generateId();
+    // verification_token_hash 仅为兼容既有表结构的簿记写入：验证邮件流程已下线，明文 token 即弃，不存在对应链接。
     const verificationTokenHash = await sha256(generateSecureToken(32));
     const expiresAt = currentTime + VERIFICATION_TTL_SECONDS;
 
@@ -509,7 +510,7 @@ export function buildInvitationEmail(input: {
             <p style="margin:0 0 18px;color:#6D685F;">你好，${name}：</p>
             <h1 style="margin:0 0 16px;font:600 30px/1.15 Georgia,serif;color:#1D1C19;">欢迎加入 TraktoSearch！</h1>
             <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。</p>
-            <div style="margin:0 0 8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-align:center;text-transform:uppercase;">INVITATION CODE</div>
+            <div style="margin:0 0 8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-align:center;text-transform:uppercase;">TICKET CODE</div>
             <div style="margin:0 0 12px;padding:18px 20px;background:#E9E2D4;border-left:4px solid #D95532;text-align:center;">
                 <div style="font:700 24px/1.2 'Courier New',monospace;letter-spacing:.12em;color:#1D1C19;">${code}</div>
             </div>
