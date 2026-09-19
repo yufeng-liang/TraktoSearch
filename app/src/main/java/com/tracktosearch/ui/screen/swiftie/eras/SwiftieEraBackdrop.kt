@@ -141,16 +141,22 @@ private class BackdropShapes(lowRam: Boolean) {
     }
 
     /**
-     * 1989 宝丽来：x, y, 旋转（度）三元组。挂在上半屏，不压卡片。
+     * 1989 宝丽来：x, y, 旋转（度）三元组，**固定策展位**。挂在上半屏，不压卡片。
      *
-     * y 从 0.085h 起：麻线在 0.058h（状态栏以下），原来 0.04h 起的那一档会让
-     * 半数照片吊到线的**上面**去。
+     * 原来是种子随机的四档（seed 1014，按 JVM 的实现算出来的实际落点全挤在 0.65~0.81w、
+     * 相邻间距 0.06~0.09w —— 白框时代叠着还能读作一摞照片）；照面换成真实照片
+     * （从左到右对应 `era_1989_hang_1..4`）并整体放大 20%（框宽 0.14w→0.168w）之后，
+     * 位置必须策展：横向等距、间距 0.23w 大于框宽，y 与旋转交错出「随手挂」的节奏。
+     * 数组顺序 = 从左到右 = 素材序号，低配砍掉右侧两张。
      */
-    val polaroids: FloatArray = buildTriples(if (lowRam) 2 else 4, 1014) { random ->
+    val polaroids: FloatArray = if (lowRam) {
+        floatArrayOf(0.155f, 0.100f, -7f, 0.385f, 0.150f, 5f)
+    } else {
         floatArrayOf(
-            0.08f + random.nextFloat() * 0.80f,
-            0.085f + random.nextFloat() * 0.145f,
-            -14f + random.nextFloat() * 28f
+            0.155f, 0.100f, -7f,
+            0.385f, 0.150f, 5f,
+            0.615f, 0.095f, -4f,
+            0.845f, 0.175f, 8f
         )
     }
 
@@ -267,6 +273,16 @@ fun SwiftieEraBackdropLayer(
     // 换张淡变时两张舞台同时要画，所以放在这里、两边共用同一份
     val typewriter = ImageBitmap.imageResource(R.drawable.era_ttpd_typewriter)
     val stubLines = rememberTypewriterStubLines()
+    // 1989 那四张挂着的拍立得的照面（数组顺序 = 从左到右）。与打字机同一门控：
+    // 位图是**页面级**的，imageResource 只能在组合阶段调（它内部自带缓存，
+    // 不能塞进 remember 的计算 lambda —— 那不是 composable 上下文）；
+    // 四张小 JPEG（约 50KB/张）无条件解，换来 draw 阶段零资源访问
+    val hangPhotos = listOf(
+        ImageBitmap.imageResource(R.drawable.era_1989_hang_1),
+        ImageBitmap.imageResource(R.drawable.era_1989_hang_2),
+        ImageBitmap.imageResource(R.drawable.era_1989_hang_3),
+        ImageBitmap.imageResource(R.drawable.era_1989_hang_4)
+    )
     Spacer(
         modifier = modifier.fillMaxSize().drawBehind {
             val from = outgoing().coerceIn(0, skies.lastIndex)
@@ -279,18 +295,18 @@ fun SwiftieEraBackdropLayer(
             if (mix <= 0f || from == to) {
                 drawStage(
                     from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam,
-                    maple, typewriter, stubLines, houseFade
+                    maple, typewriter, stubLines, hangPhotos, houseFade
                 )
             } else {
                 drawStage(
                     from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam,
-                    maple, typewriter, stubLines, houseFade
+                    maple, typewriter, stubLines, hangPhotos, houseFade
                 )
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
                 drawStage(
                     to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam,
-                    maple, typewriter, stubLines, houseFade
+                    maple, typewriter, stubLines, hangPhotos, houseFade
                 )
             }
         }
@@ -353,6 +369,7 @@ private fun DrawScope.drawStage(
     maple: MapleArt,
     typewriter: ImageBitmap?,
     stubLines: List<TextLayoutResult>,
+    hangPhotos: List<ImageBitmap>,
     houseFade: Float
 ) {
     if (alpha <= 0.01f) return
@@ -368,7 +385,7 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(top, mid, deep, phase, alpha, shapes.knit, maple)
         SwiftieEraBackdrop.SKYLINE_POLAROIDS ->
-            drawSkylinePolaroids(path, top, mid, deep, phase, alpha, shapes)
+            drawSkylinePolaroids(path, top, mid, deep, phase, alpha, shapes, hangPhotos)
         SwiftieEraBackdrop.HALFTONE_THRONE ->
             drawHalftoneThrone(path, top, phase, alpha, eraMs, shapes)
         SwiftieEraBackdrop.PASTEL_RAINBOW_HOUSE ->
@@ -1956,7 +1973,9 @@ private fun DrawScope.drawKnitMaples(maple: MapleArt, mid: Color, deep: Color, a
  * 纽约天际线 + 海岸线 + 挂着的宝丽来。
  *
  * *Welcome To New York* 与那组宝丽来是 1989 的全部视觉。天际线楼群不排序，
- * 互相遮挡才有纵深；宝丽来只画白边与灰底，**不画内容** —— 画了就是在画封面。
+ * 互相遮挡才有纵深；宝丽来白框里画**真实照片**（[hangPhotos]，从左到右对应
+ * `era_1989_hang_1..4`，2026-09-19 需求方点名）—— 白框时代「不画内容」的口径是
+ * 「画了就是在画封面」，现在画的是时代素材，不是封面本身。
  */
 private fun DrawScope.drawSkylinePolaroids(
     path: Path,
@@ -1965,7 +1984,8 @@ private fun DrawScope.drawSkylinePolaroids(
     deep: Color,
     phase: Float,
     alpha: Float,
-    shapes: BackdropShapes
+    shapes: BackdropShapes,
+    hangPhotos: List<ImageBitmap>
 ) {
     val w = size.width
     val h = size.height
@@ -2059,7 +2079,9 @@ private fun DrawScope.drawSkylinePolaroids(
         style = Stroke(width = (h * 0.0012f).coerceAtLeast(1f))
     )
     val polaroids = shapes.polaroids
-    val frameW = w * 0.14f
+    // 0.14 × 1.2：2026-09-19 需求方「四个拍立得整体放大 20%」。位置表（见
+    // [BackdropShapes.polaroids]）已按这个框宽策展，横向间距仍大于框宽不重叠
+    val frameW = w * 0.168f
     for (i in 0 until polaroids.size / 3) {
         val px = polaroids[i * 3] * w
         val py = polaroids[i * 3 + 1] * h
@@ -2086,25 +2108,63 @@ private fun DrawScope.drawSkylinePolaroids(
         val sway = sin((phase + i * 0.31f) * TAU) * 1.5f
         rotate(degrees = polaroids[i * 3 + 2] + sway, pivot = Offset(px, py)) {
             val frameH = frameW * 1.20f
+            // 白框提到 0.92：照面带了真实照片之后，框还 0.72 透底就会「照片实、纸虚」，
+            // 读作图层错位。0.92 与 Red 针织枫叶那批「这一张的主体」同档
             drawRect(
                 color = PAPER_WHITE,
                 topLeft = Offset(px - frameW / 2f, py),
                 size = Size(frameW, frameH),
-                alpha = alpha * 0.72f
+                alpha = alpha * 0.92f
             )
             // 相纸的成像区：上下左右不等宽，下边最宽 —— 这是宝丽来最好认的比例
-            drawRect(
-                color = deep,
-                topLeft = Offset(px - frameW / 2f + frameW * 0.075f, py + frameW * 0.075f),
-                size = Size(frameW * 0.85f, frameW * 0.85f),
-                alpha = alpha * 0.30f
-            )
+            val photoL = frameW * 0.075f
+            val photoT = frameW * 0.075f
+            val photoS = frameW * 0.85f
+            val photo = hangPhotos.getOrNull(i)
+            if (photo != null) {
+                // cover 铺满成像区：素材统一裁成方图、窗口也是方，只剩像素级重采样；
+                // 位图跟着整个 rotate 走，摆动不用另算
+                val scale = maxOf(photoS / photo.width, photoS / photo.height)
+                val srcW = (photoS / scale).roundToInt().coerceAtMost(photo.width)
+                val srcH = (photoS / scale).roundToInt().coerceAtMost(photo.height)
+                drawImage(
+                    image = photo,
+                    srcOffset = IntOffset((photo.width - srcW) / 2, (photo.height - srcH) / 2),
+                    srcSize = IntSize(srcW, srcH),
+                    dstOffset = IntOffset(
+                        (px - frameW / 2f + photoL).roundToInt(),
+                        (py + photoT).roundToInt()
+                    ),
+                    dstSize = IntSize(photoS.roundToInt(), photoS.roundToInt()),
+                    // 显影遮罩与卡片上那个拍立得同一档（0.35 × 2.2 ≈ 0.77）。两张
+                    // PROP_ALPHA 是各自文件的私有常量（Backdrop 0.34 / Motifs 0.35），
+                    // 不便直接引用，这里落 0.77 对齐卡片观感
+                    alpha = (alpha * HANG_PHOTO_MASK).coerceAtMost(1f),
+                    filterQuality = FilterQuality.High
+                )
+            } else {
+                // 兜底（资源缺失才走）：原来的灰底。真机永远走不到这张
+                drawRect(
+                    color = deep,
+                    topLeft = Offset(px - frameW / 2f + photoL, py + photoT),
+                    size = Size(photoS, photoS),
+                    alpha = alpha * 0.30f
+                )
+            }
         }
     }
     drawFogBand(0.58f, 0.10f, top, alpha * DISTANT_ALPHA * 1.5f)
 }
 
 private const val WAVE_SAMPLES = 28
+
+/**
+ * 挂着的四张拍立得照面的显影遮罩：0.77，与卡片母题那个拍立得的照面同一档
+ * （SwiftieEraMotifs 的 `PROP_ALPHA 0.35 × POLAROID_PHOTO_GAIN 2.2`）。
+ * 两个 PROP_ALPHA 各自是文件私有（Backdrop 0.34 / Motifs 0.35），不便跨文件引用，
+ * 这里直接落同一观感档；要改显影浓淡时两边要一起看。
+ */
+private const val HANG_PHOTO_MASK = 0.77f
 
 // ─────────────────────── 6 · reputation ───────────────────────
 
