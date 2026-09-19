@@ -2078,8 +2078,6 @@ Config:
     <string name="filter_region_tw">Taiwan, China</string>
     <string name="settings_logout_confirm_impact">Watchlist, watched history and ratings stop syncing until you sign in again. Locally cached data is kept.</string>
     <string name="settings_notification_requires_trakt">Connect a Trakt account to use reminders — they are pushed from your Trakt watchlist.</string>
-    <string name="settings_custom_section_subtitle_discover">Pick which lists show up on Discover and their order</string>
-    <string name="settings_custom_section_subtitle_detail">Pick which blocks show up on a title page and their order</string>
     <string name="common_load_more_loading">Loading more…</string>
     <string name="common_load_more_failed">Failed to load more. Tap to retry</string>
     <string name="common_load_more_complete">Everything is loaded</string>

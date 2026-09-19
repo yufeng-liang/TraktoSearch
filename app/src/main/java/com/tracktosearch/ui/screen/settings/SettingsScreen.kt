@@ -648,12 +648,10 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // 原来只写「发现页」「详情页」，不说能自定义什么
                         SettingsCard(
                             modifier = Modifier.weight(1f),
                             icon = Icons.Rounded.Explore,
                             title = stringResource(R.string.settings_discover_page),
-                            subtitle = stringResource(R.string.settings_custom_section_subtitle_discover),
                             onClick = { showDiscoverSectionsDialog = true },
                             containerColor = Color.Transparent
                         )
@@ -661,7 +659,6 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                             icon = Icons.Rounded.Movie,
                             title = stringResource(R.string.settings_detail_page),
-                            subtitle = stringResource(R.string.settings_custom_section_subtitle_detail),
                             onClick = { showDetailSectionsDialog = true },
                             containerColor = Color.Transparent
                         )

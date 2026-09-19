@@ -2071,8 +2071,6 @@
     <string name="filter_region_tw">中国台湾</string>
     <string name="settings_logout_confirm_impact">退出后想看/已看与评分将停止同步，需要重新登录才能继续；本地已缓存的数据会保留。</string>
     <string name="settings_notification_requires_trakt">需要连接 Trakt 账号才能使用，通知基于 Trakt 想看列表推送。</string>
-    <string name="settings_custom_section_subtitle_discover">选择发现页显示哪些榜单及顺序</string>
-    <string name="settings_custom_section_subtitle_detail">选择详情页显示哪些区块及顺序</string>
     <string name="common_load_more_loading">正在加载更多…</string>
     <string name="common_load_more_failed">加载更多失败，点击重试</string>
     <string name="common_load_more_complete">已加载全部</string>

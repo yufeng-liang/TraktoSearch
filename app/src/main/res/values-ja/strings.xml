@@ -2083,8 +2083,6 @@
     <string name="filter_region_tw">中国台湾</string>
     <string name="settings_logout_confirm_impact">ログアウトすると見たい/視聴済みと評価の同期が止まり、再ログインするまで再開しません。ローカルのキャッシュは保持されます。</string>
     <string name="settings_notification_requires_trakt">Trakt アカウントの接続が必要です。通知は Trakt の見たいリストを基に配信されます。</string>
-    <string name="settings_custom_section_subtitle_discover">見つけるページに表示するランキングと並び順を選びます</string>
-    <string name="settings_custom_section_subtitle_detail">詳細ページに表示するブロックと並び順を選びます</string>
     <string name="common_load_more_loading">さらに読み込み中…</string>
     <string name="common_load_more_failed">追加読み込みに失敗しました。タップして再試行</string>
     <string name="common_load_more_complete">すべて読み込みました</string>
