@@ -382,24 +382,25 @@ fun DiscoverScreen(
                         .firstOrNull { it.id == "douban-movie" }
                     // 栏目 id -> Hero 卡片定义（标题/渐变/点击/数据），仅包含需要展示为 Hero 的栏目
                     val heroCategoryDefs = mapOf<String, HeroCategory>(
+                        // 弹窗是无限分页列表，首页已加载条数不代表全部，传 0 隐藏数字行
                         "tmdb-popular" to HeroCategory(
                             id = "tmdb-popular",
                             title = stringResource(R.string.discover_trending),
-                            count = uiState.tmdbPopularMovies.size,
+                            count = 0,
                             gradient = popularGradient,
                             onClick = { showPopularAll = true }
                         ),
                         "tmdb-upcoming" to HeroCategory(
                             id = "tmdb-upcoming",
                             title = stringResource(R.string.discover_upcoming),
-                            count = uiState.tmdbUpcomingMovies.size,
+                            count = 0,
                             gradient = upcomingGradient,
                             onClick = { showUpcomingAll = true }
                         ),
                         "trakt-recommendations" to HeroCategory(
                             id = "trakt-recommendations",
                             title = stringResource(R.string.discover_recommended),
-                            count = uiState.traktRecommendations.size,
+                            count = 0,
                             gradient = recommendGradient,
                             onClick = { showRecommendationsAll = true }
                         ),
@@ -540,7 +541,8 @@ fun DiscoverScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                                             ) {
                                                 Text(
-                                                    text = stringResource(R.string.discover_view_all, uiState.tmdbPopularMovies.size),
+                                                    // 弹窗为无限分页列表，无法预知总数，不显示数字
+                                                    text = stringResource(R.string.common_view_all),
                                                     fontSize = 14.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = actionColor
@@ -1107,6 +1109,7 @@ fun DiscoverScreen(
 private data class HeroCategory(
     val id: String,
     val title: String,
+    /** 真实总条数；0 = 总数未知（弹窗为无限分页列表），卡片不显示数字行 */
     val count: Int,
     val gradient: Brush,
     val onClick: () -> Unit

@@ -98,7 +98,8 @@ internal fun TmdbMovieSection(
         if (title.isNotEmpty()) {
             SectionHeader(
                 title = title,
-                actionText = if (movies.isNotEmpty()) stringResource(R.string.discover_view_all, movies.size) else null,
+                // 「查看全部」弹窗是无限分页列表，首页已加载条数不代表全部，不显示数字
+                actionText = if (movies.isNotEmpty()) stringResource(R.string.common_view_all) else null,
                 onActionClick = if (movies.isNotEmpty()) onViewAll else null
             )
         }
@@ -182,7 +183,8 @@ internal fun TraktRecommendationSection(
     Column {
         SectionHeader(
             title = title,
-            actionText = if (movies.isNotEmpty()) stringResource(R.string.discover_view_all, movies.size) else null,
+            // 「查看全部」弹窗是无限分页列表，首页已加载条数不代表全部，不显示数字
+            actionText = if (movies.isNotEmpty()) stringResource(R.string.common_view_all) else null,
             onActionClick = if (movies.isNotEmpty()) onViewAll else null
         )
         when {

@@ -1651,7 +1651,12 @@ fun DoubanHotCategorySection(
         // 榜单标题 + 全部按钮
         com.tracktosearch.ui.component.SectionHeader(
             title = doubanCategoryLabel(category.id),
-            actionText = stringResource(R.string.search_view_all_count, doubanCategoryTotal(category.id)),
+            // 数字用 API 返回的真实 total（新片榜 30 / 口碑榜 10 / Top250 250 / 正在热映 300+），
+            // 不要硬编码：豆瓣各榜单总量并不相同；加载完成前无 total，退化为不带数字的「查看全部」
+            actionText = (category.total.takeIf { it > 0 } ?: category.items.size)
+                .takeIf { it > 0 }
+                ?.let { stringResource(R.string.search_view_all_count, it) }
+                ?: stringResource(R.string.common_view_all),
             onActionClick = onViewAll
         )
 
@@ -2049,11 +2054,6 @@ private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) 
     "douban-top250" -> stringResource(R.string.discover_douban_top250)
     "douban-nowplaying" -> stringResource(R.string.discover_douban_nowplaying)
     else -> categoryId
-}
-
-private fun doubanCategoryTotal(categoryId: String): Int = when (categoryId) {
-    "douban-top250" -> 250
-    else -> 10
 }
 
 private fun getLastKnownLocation(context: android.content.Context): Location? {
