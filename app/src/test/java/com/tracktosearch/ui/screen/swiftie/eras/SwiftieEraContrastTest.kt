@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
@@ -49,32 +50,130 @@ class SwiftieEraContrastTest {
                 .isAtLeast(SwiftieEraContrast.AA_SMALL)
             assertThat(ratioOf(era, colors.date, SwiftieEraContrast.DATE_ALPHA))
                 .isAtLeast(SwiftieEraContrast.AA_SMALL)
-            // 后缀有意放宽到 3.5:1（见 TRACK_SUFFIX_CONTRAST）：它要读作「更浅的标记」，
-            // 所以这里守的是大字号 AA 下限，而不是正文的 4.5:1
-            assertThat(ratioOf(era, colors.trackSuffix, SwiftieEraContrast.TRACK_SUFFIX_ALPHA))
-                .isAtLeast(SwiftieEraContrast.TRACK_SUFFIX_CONTRAST)
         }
     }
 
     @Test
-    fun trackSuffixCompositesToItsOwnHalftoneLayer() {
-        // 后缀必须单独算基色，不能复用正文色再压 alpha（那样亮度永远等于正文，
-        // 需求方在真机上看到的就是「和曲名一样深」）
+    fun tvBadgeIsAVisibleButSoftMarkOnEveryEraWithTv() {
+        // 标签底相对纸色的比值有两个边界，都要守：
+        //   下界 —— 低于它标签与纸面糊在一起，看不见边界；
+        //   上界 —— 高于它读作「这一行被选中」的实心色块，抢过曲目名。
+        // 需求方在真机上过的第三轮（2026-09-20）把它定在「一半浓度」，
+        // 所以这里判的是「看得见但柔和」，而不是能不能达到 AA
+        val erasWithTv = SwiftieErasData.ALL.filter { era ->
+            era.tracks.any { it.contains(TV_SUFFIX) }
+        }
+        assertWithMessage("带 (TV) 的专辑").that(erasWithTv).isNotEmpty()
+        erasWithTv.forEach { era ->
+            val card = SwiftieEraContrast.cardFill(era.mainColor)
+            val ratio = SwiftieEraContrast.contrastRatio(
+                SwiftieEraTextColors(era).badgeFill,
+                card
+            )
+            assertWithMessage("${era.name} 的 TV 标签底")
+                .that(ratio).isAtLeast(1.6f)
+            assertWithMessage("${era.name} 的 TV 标签底压过了曲目名")
+                .that(ratio).isLessThan(3.0f)
+        }
+    }
+
+    @Test
+    fun tvBadgeKnockoutIsTheCardPaperItself() {
+        // 字身必须**就是**卡片填充色 —— 那是「镂空露出纸面」这个语义本身。
+        // 换成别的浅色就成了另一种设计，而对比度断言仍然可能绿
+        SwiftieErasData.ALL.forEach { era ->
+            assertThat(SwiftieEraTextColors(era).badgeKnockout)
+                .isEqualTo(SwiftieEraContrast.cardFill(era.mainColor))
+        }
+    }
+
+    @Test
+    fun tvBadgeStaysLighterThanTheTrackTitle() {
+        // 标签是**标记**不是按钮：底必须比曲目名浅，才不会读成「这一行被选中」。
+        // 上一条判的是底 vs 纸，这一条判的是底 vs 正文 —— 两件事
         SwiftieErasData.ALL.forEach { era ->
             val colors = SwiftieEraTextColors(era)
-            val background = SwiftieEraContrast.cardBackground(era.mainColor)
-            val suffix = SwiftieEraContrast.composite(
-                colors.trackSuffix,
-                SwiftieEraContrast.TRACK_SUFFIX_ALPHA,
-                background
+            assertWithMessage("${era.name} 的 TV 标签底比曲目名还深")
+                .that(SwiftieEraContrast.luminance(colors.badgeFill))
+                .isGreaterThan(SwiftieEraContrast.luminance(colors.body))
+        }
+    }
+
+    @Test
+    fun tvBadgeKeepsTheEraHue() {
+        // 标签底是主色压深再退回来的，不能为了对比度被压成一律的灰：
+        // 四个有 TV 的时代仍要认得出是金 / 紫 / 红 / 蓝
+        listOf(
+            SwiftieErasData.ALL[1],  // Fearless 金黄
+            SwiftieErasData.ALL[2],  // Speak Now 紫
+            SwiftieErasData.ALL[3],  // Red 红
+            SwiftieErasData.ALL[4]   // 1989 淡天蓝
+        ).forEach { era ->
+            val fill = SwiftieEraTextColors(era).badgeFill
+            val card = SwiftieEraContrast.cardFill(era.mainColor)
+            // 与纸面相比，三个通道里至少要有一个明显偏离，否则就是没上色。
+            // 单看某一个通道会误判：1989 的蓝主要压在红/绿通道上
+            val delta = maxOf(
+                Math.abs(fill.red - card.red),
+                Math.abs(fill.green - card.green),
+                Math.abs(fill.blue - card.blue)
             )
-            val body = SwiftieEraContrast.composite(colors.body, 1f, background)
-            assertThat(SwiftieEraContrast.contrastRatio(suffix, background))
-                .isAtLeast(SwiftieEraContrast.TRACK_SUFFIX_CONTRAST)
-            // 需求方要求「再浅一档」：后缀合成后必须真的比正文亮，而不只是去饱和
-            assertThat(SwiftieEraContrast.luminance(suffix))
-                .isGreaterThan(SwiftieEraContrast.luminance(body))
-            assertThat(suffix).isNotEqualTo(body)
+            assertWithMessage("${era.name} 的 TV 标签底与卡片填充色同色了")
+                .that(delta).isGreaterThan(0.02f)
+        }
+    }
+
+    @Test
+    fun tvBadgeGeometryScalesWithRowHeight() {
+        // 标签的尺寸全部按行高比例给：大屏 16dp、小屏压到 9dp 都要成立。
+        // 写死 dp 的话小屏上标签会比行还高，上下边被布局框裁掉
+        val corners = listOf(16.dp, 12.dp, 9.dp).map { row ->
+            val height = row * SwiftieEraContrast.TV_BADGE_HEIGHT_RATIO
+            val corner = height * SwiftieEraContrast.TV_BADGE_CORNER_RATIO
+            // 圆角不能超过半高，否则 RoundedCornerShape 会把标签画成胶囊 ——
+            // 需求方明确否掉了全胶囊
+            assertWithMessage("行高 $row 的圆角")
+                .that(corner).isLessThan(height / 2f)
+            corner
+        }
+        // 圆角随行高单调增，且都是「小圆角」而不是胶囊
+        assertThat(corners[0]).isGreaterThan(corners[1])
+        assertThat(corners[1]).isGreaterThan(corners[2])
+    }
+
+    @Test
+    fun tvBadgeTypeIsAStepDownFromTheTrackTitle() {
+        // 需求方在真机上指出标签「太显眼、和曲目名不协调」——
+        // 标签字号必须**明显小于**曲目名，曲名才是这一行的主体。
+        // 这条守的就是那个主次关系：两者同大时（曾经都是 0.75）它会红
+        val title = TRACK_TITLE_FONT_RATIO
+        val badge = SwiftieEraContrast.TV_BADGE_FONT_RATIO
+        assertWithMessage("标签字号 $badge 相对曲目名 $title")
+            .that(badge).isLessThan(title * 0.8f)
+        // 但也不能小到读不出：至少要有曲名的三分之二
+        assertThat(badge).isAtLeast(title * 0.66f)
+        // 标签高与字号同比例缩放 —— 只缩字不缩盒会让字在盒子里吊着
+        val height = SwiftieEraContrast.TV_BADGE_HEIGHT_RATIO
+        assertWithMessage("标签高 $height 与字号 $badge 应当同档")
+            .that(height).isLessThan(0.65f)
+    }
+
+    @Test
+    fun tvBadgeTextIsPlainTvAndSuffixStillParses() {
+        // 标签外形已经与曲名分开，括号是多余的 —— 屏幕上印 TV。
+        // 但**解析**用的后缀仍然必须是带括号与空格的形态：少一个字符就切不下来，
+        // 于是那 36 首带标记的曲目会整个变成普通曲名（标记静默消失）
+        assertThat(TV_BADGE_TEXT).isEqualTo("TV")
+        assertThat(TV_SUFFIX).isEqualTo(" (TV)")
+        assertThat(TV_SUFFIX).contains(TV_BADGE_TEXT)
+        // 曲目数据里的每一条标记都必须能被这个后缀切下来
+        val marked = SwiftieErasData.ALL.flatMap { it.tracks }.filter { it.contains("(TV)") }
+        assertThat(marked).isNotEmpty()
+        marked.forEach { title ->
+            assertWithMessage("「$title」切不出 TV 后缀")
+                .that(title.lastIndexOf(TV_SUFFIX)).isAtLeast(0)
+            // 切剩的曲名不能是空的：空标题会排出一个空 Text，标签孤零零地贴在行尾
+            assertThat(title.substring(0, title.lastIndexOf(TV_SUFFIX))).isNotEmpty()
         }
     }
 

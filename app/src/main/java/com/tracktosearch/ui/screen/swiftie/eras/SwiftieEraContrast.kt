@@ -27,25 +27,85 @@ internal object SwiftieEraContrast {
     const val DATE_ALPHA: Float = 0.85f
 
     /**
-     * Taylor's Version 后缀 `(TV)` 的透明度，比序号再压一档。
+     * TV 标签底**压深时的锚点**对比度。
      *
-     * 压到 0.70 之后，浅色主色的合成结果会与正文的亮度接近 —— 「更浅」于是只体现为
-     * 去饱和，而不是亮度差。2026-09-20 需求方看过真机后要求后缀**再浅一档**，
-     * 于是新增 [TRACK_SUFFIX_CONTRAST] 把目标对比度单独放低，让亮度差真的出现。
+     * 先把时代主色压深到对纸色达到这个比值（保留色相、只降明度），
+     * 再按 [TV_BADGE_FILL_DILUTION] 朝纸色退回来。
+     *
+     * 为什么要有这个锚点：直接拿主色原色当底，太浅的时代（Fearless 的金 1.96:1、
+     * 1989 的淡天蓝 1.62:1）标的底与纸几乎同色；先压到 4.5:1 再退，
+     * 每个时代的底色深浅就都落在同一档，不会有的清楚有的看不见。
+     *
+     * 压在**纸色**上算而不是压在最坏情况底色上：标签是一块不透明实心图元，
+     * 它盖住底下的母题与天空，字只跟标签自己的底发生关系。
      */
-    const val TRACK_SUFFIX_ALPHA: Float = 0.70f
+    const val TV_BADGE_FILL_CONTRAST: Float = AA_SMALL
 
     /**
-     * `(TV)` 后缀的对比度目标，**有意低于正文的 [AA_SMALL]**。
+     * 标签底朝纸色退回的比例。0f = 用压深后的实色，1f = 完全退回纸色（看不见）。
      *
-     * 正文、序号、日期都必须守住 4.5:1；后缀只是一个标记，需求方要求它和曲名拉开
-     * 可见的层级，所以降到大字号的 AA 门槛 3.5:1 —— 这是 WCAG 里仍然算「达到 AA」的
-     * 最低一档，再往下就只剩非文本图形那条 3.0:1，12sp 的字不该走那么低。
+     * 2026-09-20 需求方在真机上过了三轮：先是「浅底 + 深描边空心字」（描边太重，
+     * 像一圈红线圈着两个字），改成压到 4.5:1 的实色块之后**又嫌太深**，
+     * 定在「一半浓度」。
      *
-     * 效果（12 张时代卡实测合成亮度相对正文的差）：4.5 → 3.5 时约 +0.03~+0.05，
-     * 后缀第一次真的比曲名浅；保持 alpha 0.70 不变，只放宽目标，不额外加透明度。
+     * 取 0.5 之后四张有 TV 的专辑落在 `#C2B384` / `#B69CCF` / `#EB8087` / `#8ABBD0`，
+     * 镂空纸色字对底约 1.95~2.29:1 —— **低于正文 AA 的 4.5:1**，这是需求方看着真机
+     * 定下的观感取舍：标签是标记而不是正文，读得出来即可，要的是柔和不抢曲目名。
+     * 想再调浓度只改这一个数：调大更浅、调小更深。
      */
-    const val TRACK_SUFFIX_CONTRAST: Float = 3.5f
+    const val TV_BADGE_FILL_DILUTION: Float = 0.5f
+
+    /**
+     * 标签的圆角，按**标签高度**的比例给。
+     *
+     * 需求方看过三档渲染（8px / 12px / 全胶囊）后定了 12px。现行标签高
+     * （见 [TV_BADGE_HEIGHT_RATIO]）在 Red 那张卡上是 33px，12px 即 0.364。
+     * 用比例而不是绝对值，是为了让标签在小屏压矮时圆角跟着收，
+     * 既不会退化成胶囊，也不会在小尺寸上显得过方。
+     */
+    const val TV_BADGE_CORNER_RATIO: Float = 0.364f
+
+    /**
+     * 标签高度占行高的比例。
+     *
+     * 33 / 59（Red 实测行高）= 0.559，与 [TV_BADGE_FONT_RATIO] 同比例缩放。
+     *
+     * 2026-09-20 需求方在真机上指出标签「太显眼、和曲目名不协调」，
+     * 于是把字号从 0.75 收到 0.52、标签高也按同一比例从 47px 收到 33px ——
+     * **只缩字不缩盒会让字在盒子里吊着**，两者必须一起动。
+     */
+    const val TV_BADGE_HEIGHT_RATIO: Float = 0.559f
+
+    /**
+     * 标签左右内边距占**标签高度**的比例。
+     *
+     * 9px 内边距 / 33px 标签高 = 0.273。按标签高而不是字号给，
+     * 是因为胶囊的饱满度取决于内边距与高之比，不随字宽变。
+     */
+    const val TV_BADGE_PAD_RATIO: Float = 0.273f
+
+    /**
+     * 标签内字号占行高的比例，**比曲目名小一号**。
+     *
+     * 曲目名是行高的 0.75（见 `SwiftieEraTracklist.TRACK_TITLE_FONT_RATIO`），
+     * 标签取 0.52 —— 在 Red 那张卡上就是曲名 12sp / 标签 8.3sp。
+     *
+     * 这个差距是有意的：标签里的字与曲目名同大时（原先也是 0.75），
+     * 字被底色围住、视觉权重反而压过曲名，需求方在真机上读作「太显眼，
+     * 和曲目名不协调」。缩小之后曲目名重新成为这一行的主体。
+     */
+    const val TV_BADGE_FONT_RATIO: Float = 0.52f
+
+    /**
+     * 标签左沿与曲名墨迹之间至少留的间隙，占行高的比例。
+     *
+     * 曲名是 `weight(1f, fill = false)` 先让出标签的固有宽度再省略，中间的间隙要
+     * 由标签自己带成一个 Spacer 的宽度 —— 否则长曲名会把标签顶到紧贴墨迹的位置。
+     *
+     * 按行高给而不是按字号给：这个间隙要跟着**整行**的呼吸走。短歌名（`Run`）
+     * 那边会有 weight 列的余量垫着，实际间距比这里大，不会显得散。
+     */
+    const val TV_BADGE_GAP_RATIO: Float = 0.16f
 
     /** 白纸层的不透明度，与 `SwiftieEraCard` 的 `Color.White.copy(alpha = 0.86f)` 同步。 */
     private const val PAPER_ALPHA = 0.86f
@@ -293,13 +353,44 @@ internal class SwiftieEraTextColors(era: SwiftieEra) {
     )
 
     /**
-     * Taylor's Version 后缀 `(TV)`：按 [SwiftieEraContrast.TRACK_SUFFIX_CONTRAST]
-     * 放宽到 3.5:1，比正文更浅，但仍落在 WCAG 大字号 AA 的范围内。
+     * 标签底色：时代实色，压深到**纸色字能读出来**（见
+     * [SwiftieEraContrast.TV_BADGE_FILL_CONTRAST]）。
      */
-    val trackSuffix: Color = SwiftieEraContrast.readable(
-        color = era.textColor,
-        background = background,
-        target = SwiftieEraContrast.TRACK_SUFFIX_CONTRAST,
-        alpha = SwiftieEraContrast.TRACK_SUFFIX_ALPHA
-    )
+    val badgeFill: Color = SwiftieEraContrast.tvBadgeFill(era.mainColor)
+
+    /**
+     * 标签的镂空字身：就是卡片填充色，字被「挖」出来露出纸面。
+     *
+     * 它对 [badgeFill] 的比值就是字本身的可读性（无描边）。这个比值由
+     * [SwiftieEraContrast.TV_BADGE_FILL_CONTRAST] 与
+     * [SwiftieEraContrast.TV_BADGE_FILL_DILUTION] 两个常量共同定出来，
+     * 当前定在约 2:1 的观感档（需求方在真机上选定）。
+     */
+    val badgeKnockout: Color = SwiftieEraContrast.cardFill(era.mainColor)
 }
+
+/**
+ * TV 标签底色：时代主色先压深到 [SwiftieEraContrast.TV_BADGE_FILL_CONTRAST]，
+ * 再按 [SwiftieEraContrast.TV_BADGE_FILL_DILUTION] 朝纸色退回。
+ *
+ * 两步各有分工：
+ * 1. [readable] 保留色相与饱和度、只降明度，把各时代的标签底先统一到同一档深浅 ——
+ *    否则原色浅的时代（1989 的淡天蓝 1.62:1）标的底与纸几乎同色，深的又太抢眼。
+ * 2. 再朝纸色按比例退回来，得到需求方在真机上定下的「一半浓度」。
+ *
+ * 四张有 TV 的专辑最终落在 `#C2B384` 金 / `#B69CCF` 紫 / `#EB8087` 红 / `#8ABBD0` 蓝，
+ * 各自仍认得出时代色。
+ *
+ * **注意这里是压在纸色 [cardFill] 上算**，不是压在 `cardBackground`（最坏情况底色）
+ * 上 —— 标签是不透明实心块，它盖住底下的母题与天空，字只跟标签自己的底发生关系。
+ */
+private fun SwiftieEraContrast.tvBadgeFill(mainColor: Color): Color =
+    composite(
+        fg = readable(
+            color = mainColor,
+            background = cardFill(mainColor),
+            target = TV_BADGE_FILL_CONTRAST
+        ),
+        alpha = 1f - TV_BADGE_FILL_DILUTION,
+        bg = cardFill(mainColor)
+    )

@@ -1,9 +1,16 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -26,9 +33,11 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
@@ -108,8 +117,25 @@ private const val COLLAPSE_WINDOW_MS: Float = 1_500f
 private fun gildedRowIndex(eraIndex: Int): Int =
     if (eraIndex == SwiftieErasData.LOVER_INDEX) 2 else -1
 
-/** 曲目名后的 Taylor's Version 标记；浅色渲染，永远保留。 */
-private const val TV_SUFFIX: String = " (TV)"
+/**
+ * 曲目名里的 Taylor's Version 标记后缀。
+ *
+ * 这个带括号与空格的形态只用来**解析**（从曲名上切下来）；屏幕上印的是
+ * [TV_BADGE_TEXT]。括号在标签里是多余的 —— 标签外形已经把它与曲名分开了。
+ */
+internal const val TV_SUFFIX: String = " (TV)"
+
+/** 标签上印的字。 */
+internal const val TV_BADGE_TEXT: String = "TV"
+
+/**
+ * 曲名字号占行高的比例，`SwiftieEraCard` 里标题字号那一档同源。
+ *
+ * 抽成常量是因为 TV 标签的字号要从它派生出「小一号」的关系（见
+ * `SwiftieEraContrast.TV_BADGE_FONT_RATIO`）——两处各写一个 0.75 迟早会对不上，
+ * 而那个主次关系一旦反过来，标签就会比曲目名还抢眼。
+ */
+internal const val TRACK_TITLE_FONT_RATIO: Float = 0.75f
 
 /** 不参与卷收的那一行用它，省得每行都新建一个返回 0 的 lambda。 */
 private val NO_COLLAPSE: () -> Float = { 0f }
@@ -172,7 +198,7 @@ internal fun SwiftieEraTracklist(
     val titleStyle = remember(textColors, rowHeight, density, titleFont) {
         TextStyle(
             fontFamily = titleFont,
-            fontSize = with(density) { (rowHeight * 0.75f).toSp() },
+            fontSize = with(density) { (rowHeight * TRACK_TITLE_FONT_RATIO).toSp() },
             color = textColors.body
         )
     }
@@ -195,13 +221,6 @@ internal fun SwiftieEraTracklist(
             (
                 (COLLAPSE_WINDOW_MS - COLLAPSE_ROW_MS) / (era.tracks.size - 1)
                 ).coerceAtMost(COLLAPSE_ROW_STAGGER_MAX_MS)
-        }
-        val suffixStyle = remember(titleStyle, textColors) {
-            titleStyle.copy(
-                color = textColors.trackSuffix.copy(
-                    alpha = SwiftieEraContrast.TRACK_SUFFIX_ALPHA
-                )
-            )
         }
         era.tracks.forEachIndexed { index, title ->
             val appearAt = if (typed) {
@@ -243,12 +262,15 @@ internal fun SwiftieEraTracklist(
             } else {
                 String.format(Locale.US, "%02d", index + 1)
             }
-            // TV 后缀与曲名分开排：曲名一列用 weight(1f, fill = false)，先让出后缀的
-            // 固有宽度再省略；后缀自己是第二个 Text，不吃 Ellipsis。
-            // 这样「只对曲目名本身省略，(TV) 永远保留」是布局保证的，不靠猜宽度。
+            // TV 标记与曲名分开排：曲名一列用 weight(1f, fill = false)，先让出标签的
+            // 固有宽度再省略；标签自己是个不吃 Ellipsis 的独立节点。
+            // 这样「只对曲目名本身省略，TV 标签永远保留」是布局保证的，不靠猜宽度。
+            //
+            // 曲名比可用宽度长时，weight(1f, fill = false) 会**优先让标签排下** ——
+            // 这正是想要的：窄屏上宁可曲名多省几个字，也不能把标记挤掉。
             val tvIndex = if (typed) -1 else title.lastIndexOf(TV_SUFFIX)
             val baseTitle = if (tvIndex >= 0) title.substring(0, tvIndex) else title
-            val suffix = if (tvIndex >= 0) title.substring(tvIndex) else ""
+            val hasTvBadge = tvIndex >= 0
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -315,18 +337,99 @@ internal fun SwiftieEraTracklist(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = { titleLayout[0] = it },
-                    modifier = if (suffix.isEmpty()) Modifier else Modifier.weight(1f, fill = false)
+                    modifier = if (hasTvBadge) {
+                        Modifier.weight(1f, fill = false)
+                    } else {
+                        Modifier
+                    }
                 )
-                if (suffix.isNotEmpty()) {
-                    Text(
-                        text = suffix,
-                        style = suffixStyle,
-                        maxLines = 1,
-                        softWrap = false
+                if (hasTvBadge) {
+                    // 间隙由标签自己带：Row 里它前面那一格是曲名的 weight 列，
+                    // 曲名短的时候 weight 列会**吸掉**全部余量，标签被推到最右。
+                    // 所以这里给一个固定间隙，保证短歌名（Run）标签也不会贴到曲名上
+                    Spacer(modifier = Modifier.width(rowHeight * SwiftieEraContrast.TV_BADGE_GAP_RATIO))
+                    TvBadge(
+                        rowHeight = rowHeight,
+                        fontSize = with(density) {
+                            (rowHeight * SwiftieEraContrast.TV_BADGE_FONT_RATIO).toSp()
+                        },
+                        fill = textColors.badgeFill,
+                        knockout = textColors.badgeKnockout
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * Taylor's Version 标签：时代实色底 + 镂空纸色字。
+ *
+ * ## 为什么要独立成一个节点，而不是接在曲名后面的文字
+ *
+ * 标签必须**永不省略**。曲名是 `weight(1f, fill = false)`、标签是它后面的固定宽度节点，
+ * 「只对曲名省略」于是成为布局保证（见调用处）。写成同一段文字就做不到这件事 ——
+ * Ellipsis 会从整段的尾巴上砍，砍掉的正好是这个标记。
+ *
+ * ## 镂空怎么画
+ *
+ * 字身直接印**卡片填充色**，压在压深后的时代实色底上 —— 就是「挖空露出纸面」的观感。
+ * 字本身没有描边：2026-09-20 需求方在真机上否掉了「浅底 + 深色描边空心字」那版
+ * （描边太重，像一圈红线圈着两个字），改成**把底压深、字直接镂空**。
+ * 去掉描边之后，底与纸色的对比度**就是**字的可读性 —— 底越深字越清楚，
+ * 但底太深就抢过曲目名。需求方在真机上过了三轮才定下当前的「一半浓度」，
+ * 两个常量（`TV_BADGE_FILL_CONTRAST` 锚点 + `TV_BADGE_FILL_DILUTION` 浓度）见
+ * `SwiftieEraContrast`。
+ *
+ * ## 尺寸全部按 [rowHeight] 派生
+ *
+ * 这个标签在 12 张卡上要跟行高一起缩放（大屏 16dp、小屏压到 9dp，字号是按
+ * `Dp.toSp()` 折过的固定版面）。所以高度、内边距、圆角都写成行高的比例，
+ * 不写死 dp —— 写死意味着小屏上标签比行还高，会被布局框裁掉上下边。
+ *
+ * 字号独立于曲目名，见 `SwiftieEraContrast.TV_BADGE_FONT_RATIO`：
+ * 它**比曲目名小一号**，曲名才是这一行的主体。
+ */
+@Composable
+private fun TvBadge(
+    rowHeight: Dp,
+    fontSize: TextUnit,
+    fill: Color,
+    knockout: Color
+) {
+    val badgeHeight = rowHeight * SwiftieEraContrast.TV_BADGE_HEIGHT_RATIO
+    val badgeShape = RoundedCornerShape(badgeHeight * SwiftieEraContrast.TV_BADGE_CORNER_RATIO)
+    val textStyle = remember(fontSize, knockout) {
+        // 加粗：标签里的字比曲目名小一号，Regular 在这个尺寸上配纸色镂空会发虚。
+        // 走 FontWeight.Bold 让系统取 Roboto 可变字体的 700 档（真加粗，
+        // 不是描边假粗）。TTPD 那张的字是自带打字机字体、只有 Regular，
+        // 但那张卡没有 TV 行（`tvIndex` 恒为 -1），所以不受影响
+        TextStyle(
+            fontSize = fontSize,
+            color = knockout,
+            fontWeight = FontWeight.Bold
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .height(badgeHeight)
+            .background(fill, badgeShape)
+            .padding(horizontal = badgeHeight * SwiftieEraContrast.TV_BADGE_PAD_RATIO),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = TV_BADGE_TEXT,
+            style = textStyle,
+            maxLines = 1,
+            softWrap = false,
+            // 行盒（含字体的行距）比标签高一截，所以要 unbounded 才量得出
+            // 真实行盒再居中 —— 否则行盒被标签高度截断，字形会整体偏下
+            modifier = Modifier.wrapContentHeight(
+                align = Alignment.CenterVertically,
+                unbounded = true
+            )
+        )
     }
 }
 
