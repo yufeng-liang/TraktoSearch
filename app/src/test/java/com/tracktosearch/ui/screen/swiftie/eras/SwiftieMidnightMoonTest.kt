@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.swiftie.eras
 
 import com.google.common.truth.Truth.assertThat
-import kotlin.math.abs
 import org.junit.Test
 
 class SwiftieMidnightMoonTest {
@@ -85,22 +84,20 @@ class SwiftieMidnightMoonTest {
 
     @Test
     fun 起手缺口正对时钟() {
-        // 缺口朝向 = 在「指向钟心」的基准上再顺时针偏一点，让初始姿态更靠右
+        // 初始态 = 终态对齐姿态再顺时针偏 13°
         val look = 47f
         assertThat(midnightMoonRotationDeg(look, 0f))
-            .isWithin(1e-4f).of(MIDNIGHT_MOON_BASE_TURN_DEG - look)
+            .isWithin(1e-4f).of(MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG - look)
     }
 
     @Test
-    fun 抱枕只回转十五度() {
-        // 回满是「把月亮转正」，读起来像素材自转；这里钉住只回 15° 这一条
+    fun 抱枕终态缺口对齐时钟() {
+        // 终态严格对齐钟心，整个抱枕过程只回转初始多出的 13°
         val look = 47f
-        val settled = midnightMoonRotationDeg(look, 1f)
-        assertThat(settled - midnightMoonRotationDeg(look, 0f))
-            .isWithin(1e-4f).of(MIDNIGHT_MOON_CUDDLE_TURN_DEG)
-        assertThat(MIDNIGHT_MOON_CUDDLE_TURN_DEG).isWithin(0.001f).of(15f)
-        // 转过 15° 之后缺口仍朝着时钟那一侧，不允许扳到反向去
-        assertThat(abs(settled)).isGreaterThan(abs(look - MIDNIGHT_MOON_BASE_TURN_DEG) / 2f)
+        assertThat(midnightMoonRotationDeg(look, 1f)).isWithin(1e-4f).of(-look)
+        assertThat(midnightMoonRotationDeg(look, 0f) - midnightMoonRotationDeg(look, 1f))
+            .isWithin(1e-4f).of(MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG)
+        assertThat(MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG).isWithin(0.001f).of(13f)
     }
 
     @Test
@@ -108,7 +105,8 @@ class SwiftieMidnightMoonTest {
         var last = midnightMoonRotationDeg(47f, 0f)
         for (step in 0..20) {
             val value = midnightMoonRotationDeg(47f, step / 20f)
-            assertThat(value).isAtLeast(last - 1e-4f)
+            // 从初始的顺时针偏转单调回收到终态对齐
+            assertThat(value).isAtMost(last + 1e-4f)
             last = value
         }
         // 进度超出定义域也不许继续转

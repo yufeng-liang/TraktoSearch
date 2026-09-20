@@ -101,25 +101,22 @@ private val PILLOW_SEAM: Path by lazy(LazyThreadSafetyMode.NONE) { Path().apply 
 } }
 
 /**
- * 月牙在自己坐标系里相对「缺口朝钟」姿态的回转角（度）。
+ * 月牙相对「缺口朝钟」姿态的回转角（度）。
  *
- * 抱枕只回 [MIDNIGHT_MOON_CUDDLE_TURN_DEG] 这么一点：整段动作是**躺着换个抱的姿势**，
- * 不是把月亮转正 —— 回满意味着月牙在众目睽睽下掉了半圈，读起来像素材在自转。
+ * 终态（抱枕抱好，`cuddle = 1`）把缺口精确对准钟心；初始态在后面这个基准上
+ * 再顺时针偏 [MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG]，抱枕过程中只回转这一小段。
  */
 internal fun midnightMoonRotationDeg(lookAngleDeg: Float, cuddle: Float): Float =
-    MIDNIGHT_MOON_BASE_TURN_DEG - lookAngleDeg +
-        MIDNIGHT_MOON_CUDDLE_TURN_DEG * cuddle.coerceIn(0f, 1f)
+    -lookAngleDeg +
+        MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG * (1f - cuddle.coerceIn(0f, 1f))
 
 /**
- * 初始姿态的顺时针偏转（度）。
+ * 初始姿态相对终态的顺时针偏转（度）。
  *
- * 月牙的「缺口朝钟」只是几何基准；真机上 0° 时开口偏上，看图更像竖直挂着。
- * 加 12° 顺时针之后开口朝左上更明显，脸和抱枕也一起靠近右边缘。
+ * 终态严格对齐钟心；初始态多转这一点，脸和抱枕会略偏向右下，
+ * 抱枕抱起后再自然回到对齐姿态。
  */
-internal const val MIDNIGHT_MOON_BASE_TURN_DEG: Float = 12f
-
-/** 抱枕时回正的角度。只回这一点，缺口始终朝着时钟那一侧。 */
-internal const val MIDNIGHT_MOON_CUDDLE_TURN_DEG: Float = 15f
+internal const val MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG: Float = 13f
 
 /**
  * 月牙的基准缩放。
