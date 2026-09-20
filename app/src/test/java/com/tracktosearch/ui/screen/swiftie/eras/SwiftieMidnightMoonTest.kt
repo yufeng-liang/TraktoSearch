@@ -85,9 +85,10 @@ class SwiftieMidnightMoonTest {
 
     @Test
     fun 起手缺口正对时钟() {
-        // 缺口朝向 = 把月牙从「缺口朝屏幕右侧」扳到指向钟心，角度由两个点现算
+        // 缺口朝向 = 在「指向钟心」的基准上再顺时针偏一点，让初始姿态更靠右
         val look = 47f
-        assertThat(midnightMoonRotationDeg(look, 0f)).isWithin(1e-4f).of(-look)
+        assertThat(midnightMoonRotationDeg(look, 0f))
+            .isWithin(1e-4f).of(MIDNIGHT_MOON_BASE_TURN_DEG - look)
     }
 
     @Test
@@ -99,7 +100,7 @@ class SwiftieMidnightMoonTest {
             .isWithin(1e-4f).of(MIDNIGHT_MOON_CUDDLE_TURN_DEG)
         assertThat(MIDNIGHT_MOON_CUDDLE_TURN_DEG).isWithin(0.001f).of(15f)
         // 转过 15° 之后缺口仍朝着时钟那一侧，不允许扳到反向去
-        assertThat(abs(settled)).isGreaterThan(abs(look) / 2f)
+        assertThat(abs(settled)).isGreaterThan(abs(look - MIDNIGHT_MOON_BASE_TURN_DEG) / 2f)
     }
 
     @Test

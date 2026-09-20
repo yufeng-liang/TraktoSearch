@@ -107,7 +107,16 @@ private val PILLOW_SEAM: Path by lazy(LazyThreadSafetyMode.NONE) { Path().apply 
  * 不是把月亮转正 —— 回满意味着月牙在众目睽睽下掉了半圈，读起来像素材在自转。
  */
 internal fun midnightMoonRotationDeg(lookAngleDeg: Float, cuddle: Float): Float =
-    -lookAngleDeg + MIDNIGHT_MOON_CUDDLE_TURN_DEG * cuddle.coerceIn(0f, 1f)
+    MIDNIGHT_MOON_BASE_TURN_DEG - lookAngleDeg +
+        MIDNIGHT_MOON_CUDDLE_TURN_DEG * cuddle.coerceIn(0f, 1f)
+
+/**
+ * 初始姿态的顺时针偏转（度）。
+ *
+ * 月牙的「缺口朝钟」只是几何基准；真机上 0° 时开口偏上，看图更像竖直挂着。
+ * 加 12° 顺时针之后开口朝左上更明显，脸和抱枕也一起靠近右边缘。
+ */
+internal const val MIDNIGHT_MOON_BASE_TURN_DEG: Float = 12f
 
 /** 抱枕时回正的角度。只回这一点，缺口始终朝着时钟那一侧。 */
 internal const val MIDNIGHT_MOON_CUDDLE_TURN_DEG: Float = 15f
@@ -128,10 +137,18 @@ internal const val MIDNIGHT_MOON_SCALE: Float = 1.18f
  */
 internal const val MOON_CENTER_Y: Float = 0.22f
 
+/**
+ * 月牙中心的横向位置（屏宽比例）。
+ *
+ * 从 0.65 右移到 0.70：初始姿态与抱枕状态都更贴近右边缘，
+ * 同时给左上方留出钟面与月牙之间的深蓝留白。
+ */
+internal const val MOON_CENTER_X: Float = 0.70f
+
 internal fun DrawScope.drawMidnightMoon(path: Path, eraMs: Long, alpha: Float, clockCenter: Offset) {
     val pose = midnightMoonPose(eraMs)
     val unit = minOf(size.width * 0.001695f, size.height * 0.00096f) * MIDNIGHT_MOON_SCALE
-    val moonCenter = Offset(size.width * 0.65f, size.height * MOON_CENTER_Y)
+    val moonCenter = Offset(size.width * MOON_CENTER_X, size.height * MOON_CENTER_Y)
     val lookAngle = atan2(moonCenter.y - clockCenter.y, moonCenter.x - clockCenter.x) * 180f / PI.toFloat()
     withTransform({
         translate(moonCenter.x, moonCenter.y + pose.breath * unit * 1.3f)
