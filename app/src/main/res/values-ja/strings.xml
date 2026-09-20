@@ -479,6 +479,13 @@
     <!-- Resource Item Card -->
     <string name="resource_viewed">閲覧済み</string>
     <string name="resource_file_count">%1$dファイル</string>
+    <string name="resource_copyright_title">リソース著作権に関するお知らせ</string>
+    <string name="resource_copyright_body_1">本アプリのリソース検索結果は第三者提供の検索ソースから取得され、リンクの検索と遷移のみを提供します。動画ファイルの作成、アップロード、保存、キャッシュ、配布は行わず、リソースが許諾済みであることも保証しません。</string>
+    <string name="resource_copyright_body_2">合法な視聴手段を利用し、リソースの著作権状況をご自身で確認してください。配布、販売、商用利用はしないでください。</string>
+    <string name="resource_copyright_body_3">権利侵害リンクを見つけた場合は、「データとプライバシー → 権利リクエスト」から通知できます。</string>
+    <string name="resource_copyright_dont_show">このお知らせを今後表示しない</string>
+    <string name="resource_copyright_continue_open">開く</string>
+    <string name="resource_copyright_continue_copy">コピーする</string>
     <string name="detail_collection_title">コレクション：%s</string>
 
     <!-- Crash Dialog -->

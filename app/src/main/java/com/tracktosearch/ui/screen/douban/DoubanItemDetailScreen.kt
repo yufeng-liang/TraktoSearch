@@ -160,6 +160,8 @@ import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ResourceCopyrightAction
+import com.tracktosearch.ui.component.rememberResourceCopyrightRequester
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -1185,6 +1187,7 @@ fun DoubanItemDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val markChanges by viewModel.markChanges.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resourceCopyrightRequester = rememberResourceCopyrightRequester()
     val openDoubanToast = stringResource(R.string.screen_douban_item_detail_open_douban)
     val copiedToast = stringResource(R.string.screen_douban_item_detail_copied)
     val haptics = rememberAppHaptics()
@@ -1579,10 +1582,14 @@ fun DoubanItemDetailScreen(
                                             sourceName = uiState.customSourceNames[item.source],
                                             isViewed = false,
                                             onClick = {
-                                                openResourceLink(context, item)
+                                                resourceCopyrightRequester.request(ResourceCopyrightAction.OPEN) {
+                                                    openResourceLink(context, item)
+                                                }
                                             },
                                             onLongClick = {
-                                                copyResourceLink(context, item)
+                                                resourceCopyrightRequester.request(ResourceCopyrightAction.COPY) {
+                                                    copyResourceLink(context, item)
+                                                }
                                             },
                                             index = index
                                         )
@@ -1912,6 +1919,8 @@ fun DoubanItemDetailScreen(
     }
 
     // 子标题编辑弹窗
+    resourceCopyrightRequester.Host()
+
     if (uiState.showSubtitleDialog) {
         val failure = uiState.failure
         if (failure != null) {

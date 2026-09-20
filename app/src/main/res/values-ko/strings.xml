@@ -479,6 +479,13 @@
     <!-- Resource Item Card -->
     <string name="resource_viewed">조회함</string>
     <string name="resource_file_count">%1$d개 파일</string>
+    <string name="resource_copyright_title">리소스 저작권 안내</string>
+    <string name="resource_copyright_body_1">이 앱의 리소스 결과는 제3자 검색 소스에서 제공되며 링크 검색 및 이동만 제공합니다. 앱은 영상 파일을 제작, 업로드, 저장, 캐시 또는 배포하지 않으며 리소스에 대한 이용 허락을 보증하지 않습니다.</string>
+    <string name="resource_copyright_body_2">합법적인 시청 경로를 이용하고 리소스의 저작권 상태를 직접 확인하십시오. 배포, 판매 또는 상업적 용도로 사용하지 마십시오.</string>
+    <string name="resource_copyright_body_3">침해 링크를 발견하면 \'데이터 및 개인정보 → 권리 요청\'을 통해 알려주세요.</string>
+    <string name="resource_copyright_dont_show">이 안내를 다시 표시하지 않음</string>
+    <string name="resource_copyright_continue_open">계속 열기</string>
+    <string name="resource_copyright_continue_copy">계속 복사</string>
     <string name="detail_collection_title">시리즈: %s</string>
 
     <!-- Crash Dialog -->

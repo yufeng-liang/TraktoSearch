@@ -207,6 +207,13 @@
     <!-- Resource Item Card -->
     <string name="resource_viewed">Viewed</string>
     <string name="resource_file_count">%1$d files</string>
+    <string name="resource_copyright_title">Resource copyright notice</string>
+    <string name="resource_copyright_body_1">Resource results in this app come from third-party search sources. The app only searches for and redirects to links; it does not create, upload, store, cache, or distribute video files, and does not represent that any resource is licensed.</string>
+    <string name="resource_copyright_body_2">Please watch through lawful channels and verify the copyright status of resources yourself; do not distribute, sell, or use them commercially.</string>
+    <string name="resource_copyright_body_3">If you find an infringing link, you can report it through Data &amp; Privacy → Rights Request.</string>
+    <string name="resource_copyright_dont_show">Don\'t show this notice again</string>
+    <string name="resource_copyright_continue_open">Continue to open</string>
+    <string name="resource_copyright_continue_copy">Continue to copy</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>

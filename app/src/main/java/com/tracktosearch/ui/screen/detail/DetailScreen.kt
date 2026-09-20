@@ -121,6 +121,8 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ResourceCopyrightAction
+import com.tracktosearch.ui.component.rememberResourceCopyrightRequester
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.detailTopBarIconColor
 import com.tracktosearch.ui.component.glassSceneForContent
@@ -193,6 +195,7 @@ fun DetailScreen(
     val spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resourceCopyrightRequester = rememberResourceCopyrightRequester()
     // OpenImage 查看器以 Activity decorView 为宿主；非 ComponentActivity 场景拿不到时点击不打开
     val activity = context as? Activity
     val haptics = rememberAppHaptics()
@@ -908,11 +911,15 @@ fun DetailScreen(
                                     sourceName = uiState.customSourceNames[item.source],
                                     isViewed = item.url in uiState.viewedUrls,
                                     onClick = {
-                                        viewModel.markResourceViewed(item.url)
-                                        openResourceLink(context, item)
+                                        resourceCopyrightRequester.request(ResourceCopyrightAction.OPEN) {
+                                            viewModel.markResourceViewed(item.url)
+                                            openResourceLink(context, item)
+                                        }
                                     },
                                     onLongClick = {
-                                        copyResourceLink(context, item)
+                                        resourceCopyrightRequester.request(ResourceCopyrightAction.COPY) {
+                                            copyResourceLink(context, item)
+                                        }
                                     },
                                     index = index
                                 )
@@ -1455,6 +1462,8 @@ fun DetailScreen(
                     }
                 )
             }
+
+            resourceCopyrightRequester.Host()
 
             // 电视剧标记已看弹窗（季/集勾选）
             if (uiState.showMarkWatchedDialog) {

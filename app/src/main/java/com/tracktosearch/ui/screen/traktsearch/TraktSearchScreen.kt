@@ -132,6 +132,7 @@ import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ResourceCopyrightAction
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.appVisualEffect
 import com.tracktosearch.ui.component.backdropContentSource
@@ -151,6 +152,7 @@ import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
+import com.tracktosearch.ui.component.rememberResourceCopyrightRequester
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
 import com.tracktosearch.ui.screen.ai.AiSpriteCenter
 import com.tracktosearch.ui.screen.ai.AiSpriteCenterEntryButton
@@ -210,6 +212,7 @@ fun TraktSearchScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val spriteState by spriteViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resourceCopyrightRequester = rememberResourceCopyrightRequester()
     val haptics = rememberAppHaptics()
     // 搜索失败（含网盘搜索原本整段吞掉的那处）配对的 reject 从这一行出
     HapticOutcomeEffect(viewModel.hapticOutcomes)
@@ -531,7 +534,15 @@ fun TraktSearchScreen(
                         },
                         onItemClick = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
-                            openResourceLink(context, it)
+                            resourceCopyrightRequester.request(ResourceCopyrightAction.OPEN) {
+                                openResourceLink(context, it)
+                            }
+                        },
+                        onItemLongClick = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            resourceCopyrightRequester.request(ResourceCopyrightAction.COPY) {
+                                copyResourceLink(context, it)
+                            }
                         },
                         onRetry = { viewModel.searchDiskInternal(uiState.query) },
                         listState = diskListState,
@@ -1049,6 +1060,8 @@ fun TraktSearchScreen(
                 onRecommendationClick = onRecommendationClick,
                 viewModel = spriteViewModel
             )
+
+            resourceCopyrightRequester.Host()
         }
     }
 
@@ -1059,6 +1072,7 @@ private fun DiskSearchContent(
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit,
     onItemClick: (ResourceItem) -> Unit,
+    onItemLongClick: (ResourceItem) -> Unit,
     onRetry: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     hazeState: HazeState = remember { HazeState() },
@@ -1283,9 +1297,7 @@ private fun DiskSearchContent(
                             isViewed = false,
                             index = index,
                             onClick = { onItemClick(item) },
-                            onLongClick = {
-                                copyResourceLink(context, item)
-                            }
+                            onLongClick = { onItemLongClick(item) }
                         )
                     }
                 }
