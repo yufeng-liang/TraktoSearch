@@ -83,6 +83,7 @@ import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalFastScrollMode
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
@@ -127,6 +128,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 
@@ -221,6 +224,21 @@ fun DiscoverScreen(
     // rememberSaveable + Saver：进入详情页（MAIN 整体销毁）返回后恢复原滚动位置，
     // 不再回到顶部（与 Watchlist 的 grid 状态策略一致）
     val discoverListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    // 只在滚动开始/结束边沿切换一次轻量绘制模式，滚动中的每个 delta 不触发页面重组。
+    var isDiscoverFastScrolling by remember { mutableStateOf(false) }
+    LaunchedEffect(discoverListState) {
+        snapshotFlow { discoverListState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (scrolling) {
+                    isDiscoverFastScrolling = true
+                } else {
+                    // 给 fling 的最后几帧留出缓冲，避免刚停就恢复阴影又被下一次触摸打断。
+                    kotlinx.coroutines.delay(100)
+                    isDiscoverFastScrolling = false
+                }
+            }
+    }
     // 下拉刷新：发现页 10+ 个榜单原来只能靠切页/重进触发重载，没有任何显式刷新入口。
     // forceRefreshAll 本就是为下拉刷新准备的入口（注释里写了「供下拉刷新用」），只是没有 UI。
     var discoverRefreshPending by remember { mutableStateOf(false) }
@@ -355,7 +373,8 @@ fun DiscoverScreen(
                         state = discoverPullToRefreshState,
                         contentTop = statusBarHeight + 80.dp
                     )
-                    LazyColumn(
+                    CompositionLocalProvider(LocalFastScrollMode provides isDiscoverFastScrolling) {
+                        LazyColumn(
                         state = discoverListState,
                         modifier = modifier
                             .fillMaxSize()
@@ -833,6 +852,7 @@ fun DiscoverScreen(
                     }
                     }
                 }
+                    }
             }
             }
             // 毛玻璃吸顶标题栏（仅 thin 模糊，不叠 surface 背景，更通透）

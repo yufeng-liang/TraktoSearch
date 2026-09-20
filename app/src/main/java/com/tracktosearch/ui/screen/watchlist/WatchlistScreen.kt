@@ -186,6 +186,7 @@ import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalBackdrop
+import com.tracktosearch.ui.component.LocalFastScrollMode
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterCard
@@ -233,6 +234,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
@@ -527,6 +529,20 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
         selectedMode == 1 && selectedTab == 1 -> historyShowGridState
         else -> historyOtherGridState
+    }
+    // 仅在滚动边沿更新一次，滚动期间让海报卡片跳过拟态阴影绘制。
+    var isWatchlistFastScrolling by remember { mutableStateOf(false) }
+    LaunchedEffect(currentGridState) {
+        snapshotFlow { currentGridState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (scrolling) {
+                    isWatchlistFastScrolling = true
+                } else {
+                    kotlinx.coroutines.delay(100)
+                    isWatchlistFastScrolling = false
+                }
+            }
     }
     val hasContentUnderTopBar by remember(currentGridState) {
         derivedStateOf {
@@ -953,7 +969,8 @@ fun WatchlistScreen(
                     }
                             }
                         } else {
-                        LazyVerticalGrid(
+                        CompositionLocalProvider(LocalFastScrollMode provides isWatchlistFastScrolling) {
+                            LazyVerticalGrid(
                 state = currentGridState,
                 columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(
@@ -1077,6 +1094,7 @@ fun WatchlistScreen(
                         }
                     }
                 }
+                        }
             }
 
             // 回顶按钮采样本页 content backdrop（含影视网格），折射正后方海报而非页面粉色渐变。

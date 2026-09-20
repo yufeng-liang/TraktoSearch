@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -79,6 +80,14 @@ internal fun blurSurfaceConfig(
 }
 
 /**
+ * 列表快速滚动期间的绘制降级开关。
+ *
+ * 只由页面在「开始滚动/停止滚动」边沿更新，避免把每个 pointer delta 变成整页重组。
+ * 卡片在该模式下跳过昂贵的拟态阴影，停止滚动后恢复完整视觉。
+ */
+val LocalFastScrollMode = staticCompositionLocalOf { false }
+
+/**
  * 统一按用途和全局视觉模式分发表面。
  * Glass 通过 Backdrop 采样；Content 与 Modal 分支不采样、不复用拟态阴影。
  */
@@ -107,6 +116,19 @@ fun AppVisualSurface(
             borderColor = borderColor,
             content = content
         )
+
+        // 列表快速滚动时，内容卡片的拟态外阴影/内阴影会随每一帧移动重复绘制。
+        // 保留裁剪、背景和边框，暂时降为轻量内容表面；停下后由 CompositionLocal 边沿恢复。
+        kind == VisualSurfaceKind.Content && LocalFastScrollMode.current -> {
+            Box(
+                modifier = modifier
+                    .clip(shape)
+                    .background(backgroundColor, shape)
+                    .border(1.dp, borderColor, shape)
+            ) {
+                content()
+            }
+        }
 
         LocalVisualEffectMode.current == VisualEffectMode.GLASS && kind == VisualSurfaceKind.Glass -> {
             GlassSurfaceImpl(

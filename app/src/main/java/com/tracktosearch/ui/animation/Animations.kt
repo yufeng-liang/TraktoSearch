@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
+import com.tracktosearch.ui.component.LocalFastScrollMode
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import kotlinx.coroutines.launch
 
@@ -87,7 +88,15 @@ fun Modifier.fadeSlideIn(index: Int = 0): Modifier = composed {
     val hasAnimated = rememberSaveable { mutableStateOf(false) }
     val alpha = remember { Animatable(if (hasAnimated.value) 1f else 0f) }
     val offsetY = remember { Animatable(if (hasAnimated.value) 0f else 16f) }
-    LaunchedEffect(Unit) {
+    val isFastScrolling = LocalFastScrollMode.current
+    LaunchedEffect(isFastScrolling) {
+        if (isFastScrolling) {
+            // 滚动中新进入视口的卡片直接落定，避免动画协程与列表 fling 争抢帧预算。
+            alpha.snapTo(1f)
+            offsetY.snapTo(0f)
+            hasAnimated.value = true
+            return@LaunchedEffect
+        }
         if (hasAnimated.value) return@LaunchedEffect
         launch { alpha.animateTo(1f, animationSpec = tween(220)) }
         launch { offsetY.animateTo(0f, animationSpec = tween(220)) }
