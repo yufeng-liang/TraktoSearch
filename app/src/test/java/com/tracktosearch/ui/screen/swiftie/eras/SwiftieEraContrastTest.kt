@@ -49,15 +49,17 @@ class SwiftieEraContrastTest {
                 .isAtLeast(SwiftieEraContrast.AA_SMALL)
             assertThat(ratioOf(era, colors.date, SwiftieEraContrast.DATE_ALPHA))
                 .isAtLeast(SwiftieEraContrast.AA_SMALL)
+            // 后缀有意放宽到 3.5:1（见 TRACK_SUFFIX_CONTRAST）：它要读作「更浅的标记」，
+            // 所以这里守的是大字号 AA 下限，而不是正文的 4.5:1
             assertThat(ratioOf(era, colors.trackSuffix, SwiftieEraContrast.TRACK_SUFFIX_ALPHA))
-                .isAtLeast(SwiftieEraContrast.AA_SMALL)
+                .isAtLeast(SwiftieEraContrast.TRACK_SUFFIX_CONTRAST)
         }
     }
 
     @Test
     fun trackSuffixCompositesToItsOwnHalftoneLayer() {
-        // 后缀在浅色主色上压到 0.70 后合成亮度与正文接近，靠去饱和体现层级；
-        // 但它必须单独算基色，不能复用正文色再压 alpha（那会掉到 AA 以下）
+        // 后缀必须单独算基色，不能复用正文色再压 alpha（那样亮度永远等于正文，
+        // 需求方在真机上看到的就是「和曲名一样深」）
         SwiftieErasData.ALL.forEach { era ->
             val colors = SwiftieEraTextColors(era)
             val background = SwiftieEraContrast.cardBackground(era.mainColor)
@@ -68,8 +70,10 @@ class SwiftieEraContrastTest {
             )
             val body = SwiftieEraContrast.composite(colors.body, 1f, background)
             assertThat(SwiftieEraContrast.contrastRatio(suffix, background))
-                .isAtLeast(SwiftieEraContrast.AA_SMALL)
-            // 四张 TV 主色浅，后缀与正文亮度几乎相等；但两者不能是完全同一个实色
+                .isAtLeast(SwiftieEraContrast.TRACK_SUFFIX_CONTRAST)
+            // 需求方要求「再浅一档」：后缀合成后必须真的比正文亮，而不只是去饱和
+            assertThat(SwiftieEraContrast.luminance(suffix))
+                .isGreaterThan(SwiftieEraContrast.luminance(body))
             assertThat(suffix).isNotEqualTo(body)
         }
     }

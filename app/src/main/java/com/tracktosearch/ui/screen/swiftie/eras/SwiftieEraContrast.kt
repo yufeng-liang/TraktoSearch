@@ -29,11 +29,23 @@ internal object SwiftieEraContrast {
     /**
      * Taylor's Version 后缀 `(TV)` 的透明度，比序号再压一档。
      *
-     * 它要求**本身满足 AA**：后缀是曲名的一部分，不是装饰。压到 0.70 之后，
-     * 浅色主色的合成结果会与正文的亮度接近 —— 「更浅」于是体现为去饱和，
-     * 而不是亮度差。这是为了不牺牲可读性做的取舍。
+     * 压到 0.70 之后，浅色主色的合成结果会与正文的亮度接近 —— 「更浅」于是只体现为
+     * 去饱和，而不是亮度差。2026-09-20 需求方看过真机后要求后缀**再浅一档**，
+     * 于是新增 [TRACK_SUFFIX_CONTRAST] 把目标对比度单独放低，让亮度差真的出现。
      */
     const val TRACK_SUFFIX_ALPHA: Float = 0.70f
+
+    /**
+     * `(TV)` 后缀的对比度目标，**有意低于正文的 [AA_SMALL]**。
+     *
+     * 正文、序号、日期都必须守住 4.5:1；后缀只是一个标记，需求方要求它和曲名拉开
+     * 可见的层级，所以降到大字号的 AA 门槛 3.5:1 —— 这是 WCAG 里仍然算「达到 AA」的
+     * 最低一档，再往下就只剩非文本图形那条 3.0:1，12sp 的字不该走那么低。
+     *
+     * 效果（12 张时代卡实测合成亮度相对正文的差）：4.5 → 3.5 时约 +0.03~+0.05，
+     * 后缀第一次真的比曲名浅；保持 alpha 0.70 不变，只放宽目标，不额外加透明度。
+     */
+    const val TRACK_SUFFIX_CONTRAST: Float = 3.5f
 
     /** 白纸层的不透明度，与 `SwiftieEraCard` 的 `Color.White.copy(alpha = 0.86f)` 同步。 */
     private const val PAPER_ALPHA = 0.86f
@@ -280,10 +292,14 @@ internal class SwiftieEraTextColors(era: SwiftieEra) {
         alpha = SwiftieEraContrast.DATE_ALPHA
     )
 
-    /** Taylor's Version 后缀 `(TV)`：同样满足 AA，只与正文拉开一档层级。 */
+    /**
+     * Taylor's Version 后缀 `(TV)`：按 [SwiftieEraContrast.TRACK_SUFFIX_CONTRAST]
+     * 放宽到 3.5:1，比正文更浅，但仍落在 WCAG 大字号 AA 的范围内。
+     */
     val trackSuffix: Color = SwiftieEraContrast.readable(
         color = era.textColor,
         background = background,
+        target = SwiftieEraContrast.TRACK_SUFFIX_CONTRAST,
         alpha = SwiftieEraContrast.TRACK_SUFFIX_ALPHA
     )
 }
