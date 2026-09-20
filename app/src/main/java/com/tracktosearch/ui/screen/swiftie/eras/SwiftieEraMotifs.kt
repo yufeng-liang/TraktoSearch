@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.tracktosearch.ui.screen.swiftie.SwiftieLetterPath
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -121,11 +120,8 @@ private val PROP_WARM = Color(0xFFFFE7A8)
  *   低端分支干净得多；这里剩下的 lowRam 只是顺手把一次性的点数也压掉
  * @param columnFade 右侧道具的亮度系数。1f = 全亮；[COLUMN_FADE_MIN] = 让位给长歌名
  *   （见 `SwiftieEraCard` 里的算法）。**只乘道具** —— 底纹跟着一起明暗会整张卡片闪
- * @param eraElapsedMs 本段已过的毫秒。**Lover 那把弓与 TTPD 那支羽毛笔读它** ——
- *   拉弓 / 撒放是一次性的动作，[phase] 那条 3.6s 的锯齿波编不出「只发生一次」；
- *   信纸上的字在低配机那一档要停在**写完**的样子（见 [drawLetterQuill]）
- * @param letterArt 信纸那一句 `All’s fair in love / and poetry.` 的字形与中线表。
- *   别的母题不用，默认 null 时那一张退化成只有纸与羽毛笔（见 `SwiftieLetterInk`）
+ * @param eraElapsedMs 本段已过的毫秒。**只有 Lover 那把弓读它** —— 拉弓 / 撒放是
+ *   一次性的动作，[phase] 那条 3.6s 的锯齿波编不出「只发生一次」
  */
 internal fun DrawScope.drawEraMotif(
     motif: SwiftieEraMotif,
@@ -156,11 +152,6 @@ internal fun DrawScope.drawEraMotif(
      * 为 null 时（没传或还没解码完）只跳过这片叶，杯与字照画。
      */
     propMapleInk: ImageBitmap? = null,
-    /**
-     * TTPD 那一句 `All’s fair in love / and poetry.` 的字形与中线表。
-     * 别的母题不用，默认 null 时那一张退化成只有纸与羽毛笔（见 `SwiftieLetterInk`）。
-     */
-    letterArt: SwiftieLetterArt? = null
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
@@ -176,11 +167,9 @@ internal fun DrawScope.drawEraMotif(
         SwiftieEraMotif.BRAID_PLAID -> drawBraidPlaid(color, phase, lowRam, alpha, propPhoto)
         SwiftieEraMotif.LIGHTER_STARS -> drawLighterStars(color, phase, alpha)
         SwiftieEraMotif.LETTER_QUILL ->
-            // 这一张**不吃 columnFade**：墨是内容（同曲目文字，从不淡出），而羽毛笔在卡片右下角、
-            // 母题又画在文字**下面**，长歌名那一列与它撞不上 —— 让位机制在这里只会把「正在写的
-            // 那一句」一起压暗（2026-09-13 真机上量到：写到一半时墨的有效 alpha 只有 0.52，
-            // 写完那一拍 0.87，同一个句子的浓淡随歌名行跳动）
-            drawLetterQuill(letterArt, phase, PROP_ALPHA, eraElapsedMs)
+            // 这一张**不吃 columnFade**：羽毛笔在卡片右下角、母题又画在文字**下面**，
+            // 长歌名那一列与它撞不上；让位机制只会把笔一起压暗
+            drawLetterQuill(phase, PROP_ALPHA)
         SwiftieEraMotif.VANITY_MIRROR -> drawVanityMirror(color, phase, alpha)
     }
 }
@@ -2616,144 +2605,41 @@ private fun DrawScope.drawBrightStars(color: Color, phase: Float, alpha: Float, 
 private val LETTER_INK = Color(0xFF4A453E)
 
 /**
- * 卡片右下角**写下来那句话**的墨色，比 [LETTER_INK] 深一档。
- *
- * 这个值调过两轮：先是因为「墨色浅」加深到 `382F27`；信纸去掉、字落到卡片白底上之后
- * 又收回来一档 —— 同一档墨压在白底上显重，压在米白纸上的经验不适用了。
- */
-private val LETTER_WRITING_INK = Color(0xFF443C33)
-
-/**
  * 米白麻纸。信纸去掉之后这个色没退休：它成了**羽毛笔羽面的填色** ——
  * 笔要「不透明、有填充色」，需求方点的就是这个信纸色。
  */
 private val LETTER_PAPER = Color(0xFFEFE7D6)
 
 /**
- * 那句话在卡片上的宽度占比。
- *
- * `0.98 × 0.40 × 0.86`：信纸还在的时候，那句字的实际宽度就是这三个数乘出来的。
- * 纸去掉、题词挪到卡片右下角，**字号原样搬过来** —— 要的是去掉那张纸，不是改字号。
- */
-private const val LETTER_TEXT_WIDTH_FRACTION = 0.337f
-
-/**
- * 墨的右缘离卡片右缘的比例。
- *
- * **比其余 11 张道具列的 0.975 收进来一截**：写字的是右手位的羽毛笔，笔尖落在笔迹
- * 前沿、羽面在笔尖**右上方**，写到行尾时羽面已经越过卡片右缘 —— 真机上量到
- * （86560/86580 两拍）**羽尖比墨右缘再出去 ≈142px**。
- *
- * 2026-09-13 定案：笔自己**长出卡片**（见 `SwiftieEraCard` 里出纸那张不裁形状），
- * 题词只让出屏幕那点余量 —— 卡缘到屏边只剩 73px，贴 0.975 时羽尖会落到屏外约 23px
- * 被切；收到 0.94 之后羽尖最右 x≈1430（屏 1440，还余 9px），同时**伸出卡外 65px**。
- * 卡宽由 `widthIn(max = 480.dp)` 封顶，所以这个余量在任何机型上都不会翻负。
- */
-private const val LETTER_TEXT_RIGHT_MARGIN = 0.94f
-
-/**
- * 第二行基线在卡片高度上的位置：**墨的下沿正好落在卡片的下内边距那一档**。
- *
- * 值是这样定出来的（TTPD 卡在真机上：卡高 2083px、宽 1292px、内边距 16dp≈56px）：
- * 第二行（`and poetry.`）的笔迹最低点比基线低 24px（那个 `y` 的下伸部，真机量的），
- * 所以基线取 `1 − (56 + 24) / 2083 = 0.9616` —— 取 0.961 让墨底压在下内边距线上，
- * 与卡片正文的下边距齐平。
- *
- * 2026-09-13 之前是 0.895：那是**信纸还在**的时候按纸面定的，纸撤掉之后这句题词就
- * 悬在卡片下沿上方 200px（≈57dp）的空处，读作「没落位」。
- *
- * 第一行由它减去一个行距（[SwiftieLetterPath.LINE_PITCH_EM]）得到 —— 行距是生成字库时
- * 定死的，这里只能跟着它走。
- */
-private const val LETTER_SECOND_BASELINE_FRACTION = 0.961f
-
-/** 墨的权重（相对 [PROP_ALPHA]）。写上去的字要一眼读得出来。 */
-private const val LETTER_INK_WEIGHT = 2.9f
-
-/**
- * 11 · TTPD：卡片右下角写着那句题词，一支羽毛笔正把它写下来。
+ * 11 · TTPD：卡片右下角常驻一支羽毛笔。
  *
  * 唯一一个不吃 `color` 的母题：TTPD 主色是近白的 `#F5F1EA`，用它在白卡上画等于没画，
- * 所以墨与笔都是硬编码的（[LETTER_INK] / [LETTER_PAPER]）。主色那层薄底由卡片自己铺
+ * 所以笔是硬编码的（[LETTER_INK] / [LETTER_PAPER]）。主色那层薄底由卡片自己铺
  * （`SwiftieEraCard` 的 `drawRect(era.mainColor, alpha = 0.10f)`）。
  *
- * 写的是 `All’s fair in love / and poetry.`（TTPD 视觉里的那句题词）——
- * 笔迹不是画出来的曲线，是离线从 Great Vibes 的字形骨架抽出中线、运行时沿中线铺墨
- * （见 [drawLetterInk]），所以那句字的形状与真字一样，笔画宽窄也对。
+ * 题词撤回之后笔不再承担「写到哪里」的进度，固定停在原句尾的笔位；
+ * 这既保留了「右手在右下角落笔」的方向感，也让低配定格档和正常档看到同一支笔。
  *
- * 这一张的历史：先是「米白信纸 + 横格线 + 歪 2°」的一整张纸，纸上有纸浆纤维、卷边、影子；
- * 后来整张纸都去掉了 —— 题词直接写在卡片右下角、**不正不歪**，横格线也一并撤掉
- * （铺满卡片的横线读作稿纸，与「卡片右下角手写一句」不是一件事）。
- *
- * @param art 字形与中线表。null = 字库没建出来（低内存那一档），那就只剩笔
  * @param alpha 恒为 [PROP_ALPHA]（调用处喂的就是它）：这一张不吃 `columnFade`，理由见
  *   `drawEraMotif` 里那一支的注释
- * @param phase 0f..1f 的母题相位。写字不跟它走（见 [drawLetterWriting]），它只用来给笔
- *   一点极轻的摆动
- * @param eraElapsedMs 负数 = 低配机那一档定格：**停在写完的样子**，而且没有笔
- *   （写完就要收笔，定格档里一支笔永远杵在句尾更怪）
+ * @param phase 0f..1f 的母题相位，用来给笔一点极轻的摆动
  */
-private fun DrawScope.drawLetterQuill(
-    art: SwiftieLetterArt?,
-    phase: Float,
-    alpha: Float,
-    eraElapsedMs: Long
-) {
+private fun DrawScope.drawLetterQuill(phase: Float, alpha: Float) {
     val box = propBox()
-    drawLetterWriting(art, phase, alpha, eraElapsedMs, min(box.width, box.height))
-}
-
-/**
- * 写字：墨沿离线烤好的中线的笔序铺开，笔尖沿**同一条**中线跟着走。
- *
- * 早先那一版是手画的三条贝塞尔曲线（三行假笔迹），被否掉了 —— 「写下来那句话」
- * 这件事，只有真的把那句话写出来才算数。
- *
- * 时间轴是**一次性**的，不跟母题相位走：相位每 3.6 秒归零一次，跟着它走就会写完又擦掉
- * 再从头写。这里改用卡片自己的单调时钟（[eraElapsedMs]），写完就停在写完的样子 ——
- * 墨留在卡片上不再淡出。抬笔之后再 [QUILL_RETIRE_MS] 把笔淡走。
- *
- * 落位是**卡片右下角**：墨的右缘贴 [LETTER_TEXT_RIGHT_MARGIN]，第二行基线落在
- * [LETTER_SECOND_BASELINE_FRACTION]。两行各自居中 —— 第二行相对第一行的居中量（0.788em）
- * 是生成字库时烤进笔位里的，这里只按第一行起算（见 `SwiftieLetterPath`）。
- */
-private fun DrawScope.drawLetterWriting(
-    art: SwiftieLetterArt?,
-    phase: Float,
-    alpha: Float,
-    eraElapsedMs: Long,
-    u: Float
-) {
-    if (art == null) return
-    val frozen = eraElapsedMs < 0L
-    // 墨自己的时间轴 = 书写（LETTER_WRITE_MS）+ 抬笔停顿（LETTER_PAUSE_MS），所以按
-    // [SwiftieLetterArt.writeEndMs] 映射，**不能**按 LETTER_WRITE_MS 收口 —— 那样最后
-    // 几个字永远写不到（真机上停在 `and poe`，笔都退场了句子还没完）。
-    val inkMs = if (frozen) {
-        art.writeEndMs
-    } else {
-        (eraElapsedMs.toFloat() / LETTER_WRITE_WALL_MS * art.writeEndMs).toLong()
-            .coerceIn(0L, art.writeEndMs)
-    }
-    // 字号：那句话排进 [LETTER_TEXT_WIDTH_FRACTION]（用最长那一行的 em 数反推）
-    val lineWidth = SwiftieLetterPath.LINE_WIDTH_EM[0].coerceAtLeast(0.1f)
-    val fontSize = size.width * LETTER_TEXT_WIDTH_FRACTION / lineWidth
-    val nib = drawLetterInk(
-        art = art,
-        elapsedMs = inkMs,
-        left = size.width * LETTER_TEXT_RIGHT_MARGIN - lineWidth * fontSize,
-        firstBaseline = size.height * LETTER_SECOND_BASELINE_FRACTION -
-            SwiftieLetterPath.LINE_PITCH_EM * fontSize,
-        fontSizePx = fontSize,
-        color = LETTER_WRITING_INK,
-        alpha = (alpha * LETTER_INK_WEIGHT).coerceAtMost(1f)
+    // 这句题词的末笔落在 `.` 上；题词撤掉后笔仍停在同一点，不另找「道具列中心」，
+    // 以免笔从右下角突然跑回卡片中央。
+    //
+    // 这里的换算与 `drawLetterWriting` 原来的落位完全一致：题词按 0.337W 排进
+    // 第一行宽度 4.791em，第二行基线落在 0.961H；末笔最后一点的字库坐标是
+    // (3.9166, -0.0326)em（见 `SwiftieLetterPath` 第 27 笔），其中 y 已含行距。
+    val fontScale = size.width * 0.337f / 4.791f
+    val textLeft = size.width * 0.94f - 4.791f * fontScale
+    val secondBaseline = size.height * 0.961f
+    val nib = Offset(
+        textLeft + 3.9166f * fontScale,
+        secondBaseline - 0.0326f * fontScale
     )
-    // 笔只在写字这段在场上。写完抬笔，笔淡走 —— 墨留在卡片上，笔不杵在句尾
-    if (frozen) return
-    val retire = ((eraElapsedMs - LETTER_WRITE_WALL_MS).toFloat() / QUILL_RETIRE_MS)
-        .coerceIn(0f, 1f)
-    if (retire >= 1f) return
-    drawQuill(phase, alpha * (1f - retire), u, nib)
+    drawQuill(phase, alpha, min(box.width, box.height), nib)
 }
 
 /**
@@ -2763,7 +2649,7 @@ private fun DrawScope.drawLetterWriting(
  * 现在用的是一条 CC0 的手绘插画矢量 —— 羽面左右不对称、三个羽枝缺口的位置、
  * 右下那几簇散羽都是原图的手感，手描不出来那个「随手画」的松紧。
  *
- * 笔尖钉在 [nib]（当前写到的位置）上，所以笔是「跟着字走」的。
+ * 笔尖钉在 [nib] 上；题词撤掉之后这个点固定为原句末的落笔处。
  *
  * 摆放 = 源图那条 group 变换**照抄**，外面再套「平移到笔尖 / 镜像 / 旋转 / 缩放」。
  * Compose 里 `withTransform` 自上而下读，几何上是自内而外生效，所以先把源变换写在下边，
@@ -2856,17 +2742,6 @@ private const val QUILL_FILL_WEIGHT = 1f / PROP_ALPHA
  * 加上这一笔之后杆落到 0.019u 上下，差不多是原来的三倍。
  */
 private const val QUILL_SHAFT_WIDTH = 0.012f
-
-/**
- * 那句话写完实际花掉的墙钟时长。写完墨就留在那儿，笔退场。
- *
- * 2026-09-18：3200 → 4700（同 1.5x），与 [LETTER_WRITE_MS] / [LETTER_PAUSE_MS]
- * 的放慢保持一致。
- */
-private const val LETTER_WRITE_WALL_MS = 4_700L
-
-/** 抬笔之后笔淡走的时长。 */
-private const val QUILL_RETIRE_MS = 420L
 
 /** 12 · Showgirl：更衣室化妆镜台（环绕灯泡轮转）+ 台面上的口红与粉扑。 */
 private fun DrawScope.drawVanityMirror(color: Color, phase: Float, alpha: Float) {

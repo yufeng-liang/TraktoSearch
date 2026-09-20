@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
@@ -212,15 +211,6 @@ fun SwiftieEraCard(
     // 画布上排字用的测量器：只有 Red 的纸套要印一行 MAPLE LATTE。与照片同理，
     // 文字只能在组合阶段量；其余 11 张卡拿到这个对象也不会去量
     val textMeasurer = rememberTextMeasurer()
-    // TTPD 那张卡片要写出 `All’s fair in love / and poetry.`：字形轮廓与中线表同样只能
-    // 在组合阶段建（draw 阶段拿不到 resources，也不该每帧再排一次字）。
-    // 别的时代这里是 null，一点不额外算
-    val letterContext = LocalContext.current
-    val letterArt = if (era.motif == SwiftieEraMotif.LETTER_QUILL) {
-        remember(letterContext) { buildSwiftieLetterArt(letterContext) }
-    } else {
-        null
-    }
     val description = stringResource(
         R.string.swiftie_era_card_a11y,
         era.name,
@@ -375,8 +365,7 @@ fun SwiftieEraCard(
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
                         textMeasurer = textMeasurer,
-                        propMapleInk = propMapleInk,
-                        letterArt = letterArt
+                        propMapleInk = propMapleInk
                     )
                 } else {
                     val elapsed = elapsedInCard()
@@ -396,8 +385,7 @@ fun SwiftieEraCard(
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
                         textMeasurer = textMeasurer,
-                        propMapleInk = propMapleInk,
-                        letterArt = letterArt
+                        propMapleInk = propMapleInk
                     )
                 }
             }
