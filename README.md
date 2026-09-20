@@ -18,7 +18,7 @@ Trakt OAuth 登录同步想看/已看/评分；豆瓣独立模式无需 Trakt，
 
 ### 🎬 发现与深度筛选
 
-豆瓣猜你喜欢、新片榜/口碑榜/Top250，Trakt 热门/最受期待/社区列表等栏目全部支持拖拽排序；按类型、地区、标签、评分区间、年代多维筛选。详情页聚合 IMDb/TMDB/OMDb/豆瓣四源评分、演职员、预告片剧照、季集信息，评论支持一键批量翻译。
+豆瓣猜你喜欢、新片榜/口碑榜/Top250，Trakt 热门/最受期待/社区列表等栏目全部支持拖拽排序；按类型、地区、标签、评分区间、年代多维筛选。详情页聚合 IMDb/TMDB/OMDb/豆瓣四源评分、演职员、预告片剧照、季集信息，评论支持一键批量翻译（AI 大模型优先）。
 
 ### 📊 观影统计与记录
 
@@ -49,7 +49,7 @@ app/src/main/java/com/tracktosearch/
 ├── ui/
 │   ├── component/       # 液态玻璃组件体系（GlassSurface/BackdropHost 等）
 │   ├── navigation/      # 导航路由
-│   ├── screen/          # 各页面（main/discover/detail/douban/watchlist/statistics/settings/...）
+│   ├── screen/          # 各页面（main/discover/detail/douban/watchlist/statistics/ai/settings/...）
 │   └── theme/           # 主题（命名主题色、天气/节日动态主题、背景光效）
 ├── di/                  # Hilt 模块
 ├── widget/              # Glance 快速搜索桌面小组件
