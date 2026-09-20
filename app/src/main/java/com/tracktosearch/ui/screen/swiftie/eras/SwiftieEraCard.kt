@@ -109,7 +109,7 @@ private val CARD_CORNER = 20.dp
 
 private val CARD_SHAPE = RoundedCornerShape(CARD_CORNER)
 
-/** 曲目行的理想行高。18 行只有 288dp，绝大多数屏幕都用这个值。 */
+/** 曲目行的理想行高。多数屏幕都用这个值，长专辑按可用高度压行。 */
 private val TRACK_ROW_HEIGHT_MAX = 16.dp
 
 /**
@@ -144,7 +144,7 @@ private fun trackRowHeight(slotHeight: Dp, trackCount: Int): Dp {
 }
 
 /**
- * 一个时代的卡片：从轴上长出 → 停留（曲目逐行点亮）→ 回落。
+ * 一个时代的卡片：从轴上长出 → 停留（曲目随卡片一次性出现，TTPD 那台打字机逐行打）→ 回落。
  *
  * 卡片**不随深色模式反色** —— 它是「图」，配色由 [SwiftieEra] 固定（Spec §2.3）。
  *
@@ -184,8 +184,8 @@ fun SwiftieEraCard(
     }
     val cardFill = remember(era.mainColor) { SwiftieEraContrast.cardFill(era.mainColor) }
     val rowHeight = trackRowHeight(slotHeight, era.tracks.size)
-    // 让位窗口的节拍必须与 `SwiftieEraTracklist` 用同一个来源 —— TTPD 走放慢后的时间表，
-    // 其余 11 张仍是 130ms；两边错开一档，压下去的就是隔壁那一行
+    // 让位窗口只服务 TTPD：其余 11 张曲目随卡片一次性出现，没有「某一行正在点亮」
+    // 这件事，道具列不该再让位（columnFade 恒 1f）。
     val stagger = if (eraIndex == SwiftieTimeline.TTPD_INDEX && !lowRam) {
         SwiftieTimeline.TTPD_TRACK_REVEAL_MS.toFloat() / era.tracks.size
     } else {
@@ -385,8 +385,13 @@ fun SwiftieEraCard(
                         color = era.mainColor,
                         phase = (elapsed.mod(MOTIF_CYCLE_MS)).toFloat() / MOTIF_CYCLE_MS,
                         lowRam = false,
-                        // 长歌名会横穿右侧那一列，那几行点亮时道具让位（见 columnFadeAt）
-                        columnFade = columnFadeAt(elapsed, longTitles, stagger),
+                        // 只有 TTPD 逐行打字需要长歌名让位；其余 11 张恒 1f，
+                        // 曲目一次性显示，长名照常 Ellipsis，道具不让位
+                        columnFade = if (eraIndex == SwiftieTimeline.TTPD_INDEX) {
+                            columnFadeAt(elapsed, longTitles, stagger)
+                        } else {
+                            1f
+                        },
                         eraElapsedMs = elapsed,
                         loverAimAngle = loverAimAngle(),
                         propPhoto = propPhoto,
@@ -517,9 +522,9 @@ private const val COLUMN_YIELD_HOLD_MS = 420f
  * 右侧道具列的让位系数：长歌名那一行点亮前后把道具压到 [COLUMN_FADE_MIN]。
  *
  * 窗口是「该行点亮时刻 − 150ms 起、按住 420ms、再 150ms 抬回来」，
- * 而不是只在那一行的 130ms 行距里压一下 —— 那样读起来是道具闪了一下。
+ * 而不是只在那一行的行距里压一下 —— 那样读起来是道具闪了一下。
  *
- * 只回看 5 行：整个窗口 720ms，130ms 一行，`720 ÷ 130 ≈ 5.5`，
+ * 只回看 5 行：整个窗口 720ms，一行约 227ms（TTPD 7030 / 31），`720 ÷ 227 ≈ 3.2`，
  * 所以**定长循环**就够，不用每帧扫 31 行。低端机不走这里（母题整块定格）。
  */
 private fun columnFadeAt(elapsed: Long, longTitles: BooleanArray, stagger: Float): Float {

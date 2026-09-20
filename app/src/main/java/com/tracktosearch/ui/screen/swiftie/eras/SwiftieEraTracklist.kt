@@ -36,21 +36,26 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-/** 卡片长出用 400ms，曲目从第 400ms 起逐行点亮。 */
+/** 卡片长出用 400ms；TTPD 的曲目从第 400ms 起逐行打印。 */
 const val TRACK_REVEAL_START_MS: Long = 400L
 
-/** 每行 130ms：读起来像唱针一格一格走过去。再快就成一整块闪现。 */
-const val TRACK_STAGGER_MS: Long = 130L
+/**
+ * 其余 11 张的账本节拍，与 `SwiftieTimeline.CARD_PER_TRACK_MS` 同源。
+ *
+ * 它们的曲目已经改成**随卡片长出一次性出现**，不再逐行点亮；这个值只服务
+ * [trackRowRevealAtMs] 的统一账本与低端机 TTPD 的回退节拍。
+ */
+const val TRACK_STAGGER_MS: Long = SwiftieTimeline.CARD_PER_TRACK_MS
 
-/** 低端机加快到 70ms。**单张卡片总时长不变**，省下的并进停留。 */
+/** 低端机 TTPD 回退到 70ms。**单张卡片总时长不变**，省下的并进停留。 */
 const val TRACK_STAGGER_LOW_RAM_MS: Long = 70L
 
 /**
  * 第 [rowIndex] 行的揭示起点（卡内毫秒）。
  *
- * 其余 11 张沿用固定 130ms；TTPD 走账本里放慢后的逐行时间表。
- * [rowIndex] 允许等于曲目数；对 TTPD 来说返回值就是整列打印结束的时刻，
- * 其余 11 张的第 N 行起点正是旧时间表里「最后一行的下一拍」。
+ * TTPD 走账本里放慢后的逐行时间表；其余 11 张只借用同一条账本函数算「曲目列结束」，
+ * 屏幕上它们已经随卡片一次性出现，不再逐行点亮。
+ * [rowIndex] 允许等于曲目数；对 TTPD 来说返回值就是整列打印结束的时刻。
  */
 internal fun trackRowRevealAtMs(
     eraIndex: Int,
@@ -69,20 +74,17 @@ internal fun trackRowRevealAtMs(
     return TRACK_REVEAL_START_MS + stagger * rowIndex
 }
 
-/** 单行淡入时长。 */
-private const val TRACK_FADE_MS: Float = 220f
-
 /** 描金色。金箔的那种黄，不是 Fearless 的主色（数值撞上了，含义无关）。 */
 private val GILD_GOLD = Color(0xFFD4AF37)
 
-/** 描金那一行那道金线：该行点亮之后再等 300ms 才扫出来，不跟逐行点亮抢注意力。 */
+/** 描金那一行那道金线：曲目出现之后再等 300ms 才扫出来，不跟卡片长出抢注意力。 */
 private const val GILD_RULE_DELAY_MS: Long = 300L
 
-/** 金线扫完 420ms。比一行的淡入（220ms）慢一点：扫得出来才读作一笔写过去。 */
+/** 金线扫完 420ms：扫得出来才读作一笔写过去。 */
 private const val GILD_RULE_MS: Float = 420f
 
-/** 卷收：逐行错开 70ms，**自下而上**。 */
-private const val COLLAPSE_ROW_STAGGER_MS: Float = 70f
+/** 卷收：逐行错开，最多 70ms，**自下而上**。 */
+private const val COLLAPSE_ROW_STAGGER_MAX_MS: Float = 70f
 
 /** 单行收起 240ms：高度收到 0 + alpha 到 0，读起来像卷纸。 */
 private const val COLLAPSE_ROW_MS: Float = 240f
@@ -90,7 +92,9 @@ private const val COLLAPSE_ROW_MS: Float = 240f
 /**
  * 卷收窗口，与 `SwiftieTimeline.REWIND_MS` 同步 —— `collapseProgress` 是按它归一化的。
  *
- * 18 行最长的一张（Lover）用 `17 × 70 + 240 = 1430ms`，正好落在窗口内。
+ * 每行错开多少**按曲目数派生**：`(窗口 - 单行收起) / 最后一行下标`，再封顶
+ * [COLLAPSE_ROW_STAGGER_MAX_MS]。Red 30 行、TTPD 31 行在 70ms 定值下会
+ * `29 × 70 + 240 > 1500`，尾部十几行永远收不完；派生之后所有卡都在窗口内收干净。
  */
 private const val COLLAPSE_WINDOW_MS: Float = 1_500f
 
@@ -104,11 +108,14 @@ private const val COLLAPSE_WINDOW_MS: Float = 1_500f
 private fun gildedRowIndex(eraIndex: Int): Int =
     if (eraIndex == SwiftieErasData.LOVER_INDEX) 2 else -1
 
+/** 曲目名后的 Taylor's Version 标记；浅色渲染，永远保留。 */
+private const val TV_SUFFIX: String = " (TV)"
+
 /** 不参与卷收的那一行用它，省得每行都新建一个返回 0 的 lambda。 */
 private val NO_COLLAPSE: () -> Float = { 0f }
 
 /**
- * 一张专辑的完整曲目列：逐行点亮（Spec §6.2），序列末尾自下而上卷收。
+ * 一张专辑的完整曲目列：非 TTPD 随卡片一次性出现，TTPD 逐行打字，序列末尾自下而上卷收。
  *
  * 曲目名**不借时代字体** —— 那 12 个字库是按专辑名逐个子集化的，只含那几个字，
  * 拿来画曲目全是豆腐块；TTPD 那张用打字机字体（`era_typewriter`，按 31 首的曲名与
@@ -120,7 +127,7 @@ private val NO_COLLAPSE: () -> Float = { 0f }
  * @param textColors 压暗到 AA 的一组文字色，由卡片算好传进来（见 `SwiftieEraContrast`）
  * @param rowHeight 单行行高，由卡片按可用高度与曲目数算好（见 `trackRowHeight`）。
  *   字号跟着它等比缩放，所以 31 首的 TTPD Anthology 在小屏上也排得下
- * @param collapseProgress 0f = 18 行全在；1f = 只剩描金那一行。**在布局阶段读**
+ * @param collapseProgress 0f = 全部行都在；1f = 只剩描金那一行。**在布局阶段读**
  */
 @Composable
 internal fun SwiftieEraTracklist(
@@ -170,26 +177,50 @@ internal fun SwiftieEraTracklist(
         )
     }
     // derivedStateOf：布尔量不变就不通知读者，所以卷收之前这一列的**布局**一帧都不失效。
-    // 直接在 layout 里读 collapseProgress() 会让整段 104 秒每帧重测一遍所有行
+    // 直接在 layout 里读 collapseProgress() 会让整段 109 秒每帧重测一遍所有行
     val collapsing = remember(collapseProgress) {
         derivedStateOf { collapseProgress() > 0.0001f }
     }
 
     Column(
-        // 190 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
+        // 244 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
         // 卡片自己有一条 contentDescription
         modifier = modifier.clearAndSetSemantics { }
     ) {
+        // 卷收节拍按曲目数派生：行数越多，每行错开越短，保证最后一行也能在
+        // REWIND_MS 的窗口内收完。短专辑仍用 70ms 的上限，观感与原来一致。
+        val collapseStaggerMs = if (era.tracks.size <= 1) {
+            COLLAPSE_ROW_STAGGER_MAX_MS
+        } else {
+            (
+                (COLLAPSE_WINDOW_MS - COLLAPSE_ROW_MS) / (era.tracks.size - 1)
+                ).coerceAtMost(COLLAPSE_ROW_STAGGER_MAX_MS)
+        }
+        val suffixStyle = remember(titleStyle, textColors) {
+            titleStyle.copy(
+                color = textColors.trackSuffix.copy(
+                    alpha = SwiftieEraContrast.TRACK_SUFFIX_ALPHA
+                )
+            )
+        }
         era.tracks.forEachIndexed { index, title ->
-            val appearAt = trackRowRevealAtMs(eraIndex, index, lowRam)
-            val revealSpan = (
-                trackRowRevealAtMs(eraIndex, index + 1, lowRam) - appearAt
-                ).coerceAtLeast(1L)
+            val appearAt = if (typed) {
+                trackRowRevealAtMs(eraIndex, index, lowRam)
+            } else {
+                0L
+            }
+            val revealSpan = if (typed) {
+                (
+                    trackRowRevealAtMs(eraIndex, index + 1, lowRam) - appearAt
+                    ).coerceAtLeast(1L)
+            } else {
+                1L
+            }
             val gilded = index == gildedRow
             // 自下而上：末行先收，首行最后收。描金那一行不收 —— 它是留下来的那一行，
             // 上面几行收干净之后它自然贴到日期底下
             val collapseStart =
-                (era.tracks.lastIndex - index) * COLLAPSE_ROW_STAGGER_MS / COLLAPSE_WINDOW_MS
+                (era.tracks.lastIndex - index) * collapseStaggerMs / COLLAPSE_WINDOW_MS
             val rowCollapse: () -> Float = if (gilded) {
                 NO_COLLAPSE
             } else {
@@ -212,6 +243,12 @@ internal fun SwiftieEraTracklist(
             } else {
                 String.format(Locale.US, "%02d", index + 1)
             }
+            // TV 后缀与曲名分开排：曲名一列用 weight(1f, fill = false)，先让出后缀的
+            // 固有宽度再省略；后缀自己是第二个 Text，不吃 Ellipsis。
+            // 这样「只对曲目名本身省略，(TV) 永远保留」是布局保证的，不靠猜宽度。
+            val tvIndex = if (typed) -1 else title.lastIndexOf(TV_SUFFIX)
+            val baseTitle = if (tvIndex >= 0) title.substring(0, tvIndex) else title
+            val suffix = if (tvIndex >= 0) title.substring(tvIndex) else ""
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -234,28 +271,26 @@ internal fun SwiftieEraTracklist(
                                     numberChars = numberText.length,
                                     numberLayout = { numberLayout[0] },
                                     titleLayout = { titleLayout[0] },
-                                    title = title,
+                                    title = baseTitle,
                                     rowHeight = rowHeight,
                                     cursor = textColors.number,
                                     elapsedInCard = elapsedInCard
                                 )
                         } else {
-                            // 在 graphicsLayer 里读时钟：每帧只失效 draw，不重组
+                            // 非 TTPD：曲目随卡片长出一次性全部出现，没有单独揭示/淡入/位移。
+                            // graphicsLayer 只保留卷收的 alpha，别再读时钟做逐行动画。
                             Modifier.graphicsLayer {
-                                val reveal = ((elapsedInCard() - appearAt) / TRACK_FADE_MS)
-                                    .coerceIn(0f, 1f)
-                                // alpha 在收起走到 70% 时就归零：高度还在收，字已经看不见了，
-                                // 于是永远看不到「字被行高横切一半」那一帧
                                 val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
-                                alpha = reveal * (1f - shrink)
-                                translationY = (1f - reveal) * 10.dp.toPx()
+                                alpha = 1f - shrink
                             }
                         }
                     )
                     .then(
                         if (gilded) {
                             Modifier.gildedRow(
-                                startMs = appearAt + GILD_RULE_DELAY_MS,
+                                // 卡片出现后 300ms 起扫，420ms 扫完；不再挂在该行
+                                // 逐行点亮的时刻上（那一套已经只服务 TTPD）
+                                startMs = GILD_RULE_DELAY_MS,
                                 elapsedInCard = elapsedInCard
                             )
                         } else {
@@ -275,12 +310,21 @@ internal fun SwiftieEraTracklist(
                     modifier = Modifier.width(numberWidth)
                 )
                 Text(
-                    text = title,
+                    text = baseTitle,
                     style = titleStyle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { titleLayout[0] = it }
+                    onTextLayout = { titleLayout[0] = it },
+                    modifier = if (suffix.isEmpty()) Modifier else Modifier.weight(1f, fill = false)
                 )
+                if (suffix.isNotEmpty()) {
+                    Text(
+                        text = suffix,
+                        style = suffixStyle,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
         }
     }
@@ -297,7 +341,7 @@ internal fun SwiftieEraTracklist(
  * 与 Clip 的序号会被布局框横切一半。
  *
  * [collapsing] 是个 `derivedStateOf`：卷收开始前它一直是 false，
- * 所以整段 104 秒里这一层一帧都不失效，真在卷的那 1.5 秒才逐帧重测。
+ * 所以整段 109 秒里这一层一帧都不失效，真在卷的那 1.5 秒才逐帧重测。
  */
 private fun Modifier.collapsingRow(
     rowHeight: Dp,
@@ -337,7 +381,7 @@ private const val TYPING_HEAD_FALLBACK_BASELINE = 0.651f
  * TTPD 这一列是那台打字机打出来的：字从左往右**一个字一个字落上去**，落下的地方压着
  * 一块方块游标（就是机器上的印字点）。淡入读作「点亮」，与屏幕上正在发生的事对不上。
  *
- * 行距 [stagger]（130ms）正好是打字头走到下一行的时间，所以任何一帧**只有一行**
+ * 行距正好是打字头走到下一行的时间，所以任何一帧**只有一行**
  * 正在被打 —— 真机也只有一根字锤。揭示就是裁一刀，字形被拦腰截断的那半个字由游标
  * 压着，看不见切口。
  *

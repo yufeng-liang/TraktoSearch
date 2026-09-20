@@ -75,28 +75,34 @@ num() { grep -m1 -E "$2" "$1" | grep -oE '= *[0-9][0-9_]*' | grep -oE '[0-9_]+' 
 # —— 前摇也在卡片时长里（SwiftieTimeline.cardDurationMs），改 TTPD 之后任何一张的
 # 起点都要带上它。这里对索引 ≥ 11（TTPD 之后）把前摇补回去。
 era_start() {
-  local want="$1" base per anchor_bonus anchor_idx idx total i
+  local want="$1" base per per_ttpd bonus anchor_bonus anchor_idx idx total i
   base="$(num "$TIMELINE" 'const val CARD_BASE_MS')"
   per="$(num "$TIMELINE" 'const val CARD_PER_TRACK_MS')"
+  per_ttpd="$(num "$TIMELINE" 'const val TTPD_CARD_PER_TRACK_MS')"
+  bonus="$(num "$TIMELINE" 'const val TTPD_TRACK_REVEAL_BONUS_MS')"
   anchor_bonus="$(num "$TIMELINE" 'const val CARD_ANCHOR_BONUS_MS')"
   # ERAS_CARDS_START 是 val 且由常量相加派生，用它的三个加数拼
   local solve diff intro
   solve="$(num "$TIMELINE" 'const val SOLVE_MS')"
   diff="$(num "$TIMELINE" 'const val DIFFUSION_MS')"
   intro="$(num "$TIMELINE" 'const val ERAS_INTRO_MS')"
-  # 锚点索引：ANCHOR_INDICES 那行的 setOf(0, 6)，取等号右边全部的整数
-  anchor_idx="$(grep -m1 -A 1 'ANCHOR_INDICES' "$TIMELINE" | grep -oE 'setOf\([0-9, ]+\)' | grep -oE '[0-9]+' | paste -sd' ' -)"
-  # 12 张卡片的曲目数，与 timeline 里的列表同一顺序
-  counts=(11 13 14 16 13 15 18 16 15 13 31 12)
+  # 额外停留索引：CARD_ANCHOR_BONUS_INDICES 那行的 setOf(6)，**不是**触感上的
+  # ANCHOR_INDICES（那个是 {0, 6}，TS1 已经不再多停 600ms）
+  anchor_idx="$(grep -m1 'CARD_ANCHOR_BONUS_INDICES' "$TIMELINE" | grep -oE 'setOf\([0-9, ]+\)' | grep -oE '[0-9]+' | paste -sd' ' -)"
+  # 12 张卡片的曲目数，与 timeline 里的列表同一顺序（补齐四张 TV 独有曲目后）
+  counts=(11 26 22 30 21 15 18 17 17 24 31 12)
   local ttp d_idx preroll
   ttp="$(num "$TIMELINE" 'const val TTPD_INDEX')"
   preroll="$(num "$TIMELINE" 'const val TTPD_PREROLL_MS')"
   total=$(( solve + diff + intro ))
   for ((i = 0; i < want; i++)); do
-    total=$(( total + base + per * counts[i] ))
+    # TTPD 那张的节拍与加时都跟其余 11 张不同（cardDurationMs 的同一条规则）
+    local row_per="$per"
+    if [ "$i" -eq "$ttp" ]; then row_per="$per_ttpd"; fi
+    total=$(( total + base + row_per * counts[i] ))
     case " $anchor_idx " in *" $i "*) total=$(( total + anchor_bonus )) ;; esac
-    # 前摇只加在 TTPD 那一张上（cardDurationMs 的同一条规则）
-    if [ "$i" -eq "$ttp" ]; then total=$(( total + preroll )); fi
+    # 前摇与逐行放慢只加在 TTPD 那一张上（cardDurationMs 的同一条规则）
+    if [ "$i" -eq "$ttp" ]; then total=$(( total + preroll + bonus )); fi
   done
   echo "$total"
 }

@@ -42,27 +42,31 @@ class SwiftieHapticScoreTest {
         }
 
     // ------------------------------------------------------------------------
-    // 最重要的一条：卡片段只有 24 记
+    // 最重要的一条：卡片段只有 13 记
     // ------------------------------------------------------------------------
 
     @Test
-    fun cardSegmentHasExactlyTwentyFourCues() {
+    fun cardSegmentHasExactlyThirteenCues() {
         val inCards = score.cues.filter {
             it.atMs >= SwiftieTimeline.ERAS_CARDS_START && it.atMs < SwiftieTimeline.ERAS_CARDS_END
         }
-        // 12 张卡各一记落地 + 12 段曲目列铺完各一记收尾。别的一记都不许有
-        assertThat(inCards).hasSize(24)
+        // 12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾。其余 11 张曲目一次性显示，
+        // 没有逐行铺完这个屏幕事件，就不该再发一记描述它
+        assertThat(inCards).hasSize(13)
         assertThat(score.of(SwiftieHapticCueKind.CARD_LAND)).hasSize(10)
         assertThat(score.of(SwiftieHapticCueKind.CARD_LAND_ANCHOR)).hasSize(2)
-        assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE)).hasSize(12)
+        assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE)).hasSize(1)
     }
 
     @Test
-    fun tracklistCuesAreOnePerCardNotOnePerTrack() {
-        // 204 首曲目，逐曲目就是 104 秒里 204 次震动 —— 手会麻，也什么都表达不了
-        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(204)
-        assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE))
-            .hasSize(SwiftieTimeline.ERA_TRACK_COUNTS.size)
+    fun tracklistDoneOnlyRemainsForTheTypewriterCard() {
+        // 244 首曲目，逐曲目就是 109 秒里 244 次震动 —— 手会麻，也什么都表达不了
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(244)
+        val done = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
+        assertThat(done.atMs).isGreaterThan(SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX))
+        assertThat(done.atMs).isLessThan(
+            SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX + 1)
+        )
     }
 
     @Test
@@ -75,17 +79,22 @@ class SwiftieHapticScoreTest {
                     it.kind != SwiftieHapticCueKind.TRACKLIST_DONE
             }
             assertThat(landing.atMs).isEqualTo(start + CARD_GROW_MS)
-            // 曲目列收尾压在最后一行的窗口末沿，与 SwiftieEraTracklist 共用时间表
-            assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE)[index].atMs)
-                .isEqualTo(start + trackRowRevealAtMs(index, trackCount, lowRam = false))
         }
+        // 只有 TTPD 保留曲目列收尾，且与 SwiftieEraTracklist 共用时间表
+        val index = SwiftieTimeline.TTPD_INDEX
+        val trackCount = SwiftieTimeline.ERA_TRACK_COUNTS[index]
+        assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single().atMs)
+            .isEqualTo(
+                SwiftieTimeline.eraStartMs(index) +
+                    trackRowRevealAtMs(index, trackCount, lowRam = false)
+            )
     }
 
     @Test
     fun ttpdTracklistGetsTheExtraThreeSecondsBeforeItsFinalCue() {
         val index = SwiftieTimeline.TTPD_INDEX
         val finalTrack = SwiftieTimeline.ERA_TRACK_COUNTS[index]
-        val cue = score.of(SwiftieHapticCueKind.TRACKLIST_DONE)[index]
+        val cue = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
         // TTPD 的时间窗是 130 × 31 + 3000；从卡内 400ms 的逐行起点算起，
         // 最后一记落在 400 + 7030ms
         assertThat(SwiftieTimeline.TTPD_TRACK_REVEAL_MS).isEqualTo(7_030L)
@@ -125,9 +134,9 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun wholeSequenceStaysInsideTheDiscreteBudget() {
-        // 47 记离散摊在 125.998 秒里，其中 24 记落在卡片段。轴线那一段只有一记 ——
+        // 36 记离散摊在 125.998 秒里，其中 13 记落在卡片段。轴线那一段只有一记 ——
         // 12 记拉链在屏幕上没有对应物。手链一整段没有触感（安静地滚进来）
-        assertThat(score.discrete()).hasSize(47)
+        assertThat(score.discrete()).hasSize(36)
         assertThat(score.discrete().size).isAtMost(65)
         assertThat(score.envelopes()).hasSize(4)
     }
@@ -205,14 +214,14 @@ class SwiftieHapticScoreTest {
             assertThat(kind.dense).isFalse()
             assertThat(quiet.of(kind)).hasSize(score.of(kind).size)
         }
-        // 卡片段那 24 记一记不少
+        // 卡片段那 13 记一记不少
         assertThat(
             quiet.cues.count {
                 it.atMs >= SwiftieTimeline.ERAS_CARDS_START &&
                     it.atMs < SwiftieTimeline.ERAS_CARDS_END
             }
-        ).isEqualTo(24)
-        assertThat(quiet.discrete()).hasSize(47)
+        ).isEqualTo(13)
+        assertThat(quiet.discrete()).hasSize(36)
         assertThat(quiet.envelopes()).hasSize(4)
     }
 
@@ -256,7 +265,7 @@ class SwiftieHapticScoreTest {
             (SwiftieTimeline.ERAS_INTRO_MS * AXIS_TICK_FADE_IN_AT).roundToInt()
         assertThat(ticks.single().atMs).isEqualTo(fadeInAtMs)
         // 不许压在两端的段落边界上：撞 ERAS_INTRO_START 会和扩散铺满并成一记，
-        // 撞 ERAS_CARDS_START 会把「卡片段只有 24 记」算成 25
+        // 撞 ERAS_CARDS_START 会把「卡片段只有 13 记」算成 14
         assertThat(ticks.single().atMs).isGreaterThan(SwiftieTimeline.ERAS_INTRO_START)
         assertThat(ticks.single().atMs).isLessThan(SwiftieTimeline.ERAS_CARDS_START)
         assertThat(score.semantics(SwiftieHapticCueKind.AXIS_TICK))

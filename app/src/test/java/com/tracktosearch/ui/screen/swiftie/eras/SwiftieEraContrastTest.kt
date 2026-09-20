@@ -9,7 +9,7 @@ import org.junit.Test
  * 12 张卡片的文字都必须读得出来。
  *
  * 这套断言是防回归用的：只要有人把某个时代主色改浅、或者把压暗那一步绕过去，
- * 这里就红 —— 而肉眼在 96.3 秒的动画里很难发现某一张卡片的曲目名淡了。
+ * 这里就红 —— 而肉眼在 109 秒的动画里很难发现某一张卡片的曲目名淡了。
  */
 class SwiftieEraContrastTest {
 
@@ -49,6 +49,28 @@ class SwiftieEraContrastTest {
                 .isAtLeast(SwiftieEraContrast.AA_SMALL)
             assertThat(ratioOf(era, colors.date, SwiftieEraContrast.DATE_ALPHA))
                 .isAtLeast(SwiftieEraContrast.AA_SMALL)
+            assertThat(ratioOf(era, colors.trackSuffix, SwiftieEraContrast.TRACK_SUFFIX_ALPHA))
+                .isAtLeast(SwiftieEraContrast.AA_SMALL)
+        }
+    }
+
+    @Test
+    fun trackSuffixCompositesToItsOwnHalftoneLayer() {
+        // 后缀在浅色主色上压到 0.70 后合成亮度与正文接近，靠去饱和体现层级；
+        // 但它必须单独算基色，不能复用正文色再压 alpha（那会掉到 AA 以下）
+        SwiftieErasData.ALL.forEach { era ->
+            val colors = SwiftieEraTextColors(era)
+            val background = SwiftieEraContrast.cardBackground(era.mainColor)
+            val suffix = SwiftieEraContrast.composite(
+                colors.trackSuffix,
+                SwiftieEraContrast.TRACK_SUFFIX_ALPHA,
+                background
+            )
+            val body = SwiftieEraContrast.composite(colors.body, 1f, background)
+            assertThat(SwiftieEraContrast.contrastRatio(suffix, background))
+                .isAtLeast(SwiftieEraContrast.AA_SMALL)
+            // 四张 TV 主色浅，后缀与正文亮度几乎相等；但两者不能是完全同一个实色
+            assertThat(suffix).isNotEqualTo(body)
         }
     }
 

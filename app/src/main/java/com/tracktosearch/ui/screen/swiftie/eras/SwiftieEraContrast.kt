@@ -9,7 +9,7 @@ import com.tracktosearch.ui.screen.swiftie.SwiftiePalette
  * Spec §6.2 原本要求「曲目名用该时代主色」，但 12 个时代主色里有 6 个是浅色
  * （`1989` 的 `#92CFEA`、`Lover` 的 `#F7A8C4`、`Fearless` 的 `#D4AF37`……），
  * 直接印在半透明白卡上只有 1.57–2.97:1，12sp 的曲目名根本读不出来 —— 而这一段
- * 96.3 秒的全部意义就是让人**看清**整个历程。
+ * 109 秒的全部意义就是让人**看清**整个历程。
  *
  * 因此保留主色的**色相与饱和度**，只压低明度到刚好满足 WCAG AA 4.5:1。
  * `1989` 会从淡天蓝变成深天蓝，`Lover` 从淡粉变成玫红 —— 时代辨识度还在，
@@ -25,6 +25,15 @@ internal object SwiftieEraContrast {
 
     /** 发行日期同样是信息而非装饰，只比曲目名淡一点。 */
     const val DATE_ALPHA: Float = 0.85f
+
+    /**
+     * Taylor's Version 后缀 `(TV)` 的透明度，比序号再压一档。
+     *
+     * 它要求**本身满足 AA**：后缀是曲名的一部分，不是装饰。压到 0.70 之后，
+     * 浅色主色的合成结果会与正文的亮度接近 —— 「更浅」于是体现为去饱和，
+     * 而不是亮度差。这是为了不牺牲可读性做的取舍。
+     */
+    const val TRACK_SUFFIX_ALPHA: Float = 0.70f
 
     /** 白纸层的不透明度，与 `SwiftieEraCard` 的 `Color.White.copy(alpha = 0.86f)` 同步。 */
     private const val PAPER_ALPHA = 0.86f
@@ -269,5 +278,12 @@ internal class SwiftieEraTextColors(era: SwiftieEra) {
         color = era.textColor,
         background = background,
         alpha = SwiftieEraContrast.DATE_ALPHA
+    )
+
+    /** Taylor's Version 后缀 `(TV)`：同样满足 AA，只与正文拉开一档层级。 */
+    val trackSuffix: Color = SwiftieEraContrast.readable(
+        color = era.textColor,
+        background = background,
+        alpha = SwiftieEraContrast.TRACK_SUFFIX_ALPHA
     )
 }

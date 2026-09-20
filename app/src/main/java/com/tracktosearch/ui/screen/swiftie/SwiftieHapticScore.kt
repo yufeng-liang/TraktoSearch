@@ -42,7 +42,7 @@ enum class SwiftieHapticCueKind {
     /** 锚点卡片（`ANCHOR_INDICES` = Taylor Swift、Lover）的落地，比其余十张重 */
     CARD_LAND_ANCHOR,
 
-    /** 曲目列铺完的收尾一记，**不逐曲目** */
+    /** TTPD 曲目列打完的收尾一记，**不逐曲目**；其余 11 张已无曲目列触感 */
     TRACKLIST_DONE,
 
     /** 签名 11 段笔画：落笔连续、抬笔静默的整段包络 */
@@ -163,9 +163,10 @@ data class SwiftieEnvelopeCue(
  *
  * ### 总量
  *
- * 默认档 47 记离散 + 4 段包络（终局签名段占 12 记离散与 1 段包络，手链一记都没有）。
- * 最重要的一条不变式：**卡片段总共只有 24 记** —— 12 张卡各一记落地、12 段曲目列
- * 铺完各一记收尾，**不逐曲目**。逐曲目就是 104 秒里 204 次震动，手会麻，也什么都表达不了。
+ * 默认档 36 记离散 + 4 段包络（终局签名段占 12 记离散与 1 段包络，手链一记都没有）。
+ * 最重要的一条不变式：**卡片段总共只有 13 记** —— 12 张卡各一记落地，只有 TTPD
+ * 保留一记曲目列收尾，**不逐曲目**。逐曲目就是 109 秒里 244 次震动，手会麻，
+ * 也什么都表达不了。
  *
  * ### 设计依据
  *
@@ -313,7 +314,7 @@ private fun axisIntroCues(): List<SwiftieHapticCue> = listOf(
 )
 
 /**
- * 卡片段：**总共 24 记**，12 张卡各一记落地 + 12 段曲目列铺完各一记收尾。
+ * 卡片段：**总共 13 记**，12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾。
  *
  * - 落地落在长出走完那一刻（`eraStartMs(i) + CARD_GROW_MS`），不是起手那一刻：
  *   `SwiftieEraCard` 的入场曲线在这里收住，手上那一记要和眼里那一下对齐。
@@ -321,34 +322,40 @@ private fun axisIntroCues(): List<SwiftieHapticCue> = listOf(
  *   `CLICK` + `THUD` 两笔，tier 0 上是 `CONFIRM`（退 `VIRTUAL_KEY`）；其余十张用
  *   `GESTURE_END`，tier 1 上是半幅 `THUD`，tier 0 上退到 `CLOCK_TICK`
  *   —— 正是设计文档给这两行标的「最低层」`tap()` 与 `lightTap()`。
- * - 曲目列收尾用 `FREQUENT_TICK`（整条梯度最轻的一档）：它是一句话的句号，
- *   不该盖过同一张卡的落地。时刻由 `trackRowRevealAtMs` 派生 —— TTPD 会走放慢后的
- *   逐行时间表，其余 11 张仍是原来的 `TRACK_REVEAL_START_MS + stagger × 曲目数`。
+ * - 曲目列收尾只留给 TTPD：其余 11 张现在是一次性随卡片长出全部显示，
+ *   没有「逐行铺完」这个屏幕事件，再发一记就是描述没发生的事。TTPD 仍逐行打字，
+ *   收尾用 `FREQUENT_TICK`（整条梯度最轻的一档），不该盖过同一张卡的落地。
  */
 private fun erasCardCues(): List<SwiftieHapticCue> =
     SwiftieTimeline.ERA_TRACK_COUNTS.flatMapIndexed { index, trackCount ->
         val start = SwiftieTimeline.eraStartMs(index)
         val anchored = index in SwiftieTimeline.ANCHOR_INDICES
-        listOf(
-            SwiftieDiscreteCue(
-                atMs = start + CARD_GROW_MS,
-                kind = if (anchored) {
-                    SwiftieHapticCueKind.CARD_LAND_ANCHOR
-                } else {
-                    SwiftieHapticCueKind.CARD_LAND
-                },
-                semantic = if (anchored) HapticSemantic.CONFIRM else HapticSemantic.GESTURE_END,
-            ),
-            SwiftieDiscreteCue(
-                atMs = start + trackRowRevealAtMs(
-                    eraIndex = index,
-                    rowIndex = trackCount,
-                    lowRam = false,
-                ),
-                kind = SwiftieHapticCueKind.TRACKLIST_DONE,
-                semantic = HapticSemantic.FREQUENT_TICK,
-            ),
-        )
+        buildList {
+            add(
+                SwiftieDiscreteCue(
+                    atMs = start + CARD_GROW_MS,
+                    kind = if (anchored) {
+                        SwiftieHapticCueKind.CARD_LAND_ANCHOR
+                    } else {
+                        SwiftieHapticCueKind.CARD_LAND
+                    },
+                    semantic = if (anchored) HapticSemantic.CONFIRM else HapticSemantic.GESTURE_END,
+                )
+            )
+            if (index == SwiftieTimeline.TTPD_INDEX) {
+                add(
+                    SwiftieDiscreteCue(
+                        atMs = start + trackRowRevealAtMs(
+                            eraIndex = index,
+                            rowIndex = trackCount,
+                            lowRam = false,
+                        ),
+                        kind = SwiftieHapticCueKind.TRACKLIST_DONE,
+                        semantic = HapticSemantic.FREQUENT_TICK,
+                    )
+                )
+            }
+        }
     }
 
 /**

@@ -72,7 +72,8 @@ class SwiftieHapticConductorTest {
         val loverLanding = SwiftieTimeline.eraStartMs(6) + CARD_GROW_MS
         val onSeek = conductor.onFrame(elapsedMs = loverLanding - 160L, seekEpoch = 1, muted = false)
         assertThat(onSeek).isEmpty()
-        // 跨过去的那些记（5 记落地 + 6 记曲目列收尾）就此作废，不排队等着
+        // 跨过去的那些记（5 记落地 + 若干曲目列收尾，其中只有 TTPD 那一记存在）
+        // 就此作废，不排队等着
         assertThat(recorder.performed).hasSize(dispatchedBeforeSeek)
 
         // 拨完之后从新位置接着走：Lover 的落地在它自己的段首 + 400ms
@@ -124,10 +125,12 @@ class SwiftieHapticConductorTest {
 
         // 闸门重开之后从当时的时刻接着走，欠下的十几记不许补发成一串乱码
         assertThat(conductor.onFrame(elapsedMs = 3_700L, seekEpoch = 0, muted = false)).isEmpty()
-        // 4930 是第一张卡曲目列铺完，那一记是闸门重开后第一条到期的
-        val resumed = conductor.onFrame(elapsedMs = 5_000L, seekEpoch = 0, muted = false)
+        // 非 TTPD 已没有曲目列收尾触感；闸门重开后第一条到期的是下一张卡的落地。
+        // 第一张卡落地在 3500ms（已跨过），第二张在 eraStartMs(1) + 400ms
+        val nextLanding = SwiftieTimeline.eraStartMs(1) + CARD_GROW_MS
+        val resumed = conductor.onFrame(elapsedMs = nextLanding, seekEpoch = 0, muted = false)
         assertThat(resumed.map { it.kind })
-            .containsExactly(SwiftieHapticCueKind.TRACKLIST_DONE)
+            .containsExactly(SwiftieHapticCueKind.CARD_LAND)
     }
 
     @Test
@@ -247,11 +250,11 @@ class SwiftieHapticConductorTest {
         val recorder = Recorder(envelopeAccepted = false)
         val score = SwiftieHapticScore()
         val dispatched = recorder.conductor(score).runWholeSequence()
-        // 没人接包络，所以谱子上每一条都该露面：47 记离散 + 4 段包络。
+        // 没人接包络，所以谱子上每一条都该露面：36 记离散 + 4 段包络。
         // 离散那个数跟着 SwiftieSignaturePath 的笔数走（现在 12 笔，'i' 上那一点单独算
         // 一笔），重新子集化字形导致笔数变化时这三条用例的数字都要跟着改
         assertThat(dispatched).containsExactlyElementsIn(score.cues).inOrder()
-        assertThat(recorder.performed).hasSize(47)
+        assertThat(recorder.performed).hasSize(36)
         assertThat(recorder.envelopes).hasSize(4)
     }
 
@@ -264,7 +267,7 @@ class SwiftieHapticConductorTest {
         // 1 扩散 + 12 笔画 + 1 闪光 + 2 绽放
         assertThat(standIns).isEqualTo(16)
         assertThat(dispatched).hasSize(score.cues.size - standIns)
-        assertThat(recorder.performed).hasSize(47 - standIns)
+        assertThat(recorder.performed).hasSize(36 - standIns)
         assertThat(recorder.envelopes).hasSize(4)
     }
 
@@ -291,7 +294,7 @@ class SwiftieHapticConductorTest {
         assertThat(score.cues).containsExactlyElementsIn(SwiftieHapticScore().cues).inOrder()
         // 「标尺出现了」那一记留着 —— 它是结构性路标，不是密集事件
         assertThat(dispatched.map { it.kind }).contains(SwiftieHapticCueKind.AXIS_TICK)
-        assertThat(recorder.performed).hasSize(47)
+        assertThat(recorder.performed).hasSize(36)
         assertThat(recorder.envelopes).hasSize(4)
     }
 }
