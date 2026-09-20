@@ -435,4 +435,7 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
     assert.match(email.html, /<meta name="color-scheme" content="light only">/);
     assert.match(email.html, /<meta name="supported-color-schemes" content="light only">/);
     assert.match(email.html, /:root\{color-scheme:light only;supported-color-schemes:light only\}/);
+    // Gmail 移动端会剥离 <head>，html/body 内联声明必须同时存在才能兜住反相
+    assert.match(email.html, /<html lang="zh-CN" style="color-scheme:light only;supported-color-schemes:light only">/);
+    assert.match(email.html, /<body style="color-scheme:light only;supported-color-schemes:light only;/);
 });
