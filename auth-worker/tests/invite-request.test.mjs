@@ -431,4 +431,8 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
     assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);
+    // 邮件固定为浅色配色：缺少声明时邮件客户端的深色模式会把整个米白底反相压暗
+    assert.match(email.html, /<meta name="color-scheme" content="light only">/);
+    assert.match(email.html, /<meta name="supported-color-schemes" content="light only">/);
+    assert.match(email.html, /:root\{color-scheme:light only;supported-color-schemes:light only\}/);
 });
