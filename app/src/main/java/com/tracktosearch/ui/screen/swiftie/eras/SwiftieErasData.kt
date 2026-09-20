@@ -431,8 +431,8 @@ object SwiftieErasData {
         textColor = Color(0xFF1B2A5B),
         fontResId = R.font.era_midnights,
         motif = SwiftieEraMotif.LIGHTER_STARS,
-        // The Til Dawn Edition 23 首：标准版 13 首 + 3am Edition 7 首 + 3 首加曲。
-        // 保留标准版曲目，再追加 More Lana / Ice Spice 版本；显示名去掉 feat. 标记。
+        // 合辑 24 首：The Til Dawn Edition 23 首 + Late Night Edition 加曲 You're Losing Me。
+        // 这是跨版本合辑，不对应任一单独发行的实体版；显示名去掉 feat. 标记。
         tracks = listOf(
             "Lavender Haze",
             "Maroon",
@@ -455,6 +455,7 @@ object SwiftieErasData {
             "Would've, Could've, Should've",
             "Dear Reader",
             "Hits Different",
+            "You're Losing Me",
             "Snow on the Beach (More Lana)",
             "Karma (Ice Spice)"
         )

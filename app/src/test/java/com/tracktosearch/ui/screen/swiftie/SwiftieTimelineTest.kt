@@ -24,13 +24,13 @@ class SwiftieTimelineTest {
 
     @Test
     fun segmentBoundariesMatchTheSpec() {
-        // 2026-09-19：1989 换豪华版 16 首，卡片段多 390ms；2026-09-20 再补三张最多版本，105400 → 107090
+        // 2026-09-19：1989 换豪华版 16 首，卡片段多 390ms；2026-09-20 再补四首版本差异，105400 → 107220
         assertThat(SwiftieTimeline.DIFFUSION_START).isEqualTo(400L)
         assertThat(SwiftieTimeline.ERAS_INTRO_START).isEqualTo(1_100L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START).isEqualTo(3_100L)
-        assertThat(SwiftieTimeline.ERAS_CARDS_END).isEqualTo(107_090L)
-        assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(107_090L)
-        assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(112_490L)
+        assertThat(SwiftieTimeline.ERAS_CARDS_END).isEqualTo(107_220L)
+        assertThat(SwiftieTimeline.SIGNATURE_START).isEqualTo(107_220L)
+        assertThat(SwiftieTimeline.FINAL_HOLD_START).isEqualTo(112_620L)
         assertThat(SwiftieTimeline.LOVER_BLOOM_START).isEqualTo(119_500L)
         assertThat(SwiftieTimeline.FADE_OUT_START).isEqualTo(123_000L)
     }
@@ -63,8 +63,9 @@ class SwiftieTimelineTest {
     fun finalHoldAbsorbsTheSlackAndNeverGoesNegative() {
         // 唯一的弹性段：曲目数或 TTPD 前摇一改，误差全落在这里，不许把 Lover 绽放挤出配乐。
         // 2026-09-18：TTPD 逐行打印加 3000ms，从定格挪出同样长度，10590 → 7590
-        // 2026-09-19：1989 换豪华版 16 首（+130×3ms），7590 → 5510
-        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(5_510L)
+        // 2026-09-19：1989 换豪华版 16 首（+130×3ms），7590 → 5510；
+        // 2026-09-20：Midnights 加曲再占 130ms，5510 → 5380
+        assertThat(SwiftieTimeline.FINAL_HOLD_MS).isEqualTo(5_380L)
         assertThat(SwiftieTimeline.FINAL_HOLD_MS).isGreaterThan(0L)
         assertThat(SwiftieTimeline.FINAL_HOLD_START + SwiftieTimeline.FINAL_HOLD_MS)
             .isEqualTo(SwiftieTimeline.REWIND_START)
@@ -91,9 +92,9 @@ class SwiftieTimelineTest {
     fun twelveCardsFillTheErasSegment() {
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS).hasSize(12)
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS[10]).isEqualTo(31)
-        // 补齐 folklore / evermore / Midnights 的最多曲目版本后总数 203
-        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(203)
-        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(103_990L)
+        // 补齐 folklore / evermore 最多版本，并为 Midnights 合辑版加入 You're Losing Me 后总数 204
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(204)
+        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(104_120L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START + SwiftieTimeline.ERAS_CARDS_MS)
             .isEqualTo(SwiftieTimeline.ERAS_CARDS_END)
     }
@@ -109,15 +110,15 @@ class SwiftieTimelineTest {
         // 第 12 张（TTPD 之后那张）也变长了 —— TTPD 的加时加在它身上，它跟着往后挪
         assertThat(SwiftieTimeline.eraIndexAt(104_000L)).isEqualTo(11)
         // 边界必须是卡片段末尾，不是 REWIND_START —— 终局夹在两者之间
-        // （补齐三张最多版本后卡片段末尾是 107090）
-        assertThat(SwiftieTimeline.eraIndexAt(107_090L)).isNull()
+        // （补齐版本差异后卡片段末尾是 107220）
+        assertThat(SwiftieTimeline.eraIndexAt(107_220L)).isNull()
         assertThat(SwiftieTimeline.eraIndexAt(112_000L)).isNull()
     }
 
     @Test
     fun motionPreheatSitsInsideTheSignatureSegment() {
-        // 签名段整体后移，预热仍停在收笔前 260ms（补齐三张最多版本后随段落到 111230）
-        assertThat(SwiftieTimeline.MOTION_PREHEAT_AT).isEqualTo(111_230L)
+        // 签名段整体后移，预热仍停在收笔前 260ms（补齐版本差异后随段落到 111360）
+        assertThat(SwiftieTimeline.MOTION_PREHEAT_AT).isEqualTo(111_360L)
         assertThat(SwiftieTimeline.MOTION_PREHEAT_AT)
             .isGreaterThan(SwiftieTimeline.SIGNATURE_START)
         // 预热必须在终局段内跑完：写完之后就是定格合影，一帧都不该再出
