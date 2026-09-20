@@ -54,6 +54,28 @@ RichTapAudioPlayer、RichTapVideoPlayer 三个示例工程）在 `RichTapUtils.i
 `RichTapUtils.isSupportedRichTap()` 判定，不支持则整层退回 AOSP 触感通路
 （`HapticFeedbackConstants` / `VibrationEffect`）。
 
+## sherpa-onnx 语音关键词识别
+
+`app/libs/sherpa-onnx-1.13.6.aar`
+
+| 项 | 值 |
+| --- | --- |
+| 组件 | sherpa-onnx Android native AAR |
+| 版本 | 1.13.6 |
+| 用途 | AI 精灵按住说话时的本地关键词检测（KWS），将 PCM 音频流匹配到 `keywords.txt` 中的角色 ID |
+| 大小 | 49 097 942 字节（约 46.82 MiB） |
+| SHA-256 | `0012d9a28f15bd6fb966b62b70a75da3990512fdccce28b83098248ce4be1698` |
+| 上游项目 | [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) |
+| 对应发布 | [v1.13.6](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.6) |
+| 许可证 | Apache-2.0；以上游仓库的 [LICENSE](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 为准 |
+| 项目集成 | `implementation(files("libs/sherpa-onnx-1.13.6.aar"))` |
+
+当前项目没有通过 Gradle/Maven 坐标解析该 Android 二进制，而是直接引用 `app/libs/` 下的固定 AAR。这样可以锁定当前验证过的 native 实现、版本与 ABI，保证源码克隆后能够按相同二进制复现构建；如果以后改为构建脚本下载或 Git LFS / Release 分发，应同步更新版本、下载来源和 SHA-256。
+
+AAR 内未发现独立的 `LICENSE` / `NOTICE` 条目，因此本节保留上游许可证、版本和校验值作为归属记录。AAR 的许可证不自动覆盖项目另外打包的语音模型；`app/src/main/assets/kws/` 下的 ONNX 模型、tokens 和关键词表应按各自来源与授权另行核对。
+
+构建配置只保留 `arm64-v8a`（见 `app/build.gradle.kts` 的 `abiFilters`），AAR 文件大小不等于最终 APK 增加量。删除该 AAR 会同时破坏 `SherpaOnnxKwsRecognizer`、`AiVoiceCapture` 和 AI 精灵语音激活链路，不能只删除二进制文件。
+
 ## 随包字体
 
 `app/src/main/res/font/` 下共 14 个字体：彩蛋序列用的 13 个来自 Google Fonts，
