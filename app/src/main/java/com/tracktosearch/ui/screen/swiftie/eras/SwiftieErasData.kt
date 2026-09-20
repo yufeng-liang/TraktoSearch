@@ -123,7 +123,8 @@ enum class SwiftieEraParticle {
  * @param mainColor 时代主色，用于色带、卡片底色、曲目序号
  * @param textColor 卡片文字色。默认同 [mainColor]；米白的 TTPD 必须覆写
  * @param fontResId 专辑名专用子集化字体。**只够渲染专辑名**，不要拿去画曲目
- * @param tracks 标准版曲目，按官方顺序，不含客串信息
+ * @param tracks 展示用曲目，按官方顺序；含该专辑最多曲目版本的独有曲目，
+ *   同版独占曲目以浅色 `(TV)` 标记，不含客串信息
  */
 data class SwiftieEra(
     val name: String,
@@ -224,7 +225,21 @@ object SwiftieErasData {
             "The Way I Loved You",
             "Forever & Always",
             "The Best Day",
-            "Change"
+            "Change",
+            // ---- Taylor's Version 独有曲目（13 首）----
+            "Jump Then Fall (TV)",
+            "Untouchable (TV)",
+            "Forever & Always (Piano Version) (TV)",
+            "Come In with the Rain (TV)",
+            "Superstar (TV)",
+            "The Other Side of the Door (TV)",
+            "Today Was a Fairytale (TV)",
+            "You All Over Me (TV)",
+            "Mr. Perfectly Fine (TV)",
+            "We Were Happy (TV)",
+            "That's When (TV)",
+            "Don't You (TV)",
+            "Bye Bye Baby (TV)"
         )
     )
 
@@ -249,7 +264,16 @@ object SwiftieErasData {
             "Innocent",
             "Haunted",
             "Last Kiss",
-            "Long Live"
+            "Long Live",
+            // ---- Taylor's Version 独有曲目（8 首）----
+            "Ours (TV)",
+            "Superman (TV)",
+            "Electric Touch (TV)",
+            "When Emma Falls in Love (TV)",
+            "I Can See You (TV)",
+            "Castles Crumbling (TV)",
+            "Foolish One (TV)",
+            "Timeless (TV)"
         )
     )
 
@@ -277,7 +301,22 @@ object SwiftieErasData {
             "The Lucky One",
             "Everything Has Changed",
             "Starlight",
-            "Begin Again"
+            "Begin Again",
+            // ---- Taylor's Version 独有曲目（14 首）----
+            "The Moment I Knew (TV)",
+            "Come Back... Be Here (TV)",
+            "Girl at Home (TV)",
+            "State of Grace (Acoustic Version) (TV)",
+            "Ronan (TV)",
+            "Better Man (TV)",
+            "Nothing New (TV)",
+            "Babe (TV)",
+            "Message in a Bottle (TV)",
+            "I Bet You Think About Me (TV)",
+            "Forever Winter (TV)",
+            "Run (TV)",
+            "The Very First Night (TV)",
+            "All Too Well (10 Minute Version) (TV)"
         )
     )
 
@@ -306,7 +345,13 @@ object SwiftieErasData {
             // 同步为 16，卡片多出的停留由定格弹性段吸收
             "Wonderland",
             "You Are In Love",
-            "New Romantics"
+            "New Romantics",
+            // ---- Taylor's Version 独有曲目（5 首）----
+            "\"Slut!\" (TV)",
+            "Say Don't Go (TV)",
+            "Now That We Don't Talk (TV)",
+            "Suburban Legends (TV)",
+            "Is It Over Now? (TV)"
         )
     )
 

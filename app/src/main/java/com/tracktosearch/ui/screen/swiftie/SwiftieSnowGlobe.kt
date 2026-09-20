@@ -398,7 +398,7 @@ half4 main(float2 coord) {
  * **不写年份、不写任何解释文字** —— 讲出来就不是彩蛋了。
  *
  * @param elapsedMs 序列的绝对已用毫秒，内部按 [SwiftieTimeline] 的常量自己分拍
- * @param content 球内那张卡片。**卷收由调用方负责**（`SwiftieEraCard` 里那 18 行曲目
+ * @param content 球内那张卡片。**卷收由调用方负责**（`SwiftieEraCard` 里的曲目列
  *   自下而上收起，只留专辑名 + 日期 + 第 3 首 + 爱心），本函数收到的就是一个已经或
  *   正在变矮的 Composable，尺寸约 320×110dp；这里按 [INNER_WIDTH_RATIO] 把它收进圆内，
  *   并在房子淡入那一拍缩到 [CARD_SETTLE_SCALE] 沉到球的下半（见 [cardSettleProgress]）——

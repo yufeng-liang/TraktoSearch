@@ -38,6 +38,23 @@ class SwiftieErasDataTest {
         assertThat(dates.last()).isEqualTo("2025-10-03")
     }
 
+
+    @Test
+    fun taylorVersionExclusiveTracksAreCovered() {
+        // 四张重录：只列各自 Taylor's Version 的独有曲目，旧曲保持裸名
+        val expected = mapOf(
+            1 to listOf("Jump Then Fall (TV)", "Bye Bye Baby (TV)"),
+            2 to listOf("Ours (TV)", "Timeless (TV)"),
+            3 to listOf("The Moment I Knew (TV)", "All Too Well (10 Minute Version) (TV)"),
+            4 to listOf("\"Slut!\" (TV)", "Is It Over Now? (TV)"),
+        )
+        expected.forEach { (index, tracks) ->
+            assertThat(SwiftieErasData.ALL[index].tracks).containsAtLeastElementsIn(tracks)
+        }
+        assertThat(SwiftieErasData.ALL.map { it.tracks.count { track -> track.endsWith("(TV)") } })
+            .isEqualTo(listOf(0, 13, 8, 14, 5, 0, 0, 0, 0, 0, 0, 0))
+    }
+
     @Test
     fun officialCasingIsPreserved() {
         val names = SwiftieErasData.ALL.map { it.name }

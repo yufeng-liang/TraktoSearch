@@ -47,8 +47,11 @@ object SwiftieTimeline {
     /** 单张卡片的固定开销：400 长出 + 5000 停留 + 400 回落 + 100 段间停顿。 */
     const val CARD_BASE_MS: Long = 5_900L
 
-    /** 其余 11 张的曲目逐行点亮 stagger，每首一行。TTPD 另有放慢后的时间表。 */
-    const val CARD_PER_TRACK_MS: Long = 130L
+    /** 其余 11 张的曲目时间账本，每首一行。补齐最多曲目版本后仍要留住阅读时间。 */
+    const val CARD_PER_TRACK_MS: Long = 117L
+
+    /** TTPD 的逐行打印仍按 130ms：31 行打字机是表演本身，不跟其余 11 张一起加速。 */
+    const val TTPD_CARD_PER_TRACK_MS: Long = 130L
 
     /**
      * Lover 段额外停留。
@@ -100,25 +103,28 @@ object SwiftieTimeline {
     /**
      * 12 张专辑曲目数，顺序与 Eras 一致。
      *
-     * 索引 4 的 1989 用 **2014 豪华版 16 首**（标准 13 + Wonderland / You Are In Love /
-     * New Romantics）；索引 7/8/9 分别使用 folklore 豪华版 17 首、evermore 豪华版 17 首、
+     * 索引 1/2/3/4 都取各专辑曲目最多的 Taylor's Version：Fearless 26、Speak Now 22、
+     * Red 30、1989 21；索引 4 的 1989 含 2014 豪华版 16 首与重录独有 5 首；
+     * 索引 7/8/9 分别使用 folklore 豪华版 17 首、evermore 豪华版 17 首、
      * Midnights 跨版本合辑 24 首（The Til Dawn Edition 23 首 + Late Night 加曲
      * You're Losing Me）；索引 10 的 TTPD 用 **The Anthology 版 31 首**。
      * Phase D 的 `SwiftieErasData` 必须与此逐项吻合，那边有交叉断言。
      */
-    val ERA_TRACK_COUNTS: List<Int> = listOf(11, 13, 14, 16, 16, 15, 18, 17, 17, 24, 31, 12)
+    val ERA_TRACK_COUNTS: List<Int> =
+        listOf(11, 26, 22, 30, 21, 15, 18, 17, 17, 24, 31, 12)
 
     /** TTPD 整列打印的窗口长度：31 行普通时间表再加 [TTPD_TRACK_REVEAL_BONUS_MS]。 */
     val TTPD_TRACK_REVEAL_MS: Long =
-        CARD_PER_TRACK_MS * ERA_TRACK_COUNTS[TTPD_INDEX] + TTPD_TRACK_REVEAL_BONUS_MS
+        TTPD_CARD_PER_TRACK_MS * ERA_TRACK_COUNTS[TTPD_INDEX] + TTPD_TRACK_REVEAL_BONUS_MS
 
     fun cardDurationMs(index: Int, trackCount: Int): Long =
-        CARD_BASE_MS + CARD_PER_TRACK_MS * trackCount +
+        CARD_BASE_MS +
+            (if (index == TTPD_INDEX) TTPD_CARD_PER_TRACK_MS else CARD_PER_TRACK_MS) * trackCount +
             (if (index in CARD_ANCHOR_BONUS_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
 
-    /** 12 张卡片合计 104120ms（含 folklore / evermore 最多版本与 Midnights 合辑版）。 */
+    /** 12 张卡片合计 106551ms（含四张 TV 独有曲目与其余最多版本）。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS
         .withIndex()
         .sumOf { (index, count) -> cardDurationMs(index, count) }
@@ -140,7 +146,7 @@ object SwiftieTimeline {
     const val ERAS_CARDS_START: Long = ERAS_INTRO_START + ERAS_INTRO_MS
 
     /**
-     * T107220：第 12 张卡片走完。
+     * T109651：第 12 张卡片走完。
      *
      * 与 [REWIND_START] **不再是同一个值** —— 终局插在两者之间，
      * 所以判「是否还在卡片段内」只能用这个常量。
@@ -150,7 +156,7 @@ object SwiftieTimeline {
     /**
      * 终局一整段：签名（写字 4400 + 抬笔停顿 300 + 收笔闪光 700）与手链同场。
      *
-     * T107220–112620。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
+     * T109651–115051。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
      * `SIGNATURE_PAUSE_TOTAL_MS` / `SIGNATURE_FLASH_MS`，**相加必须正好等于本值**
      * （`SwiftieTimelineTest` 守着）。
      *
@@ -174,7 +180,7 @@ object SwiftieTimeline {
     val BRACELET_ENTRY_MS: Long = 800L
 
     /**
-     * T112620–118000：定格合影，留出截图时间。
+     * T115051–118000：定格合影，留出截图时间。
      *
      * 这一段是账本里唯一的**弹性段**：前面各段都由内容决定长度，
      * 后面各段由配乐钉死，误差全落在这里。改曲目数、改手链进场时刻都只会让定格变长变短，
@@ -185,7 +191,8 @@ object SwiftieTimeline {
      *
      * 2026-09-18 从中挪出 3000ms 给 TTPD 的逐行打印，10590 → 7590；
      * 2026-09-20 补齐 folklore / evermore / Midnights 最多版本，再补 Midnights 加曲，
-     * 7590 → 5510 → 5380。
+     * 7590 → 5510 → 5380；同日再补四张 Taylor's Version 独有 40 首，
+     * 其余 11 张降到 117ms/首，5380 → 2949。
      * TS1 去掉的 600ms 则转给 TTPD 前摇。两个配乐钉死的端点都没动。
      */
     val FINAL_HOLD_START: Long = SIGNATURE_START + SIGNATURE_MS
