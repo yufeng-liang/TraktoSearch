@@ -2,7 +2,7 @@
 
 从观影清单到网盘资源，一步之遥。
 
-一款 Android 影视搜索与管理工具：基于 Trakt 观影清单，也可独立使用豆瓣账号，快速查找网盘资源、管理想看/已看清单，还有 AI 精灵陪你看电影。
+一款 Android 影视搜索与管理工具：基于 Trakt 观影清单，也可独立使用豆瓣账号，快速查找网盘资源、管理想看/已看清单。
 
 `Android 8.0+ · Kotlin · Jetpack Compose · Material 3 · v3.6.0 · 中/英/日/韩`
 
@@ -12,17 +12,13 @@
 
 内置 pansou、PanHub、Z-RESO 三大搜索源并发聚合，支持按网盘类型（夸克/百度网盘/阿里云盘/迅雷等）过滤，一键跳转打开。更提供**自定义搜索源引擎**：三步向导 + AutoProbe 自动探测接口结构（简化 JSONPath 解析），任何兼容接口都能接入，还支持分享导入。
 
-### 🤖 AI 精灵中心
-
-选一只 AI 伙伴陪你看电影：称呼问候（含语音播报）、口味分析与吐槽、13 题观影测验生成专属报告、每日影视冷知识。API Key 只存服务端，经自建网关安全调用。
-
 ### 🔄 Trakt + 豆瓣双生态同步
 
 Trakt OAuth 登录同步想看/已看/评分；豆瓣独立模式无需 Trakt，用豆瓣账号直接同步观影数据——支持失败续传、完整重写可回滚、状态一致性检查。还可从 IMDb 导出的 CSV 一键导入想看列表。
 
 ### 🎬 发现与深度筛选
 
-豆瓣猜你喜欢、新片榜/口碑榜/Top250，Trakt 热门/最受期待/社区列表等栏目全部支持拖拽排序；按类型、地区、标签、评分区间、年代多维筛选。详情页聚合 IMDb/TMDB/OMDb/豆瓣四源评分、演职员、预告片剧照、季集信息，评论支持一键批量翻译（AI 大模型优先）。
+豆瓣猜你喜欢、新片榜/口碑榜/Top250，Trakt 热门/最受期待/社区列表等栏目全部支持拖拽排序；按类型、地区、标签、评分区间、年代多维筛选。详情页聚合 IMDb/TMDB/OMDb/豆瓣四源评分、演职员、预告片剧照、季集信息，评论支持一键批量翻译。
 
 ### 📊 观影统计与记录
 
@@ -53,7 +49,7 @@ app/src/main/java/com/tracktosearch/
 ├── ui/
 │   ├── component/       # 液态玻璃组件体系（GlassSurface/BackdropHost 等）
 │   ├── navigation/      # 导航路由
-│   ├── screen/          # 各页面（main/discover/detail/douban/watchlist/statistics/ai/settings/...）
+│   ├── screen/          # 各页面（main/discover/detail/douban/watchlist/statistics/settings/...）
 │   └── theme/           # 主题（命名主题色、天气/节日动态主题、背景光效）
 ├── di/                  # Hilt 模块
 ├── widget/              # Glance 快速搜索桌面小组件
