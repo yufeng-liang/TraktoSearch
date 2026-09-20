@@ -22,6 +22,17 @@ class SwiftieEraContrastTest {
         }
 
     @Test
+    fun everyEraCardUsesOneOpaqueEraFill() {
+        SwiftieErasData.ALL.forEach { era ->
+            val fill = SwiftieEraContrast.cardFill(era.mainColor)
+            assertThat(fill.alpha).isEqualTo(1f)
+            assertThat(fill).isEqualTo(
+                SwiftieEraContrast.composite(era.mainColor, 0.10f, Color.White)
+            )
+        }
+    }
+
+    @Test
     fun everyEraBodyTextMeetsAaOnItsCard() {
         SwiftieErasData.ALL.forEach { era ->
             val colors = SwiftieEraTextColors(era)
@@ -80,6 +91,25 @@ class SwiftieEraContrastTest {
             assertThat(SwiftieEraContrast.luminance(SwiftieEraContrast.cardBackground(era.mainColor)))
                 .isLessThan(SwiftieEraContrast.luminance(tintOnly))
         }
+    }
+
+    @Test
+    fun loverDateUsesReleaseDateUntilRewind() {
+        val lover = SwiftieErasData.ALL[SwiftieErasData.LOVER_INDEX]
+        assertThat(swiftieEraDateLabel(SwiftieErasData.LOVER_INDEX, lover.releaseDate, false))
+            .isEqualTo(lover.releaseDate)
+        assertThat(swiftieEraDateLabel(SwiftieErasData.LOVER_INDEX, lover.releaseDate, true))
+            .isEqualTo("TS7")
+    }
+
+    @Test
+    fun nonLoverDatesStayAsReleaseDatesDuringRewind() {
+        SwiftieErasData.ALL.filterIndexed { index, _ -> index != SwiftieErasData.LOVER_INDEX }
+            .forEach { era ->
+                val index = SwiftieErasData.ALL.indexOf(era)
+                assertThat(swiftieEraDateLabel(index, era.releaseDate, true))
+                    .isEqualTo(era.releaseDate)
+            }
     }
 
     @Test

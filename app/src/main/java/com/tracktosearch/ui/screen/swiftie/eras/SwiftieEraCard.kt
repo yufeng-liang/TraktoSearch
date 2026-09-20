@@ -12,13 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -178,6 +178,11 @@ fun SwiftieEraCard(
     val titleFont = remember(era.fontResId) { FontFamily(Font(era.fontResId)) }
     // 浅色时代主色印在白卡上读不出来，这里取压暗到 AA 的那一组（见 SwiftieEraContrast）
     val textColors = remember(era) { SwiftieEraTextColors(era) }
+    // 只在序列末尾开始回退时切换 Lover 的彩蛋日期；用布尔 derivedState 避免回退期间逐帧重组卡片。
+    val rewinding = remember(collapseProgress) {
+        derivedStateOf { collapseProgress() > 0.0001f }
+    }
+    val cardFill = remember(era.mainColor) { SwiftieEraContrast.cardFill(era.mainColor) }
     val rowHeight = trackRowHeight(slotHeight, era.tracks.size)
     // 让位窗口的节拍必须与 `SwiftieEraTracklist` 用同一个来源 —— TTPD 走放慢后的时间表，
     // 其余 11 张仍是 130ms；两边错开一档，压下去的就是隔壁那一行
@@ -345,28 +350,14 @@ fun SwiftieEraCard(
                 if (feedProgress == null) {
                     Modifier
                         .clip(CARD_SHAPE)
-                        // 半透明白纸压在水彩天空上；主色只染一层薄底。
-                        // （出纸那一张的白底在另一支里，不透明，理由见下）
-                        .background(Color.White.copy(alpha = 0.86f))
+                        // 先合成时代主色薄染，整张卡片使用同一实色，避免圆角边缘透出更浅颜色。
+                        .background(cardFill)
                 } else {
-                    // **出纸那一张（TTPD）是不透明的**：它正下方就是那台打字机与滚筒上打好的两行字，
-                    // 0.86 的白会把机身的滚轮、压纸杆和那两行字一起透上来，读作「印花了」——
-                    // 其余 11 张底下只有天空，透一点反而好看，这一张不行
-                    Modifier.background(Color.White, CARD_SHAPE)
+                    // 出纸卡片也使用同一实色；滚筒与机器阴影仍由 feedModifier 单独绘制。
+                    Modifier.background(cardFill, CARD_SHAPE)
                 }
             )
             .drawBehind {
-                // 出纸那张节点不裁形状（见上），这一层薄底得自己收在圆角里 ——
-                // 方角色块会从圆角外侧露到天空上，读作卡片角上糊了一块
-                if (feedProgress == null) {
-                    drawRect(color = era.mainColor, alpha = 0.10f)
-                } else {
-                    drawRoundRect(
-                        color = era.mainColor,
-                        alpha = 0.10f,
-                        cornerRadius = CornerRadius(CARD_CORNER.toPx())
-                    )
-                }
                 // 低端机整块母题定格（Spec §11.2）。关键是这条分支**根本不读时钟** ——
                 // 只要读了 elapsedInCard()，这个 drawBehind 就会每帧失效，
                 // 母题里那一堆 Path / Brush 也就每帧重建一次。让位系数同理定在 1f，
@@ -474,7 +465,11 @@ fun SwiftieEraCard(
                 remember(res) { FontFamily(Font(res)) }
             }
             Text(
-                text = if (eraIndex == SwiftieErasData.LOVER_INDEX) "TS7" else era.releaseDate,
+                text = swiftieEraDateLabel(
+                    eraIndex = eraIndex,
+                    releaseDate = era.releaseDate,
+                    rewinding = rewinding.value
+                ),
                 style = TextStyle(
                     fontFamily = dateFamily,
                     fontSize = with(density) { 11.dp.toSp() },
@@ -494,6 +489,13 @@ fun SwiftieEraCard(
         }
     }
 }
+
+/** Lover 初次展示真实发行日期，序列末尾回退时才显示 TS7。 */
+internal fun swiftieEraDateLabel(
+    eraIndex: Int,
+    releaseDate: String,
+    rewinding: Boolean
+): String = if (eraIndex == SwiftieErasData.LOVER_INDEX && rewinding) "TS7" else releaseDate
 
 /**
  * 算「长歌名」的字符数门槛。

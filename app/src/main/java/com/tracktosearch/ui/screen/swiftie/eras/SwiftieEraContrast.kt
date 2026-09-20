@@ -106,6 +106,14 @@ internal object SwiftieEraContrast {
         return darkest
     }
 
+    /**
+     * 每张时代卡片统一使用的不透明填充色。
+     *
+     * 原先是半透明白纸再叠一层主色薄底，圆角边缘会透出更浅的背景色；这里把同样的
+     * 主色薄染预先合成为实色，卡片内部和边缘使用同一填充。
+     */
+    fun cardFill(mainColor: Color): Color = composite(mainColor, 0.10f, Color.White)
+
     /** [fg] 以 [alpha] 压在 [bg] 上之后的实色。 */
     fun composite(fg: Color, alpha: Float, bg: Color): Color = Color(
         red = fg.red * alpha + bg.red * (1f - alpha),
