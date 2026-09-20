@@ -390,7 +390,8 @@ object SwiftieErasData {
             "epiphany",
             "betty",
             "peace",
-            "hoax"
+            "hoax",
+            "the lakes"
         )
     )
 
@@ -417,7 +418,9 @@ object SwiftieErasData {
             "long story short",
             "marjorie",
             "closure",
-            "evermore"
+            "evermore",
+            "right where you left me",
+            "it's time to go"
         )
     )
 
@@ -428,7 +431,8 @@ object SwiftieErasData {
         textColor = Color(0xFF1B2A5B),
         fontResId = R.font.era_midnights,
         motif = SwiftieEraMotif.LIGHTER_STARS,
-        // 标准版 13 首。3am Edition 与 Til Dawn 的加曲不列
+        // The Til Dawn Edition 23 首：标准版 13 首 + 3am Edition 7 首 + 3 首加曲。
+        // 保留标准版曲目，再追加 More Lana / Ice Spice 版本；显示名去掉 feat. 标记。
         tracks = listOf(
             "Lavender Haze",
             "Maroon",
@@ -442,7 +446,17 @@ object SwiftieErasData {
             "Labyrinth",
             "Karma",
             "Sweet Nothing",
-            "Mastermind"
+            "Mastermind",
+            "The Great War",
+            "Bigger Than the Whole Sky",
+            "Paris",
+            "High Infidelity",
+            "Glitch",
+            "Would've, Could've, Should've",
+            "Dear Reader",
+            "Hits Different",
+            "Snow on the Beach (More Lana)",
+            "Karma (Ice Spice)"
         )
     )
 

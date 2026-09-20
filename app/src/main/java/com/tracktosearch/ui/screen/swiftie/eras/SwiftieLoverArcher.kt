@@ -266,7 +266,7 @@ private const val ARROW_POINT_FRACTION = 0.17f
  * 反复 `rewind()` 的那一条 Path。
  *
  * 一支箭要画 5 个形状（箭头、两片尾羽、箭尾、弓臂另算），每帧 new 五个 Path 就是
- * 96 秒的 GC 抖动 —— 与 `SwiftieEraMotifs` / `SwiftieEraBackdrop` 同一条铁律。
+ * 104 秒的 GC 抖动 —— 与 `SwiftieEraMotifs` / `SwiftieEraBackdrop` 同一条铁律。
  * 顶层单例安全：Compose 的 draw 全在主线程上顺序跑，本文件也从不嵌套使用它。
  */
 private val ARCHER_SCRATCH = Path()

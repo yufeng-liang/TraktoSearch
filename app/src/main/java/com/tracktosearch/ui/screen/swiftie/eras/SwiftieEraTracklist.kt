@@ -170,7 +170,7 @@ internal fun SwiftieEraTracklist(
         )
     }
     // derivedStateOf：布尔量不变就不通知读者，所以卷收之前这一列的**布局**一帧都不失效。
-    // 直接在 layout 里读 collapseProgress() 会让整段 96 秒每帧重测一遍所有行
+    // 直接在 layout 里读 collapseProgress() 会让整段 104 秒每帧重测一遍所有行
     val collapsing = remember(collapseProgress) {
         derivedStateOf { collapseProgress() > 0.0001f }
     }
@@ -297,7 +297,7 @@ internal fun SwiftieEraTracklist(
  * 与 Clip 的序号会被布局框横切一半。
  *
  * [collapsing] 是个 `derivedStateOf`：卷收开始前它一直是 false，
- * 所以整段 96 秒里这一层一帧都不失效，真在卷的那 1.5 秒才逐帧重测。
+ * 所以整段 104 秒里这一层一帧都不失效，真在卷的那 1.5 秒才逐帧重测。
  */
 private fun Modifier.collapsingRow(
     rowHeight: Dp,

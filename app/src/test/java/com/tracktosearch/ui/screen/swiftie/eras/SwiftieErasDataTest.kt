@@ -8,7 +8,7 @@ class SwiftieErasDataTest {
 
     @Test
     fun trackCountsMatchTheDurationLedger() {
-        // 账本按这些数字算出 95710ms（再加 TTPD 前摇 3200ms 与逐行放慢 3000ms = 101910ms）。
+        // 账本按 `SwiftieTimeline.ERA_TRACK_COUNTS` 对齐每张卡片的曲目数量。
         // 抄漏一首这里就红
         assertThat(SwiftieErasData.ALL.map { it.tracks.size })
             .isEqualTo(SwiftieTimeline.ERA_TRACK_COUNTS)
