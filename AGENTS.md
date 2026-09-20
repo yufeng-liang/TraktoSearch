@@ -68,8 +68,4 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 - 不硬编码密码/密钥；配置文件敏感信息提醒用户保护
 - 不确定就主动问：不要瞎猜，讲清权衡，有更简单做法直说，该反对时反对
 
-## 环境事实
-- 邮箱 1577865546@qq.com，SMTP 授权码在 C:\Users\15778\Downloads\1577865546@qq.com.txt
-- Cloudflare 账号 ID：9fe1b3ef7e9891ea34b4d8f6d1210ff1；团队域名 douban-movie-api-peak.cloudflareaccess.com
-- 本机 ANDROID_HOME=H:\android\Sdk；Android Studio keystore 在 C:\Users\15778\.android\debug.keystore（重签用，见 lessons adb-verify 组）
 - 子代理并行期间 Gradle 禁令见 §1.3；worktree 开发注意 lessons（common-pitfalls 组）
