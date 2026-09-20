@@ -30,6 +30,15 @@ class SwiftieErasDataTest {
     }
 
     @Test
+    fun midnightsUsesTheTilDawnEditionWithoutDuplicateVersions() {
+        val midnights = SwiftieErasData.ALL[9]
+        assertThat(midnights.tracks).hasSize(22)
+        assertThat(midnights.tracks.last()).isEqualTo("You're Losing Me")
+        assertThat(midnights.tracks).doesNotContain("Snow on the Beach (More Lana)")
+        assertThat(midnights.tracks).doesNotContain("Karma (Ice Spice)")
+    }
+
+    @Test
     fun twelveErasInReleaseOrder() {
         assertThat(SwiftieErasData.ALL).hasSize(12)
         val dates = SwiftieErasData.ALL.map { it.releaseDate }

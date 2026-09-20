@@ -106,12 +106,12 @@ object SwiftieTimeline {
      * 索引 1/2/3/4 都取各专辑曲目最多的 Taylor's Version：Fearless 26、Speak Now 22、
      * Red 30、1989 21；索引 4 的 1989 含 2014 豪华版 16 首与重录独有 5 首；
      * 索引 7/8/9 分别使用 folklore 豪华版 17 首、evermore 豪华版 17 首、
-     * Midnights 跨版本合辑 24 首（The Til Dawn Edition 23 首 + Late Night 加曲
-     * You're Losing Me）；索引 10 的 TTPD 用 **The Anthology 版 31 首**。
+     * Midnights The Til Dawn Edition 22 首（不列 More Lana / Ice Spice 两条）；
+     * 索引 10 的 TTPD 用 **The Anthology 版 31 首**。
      * Phase D 的 `SwiftieErasData` 必须与此逐项吻合，那边有交叉断言。
      */
     val ERA_TRACK_COUNTS: List<Int> =
-        listOf(11, 26, 22, 30, 21, 15, 18, 17, 17, 24, 31, 12)
+        listOf(11, 26, 22, 30, 21, 15, 18, 17, 17, 22, 31, 12)
 
     /** TTPD 整列打印的窗口长度：31 行普通时间表再加 [TTPD_TRACK_REVEAL_BONUS_MS]。 */
     val TTPD_TRACK_REVEAL_MS: Long =
@@ -124,7 +124,7 @@ object SwiftieTimeline {
             (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
 
-    /** 12 张卡片合计 106551ms（含四张 TV 独有曲目与其余最多版本）。 */
+    /** 12 张卡片合计 106317ms（含四张 TV 独有曲目与其余最多版本）。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS
         .withIndex()
         .sumOf { (index, count) -> cardDurationMs(index, count) }
@@ -146,7 +146,7 @@ object SwiftieTimeline {
     const val ERAS_CARDS_START: Long = ERAS_INTRO_START + ERAS_INTRO_MS
 
     /**
-     * T109651：第 12 张卡片走完。
+     * T109417：第 12 张卡片走完。
      *
      * 与 [REWIND_START] **不再是同一个值** —— 终局插在两者之间，
      * 所以判「是否还在卡片段内」只能用这个常量。
@@ -156,7 +156,7 @@ object SwiftieTimeline {
     /**
      * 终局一整段：签名（写字 4400 + 抬笔停顿 300 + 收笔闪光 700）与手链同场。
      *
-     * T109651–115051。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
+     * T109417–114817。三个加数分别来自 `SwiftieSignature` 的 `SIGNATURE_WRITE_MS` /
      * `SIGNATURE_PAUSE_TOTAL_MS` / `SIGNATURE_FLASH_MS`，**相加必须正好等于本值**
      * （`SwiftieTimelineTest` 守着）。
      *
@@ -180,7 +180,7 @@ object SwiftieTimeline {
     val BRACELET_ENTRY_MS: Long = 800L
 
     /**
-     * T115051–118000：定格合影，留出截图时间。
+     * T114817–118000：定格合影，留出截图时间。
      *
      * 这一段是账本里唯一的**弹性段**：前面各段都由内容决定长度，
      * 后面各段由配乐钉死，误差全落在这里。改曲目数、改手链进场时刻都只会让定格变长变短，
@@ -192,7 +192,8 @@ object SwiftieTimeline {
      * 2026-09-18 从中挪出 3000ms 给 TTPD 的逐行打印，10590 → 7590；
      * 2026-09-20 补齐 folklore / evermore / Midnights 最多版本，再补 Midnights 加曲，
      * 7590 → 5510 → 5380；同日再补四张 Taylor's Version 独有 40 首，
-     * 其余 11 张降到 117ms/首，5380 → 2949。
+     * 其余 11 张降到 117ms/首，5380 → 2949；
+     * 同日 Midnights 按需求删去 More Lana / Ice Spice 两条，2949 → 3183。
      * TS1 去掉的 600ms 则转给 TTPD 前摇。两个配乐钉死的端点都没动。
      */
     val FINAL_HOLD_START: Long = SIGNATURE_START + SIGNATURE_MS

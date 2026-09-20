@@ -39,7 +39,7 @@ enum class SwiftieEraMotif {
     BRAID_PLAID,
     /** 10 · Midnights：打火机（火苗跳动）+ 几颗四芒星 */
     LIGHTER_STARS,
-    /** 11 · TTPD：卡片右下角写着 All’s fair in love（羽毛笔写一半/写完退场）+ 羽毛笔 */
+    /** 11 · TTPD：卡片右下角常驻一支羽毛笔 */
     LETTER_QUILL,
     /** 12 · Showgirl：更衣室化妆镜台（环绕灯泡）+ 口红与粉扑 */
     VANITY_MIRROR
@@ -476,8 +476,8 @@ object SwiftieErasData {
         textColor = Color(0xFF1B2A5B),
         fontResId = R.font.era_midnights,
         motif = SwiftieEraMotif.LIGHTER_STARS,
-        // 合辑 24 首：The Til Dawn Edition 23 首 + Late Night Edition 加曲 You're Losing Me。
-        // 这是跨版本合辑，不对应任一单独发行的实体版；显示名去掉 feat. 标记。
+        // The Til Dawn Edition 22 首：标准版 13 首 + 3am Edition 7 首 + You're Losing Me
+        // 与 Hits Different；不列 More Lana / Ice Spice 两条重复版本。
         tracks = listOf(
             "Lavender Haze",
             "Maroon",
@@ -500,9 +500,7 @@ object SwiftieErasData {
             "Would've, Could've, Should've",
             "Dear Reader",
             "Hits Different",
-            "You're Losing Me",
-            "Snow on the Beach (More Lana)",
-            "Karma (Ice Spice)"
+            "You're Losing Me"
         )
     )
 

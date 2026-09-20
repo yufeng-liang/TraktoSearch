@@ -113,16 +113,20 @@ internal fun midnightMoonRotationDeg(lookAngleDeg: Float, cuddle: Float): Float 
 internal const val MIDNIGHT_MOON_CUDDLE_TURN_DEG: Float = 15f
 
 /**
- * 月牙的基准缩放。1.45 是「刚好不与卡片打架」的那一版，再收 10% 让缺口那两只尖角
- * 不至于顶到钟面上。
+ * 月牙的基准缩放。
+ *
+ * 24 首版本用 1.305，卡片上缘把它右下角切掉一截。曲目减到 22 首后卡片虽然更高，
+ * 但月牙仍要与钟面保持留白；收到 1.18，整只月牙和抱枕都完整落在卡片上缘之上。
  */
-internal const val MIDNIGHT_MOON_SCALE: Float = 1.305f
+internal const val MIDNIGHT_MOON_SCALE: Float = 1.18f
 
 /**
- * 月牙中心的纵向位置（屏高比例）。取 0.352 而不是让抱枕时往下沉：
- * 回转只有 15° 之后，轮廓本来就比原来收得高，再沉下去反而离卡片太远。
+ * 月牙中心的纵向位置（屏高比例）。
+ *
+ * 从 0.352 上移到 0.22：卡片 22 首时上缘约在 0.34H，而抱枕落位后下缘约 0.33H；
+ * 月牙和抱枕都完整留在卡片上方，且与左上角钟面保持距离。
  */
-internal const val MOON_CENTER_Y: Float = 0.352f
+internal const val MOON_CENTER_Y: Float = 0.22f
 
 internal fun DrawScope.drawMidnightMoon(path: Path, eraMs: Long, alpha: Float, clockCenter: Offset) {
     val pose = midnightMoonPose(eraMs)

@@ -60,8 +60,8 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun tracklistDoneOnlyRemainsForTheTypewriterCard() {
-        // 244 首曲目，逐曲目就是 109 秒里 244 次震动 —— 手会麻，也什么都表达不了
-        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(244)
+        // 242 首曲目，逐曲目就是 109 秒里 242 次震动 —— 手会麻，也什么都表达不了
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(242)
         val done = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
         assertThat(done.atMs).isGreaterThan(SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX))
         assertThat(done.atMs).isLessThan(

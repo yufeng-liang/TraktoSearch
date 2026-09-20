@@ -90,7 +90,7 @@ era_start() {
   # ANCHOR_INDICES（那个是 {0, 6}，TS1 已经不再多停 600ms）
   anchor_idx="$(grep -m1 'CARD_ANCHOR_BONUS_INDICES' "$TIMELINE" | grep -oE 'setOf\([0-9, ]+\)' | grep -oE '[0-9]+' | paste -sd' ' -)"
   # 12 张卡片的曲目数，与 timeline 里的列表同一顺序（补齐四张 TV 独有曲目后）
-  counts=(11 26 22 30 21 15 18 17 17 24 31 12)
+  counts=(11 26 22 30 21 15 18 17 17 22 31 12)
   local ttp d_idx preroll
   ttp="$(num "$TIMELINE" 'const val TTPD_INDEX')"
   preroll="$(num "$TIMELINE" 'const val TTPD_PREROLL_MS')"

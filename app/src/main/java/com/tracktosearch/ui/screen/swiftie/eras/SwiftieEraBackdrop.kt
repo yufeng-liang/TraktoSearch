@@ -4983,9 +4983,9 @@ private fun DrawScope.drawMidnightClock(
     }
 
     // 钟：表盘 + 表圈 + 60 格分刻度（整点加粗）+ 罗马数字 + 指向 3 点的星形指针。
-    // 钟再收向左上角，给右下方的月牙与抱枕动作让出整片天。
-    val clockCenter = Offset(w * 0.30f, h * 0.175f)
-    val clockR = w * 0.176f
+    // 钟收向左上角；月牙缩到 1.18 后同步上移、略缩，两者在卡外保持一段深蓝留白。
+    val clockCenter = Offset(w * 0.30f, h * 0.168f)
+    val clockR = w * 0.170f
     val clockUnit = clockR / 0.26f
     // 盘面先压暗一档，再用薰衣草描圈与刻度。
     // 表圈与刻度**不能用 top**（#2A3A6B）：那是这张舞台的首档底色，
