@@ -23,6 +23,7 @@ import com.tracktosearch.data.session.SessionCacheInvalidatedException
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
+import com.tracktosearch.di.DoubanCrawlConcurrency
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -371,6 +372,8 @@ class DoubanSyncManager @Inject constructor(
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val sessionModeManager: SessionModeManager,
     private val tmdbRepository: TmdbRepository,
+    /** 豆瓣全站爬取并发共享信号量：与批量移除共用，避免两者叠加超出反爬安全并发 */
+    @DoubanCrawlConcurrency private val sharedCrawlSemaphore: Semaphore,
     @ApplicationContext private val appContext: Context
 ) {
     private companion object {
@@ -2593,7 +2596,8 @@ class DoubanSyncManager @Inject constructor(
 
         // 用 Channel 连接阶段 1(详情页)→ 阶段 2(Trakt 查询)
         val detailChannel = Channel<SyncResolve>(capacity = pending.size)
-        val detailSemaphore = Semaphore(3)
+        // 共享爬取信号量：与批量移除共用，叠加时对豆瓣总并发封顶 3
+        val detailSemaphore = sharedCrawlSemaphore
         val traktSemaphore = Semaphore(5)
         val completedCount = AtomicInteger(0)
         val detailCacheHit = AtomicInteger(0)
@@ -3047,7 +3051,8 @@ class DoubanSyncManager @Inject constructor(
 
         // 阶段 1(详情页) → Channel → 阶段 2(searchByImdb 拿 traktId+tmdbId)
         val detailChannel = Channel<DoubanLocalResolve>(capacity = pending.size)
-        val detailSemaphore = Semaphore(3)
+        // 共享爬取信号量：与批量移除共用，叠加时对豆瓣总并发封顶 3
+        val detailSemaphore = sharedCrawlSemaphore
         val traktSemaphore = Semaphore(5)
         val completedCount = AtomicInteger(0)
         val detailCacheHit = AtomicInteger(0)

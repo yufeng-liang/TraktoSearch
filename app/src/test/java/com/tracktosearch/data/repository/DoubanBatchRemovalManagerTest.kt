@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -77,6 +78,7 @@ class DoubanBatchRemovalManagerTest {
             doubanRepository,
             doubanAuthStorage,
             doubanSyncedItemDao,
+            Semaphore(3),
             appContext
         )
     }

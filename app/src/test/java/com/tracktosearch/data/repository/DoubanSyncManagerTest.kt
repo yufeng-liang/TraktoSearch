@@ -21,6 +21,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -132,6 +133,7 @@ class DoubanSyncManagerTest {
             statusConsistencyChecker,
             sessionModeManager,
             tmdbRepository,
+            Semaphore(3),
             appContext
         )
     }

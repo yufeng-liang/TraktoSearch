@@ -4,9 +4,11 @@ import android.content.Context
 import android.os.PowerManager
 import android.util.Log
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.di.DoubanCrawlConcurrency
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -98,6 +100,8 @@ class DoubanBatchRemovalManager @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
+    /** 豆瓣全站爬取并发共享信号量：与同步详情爬取共用，避免两者叠加超出反爬安全并发 */
+    @DoubanCrawlConcurrency private val sharedCrawlSemaphore: Semaphore,
     @ApplicationContext private val appContext: Context
 ) {
     companion object {
@@ -182,61 +186,16 @@ class DoubanBatchRemovalManager @Inject constructor(
             val current = AtomicInteger(0)
 
             try {
-                val semaphore = Semaphore(DOUBAN_CONCURRENCY)
+                // 本地 2 并发上限 + 全站共享信号量：与同步详情爬取共用 3 个许可，
+                // 两者叠加运行时对豆瓣总并发封顶 3，避免反爬封禁
+                val localSemaphore = Semaphore(DOUBAN_CONCURRENCY)
                 coroutineScope {
                     items.map { item ->
                         async {
-                            semaphore.withPermit {
-                                // 用户取消时立即停止派发新条目
-                                if (cancelled.get()) return@withPermit
-
-                                // 更新当前条目（UI 展示）
-                                val cur = current.get()
-                                _progress.value = _progress.value.copy(
-                                    current = cur,
-                                    currentTitle = item.title
-                                )
-
-                                val ok = runCatching {
-                                    // 1. 优先用 item.doubanId (豆瓣模式直接传,避免网络请求)
-                                    //    否则查同步表 by imdbId (Trakt 模式快速路径)
-                                    //    最后才 findDoubanId 网络搜索
-                                    // 注意: 用括号明确优先级,避免 ?: 被 else 分支吞掉
-                                    val doubanId = item.doubanId
-                                        ?: (if (item.imdbId.isNotBlank()) {
-                                            runCatching { doubanSyncedItemDao.getByImdbId(item.imdbId) }
-                                                .getOrNull()?.doubanId
-                                        } else null)
-                                            ?: doubanRepository.findDoubanId(item.traktId, item.imdbId, mediaTypeStr)
-                                    if (doubanId == null) {
-                                        Log.w(TAG, "找不到 doubanId, 跳过: traktId=${item.traktId}, imdbId=${item.imdbId}, title=${item.title}")
-                                        return@runCatching null  // skip
-                                    }
-                                    // 2. 获取 ck
-                                    val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie, respectAntiCrawlDelay = true)
-                                    if (ck == null) {
-                                        Log.w(TAG, "获取 ck 失败: $doubanId")
-                                        return@runCatching false  // fail
-                                    }
-                                    // 3. 移除标记
-                                    doubanRepository.removeMark(doubanId, cred.cookie, ck).success
-                                }.getOrElse { e ->
-                                    Log.e(TAG, "移除豆瓣标记异常: traktId=${item.traktId}", e)
-                                    false
+                            localSemaphore.withPermit {
+                                sharedCrawlSemaphore.withPermit {
+                                    removeSingleItem(item, cred, mediaTypeStr, current, successCount, failCount, skipCount)
                                 }
-
-                                val newCur = current.incrementAndGet()
-                                when (ok) {
-                                    null -> skipCount.incrementAndGet()
-                                    true -> successCount.incrementAndGet()
-                                    false -> failCount.incrementAndGet()
-                                }
-                                _progress.value = _progress.value.copy(
-                                    current = newCur,
-                                    successCount = successCount.get(),
-                                    failCount = failCount.get(),
-                                    skipCount = skipCount.get()
-                                )
                             }
                         }
                     }.awaitAll()
@@ -259,6 +218,72 @@ class DoubanBatchRemovalManager @Inject constructor(
             }
         }
         return true
+    }
+
+    /**
+     * 移除单条豆瓣标记（在本地 + 共享信号量许可内执行）。
+     *
+     * @return true=成功；false=失败；null=跳过（取消或找不到 doubanId）
+     */
+    private suspend fun removeSingleItem(
+        item: BatchRemovalItem,
+        cred: DoubanCredentials,
+        mediaTypeStr: String,
+        current: AtomicInteger,
+        successCount: AtomicInteger,
+        failCount: AtomicInteger,
+        skipCount: AtomicInteger
+    ): Boolean? {
+        // 用户取消时立即停止派发新条目
+        if (cancelled.get()) return null
+
+        // 更新当前条目（UI 展示）
+        _progress.value = _progress.value.copy(
+            current = current.get(),
+            currentTitle = item.title
+        )
+
+        val ok = runCatching {
+            // 1. 优先用 item.doubanId (豆瓣模式直接传,避免网络请求)
+            //    否则查同步表 by imdbId (Trakt 模式快速路径)
+            //    最后才 findDoubanId 网络搜索
+            // 注意: 用括号明确优先级,避免 ?: 被 else 分支吞掉
+            val doubanId = item.doubanId
+                ?: (if (item.imdbId.isNotBlank()) {
+                    runCatching { doubanSyncedItemDao.getByImdbId(item.imdbId) }
+                        .getOrNull()?.doubanId
+                } else null)
+                    ?: doubanRepository.findDoubanId(item.traktId, item.imdbId, mediaTypeStr)
+            if (doubanId == null) {
+                Log.w(TAG, "找不到 doubanId, 跳过: traktId=${item.traktId}, imdbId=${item.imdbId}, title=${item.title}")
+                return@runCatching null  // skip
+            }
+            // 2. 获取 ck
+            val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie, respectAntiCrawlDelay = true)
+            if (ck == null) {
+                Log.w(TAG, "获取 ck 失败: $doubanId")
+                return@runCatching false  // fail
+            }
+            // 3. 移除标记
+            doubanRepository.removeMark(doubanId, cred.cookie, ck).success
+        }.getOrElse { e ->
+            Log.e(TAG, "移除豆瓣标记异常: traktId=${item.traktId}", e)
+            false
+        }
+
+        val newCur = current.incrementAndGet()
+        when (ok) {
+            null -> skipCount.incrementAndGet()
+            true -> successCount.incrementAndGet()
+            false -> failCount.incrementAndGet()
+        }
+        _progress.value = _progress.value.copy(
+            current = newCur,
+            successCount = successCount.get(),
+            failCount = failCount.get(),
+            skipCount = skipCount.get()
+        )
+        return ok
     }
 
     /** 获取 PARTIAL_WAKE_LOCK,保持 CPU 唤醒避免息屏后网络请求 timeout */

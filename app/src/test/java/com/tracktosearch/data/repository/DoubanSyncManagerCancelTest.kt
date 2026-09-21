@@ -19,6 +19,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -124,6 +125,7 @@ class DoubanSyncManagerCancelTest {
             statusConsistencyChecker,
             sessionModeManager,
             tmdbRepository,
+            Semaphore(3),
             appContext
         )
     }

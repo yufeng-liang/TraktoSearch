@@ -25,6 +25,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.json.Json
 import javax.inject.Qualifier
 import javax.inject.Singleton
@@ -41,6 +42,10 @@ annotation class DoubanRexxarPhotosCache
 
 @Qualifier
 annotation class DoubanRexxarCommentsCache
+
+/** 限定符：豆瓣全站爬取并发共享信号量（同步详情爬取 + 批量移除共用，叠加封顶） */
+@Qualifier
+annotation class DoubanCrawlConcurrency
 
 /**
  * 豆瓣相关依赖注入模块。
@@ -162,6 +167,18 @@ object DoubanModule {
         commentsCache = commentsCache,
         publicDataPoolManager = publicDataPoolManager
     )
+
+    /**
+     * 豆瓣全站爬取并发共享信号量。
+     *
+     * 同步详情爬取（本地 Semaphore(3)）与批量移除（本地 Semaphore(2)）各自限流，
+     * 但两者同时运行时对豆瓣总并发可达 5，叠加反爬封禁风险；
+     * 共享 3 个许可后：单独运行保持原并发（移除侧另有本地 2 上限），叠加时总并发封顶 3。
+     */
+    @Provides
+    @Singleton
+    @DoubanCrawlConcurrency
+    fun provideDoubanCrawlSemaphore(): Semaphore = Semaphore(3)
 
     /**
      * DoubanFailureExporter 需要 DoubanSyncFailureDao + Json,显式 provide 以便注入 Json 实例。
