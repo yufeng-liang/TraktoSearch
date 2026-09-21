@@ -10,7 +10,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -150,7 +149,8 @@ class DoubanRepository(
     /** IMDb/Trakt/TMDB→豆瓣 ID 公共映射池，仅负责直读和异步上传公开映射。 */
     private val publicDataPoolManager: DoubanPublicDataPoolManager? = null
 ) {
-    private val publicUploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 异步上传专用 scope：SupervisorJob 保证单次上传失败不影响后续，避免 GlobalScope 生命周期失控 */
+    private val uploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val findDoubanIdFlights = ConcurrentHashMap<String, CompletableDeferred<String?>>()
     private val negativeFindDoubanIdUntil = ConcurrentHashMap<String, Long>()
     /** imdbId(小写)→doubanId 进程内 memo：详情缓存全表扫盘只在首次 miss 时发生，命中后走常数级快速路径。 */
@@ -403,7 +403,7 @@ class DoubanRepository(
                 // 异步上传到全局池,供其他用户复用(失败不阻塞主流程)
                 if (uploadToCloudPool) {
                     cloudDetailsPoolManager?.let { p ->
-                        GlobalScope.launch(Dispatchers.IO) {
+                        uploadScope.launch {
                             try {
                                 p.uploadDetailEntry(doubanId, entry)
                             } catch (e: CancellationException) {
@@ -1015,7 +1015,7 @@ class DoubanRepository(
         }
         if (publicKeys.isNotEmpty()) {
             publicDataPoolManager?.let { pool ->
-                publicUploadScope.launch {
+                uploadScope.launch {
                     runCatching { pool.uploadMappings(publicKeys.associateWith { doubanId }) }
                 }
             }
