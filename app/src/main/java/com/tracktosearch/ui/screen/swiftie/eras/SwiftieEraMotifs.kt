@@ -2458,7 +2458,7 @@ private fun DrawScope.drawBraidPlaid(
  */
 private const val EVERMORE_PHOTO_GAIN = 2.2f
 
-/** 10 · Midnights：一只打火机（风罩栅格 + 拨轮 + 呼吸的火苗）+ 几颗四芒星。 */
+/** 10 · Midnights：一只打火机（风罩栅格 + 拨轮 + 摇曳的火苗）+ 往上飘的火星。 */
 private fun DrawScope.drawLighterStars(color: Color, phase: Float, alpha: Float) {
     starburstTexture(color, phase)
     val box = propBox()
@@ -2520,79 +2520,218 @@ private fun DrawScope.drawLighterStars(color: Color, phase: Float, alpha: Float)
             knurl.lineTo(wheel.x + cos(angle) * u * 0.036f, wheel.y + sin(angle) * u * 0.036f)
         }
         drawPath(knurl, Color.White, alpha = alpha * 1.7f, style = Stroke(width = u * 0.005f))
-        drawFlame(phase, alpha, w, h, u, guardTop)
-        drawBrightStars(color, phase, alpha, w, h, u)
+        val tip = drawFlame(phase, w, h, u, guardTop)
+        drawFlameSparks(color, phase, alpha, w, h, u, tip)
     }
 }
 
+// ---------------------------------------------------------------------------
+// 火苗的摇曳信号
+// ---------------------------------------------------------------------------
+
 /**
- * 火苗：底宽顶尖的水滴，宽度随相位呼吸。
+ * 火苗横向摆动的归一化信号（约 -1f..1f）。消费方是 [drawFlame] 与 [drawFlameSparks]。
+ *
+ * 倍频**必须取整数**：`phase` 每 3.6s 回绕一次（`SwiftieEraCard` 的 `MOTIF_CYCLE_MS`），
+ * 非整数倍频在回绕那一帧回不到同一个值，屏幕上就是火苗每隔 3.6s 被瞬间掰回去一次。
+ * 5 / 8 / 13 两两互质，叠出来的波形在一个循环内不重复读，够乱；振幅 0.55 / 0.30 / 0.15
+ * 递减，让主频占主导 —— 三等幅就是一团抖，读不出「在晃」。
+ */
+private fun flameSway(phase: Float): Float =
+    0.55f * sin(phase * TAU * 5f) +
+        0.30f * sin(phase * TAU * 8f + 1.1f) +
+        0.15f * sin(phase * TAU * 13f + 2.4f)
+
+/**
+ * 火苗「窜高 + 发亮」的归一化信号（约 -1f..1f）。
+ *
+ * 故意与 [flameSway] 用另一组倍频（3 / 7 / 11）：同一条信号既管歪又管高的话，每次歪到最左
+ * 也正好窜到最高，读起来是节拍器而不是火。
+ */
+private fun flameFlare(phase: Float): Float =
+    0.60f * sin(phase * TAU * 3f + 0.4f) +
+        0.28f * sin(phase * TAU * 7f + 2.0f) +
+        0.12f * sin(phase * TAU * 11f + 0.9f)
+
+/**
+ * 火苗在「离底 [frac]（0 = 灯芯，1 = 尖端）」处该横移多少。
+ *
+ * 平方而不是线性：贴着芯那一段几乎不动，越往上被横向气流带得越远。线性会把底端也推开，
+ * 火苗就脱开灯芯了 —— 那是最一眼假的一种错法。
+ */
+private fun flameLean(sway: Float, tipLean: Float, frac: Float): Float =
+    sway * tipLean * frac * frac
+
+/** 火苗尖端能歪到多远（列宽比例）。再大就不像被风吹，像有人拿手指拨。 */
+private const val FLAME_TIP_LEAN = 0.055f
+
+/** [flameFlare] 超过这个值算「爆了一下」，额外窜高一档。真打火机就有这一下。 */
+private const val FLAME_SURGE_AT = 0.72f
+
+/** 外焰与内焰各一条反复 `rewind()` 的 Path。顶层单例安全：draw 全在主线程顺序跑。 */
+private val FLAME_SCRATCH = Path()
+private val FLAME_CORE_SCRATCH = Path()
+
+/**
+ * 火苗：底宽顶尖的水滴，**弯而不脱芯**，高度与亮度一起不规则跳。
  *
  * 不吃时代主色 —— Midnights 是深蓝，蓝火苗读作煤气灶。外焰用 [PROP_WARM]、
  * 内焰用 [PROP_GOLD]，在白卡上都还剩得下辨识度。
+ *
+ * 三条真实感各自从哪来：
+ * - **弯**：底点钉死在灯芯，横向偏移按 [flameLean] 的平方曲线往上放大，所以是弯折而不是
+ *   整只旋转 —— 旋转会把底挪离芯。
+ * - **窜**：[flameFlare] 同时管高度和宽度，方向相反。同一簇火体积守恒，只高不粗会读成
+ *   拉长的一条塑料片。
+ * - **闪**：外焰渐变的两个色标跟着 [flameFlare] 抖，内焰的 alpha 一起抖。
+ *
+ * @return 尖端坐标（与调用处同一套 `translate` 局部坐标），[drawFlameSparks] 拿它当出口
  */
-private fun DrawScope.drawFlame(phase: Float, alpha: Float, w: Float, h: Float, u: Float, baseY: Float) {
-    val flameHeight = h * 0.26f
-    val flameWidth = w * (0.052f + 0.012f * sin(phase * TAU * 3f))
+private fun DrawScope.drawFlame(phase: Float, w: Float, h: Float, u: Float, baseY: Float): Offset {
+    val sway = flameSway(phase)
+    val flare = flameFlare(phase)
+    val surge = ((flare - FLAME_SURGE_AT) / (1f - FLAME_SURGE_AT)).coerceIn(0f, 1f)
+    val flameHeight = h * 0.26f * (1f + 0.16f * flare + 0.10f * surge)
+    val flameWidth = w * 0.070f * (1f - 0.18f * flare)
     val baseX = w * 0.48f
-    val flame = Path()
+    val tipLean = w * FLAME_TIP_LEAN
+    val tipY = baseY - flameHeight
+
+    val flame = FLAME_SCRATCH
+    flame.rewind()
     flame.moveTo(baseX, baseY)
     flame.cubicTo(
-        baseX - flameWidth, baseY - flameHeight * 0.45f,
-        baseX - flameWidth * 0.35f, baseY - flameHeight * 0.80f,
-        baseX, baseY - flameHeight
+        baseX - flameWidth + flameLean(sway, tipLean, 0.45f), baseY - flameHeight * 0.45f,
+        baseX - flameWidth * 0.35f + flameLean(sway, tipLean, 0.80f), baseY - flameHeight * 0.80f,
+        baseX + sway * tipLean, tipY
     )
     flame.cubicTo(
-        baseX + flameWidth * 0.35f, baseY - flameHeight * 0.80f,
-        baseX + flameWidth, baseY - flameHeight * 0.45f,
+        baseX + flameWidth * 0.35f + flameLean(sway, tipLean, 0.80f), baseY - flameHeight * 0.80f,
+        baseX + flameWidth + flameLean(sway, tipLean, 0.45f), baseY - flameHeight * 0.45f,
         baseX, baseY
     )
     flame.close()
     drawPath(
         path = flame,
         brush = Brush.verticalGradient(
-            colors = listOf(PROP_WARM.copy(alpha = 0.30f), PROP_WARM.copy(alpha = 0.85f)),
-            startY = baseY - flameHeight,
+            colors = listOf(
+                PROP_WARM.copy(alpha = (0.30f + 0.14f * flare).coerceIn(0f, 1f)),
+                PROP_WARM.copy(alpha = (0.85f + 0.15f * flare).coerceIn(0f, 1f))
+            ),
+            startY = tipY,
             endY = baseY
         )
     )
-    val core = Path()
+
+    // 内焰的弯幅取外焰的 0.6 档：核心在湍流里摆幅本来就小，两层同幅度会一起糊掉
+    val coreLean = tipLean * 0.6f
+    val coreTop = baseY - flameHeight * 0.58f
+    val core = FLAME_CORE_SCRATCH
+    core.rewind()
     core.moveTo(baseX, baseY - u * 0.01f)
     core.cubicTo(
-        baseX - flameWidth * 0.40f, baseY - flameHeight * 0.32f,
-        baseX - flameWidth * 0.14f, baseY - flameHeight * 0.48f,
-        baseX, baseY - flameHeight * 0.58f
+        baseX - flameWidth * 0.40f + flameLean(sway, coreLean, 0.32f), baseY - flameHeight * 0.32f,
+        baseX - flameWidth * 0.14f + flameLean(sway, coreLean, 0.48f), baseY - flameHeight * 0.48f,
+        baseX + flameLean(sway, coreLean, 0.58f), coreTop
     )
     core.cubicTo(
-        baseX + flameWidth * 0.14f, baseY - flameHeight * 0.48f,
-        baseX + flameWidth * 0.40f, baseY - flameHeight * 0.32f,
+        baseX + flameWidth * 0.14f + flameLean(sway, coreLean, 0.48f), baseY - flameHeight * 0.48f,
+        baseX + flameWidth * 0.40f + flameLean(sway, coreLean, 0.32f), baseY - flameHeight * 0.32f,
         baseX, baseY - u * 0.01f
     )
     core.close()
-    drawPath(core, PROP_GOLD, alpha = 0.75f)
+    drawPath(core, PROP_GOLD, alpha = (0.75f + 0.20f * flare).coerceIn(0f, 1f))
+    return Offset(baseX + sway * tipLean, tipY)
 }
 
-/** 打火机旁的几颗亮星：比底纹那批粗一档，带柔光晕，随相位各自闪。 */
-private fun DrawScope.drawBrightStars(color: Color, phase: Float, alpha: Float, w: Float, h: Float, u: Float) {
-    val random = Random(2012)
-    repeat(4) {
-        val center = Offset(
-            (0.08f + random.nextFloat() * 0.84f) * w,
-            (0.02f + random.nextFloat() * 0.30f) * h
-        )
-        val arm = u * (0.05f + random.nextFloat() * 0.035f)
-        val twinkle = 0.45f + 0.55f * (0.5f + 0.5f * sin((phase + random.nextFloat()) * TAU))
-        val starAlpha = alpha * 2.2f * twinkle
-        val thin = u * 0.008f
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(color.copy(alpha = alpha * 0.7f * twinkle), Color.Transparent),
-                center = center,
-                radius = arm * 1.6f
-            ),
-            radius = arm * 1.6f,
-            center = center
-        )
+/** 火星颗数。沿用原来那四颗星的数量，「打火机上方四颗星」的读法不变。 */
+private const val SPARK_COUNT = 4
+
+/** 一圈 3.6s 里每颗走完几次生灭。两次 → 单颗寿命约 1.8s，飘得完又来不及看腻。 */
+private const val SPARKS_PER_CYCLE = 2f
+
+/**
+ * 火星的总升程（列高比例）。
+ *
+ * 收在道具列内：尖端在列内 0.19h，飘到顶刚好贴着列上缘。再往上就爬进专辑标题那一行，
+ * 火星画在 `drawBehind`、在文字**后面**，成了字背后一片乱动的噪点。
+ */
+private const val SPARK_RISE = 0.17f
+
+/** 那股风把火星横推多远（列宽比例），随升程放大。 */
+private const val SPARK_WIND = 0.09f
+
+/**
+ * 火星晚多久才感受到火苗那股风（以相位计）。
+ *
+ * 滞后量按火星自己的年龄算：刚冒出来那颗读的是**当前**这股风（所以与尖端接得上），
+ * 飘高了那颗读的是几帧之前的。没有这一档，四条轨迹会跟着尖端刚性平移。
+ */
+private const val SPARK_WIND_LAG = 0.05f
+
+/** 淡入占寿命的比例。一冒头就满亮读作「凭空出现」。 */
+private const val SPARK_FADE_IN = 0.12f
+
+/** 冒出的横向散布（列宽比例）。四颗全挤在尖端正上方会读成一条竖线。 */
+private val SPARK_SPREAD = floatArrayOf(-0.085f, -0.028f, 0.034f, 0.096f)
+
+/** 每颗的臂长（u 比例）。四颗不等大，才不像复制粘贴。 */
+private val SPARK_ARM = floatArrayOf(0.052f, 0.038f, 0.062f, 0.044f)
+
+/**
+ * 火苗上方那几颗火星：从尖端冒出、往上飘、淡出，再从尖端重新冒。
+ *
+ * 形状仍是四芒星（两条主轴 + 两条短斜轴），仍吃 `alpha` —— 长歌名让位时这一列要一起淡。
+ *
+ * 三件事让它读作「被同一股气流带起来」而不是「四颗星各飘各的」：
+ * - 起点是 [drawFlame] 返回的尖端，火苗歪到哪、窜多高，火星就从哪冒；
+ * - 横移取 [flameSway] **按各自年龄滞后**的那一段，且随升程放大 —— 底下那颗还跟着芯走，
+ *   飘高了才被这股风彻底带偏；
+ * - 明暗与火苗共用同一条 [flameFlare]：火窜一下的同时火星一起亮，才读作一个光源照的。
+ *
+ * 颜色仍是时代主色（不改暖金）：这四颗本来就是 Midnights 的星，暖金一上就把这张卡
+ * 唯一的深蓝识别特征换掉了。
+ */
+private fun DrawScope.drawFlameSparks(
+    color: Color,
+    phase: Float,
+    alpha: Float,
+    w: Float,
+    h: Float,
+    u: Float,
+    tip: Offset
+) {
+    // 与火苗共用同一条 flare：两处一起亮才读作一个光源
+    val flare = flameFlare(phase)
+    val baseX = w * 0.48f
+    val thin = u * 0.013f
+    repeat(SPARK_COUNT) { index ->
+        // 固定错开的相位偏移：phase = 0 的定格帧上四颗落在轨迹的四个不同高度，
+        // 既不会全挤在尖端，也不会全淡出
+        val life = (phase * SPARKS_PER_CYCLE + (index + 1f) / (SPARK_COUNT + 1f)) % 1f
+        // 前快后慢：热气上浮会减速，等速读作匀速直线的小圆点
+        val rise = SPARK_RISE * h * (1f - (1f - life) * (1f - life))
+        val wind = flameSway(phase - SPARK_WIND_LAG * life) * w * SPARK_WIND * life
+        // 刚冒出时继承尖端那一档偏移，飘高了彻底脱开火苗
+        val inherit = (tip.x - baseX) * (1f - life)
+        val center = Offset(baseX + w * SPARK_SPREAD[index] + wind + inherit, tip.y - rise)
+        val born = (life / SPARK_FADE_IN).coerceAtMost(1f)
+        val dying = 1f - ((life - SPARK_FADE_IN) / (1f - SPARK_FADE_IN)).coerceIn(0f, 1f)
+        val vis = born * dying
+        val arm = u * SPARK_ARM[index] * (1f - 0.45f * life)
+        val starAlpha = alpha * 2.2f * vis * (0.75f + 0.25f * flare)
+        // 光晕只给前半程：飘到顶还带一圈热晕就假了，顺带省掉一半 Brush
+        if (life < 0.5f) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(color.copy(alpha = alpha * 0.7f * vis), Color.Transparent),
+                    center = center,
+                    radius = arm * 1.6f
+                ),
+                radius = arm * 1.6f,
+                center = center
+            )
+        }
         drawLine(color, center - Offset(arm, 0f), center + Offset(arm, 0f), thin, alpha = starAlpha)
         drawLine(color, center - Offset(0f, arm), center + Offset(0f, arm), thin, alpha = starAlpha)
         val diag = arm * 0.42f
