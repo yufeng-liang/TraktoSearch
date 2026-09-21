@@ -1335,28 +1335,16 @@ private fun DrawScope.drawGoldenCastle(
     path.close()
     drawPath(path = path, color = deep, alpha = silhouette * 0.42f)
 
-    // 城墙：把三座塔连起来，墙头一排城齿。
+    // 城墙 + 三座塔（含各自垛口）**合成一条路径、一次填充**。
+    //
+    // 原来墙和塔分两趟画，塔压在墙身上：同一种深色的两层半透明叠在一起，每座塔穿过城墙
+    // 那一段就比墙的其他部分深一档，屏幕上是三截更深的方柱。逆光剪影本来就是一整块色，
+    // 没有「墙比塔浅一档」可言 —— 那一档只能靠轮廓自己说：城齿只在塔与塔之间的空档里
+    // 读得出来，压在塔身上的齿与塔融为一体，这正是实体墙挡住塔底该有的样子。
+    //
     // 少了这道墙，三座塔各自孤立，怎么加尖顶都读不出「一座城堡」。
-    // 墙比塔浅一档（0.82 对 1.0）：墙在前、塔在后，同值时整座城堡是一块平板
     val wallTop = groundY - h * 0.072f
-    drawRect(
-        color = deep,
-        topLeft = Offset(w * 0.255f, wallTop),
-        size = Size(w * 0.49f, groundY - wallTop),
-        alpha = stone * 0.82f
-    )
     val crenel = w * 0.022f
-    var cx0 = w * 0.255f
-    while (cx0 < w * 0.745f) {
-        drawRect(
-            color = deep,
-            topLeft = Offset(cx0, wallTop - crenel * 0.8f),
-            size = Size(crenel, crenel * 0.8f),
-            alpha = stone * 0.82f
-        )
-        cx0 += crenel * 2f
-    }
-
     // 塔（x 中心，塔宽，塔高）。左右两座刻意不等高、不等宽 ——
     // 三座一样的塔并排是一排烟囱。塔高按 groundY 上移后重算过，主楼加尖顶收在 0.07h
     val towers = floatArrayOf(
@@ -1364,22 +1352,37 @@ private fun DrawScope.drawGoldenCastle(
         0.50f, 0.135f, 0.198f,
         0.685f, 0.070f, 0.156f
     )
+    path.rewind()
+    path.addRect(Rect(w * 0.255f, wallTop, w * 0.745f, groundY))
+    var cx0 = w * 0.255f
+    while (cx0 < w * 0.745f) {
+        path.addRect(Rect(cx0, wallTop - crenel * 0.8f, cx0 + crenel, wallTop))
+        cx0 += crenel * 2f
+    }
+    for (i in 0 until 3) {
+        val cx = w * towers[i * 3]
+        val tw = w * towers[i * 3 + 1]
+        val towerTop = groundY - h * towers[i * 3 + 2]
+        path.addRect(Rect(cx - tw / 2f, towerTop, cx + tw / 2f, groundY))
+        // 中间那座是主楼（收尖顶），两侧才是垛口塔。**同一座塔不能既有城齿又有尖顶** ——
+        // 尖顶压在城齿上时，齿与齿之间的空档露出背景，屏幕上是每座塔顶两枚发亮的小方块，
+        // 读作「窗」；而真实的城堡里那两样本来就是两种收顶方式。
+        if (i != 1) {
+            val merlon = tw / 5f
+            for (m in 0 until 3) {
+                val mx = cx - tw / 2f + m * merlon * 2f
+                path.addRect(Rect(mx, towerTop - merlon * 0.9f, mx + merlon, towerTop))
+            }
+        }
+    }
+    drawPath(path = path, color = deep, alpha = stone)
+
     for (i in 0 until 3) {
         val cx = w * towers[i * 3]
         val tw = w * towers[i * 3 + 1]
         val th = h * towers[i * 3 + 2]
         val towerTop = groundY - th
-        // 中间那座是主楼（带尖顶），两侧是垛口塔。**同一座塔不能既有城齿又有尖顶** ——
-        // 尖顶压在城齿上时，齿与齿之间的空档露出背景，屏幕上是每座塔顶两枚发亮的小方块，
-        // 读作「窗」；而真实的城堡里那两样本来就是两种收顶方式。
-        // 分开之后侧影也有了变化：一座尖顶主楼 + 两座垛口塔
         val keep = i == 1
-        drawRect(
-            color = deep,
-            topLeft = Offset(cx - tw / 2f, towerTop),
-            size = Size(tw, th),
-            alpha = stone
-        )
         val merlon = tw / 5f
         // 旗杆的落点：主楼在尖顶尖上，垛口塔在齿顶
         val flagY: Float
@@ -1396,14 +1399,6 @@ private fun DrawScope.drawGoldenCastle(
             drawPath(path = path, color = deep, alpha = stone)
             drawPath(path = path, color = Color.Black, alpha = alpha * 0.20f)
         } else {
-            for (m in 0 until 3) {
-                drawRect(
-                    color = deep,
-                    topLeft = Offset(cx - tw / 2f + m * merlon * 2f, towerTop - merlon * 0.9f),
-                    size = Size(merlon, merlon * 0.9f),
-                    alpha = stone
-                )
-            }
             flagY = towerTop - merlon * 0.9f - th * 0.10f
             // 垛口塔的旗要有杆，否则旗浮在齿顶上方一截
             drawLine(
