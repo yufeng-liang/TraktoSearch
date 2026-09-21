@@ -123,6 +123,8 @@ class PersistentTtlCache<T>(
             get(key)?.let { return it }
             awaitLoaded()
             get(key)?.let { return it }
+            // 磁盘回填后复查负缓存：null 负缓存以短 TTL 持久化，冷启动后同样抑制重复请求
+            if (hasActiveNullEntry(key)) return nullAsT()
         }
         // 已确认内存 + 磁盘都未命中，交给基类只做飞行中去重（不再重复查内存）
         return super.getOrAwait(key, skipCache = true, fetch = fetch)
@@ -141,9 +143,15 @@ class PersistentTtlCache<T>(
     override fun put(key: String, value: T) {
         withGenerationLock {
             markKeyWrittenDuringLoad(key)
-            // 持久化缓存不做负缓存（TTL 往往很长/永久）：临时无结果不应被永久/长期抑制，
-            // 且 null 会污染 DataStore 序列化。内存负缓存仅由纯内存 TtlCache 承担。
-            if (value == null) return@withGenerationLock
+            if (value == null) {
+                // null 负缓存短期持久化：避免冷启动后「空结果」重复打网络。
+                // 不沿用主 TTL（往往很长/永久），防止临时无结果被长期抑制；
+                // 可空 serializer 可正常编码 null，非空 T 永远走不到该分支。
+                val expireAt = System.currentTimeMillis() + NULL_NEGATIVE_TTL_MS
+                putInternal(key, value, expireAt)
+                schedulePersist(key, value, expireAt, currentGeneration())
+                return@withGenerationLock
+            }
             super.put(key, value)
             val expireAt = getExpireAt(key) ?: return@withGenerationLock
             // 攒批异步落盘，不阻塞内存写入返回
@@ -305,6 +313,9 @@ class PersistentTtlCache<T>(
     private companion object {
         /** 攒批窗口（毫秒）：足够合并一屏列表的富化写入，又不至于让缓存长时间只在内存里。 */
         const val PERSIST_DEBOUNCE_MS = 400L
+
+        /** null 负缓存持久化时长：跨重启抑制空结果重复请求，同时保证临时性无结果很快可重试。 */
+        const val NULL_NEGATIVE_TTL_MS = 30L * 60 * 1000
     }
 
     private fun beginDiskLoad(): Long = synchronized(loadStateLock) {

@@ -69,6 +69,18 @@ open class TtlCache<T>(
         return entry.value.value
     }
 
+    /**
+     * 该 key 是否存在未过期的负缓存条目（值为 null）。
+     *
+     * [get] 对负缓存条目同样返回 null，与「未命中」无法区分；
+     * [getOrAwait] 借助本方法在 TTL 内把空结果当命中直接返回，避免重复 fetch。
+     */
+    fun hasActiveNullEntry(key: String): Boolean {
+        val entry = cache[key] ?: return false
+        if (entry.expireAt != Long.MAX_VALUE && System.currentTimeMillis() > entry.expireAt) return false
+        return entry.value.value == null
+    }
+
     open fun put(key: String, value: T) {
         synchronized(generationLock) {
             val now = System.currentTimeMillis()
@@ -108,6 +120,8 @@ open class TtlCache<T>(
     open suspend fun getOrAwait(key: String, skipCache: Boolean = false, fetch: suspend () -> T): T {
         if (!skipCache) {
             get(key)?.let { return it }
+            // 负缓存命中：TTL 内的空结果直接返回 null，避免同 key 重复 fetch
+            if (hasActiveNullEntry(key)) return nullAsT()
         }
         var requestGeneration = 0L
         lateinit var deferred: CompletableDeferred<T>
@@ -206,4 +220,12 @@ open class TtlCache<T>(
     private companion object {
         const val FETCH_CANCELLED_MESSAGE = "Fetch cancelled"
     }
+
+    /**
+     * 负缓存命中时以 T 类型返回 null。
+     * 负缓存条目只可能由可空 T 的缓存写入（类型系统保证非空 T 调用方传不进 null），
+     * 因此这里对非空 T 不会产生运行时类型冲突。
+     */
+    @Suppress("UNCHECKED_CAST")
+    protected fun nullAsT(): T = null as T
 }

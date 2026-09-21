@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -291,6 +292,35 @@ class PersistentTtlCacheTest {
 
     @Suppress("unused")
     private val dummyProperty: Int = 0
+
+    // ==================== null 负缓存跨重启 ====================
+
+    /**
+     * 磁盘上的 null 负缓存条目（短 TTL）在重启后命中：getOrAwait 直接返回 null，
+     * 不再发起 fetch，避免冷启动后空结果重复打网络。
+     */
+    @Test
+    fun getOrAwait_negativeEntryOnDisk_suppressesRefetchAfterRestart() = runTest {
+        val dataStore = createDataStore()
+        // 直接写 null 负缓存条目到磁盘，模拟上次运行落盘的结果（绕开 put 的异步落盘竞态）
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey("neg:k1")] = "null"
+            prefs[longPreferencesKey("neg:k1:exp")] = System.currentTimeMillis() + 60_000
+        }
+        val cache = PersistentTtlCache<PersistentTestItem?>(
+            ttlMillis = Long.MAX_VALUE,
+            maxSize = 100,
+            dataStore = dataStore,
+            json = json,
+            serializer = json.serializersModule.serializer<PersistentTestItem?>(),
+            keyPrefix = "neg",
+            scope = backgroundScope
+        )
+        var fetchCount = 0
+        val result = cache.getOrAwait("k1") { fetchCount++; PersistentTestItem("x", 1) }
+        assertThat(result).isNull()
+        assertThat(fetchCount).isEqualTo(0)
+    }
 
     private fun createDataStore(): DataStore<Preferences> {
         val context: Context = RuntimeEnvironment.getApplication()

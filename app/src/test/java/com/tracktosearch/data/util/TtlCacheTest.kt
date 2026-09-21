@@ -188,6 +188,31 @@ class TtlCacheTest {
         assertThat(second.await()).isEqualTo("retried")
     }
 
+    // ==================== null 负缓存 ====================
+
+    /**
+     * fetch 返回 null 时写入负缓存条目：TTL 内再次 getOrAwait 直接返回 null，
+     * 不重复执行 fetch（skipCache=true 可强制穿透重新 fetch）。
+     */
+    @Test
+    fun getOrAwait_nullResult_negativeCacheSuppressesRefetch() = runTest {
+        val cache = TtlCache<String?>(ttlMillis = 60_000)
+        var fetchCount = 0
+        val first = cache.getOrAwait("k") { fetchCount++; null }
+        assertThat(first).isNull()
+        assertThat(fetchCount).isEqualTo(1)
+
+        // 负缓存命中：不再 fetch，返回 null 而非 defaultValue 的结果
+        val second = cache.getOrAwait("k") { fetchCount++; "value" }
+        assertThat(second).isNull()
+        assertThat(fetchCount).isEqualTo(1)
+
+        // skipCache 穿透负缓存
+        val third = cache.getOrAwait("k", skipCache = true) { fetchCount++; "value" }
+        assertThat(third).isEqualTo("value")
+        assertThat(fetchCount).isEqualTo(2)
+    }
+
     // ==================== clear ====================
 
     @Test
