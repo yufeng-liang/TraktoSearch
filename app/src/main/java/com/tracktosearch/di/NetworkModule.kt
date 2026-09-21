@@ -109,6 +109,9 @@ object NetworkModule {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
+            // callTimeout 兜底：防止慢响应/挂起连接无限占用（子 client 各自覆盖更短值），
+            // 尤其 zreso 等仅复用 base 不额外设超时的客户端
+            .callTimeout(20, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }
