@@ -1678,8 +1678,8 @@ private fun DrawScope.drawVeilSpotlight(
 /**
  * 花窗的窗棂与彩玻：竖棂 + 横楣 + 拱心的四叶饰 + 几格上色的玻璃。
  *
- * 全部**裁在窗形之内**（`clipPath`）。不裁的话竖棂会一路捅出拱线以外，
- * 屏幕上是窗顶伸出来两根天线 —— 尖拱的上半是斜的，直线画到 apexY 必然出界。
+ * 全部**裁在窗形之内**（`clipPath`）：横楣两头正好顶在窗框的中线上，不裁的话铅条的线宽
+ * 会压到石框上，尖拱那两段斜边尤其明显。
  *
  * [frame] 是路径本身（调用方刚描完的窗形），这里只读不改；棂与玻璃全部另起路径，
  * 画完不需要还原 —— 调用方随后要用它描石框，会自己 rewind。
@@ -1697,13 +1697,20 @@ private fun DrawScope.drawWindowGlass(
     alpha: Float
 ) {
     val bar = (winW * 0.026f).coerceAtLeast(1.5f)
+    // 拱心玫瑰窗的圆心与外环半径。竖棂要停在它的外沿上，四叶饰也按这三个数定位
+    val qy = springY - winW * 0.40f
+    val qr = winW * 0.115f
+    val roseR = qr * 2.05f
     clipPath(frame) {
-        // 三道竖棂把窗分成三条 light（哥特窗的标准分法），一路顶到拱里被裁掉
+        // 三道竖棂把窗分成三条 light（哥特窗的标准分法）。**走到玫瑰窗的外沿就收住**，
+        // 不穿过圆：真实的哥特窗里圆窗是坐在竖棂上的，铅条停在圆环外沿，圆内是另一套花饰
         for (m in 1..2) {
             val mx = winLeft + winW * m / 3f
+            val dx = abs(mx - (winLeft + winW / 2f))
+            val chord = sqrt((roseR * roseR - dx * dx).coerceAtLeast(0f))
             drawLine(
                 color = INK,
-                start = Offset(mx, springY - winW * 0.90f),
+                start = Offset(mx, qy + chord + bar * 0.5f),
                 end = Offset(mx, sillY),
                 strokeWidth = bar,
                 alpha = alpha * 0.72f
@@ -1749,11 +1756,9 @@ private fun DrawScope.drawWindowGlass(
             )
         }
         // 拱心的四叶饰：四个圆瓣 + 一圈外环。哥特窗拱头里就是这个
-        val qy = springY - winW * 0.40f
-        val qr = winW * 0.115f
         drawCircle(
             color = INK,
-            radius = qr * 2.05f,
+            radius = roseR,
             center = Offset(winLeft + winW / 2f, qy),
             alpha = alpha * 0.55f,
             style = Stroke(width = bar)
