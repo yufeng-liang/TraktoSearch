@@ -92,6 +92,22 @@ object SwiftieTimeline {
     const val TTPD_PREROLL_MS: Long = 3_200L
 
     /**
+     * 三张卡片让**页面背景**独走一段时间的时长。
+     *
+     * `Fearless` / `Speak Now` / `1989` 的背景主体最满（旋转金光晕 + 城堡尖顶 + 甩发弧、
+     * 三层紫纱 + 追光、天际线 + 海浪 + 散落拍立得），卡片一压就盖掉大半，用户来不及看。
+     * 这三张因此在卡片长出之前先让背景独自演 600ms。
+     *
+     * 与 [TTPD_PREROLL_MS] 的区别只在**钱从哪儿出**：TTPD 的前摇是加在账本上的新表演，
+     * 这一段的 600ms 从本张卡片自己的完整停留里扣 —— [cardDurationMs] 一毫秒不动，
+     * 于是 [ERAS_CARDS_MS] 与配乐钉死的那两个点全不受影响。代价是这三张读曲目的时间少 600ms。
+     */
+    const val BACKDROP_SOLO_MS: Long = 600L
+
+    /** 吃到背景独走的三张：2 · Fearless、3 · Speak Now、5 · 1989（索引从 0 起）。 */
+    val BACKDROP_SOLO_INDICES: Set<Int> = setOf(1, 2, 4)
+
+    /**
      * TTPD 逐行打印额外占用的时间。
      *
      * 31 行仍按正常时间表占 `130 × 31 = 4030ms`，再从定格挪来的 3s 加在这里，
@@ -123,6 +139,22 @@ object SwiftieTimeline {
             (if (index in CARD_ANCHOR_BONUS_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
             (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L)
+
+    /**
+     * 第 [index] 张卡片的内部时钟相对本段起点要**后移**多少毫秒。
+     *
+     * 两种来源共用这一个量：[TTPD_PREROLL_MS] 的打字机独奏，与 [BACKDROP_SOLO_MS] 的
+     * 三张背景先演。后移期间屏幕上没有卡片，所以卡片自己的时长要减掉它
+     * （`cardDurationMs(index) - cardPrerollMs(index)`），回落点才仍落在段末 500ms 处。
+     *
+     * 消费方（`SwiftieErasStage`、触感谱的落地那一记、三个预览 Activity）一律走这里，
+     * 别各自再算一遍 —— 触感谱从前根本没算这一笔，于是 TTPD 那记落地一直比眼里早 3200ms。
+     */
+    fun cardPrerollMs(index: Int): Long = when {
+        index == TTPD_INDEX -> TTPD_PREROLL_MS
+        index in BACKDROP_SOLO_INDICES -> BACKDROP_SOLO_MS
+        else -> 0L
+    }
 
     /** 12 张卡片合计 106317ms（含四张 TV 独有曲目与其余最多版本）。 */
     val ERAS_CARDS_MS: Long = ERA_TRACK_COUNTS

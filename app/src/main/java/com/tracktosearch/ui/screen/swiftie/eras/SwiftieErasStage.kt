@@ -95,13 +95,11 @@ fun SwiftieErasStage(
     // 每帧变的量只在 draw lambda 里读；组合里只读这一个「翻转 12 次」的派生量
     val activeIndex by remember { derivedStateOf { activeEraIndexAt(clock.elapsedMs) } }
     val era = SwiftieErasData.ALL[activeIndex]
-    // TTPD 段头是打字机独奏，卡片的内部时钟按 `TTPD_PREROLL_MS` 整体后移；
-    // 卡片自己的总时长因此要把前摇减掉，回落点才仍落在段末 500ms 处
-    val prerollMs = if (activeIndex == SwiftieTimeline.TTPD_INDEX) {
-        SwiftieTimeline.TTPD_PREROLL_MS
-    } else {
-        0L
-    }
+    val isTtpd = activeIndex == SwiftieTimeline.TTPD_INDEX
+    // 卡片内部时钟整体后移：TTPD 是打字机独奏（前摇额外加在账本上），TS2/TS3/TS5 是让
+    // 页面背景先演 600ms（从这张卡自己的停留里扣）。两种都要把后移量从卡片时长里减掉，
+    // 回落点才仍落在段末 500ms 处
+    val prerollMs = SwiftieTimeline.cardPrerollMs(activeIndex)
     val cardDurationMs =
         SwiftieTimeline.cardDurationMs(activeIndex, era.tracks.size) - prerollMs
     // 倒滑与绽放期间把 Lover 钉在停留末帧，不许它回落
@@ -232,7 +230,7 @@ fun SwiftieErasStage(
                 // 卡片自己按这个高度折算曲目行高：31 首的 TTPD Anthology 在小屏上要压行。
                 // TTPD 的卡片要从插槽底再抬高一台打字机的高度（出纸口坐在卡片下缘上），
                 // 行高按抬高后的剩余空间折算，别让 31 行把机器顶出屏
-                val machineReserve = if (prerollMs != 0L) TTPD_MACHINE_RESERVE else 0.dp
+                val machineReserve = if (isTtpd) TTPD_MACHINE_RESERVE else 0.dp
                 val slotHeight = maxHeight - machineReserve
                 // key 换值就重挂：新卡片的 elapsedInCard 从 0 起算，
                 // 上一张此时 scaleY 已经收到 0，看不到硬切
@@ -256,7 +254,7 @@ fun SwiftieErasStage(
                             collapseProgress = collapseProgress,
                             // 出纸只在 TTPD：前摇里 elapsedInCard 是负的，进度钳到 0f，
                             // 这张卡片连投影都不画
-                            feedProgress = if (prerollMs == 0L) {
+                            feedProgress = if (!isTtpd) {
                                 null
                             } else {
                                 { elapsedInCard().toFloat() / CARD_FEED_MS }

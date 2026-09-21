@@ -108,9 +108,10 @@ class SwiftieEggPreviewActivity : ComponentActivity() {
         }
         val era = intent.longExtraOrNull(EXTRA_ERA)?.toInt() ?: return null
         val index = era.coerceIn(0, SwiftieTimeline.ERA_TRACK_COUNTS.lastIndex)
-        // TTPD 段头那 1400ms 是打字机独奏（卡片还没出纸），落点要把它加回去，
-        // 不然这一张截出来是「机器 + 半张纸」，和其余 11 张不是同一个时刻
-        val preroll = if (index == SwiftieTimeline.TTPD_INDEX) SwiftieTimeline.TTPD_PREROLL_MS else 0L
+        // 段起点之后还有前摇（TTPD 的打字机独奏、TS2/TS3/TS5 让背景先演 600ms），
+        // 落点要把它加回去，不然截出来是「空插槽」或「机器 + 半张纸」，
+        // 和其余卡片不是同一个时刻
+        val preroll = SwiftieTimeline.cardPrerollMs(index)
         return (SwiftieTimeline.eraStartMs(index) + preroll + ERA_SETTLE_MS)
             .coerceAtMost(SwiftieTimeline.TOTAL_MS)
     }

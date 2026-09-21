@@ -89,6 +89,30 @@ class SwiftieTimelineTest {
         assertThat(SwiftieTimeline.cardDurationMs(index = 11, trackCount = 12)).isEqualTo(7_304L)
     }
 
+    /**
+     * TS2 / TS3 / TS5 让页面背景先演 600ms，卡片推迟长出。
+     *
+     * 时间从这张卡自己的完整停留里扣，所以 [SwiftieTimeline.cardDurationMs] 一毫秒不动 ——
+     * 账本总长、卡片边界与配乐钉死的那两个点全都不该跟着抖。
+     */
+    @Test
+    fun backdropSoloDelaysThreeCardsWithoutTouchingTheLedger() {
+        assertThat(SwiftieTimeline.BACKDROP_SOLO_INDICES).containsExactly(1, 2, 4).inOrder()
+        assertThat(SwiftieTimeline.cardPrerollMs(1)).isEqualTo(600L)
+        assertThat(SwiftieTimeline.cardPrerollMs(3)).isEqualTo(0L)
+        // TTPD 的前摇是**加在账本上**的另一种前摇，同一个 helper 认人
+        assertThat(SwiftieTimeline.cardPrerollMs(SwiftieTimeline.TTPD_INDEX))
+            .isEqualTo(SwiftieTimeline.TTPD_PREROLL_MS)
+        SwiftieTimeline.ERA_TRACK_COUNTS.forEachIndexed { index, count ->
+            val solo = SwiftieTimeline.cardPrerollMs(index)
+            if (index == SwiftieTimeline.TTPD_INDEX) return@forEachIndexed
+            // 扣完剩下的窗口仍要盖得住「长出 + 停留 + 回落 + 段间停顿」那一整套固定开销，
+            // 否则回落会跑到下一张的份里去
+            assertThat(SwiftieTimeline.cardDurationMs(index, count) - solo)
+                .isGreaterThan(SwiftieTimeline.CARD_BASE_MS)
+        }
+    }
+
     @Test
     fun twelveCardsFillTheErasSegment() {
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS).hasSize(12)
