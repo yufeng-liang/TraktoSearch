@@ -9,6 +9,7 @@ import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.gradle.api.tasks.testing.Test
@@ -361,9 +362,57 @@ val verifyReleaseSigning = tasks.register<VerifyReleaseSigningTask>("verifyRelea
     localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
 }
 
+// release 产物护栏，两件事故都要等包跑起来才看得见，所以在配置阶段就拦住：
+//
+// 1) 版本号与 tag 对不上。搬到 CI 后 EXPECTED_VERSION_NAME 由 tag 传入，不一致意味着
+//    tag 与代码不同步 —— 宁可不构建，也不能发一个 tag 写着 3.7.0、包里 versionName 还是
+//    3.6.0 的产物：应用内更新只比 versionName，这种包发出去用户永远检测不到下一次更新。
+//    变量缺省时该项 no-op，本机手工 assembleRelease 的行为不变。
+//    必须走 providers.environmentVariable 而不是 System.getenv：项目开了
+//    org.gradle.configuration-cache=true，直读环境变量 Gradle 追不到，
+//    换 tag 重跑会命中旧缓存里的值。
+//
+// 2) 空的 config.aes.key。它会编出一个解不开远程配置的包（BuildConfig.CONFIG_AES_KEY
+//    没有默认值），症状是「配置拉不下来」这种到线上才暴露的表现，比构建失败难查得多。
+//    这里只把「有没有配」当输入，密钥值本身不进 @Input，免得漏进缓存与构建报告。
+abstract class VerifyReleaseVersionTask : DefaultTask() {
+    @get:Input
+    @get:Optional
+    abstract val expectedVersionName: Property<String>
+
+    @get:Input
+    abstract val declaredVersionName: Property<String>
+
+    @get:Input
+    abstract val configAesKeyPresent: Property<Boolean>
+
+    @TaskAction
+    fun verify() {
+        val expected = expectedVersionName.orNull?.trim()
+        if (!expected.isNullOrEmpty()) {
+            val declared = declaredVersionName.get()
+            check(expected == declared) {
+                "Release version mismatch: tag says '$expected' but app/build.gradle.kts " +
+                    "declares versionName '$declared'. Bump versionName and commit before tagging."
+            }
+        }
+        check(configAesKeyPresent.get()) {
+            "config.aes.key is blank in local.properties; the release APK would ship without " +
+                "a key able to decrypt remote config."
+        }
+    }
+}
+
+val verifyReleaseVersion = tasks.register<VerifyReleaseVersionTask>("verifyReleaseVersion") {
+    expectedVersionName.set(providers.environmentVariable("EXPECTED_VERSION_NAME").map { it.trim() })
+    declaredVersionName.set(android.defaultConfig.versionName.orEmpty())
+    configAesKeyPresent.set(properties.getProperty("config.aes.key", "").trim().isNotBlank())
+}
+
 tasks.configureEach {
     if (name == "preReleaseBuild" || name == "assembleRelease" || name == "bundleRelease") {
         dependsOn(verifyReleaseSigning)
+        dependsOn(verifyReleaseVersion)
     }
 }
 
