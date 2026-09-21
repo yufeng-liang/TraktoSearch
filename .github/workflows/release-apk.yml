@@ -1,0 +1,147 @@
+name: Build release APK
+
+# 当前是「影子构建」阶段：只产出签名 APK 与 R8 mapping 作为 workflow artifact，
+# 不碰 R2、不上传任何 Release，现有发布链路一字不动。
+# 接 on: release: types: [published] 并把产物推上 R2 + GitHub Release 是后续阶段的事。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要构建的 tag，例如 v3.6.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-apk-${{ github.event.inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: assembleRelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # 动用正式发布密钥的作业，跑之前要过 environment 审批
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: 解析版本号
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "::error::tag 必须是 v 开头的版本号，收到 '$TAG'"; exit 1 ;;
+          esac
+          # verifyReleaseVersion 用它比对 app/build.gradle.kts 的 versionName，不一致就构建失败
+          echo "EXPECTED_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
+
+      - name: 校验签名材料齐备
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          AES_KEY: ${{ secrets.CONFIG_AES_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          check() {
+            if [ -z "$2" ]; then
+              echo "::error::缺少 Secret $1"
+              missing=1
+            fi
+          }
+          check RELEASE_KEYSTORE_B64 "$KEYSTORE_B64"
+          check RELEASE_STORE_PASSWORD "$STORE_PASSWORD"
+          check RELEASE_KEY_ALIAS "$KEY_ALIAS"
+          check RELEASE_KEY_PASSWORD "$KEY_PASSWORD"
+          check CONFIG_AES_KEY "$AES_KEY"
+          exit "$missing"
+
+      - name: 还原签名材料与构建配置
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          AES_KEY: ${{ secrets.CONFIG_AES_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_B64" | base64 -d > release.jks
+          chmod 600 release.jks
+          # 键名与 app/build.gradle.kts 读取的严格对应。
+          # 不写 sdk.dir：runner 用镜像自带的 ANDROID_HOME。
+          cat > local.properties <<EOF
+          release.store.file=../release.jks
+          release.store.password=$STORE_PASSWORD
+          release.key.alias=$KEY_ALIAS
+          release.key.password=$KEY_PASSWORD
+          config.aes.key=$AES_KEY
+          EOF
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          # AGP 9.x 的最低 JDK；升 AGP 时按官方兼容表复核
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装编译所需平台
+        # compileSdkVersion("android-37.2") 是扩展级版本，镜像预装的 platform 不一定带；
+        # 装不上会在这里明确失败，而不是拖到依赖解析阶段报难懂的错。sdkmanager 幂等。
+        run: sdkmanager --install "platforms;android-37.2"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: assembleRelease
+        # -I 的 init script 把官方源前置到国内镜像之前，绕开 CI 空缓存下阿里云缺构件的坑，
+        # 详见 .ci/gradle-ci.init.gradle.kts
+        run: ./gradlew :app:assembleRelease --stacktrace -I "$GITHUB_WORKSPACE/.ci/gradle-ci.init.gradle.kts"
+
+      - name: 校验产物签名指纹
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)"
+          fingerprint="$("$apksigner" verify --print-certs "$apk" \
+            | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)"
+          echo "APK 签名证书 SHA-256：$fingerprint"
+          # 与 app/build.gradle.kts 里 VerifyReleaseSigningTask 校验的是同一枚证书；
+          # 那边查的是「用的 keystore 对不对」，这边查「发出去的包真是它签的吗」。
+          expected=5ece267c52985b64bd23f40f5be6a8732e5689b10248fa7846e9e16f8cf5adb8
+          [ "$fingerprint" = "$expected" ] || { echo "::error::产物签名指纹与发布证书不符"; exit 1; }
+
+      - name: 整理产物
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-${{ inputs.tag }}
+          path: out/
+          retention-days: 30
+
+      - name: Upload R8 mapping
+        # R8 fullMode 下的线上崩溃栈只有这份 mapping 能解，先随 artifact 留存
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mapping-${{ inputs.tag }}
+          path: app/build/outputs/mapping/release/
+          retention-days: 90
