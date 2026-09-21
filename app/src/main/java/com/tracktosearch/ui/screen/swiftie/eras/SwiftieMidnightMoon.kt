@@ -104,17 +104,21 @@ private val PILLOW_SEAM: Path by lazy(LazyThreadSafetyMode.NONE) { Path().apply 
  * 月牙相对「缺口朝钟」姿态的回转角（度）。
  *
  * 终态（抱枕抱好，`cuddle = 1`）把缺口精确对准钟心；初始态在后面这个基准上
- * 再顺时针偏 [MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG]，抱枕过程中只回转这一小段。
+ * 再顺时针偏 [MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG]，抱枕过程中转回对齐。
+ *
+ * **这个返回值不是屏幕上的转角**：调用方用 `scale(-unit, unit)` 把整只月牙左右翻转
+ * 来画（画稿时脸朝左更直观），镜像会把转向再翻一次 —— 屏幕上顺时针 N° 在这里得写 `-N`。
+ * 基准项 `-lookAngleDeg` 同理，它已被真机核验为「缺口正对钟心」，不要动符号。
  */
 internal fun midnightMoonRotationDeg(lookAngleDeg: Float, cuddle: Float): Float =
-    -lookAngleDeg +
+    -lookAngleDeg -
         MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG * (1f - cuddle.coerceIn(0f, 1f))
 
 /**
  * 初始姿态相对终态的顺时针偏转（度）。
  *
- * 终态严格对齐钟心；初始态多转这一点，脸和抱枕会略偏向右下，
- * 抱枕抱起后再自然回到对齐姿态。
+ * 终态严格对齐钟心；初始态多转这一点，抱枕抱起后再自然回转回到对齐姿态。
+ * 方向以**屏幕**为准，[midnightMoonRotationDeg] 里那一次取负就是为它兑镜像。
  */
 internal const val MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG: Float = 40f
 
