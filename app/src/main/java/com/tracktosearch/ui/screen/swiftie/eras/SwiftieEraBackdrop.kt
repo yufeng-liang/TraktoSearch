@@ -1344,7 +1344,13 @@ private fun DrawScope.drawGoldenCastle(
     //
     // 少了这道墙，三座塔各自孤立，怎么加尖顶都读不出「一座城堡」。
     val wallTop = groundY - h * 0.072f
+    val wallLeft = w * 0.255f
+    val wallRight = w * 0.745f
     val crenel = w * 0.022f
+    // 城齿两端各与一道墙边对齐，剩下的等分。按固定步长往后排会在右端多出半块
+    // （墙宽 0.49 屏宽不是步长 0.044 的整数倍），左齐右凸，整道墙看着往右倒
+    val crenelCount = 12
+    val crenelPitch = (wallRight - wallLeft - crenel) / (crenelCount - 1)
     // 塔（x 中心，塔宽，塔高）。左右两座刻意不等高、不等宽 ——
     // 三座一样的塔并排是一排烟囱。塔高按 groundY 上移后重算过，主楼加尖顶收在 0.07h
     val towers = floatArrayOf(
@@ -1353,11 +1359,10 @@ private fun DrawScope.drawGoldenCastle(
         0.685f, 0.070f, 0.156f
     )
     path.rewind()
-    path.addRect(Rect(w * 0.255f, wallTop, w * 0.745f, groundY))
-    var cx0 = w * 0.255f
-    while (cx0 < w * 0.745f) {
-        path.addRect(Rect(cx0, wallTop - crenel * 0.8f, cx0 + crenel, wallTop))
-        cx0 += crenel * 2f
+    path.addRect(Rect(wallLeft, wallTop, wallRight, groundY))
+    for (m in 0 until crenelCount) {
+        val mx = wallLeft + m * crenelPitch
+        path.addRect(Rect(mx, wallTop - crenel * 0.8f, mx + crenel, wallTop))
     }
     for (i in 0 until 3) {
         val cx = w * towers[i * 3]
