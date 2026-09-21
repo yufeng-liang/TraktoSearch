@@ -964,6 +964,19 @@ private val PORCH_CROWN_CORE = floatArrayOf(
 private val PORCH_POSTS = floatArrayOf(0.20f, 0.86f)
 
 /**
+ * 门廊的纵向骨架，全部是**屏高比例**，消费方是 [drawFireflyPorch]。
+ *
+ * 这几档是一条链：屋檐 → 窗 → 栏杆 → 地板，每一档必须整个落在下一档以上。
+ * 竖向顺序由 `SwiftiePorchLayoutTest` 钉住 —— 窗与栏杆一旦咬住就是肉眼可见的错位，
+ * 但画完之后从截图上很难归因回「窗的下缘和栏杆的上缘分别写死在两个地方」。
+ */
+internal const val PORCH_EAVE_BOTTOM = 0.055f
+internal const val PORCH_RAIL_TOP = 0.24f
+private const val PORCH_RAIL_BOTTOM = 0.335f
+internal const val PORCH_WIN_TOP = 0.085f
+internal const val PORCH_WIN_HEIGHT = 0.13f
+
+/**
  * 卡片盖住的横带上缘。
  *
  * 卡片高度按曲目数派生，所以顶边每张不同。**要被看见的大主体必须落在这条线以上。**
@@ -1048,20 +1061,20 @@ private fun DrawScope.drawFireflyPorch(
     drawPath(path = path, color = Color.Black, alpha = ink * 0.30f)
 
     // 屋檐：一根横梁压住上缘，两根立柱落到地板
-    drawRect(color = PORCH_INK, size = Size(w, h * 0.055f), alpha = ink)
+    drawRect(color = PORCH_INK, size = Size(w, h * PORCH_EAVE_BOTTOM), alpha = ink)
     val postW = w * 0.032f
     for (i in PORCH_POSTS.indices) {
         drawRect(
             color = PORCH_INK,
-            topLeft = Offset(w * PORCH_POSTS[i] - postW / 2f, h * 0.055f),
-            size = Size(postW, floorY - h * 0.055f),
+            topLeft = Offset(w * PORCH_POSTS[i] - postW / 2f, h * PORCH_EAVE_BOTTOM),
+            size = Size(postW, floorY - h * PORCH_EAVE_BOTTOM),
             alpha = ink
         )
     }
 
     // 栏杆：上下两根横档 + 一排立柱。立柱间距 0.038 屏宽，密到读作栏杆而不是围栏
-    val railTop = h * 0.24f
-    val railBottom = h * 0.335f
+    val railTop = h * PORCH_RAIL_TOP
+    val railBottom = h * PORCH_RAIL_BOTTOM
     val barW = (w * 0.007f).coerceAtLeast(1f)
     var bx = w * 0.20f + postW
     while (bx < w * 0.86f - postW) {
@@ -1122,9 +1135,9 @@ private fun DrawScope.drawFireflyPorch(
     // 屋内暖光。sin(phase*TAU) 是 phase 的一倍频，绕回 0f 时连续
     val flicker = 0.82f + 0.18f * sin(phase * TAU)
     val winLeft = w * 0.62f
-    val winTop = h * 0.11f
+    val winTop = h * PORCH_WIN_TOP
     val winW = w * 0.20f
-    val winH = h * 0.15f
+    val winH = h * PORCH_WIN_HEIGHT
     // 窗外的光晕先铺：暖光要洒到墙上，否则窗只是一块贴上去的亮片。
     // 0.55 而不是 0.30：结构压到近黑之后，这道光是整张图唯一的亮部，也是「屋里有人」的全部信息
     drawUnitGlow(
