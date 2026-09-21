@@ -1143,17 +1143,13 @@ fun WatchlistScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                // 点击回顶：无涟漪（标题区是整块覆盖层，点击回顶属于导航语义，不显示波纹）
+                                // 点击仅收起搜索框：无涟漪（标题区是整块覆盖层，点击收起属于导航语义，不显示波纹）
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
                                 ) {
                                     if (isSearchExpanded) {
                                         collapseSearch()
-                                    } else {
-                                        gridCoroutineScope.launch {
-                                            currentGridState.animateScrollToItem(0)
-                                        }
                                     }
                                 }
                         ) {
