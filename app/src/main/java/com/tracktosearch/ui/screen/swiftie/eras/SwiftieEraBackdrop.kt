@@ -1679,7 +1679,7 @@ private fun DrawScope.drawVeilSpotlight(
  * 花窗的窗棂与彩玻：竖棂 + 横楣 + 拱心的四叶饰 + 几格上色的玻璃。
  *
  * 全部**裁在窗形之内**（`clipPath`）：横楣两头正好顶在窗框的中线上，不裁的话铅条的线宽
- * 会压到石框上，尖拱那两段斜边尤其明显。
+ * 会压到石框上；竖棂的上段一路画进拱里，收口也全靠这层裁剪。
  *
  * [frame] 是路径本身（调用方刚描完的窗形），这里只读不改；棂与玻璃全部另起路径，
  * 画完不需要还原 —— 调用方随后要用它描石框，会自己 rewind。
@@ -1702,16 +1702,25 @@ private fun DrawScope.drawWindowGlass(
     val qr = winW * 0.115f
     val roseR = qr * 2.05f
     clipPath(frame) {
-        // 三道竖棂把窗分成三条 light（哥特窗的标准分法）。**走到玫瑰窗的外沿就收住**，
-        // 不穿过圆：真实的哥特窗里圆窗是坐在竖棂上的，铅条停在圆环外沿，圆内是另一套花饰
+        // 三道竖棂把窗分成三条 light（哥特窗的标准分法）。**在圆环处断开**：
+        // 下段从窗台走到圆环下沿，上段从圆环上沿再往上捅进拱里由 clipPath 裁掉 ——
+        // 哥特窗的圆窗是坐在竖棂上的，铅条绕着圆走，不从圆心里穿过去
         for (m in 1..2) {
             val mx = winLeft + winW * m / 3f
             val dx = abs(mx - (winLeft + winW / 2f))
             val chord = sqrt((roseR * roseR - dx * dx).coerceAtLeast(0f))
+            val clearance = bar * 0.5f
             drawLine(
                 color = INK,
-                start = Offset(mx, qy + chord + bar * 0.5f),
+                start = Offset(mx, qy + chord + clearance),
                 end = Offset(mx, sillY),
+                strokeWidth = bar,
+                alpha = alpha * 0.72f
+            )
+            drawLine(
+                color = INK,
+                start = Offset(mx, springY - winW * 0.90f),
+                end = Offset(mx, qy - chord - clearance),
                 strokeWidth = bar,
                 alpha = alpha * 0.72f
             )
