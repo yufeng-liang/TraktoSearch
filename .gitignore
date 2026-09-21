@@ -135,6 +135,7 @@ verification-artifacts/
 # Agent 客户端本地配置与技能，不属于公开源码
 /.zcode/
 /.claude/
+/.qoder/
 
 # 性能基线：只留 before/after-benchmarkData 这一对可比记录（已入库，跟踪的路径不受忽略影响），
 # 排查过程的中间测量（after-run1/2、after-corner-fix 等）不入库
