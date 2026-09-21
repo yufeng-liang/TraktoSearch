@@ -120,7 +120,7 @@ internal fun midnightMoonRotationDeg(lookAngleDeg: Float, cuddle: Float): Float 
  * 终态严格对齐钟心；初始态多转这一点，抱枕抱起后再自然回转回到对齐姿态。
  * 方向以**屏幕**为准，[midnightMoonRotationDeg] 里那一次取负就是为它兑镜像。
  */
-internal const val MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG: Float = 40f
+internal const val MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG: Float = 20f
 
 /**
  * 月牙的基准缩放。

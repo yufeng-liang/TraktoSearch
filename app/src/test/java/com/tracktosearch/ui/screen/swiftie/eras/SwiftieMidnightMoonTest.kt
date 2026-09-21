@@ -84,7 +84,7 @@ class SwiftieMidnightMoonTest {
 
     @Test
     fun 起手缺口正对时钟() {
-        // 初始态 = 终态对齐姿态再顺时针偏 40°。返回值是**镜像前**的转角，
+        // 初始态 = 终态对齐姿态再顺时针偏 20°。返回值是**镜像前**的转角，
         // 调用方的 scale(-unit, unit) 会把方向翻回屏幕上的顺时针，所以这里多一项负号
         val look = 47f
         assertThat(midnightMoonRotationDeg(look, 0f))
@@ -93,12 +93,12 @@ class SwiftieMidnightMoonTest {
 
     @Test
     fun 抱枕终态缺口对齐时钟() {
-        // 终态严格对齐钟心，整个抱枕过程只回转初始多出的 40°
+        // 终态严格对齐钟心，整个抱枕过程只回转初始多出的 20°
         val look = 47f
         assertThat(midnightMoonRotationDeg(look, 1f)).isWithin(1e-4f).of(-look)
         assertThat(midnightMoonRotationDeg(look, 0f) - midnightMoonRotationDeg(look, 1f))
             .isWithin(1e-4f).of(-MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG)
-        assertThat(MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG).isWithin(0.001f).of(40f)
+        assertThat(MIDNIGHT_MOON_INITIAL_EXTRA_TURN_DEG).isWithin(0.001f).of(20f)
     }
 
     @Test
