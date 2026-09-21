@@ -316,8 +316,10 @@ private fun axisIntroCues(): List<SwiftieHapticCue> = listOf(
 /**
  * 卡片段：**总共 13 记**，12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾。
  *
- * - 落地落在长出走完那一刻（`eraStartMs(i) + CARD_GROW_MS`），不是起手那一刻：
- *   `SwiftieEraCard` 的入场曲线在这里收住，手上那一记要和眼里那一下对齐。
+ * - 落地落在长出走完那一刻（`eraStartMs(i) + cardPrerollMs(i) + CARD_GROW_MS`），不是起手
+ *   那一刻：`SwiftieEraCard` 的入场曲线在这里收住，手上那一记要和眼里那一下对齐。
+ *   前摇那一段屏幕上根本没有卡片（TTPD 的打字机独奏、TS2/TS3/TS5 的背景先演），
+ *   所以后移量必须一起加上 —— 从前漏了这一笔，TTPD 那记落地一直比眼里早 3200ms。
  * - 锚点两张（`ANCHOR_INDICES` = Taylor Swift、Lover）用 `CONFIRM`，tier 1 上是
  *   `CLICK` + `THUD` 两笔，tier 0 上是 `CONFIRM`（退 `VIRTUAL_KEY`）；其余十张用
  *   `GESTURE_END`，tier 1 上是半幅 `THUD`，tier 0 上退到 `CLOCK_TICK`
@@ -328,12 +330,13 @@ private fun axisIntroCues(): List<SwiftieHapticCue> = listOf(
  */
 private fun erasCardCues(): List<SwiftieHapticCue> =
     SwiftieTimeline.ERA_TRACK_COUNTS.flatMapIndexed { index, trackCount ->
-        val start = SwiftieTimeline.eraStartMs(index)
+        // 段起点之后还要等前摇演完，卡片才真的开始长出
+        val cardStart = SwiftieTimeline.eraStartMs(index) + SwiftieTimeline.cardPrerollMs(index)
         val anchored = index in SwiftieTimeline.ANCHOR_INDICES
         buildList {
             add(
                 SwiftieDiscreteCue(
-                    atMs = start + CARD_GROW_MS,
+                    atMs = cardStart + CARD_GROW_MS,
                     kind = if (anchored) {
                         SwiftieHapticCueKind.CARD_LAND_ANCHOR
                     } else {
@@ -345,7 +348,7 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
             if (index == SwiftieTimeline.TTPD_INDEX) {
                 add(
                     SwiftieDiscreteCue(
-                        atMs = start + trackRowRevealAtMs(
+                        atMs = cardStart + trackRowRevealAtMs(
                             eraIndex = index,
                             rowIndex = trackCount,
                             lowRam = false,

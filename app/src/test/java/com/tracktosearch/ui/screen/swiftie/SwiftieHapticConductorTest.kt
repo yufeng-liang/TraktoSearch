@@ -126,8 +126,9 @@ class SwiftieHapticConductorTest {
         // 闸门重开之后从当时的时刻接着走，欠下的十几记不许补发成一串乱码
         assertThat(conductor.onFrame(elapsedMs = 3_700L, seekEpoch = 0, muted = false)).isEmpty()
         // 非 TTPD 已没有曲目列收尾触感；闸门重开后第一条到期的是下一张卡的落地。
-        // 第一张卡落地在 3500ms（已跨过），第二张在 eraStartMs(1) + 400ms
-        val nextLanding = SwiftieTimeline.eraStartMs(1) + CARD_GROW_MS
+        // 第一张卡落地在 3500ms（已跨过），第二张（Fearless）要先等它那 600ms 背景独走
+        val nextLanding = SwiftieTimeline.eraStartMs(1) +
+            SwiftieTimeline.cardPrerollMs(1) + CARD_GROW_MS
         val resumed = conductor.onFrame(elapsedMs = nextLanding, seekEpoch = 0, muted = false)
         assertThat(resumed.map { it.kind })
             .containsExactly(SwiftieHapticCueKind.CARD_LAND)

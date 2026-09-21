@@ -63,16 +63,20 @@ class SwiftieHapticScoreTest {
         // 242 首曲目，逐曲目就是 109 秒里 242 次震动 —— 手会麻，也什么都表达不了
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(242)
         val done = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
-        assertThat(done.atMs).isGreaterThan(SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX))
+        assertThat(done.atMs).isGreaterThan(cardStartMs(SwiftieTimeline.TTPD_INDEX))
         assertThat(done.atMs).isLessThan(
             SwiftieTimeline.eraStartMs(SwiftieTimeline.TTPD_INDEX + 1)
         )
     }
 
+    /** 卡片**真的开始长出**那一刻：段起点还要减去前摇（打字机独奏 / 背景先演）。 */
+    private fun cardStartMs(index: Int) =
+        SwiftieTimeline.eraStartMs(index) + SwiftieTimeline.cardPrerollMs(index)
+
     @Test
     fun cardCuesLandWhereTheCardAndItsTracklistDo() {
         SwiftieTimeline.ERA_TRACK_COUNTS.forEachIndexed { index, trackCount ->
-            val start = SwiftieTimeline.eraStartMs(index)
+            val start = cardStartMs(index)
             // 落地压在长出走完那一刻，不是起手那一刻
             val landing = score.cues.single {
                 it.atMs == start + CARD_GROW_MS &&
@@ -85,9 +89,29 @@ class SwiftieHapticScoreTest {
         val trackCount = SwiftieTimeline.ERA_TRACK_COUNTS[index]
         assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single().atMs)
             .isEqualTo(
-                SwiftieTimeline.eraStartMs(index) +
+                cardStartMs(index) +
                     trackRowRevealAtMs(index, trackCount, lowRam = false)
             )
+    }
+
+    /**
+     * 有前摇的卡片：触感必须跟着后移，否则手上那记落在屏幕上还什么都没有的时候。
+     *
+     * TTPD 从前漏了这一笔（在打字机独奏里就响了），TS2/TS3/TS5 是这次加背景独走时
+     * 一起补上的 —— 两边都用同一个 `cardPrerollMs` 认人。
+     */
+    @Test
+    fun landingFollowsEveryCardThatHasAPreroll() {
+        assertThat(SwiftieTimeline.BACKDROP_SOLO_INDICES).containsExactly(1, 2, 4).inOrder()
+        assertThat(SwiftieTimeline.BACKDROP_SOLO_MS).isEqualTo(600L)
+        // 三张的账本总长一毫秒不动：独走的时间从自己的完整停留里扣
+        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(106_317L)
+        (SwiftieTimeline.BACKDROP_SOLO_INDICES + SwiftieTimeline.TTPD_INDEX).forEach { index ->
+            assertThat(score.cues.filter {
+                it.kind == SwiftieHapticCueKind.CARD_LAND &&
+                    it.atMs == cardStartMs(index) + CARD_GROW_MS
+            }).hasSize(1)
+        }
     }
 
     @Test
@@ -96,14 +120,14 @@ class SwiftieHapticScoreTest {
         val finalTrack = SwiftieTimeline.ERA_TRACK_COUNTS[index]
         val cue = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
         // TTPD 的时间窗是 130 × 31 + 3000；从卡内 400ms 的逐行起点算起，
-        // 最后一记落在 400 + 7030ms
+        // 最后一记落在 400 + 7030ms，再往后是它自己那 3200ms 前摇
         assertThat(SwiftieTimeline.TTPD_TRACK_REVEAL_MS).isEqualTo(7_030L)
         assertThat(trackRowRevealAtMs(index, finalTrack, lowRam = false))
             .isEqualTo(400L + SwiftieTimeline.TTPD_TRACK_REVEAL_MS)
         assertThat(cue.atMs)
             .isEqualTo(
-                SwiftieTimeline.eraStartMs(index) + 400L +
-                    SwiftieTimeline.TTPD_TRACK_REVEAL_MS
+                SwiftieTimeline.eraStartMs(index) + SwiftieTimeline.TTPD_PREROLL_MS +
+                    400L + SwiftieTimeline.TTPD_TRACK_REVEAL_MS
             )
     }
 
