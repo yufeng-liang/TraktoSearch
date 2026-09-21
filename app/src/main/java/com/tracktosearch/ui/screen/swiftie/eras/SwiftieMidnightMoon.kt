@@ -135,8 +135,10 @@ internal const val MIDNIGHT_MOON_SCALE: Float = 1.18f
  *
  * 从 0.352 上移到 0.22：卡片 22 首时上缘约在 0.34H，而抱枕落位后下缘约 0.33H；
  * 月牙和抱枕都完整留在卡片上方，且与左上角钟面保持距离。
+ * 0.22 → 0.24 是把那道留白收薄：抱枕落位后下缘约 0.34H，仍压在卡片上缘之上，
+ * 但月牙不再像悬在半空。再往下就会让抱枕和卡片顶边打架。
  */
-internal const val MOON_CENTER_Y: Float = 0.22f
+internal const val MOON_CENTER_Y: Float = 0.24f
 
 /**
  * 月牙中心的横向位置（屏宽比例）。
