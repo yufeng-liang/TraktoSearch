@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -36,7 +35,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Help
@@ -47,8 +45,6 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,7 +54,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -98,7 +93,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppErrorState
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.localizedGenreName
 import com.tracktosearch.ui.component.backdropSource
@@ -113,7 +110,6 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.component.TopBarBackdropBlurRadius
-import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -536,16 +532,12 @@ fun StatisticsScreen(
 /** 统计说明弹窗 */
 @Composable
 private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.statistics_info)) },
-        text = {
+        title = stringResource(R.string.statistics_info),
+        content = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-                    .verticalScroll(rememberScrollState())
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = stringResource(R.string.statistics_info_overview),
@@ -590,19 +582,11 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = {
-            // 对话框有自己的宿主 View，按 ComposeHaptics 的约定在这一层重新取一份。
-            // 这一记是本弹窗唯一的主按钮（标着「确定」），即使它只是关掉弹窗也按主按钮给 tap
-            val dialogHaptics = rememberAppHaptics()
-            TextButton(
-                onClick = {
-                    dialogHaptics.tap()
-                    onDismiss()
-                }
-            ) {
-                Text(stringResource(android.R.string.ok))
-            }
-        }
+        confirm = DialogAction(
+            // 本弹窗唯一的主按钮（标着「确定」），即使它只是关掉弹窗也按主按钮给触感
+            label = stringResource(android.R.string.ok),
+            onClick = { onDismiss() }
+        )
     )
 }
 

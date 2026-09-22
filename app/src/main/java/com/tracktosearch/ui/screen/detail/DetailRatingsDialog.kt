@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.detail
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.glassBorderColor
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -12,7 +13,6 @@ import com.tracktosearch.ui.theme.OnBrandTmdb
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.readableOn
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.ui.theme.floatingDialogColor
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -38,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.StarHalf
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -478,12 +477,9 @@ internal fun RatingDialog(
     val starColor = RatingGold
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
-        containerColor = floatingDialogColor(),
-        shape = RoundedCornerShape(24.dp),
-        title = null,
-        text = {
+        content = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -658,8 +654,6 @@ internal fun RatingDialog(
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {}
+        }
     )
 }

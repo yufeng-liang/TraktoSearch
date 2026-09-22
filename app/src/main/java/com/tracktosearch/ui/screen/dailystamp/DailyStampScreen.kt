@@ -36,13 +36,11 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,6 +87,8 @@ import coil.request.ImageRequest
 import coil.size.Scale
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SplashQuote
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.haptic.HapticSemantic
@@ -97,7 +97,6 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.splash.SplashPalette
 import com.tracktosearch.ui.screen.splash.grainBrush
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.floatingDialogColor
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -430,11 +429,10 @@ private fun SplashQuoteSettingsDialog(
     onEnabledChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.splash_quote_title)) },
-        text = {
+        title = stringResource(R.string.splash_quote_title),
+        content = {
             Column {
                 Text(
                     text = stringResource(R.string.settings_splash_quote_subtitle),
@@ -459,11 +457,10 @@ private fun SplashQuoteSettingsDialog(
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_done))
-            }
-        },
+        confirm = DialogAction(
+            label = stringResource(R.string.common_done),
+            onClick = onDismiss
+        ),
     )
 }
 

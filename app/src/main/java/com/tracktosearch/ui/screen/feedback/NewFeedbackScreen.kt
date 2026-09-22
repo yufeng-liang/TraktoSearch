@@ -39,6 +39,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.DialogTone
 import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.recordOpenImageBounds
@@ -47,7 +50,6 @@ import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -291,36 +293,22 @@ fun NewFeedbackScreen(
     }
 
     if (showDiscardDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text(stringResource(R.string.feedback_discard_title)) },
-            text = { Text(stringResource(R.string.feedback_discard_message)) },
-            confirmButton = {
-                // 弹窗的两个槽各是独立 subcomposition，各取一份 facade
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(
-                    onClick = {
-                        confirmHaptics.tap()
-                        showDiscardDialog = false
-                        onBack()
-                    }
-                ) {
-                    Text(
-                        text = stringResource(R.string.feedback_discard_confirm),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
+            title = stringResource(R.string.feedback_discard_title),
+            message = stringResource(R.string.feedback_discard_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.feedback_discard_confirm),
+                onClick = {
                     showDiscardDialog = false
-                }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
-            containerColor = floatingDialogColor()
+                    onBack()
+                },
+                tone = DialogTone.Destructive
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = { showDiscardDialog = false }
+            )
         )
     }
 

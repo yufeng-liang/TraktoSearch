@@ -8,11 +8,10 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,8 +30,11 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.ShareCodec
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.AppDialogActionRow
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
+import com.tracktosearch.ui.theme.DesignToken
 
 /** 分享配置弹层：编码文本 + 复制 + 系统分享面板 */
 @Composable
@@ -42,11 +44,10 @@ fun ShareSourceDialog(
 ) {
     val context = LocalContext.current
     val text = remember(source.id) { ShareCodec.encode(source) }
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.share_source_title, source.name)) },
-        text = {
+        title = stringResource(R.string.share_source_title, source.name),
+        content = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.share_source_desc), style = MaterialTheme.typography.bodySmall)
                 Text(
@@ -57,35 +58,34 @@ fun ShareSourceDialog(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-        },
-        confirmButton = {
-            // 槽是独立 subcomposition（自己的宿主 View），单独取一份
-            val haptics = rememberAppHaptics()
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = {
-                        haptics.tap()
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("source-config", text))
-                        // 这里保留 Toast：复制后弹层不关，Snackbar 由下层 Scaffold 承载会被弹层窗口盖住看不见
-                        Toast.makeText(context, R.string.share_copy_success, Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text(stringResource(R.string.share_copy)) }
-                Button(
+            Spacer(modifier = Modifier.height(DesignToken.DialogActionGap))
+            // 复制与分享两个动作收进统一按钮行：主推进（分享）在右，复制退居次按钮
+            AppDialogActionRow(
+                primary = DialogAction(
+                    label = stringResource(R.string.share_to_apps),
+                    weight = 1.4f,
                     onClick = {
                         // 系统分享面板是盖在本应用之上的系统 UI，这一下没有离开任务栈（真正跳出去
-                        // 是用户在面板里再选一个应用），按弹层主操作给 tap
-                        haptics.tap()
+                        // 是用户在面板里再选一个应用），故作为弹窗的主推进动作
                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, text)
                         }
                         context.startActivity(Intent.createChooser(sendIntent, null))
-                    },
-                    modifier = Modifier.weight(1.4f)
-                ) { Text(stringResource(R.string.share_to_apps)) }
-            }
+                    }
+                ),
+                secondary = listOf(
+                    DialogAction(
+                        label = stringResource(R.string.share_copy),
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("source-config", text))
+                            // 这里保留 Toast：复制后弹层不关，Snackbar 由下层 Scaffold 承载会被弹层窗口盖住看不见
+                            Toast.makeText(context, R.string.share_copy_success, Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                )
+            )
         }
     )
 }
@@ -116,12 +116,11 @@ fun ImportSourceDialog(
         }
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.editor_title_import)) },
-        text = {
-            // text 槽也是独立 subcomposition，单独取一份
+        title = stringResource(R.string.editor_title_import),
+        content = {
+            // content 槽在自己的组合作用域里，粘贴按钮的触感句柄单独取一份
             val bodyHaptics = rememberAppHaptics()
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -178,26 +177,20 @@ fun ImportSourceDialog(
                 }
             }
         },
-        confirmButton = {
-            val confirmHaptics = rememberAppHaptics()
-            TextButton(
-                enabled = preview != null,
-                onClick = {
-                    confirmHaptics.tap()
-                    preview?.let { source ->
-                        val finalName = editableName.trim().ifBlank { source.name }
-                        onConfirm(if (finalName != source.name) source.copy(name = finalName) else source)
-                    }
+        confirm = DialogAction(
+            label = stringResource(R.string.import_confirm),
+            enabled = preview != null,
+            onClick = {
+                preview?.let { source ->
+                    val finalName = editableName.trim().ifBlank { source.name }
+                    onConfirm(if (finalName != source.name) source.copy(name = finalName) else source)
                 }
-            ) { Text(stringResource(R.string.import_confirm)) }
-        },
-        dismissButton = {
-            val dismissHaptics = rememberAppHaptics()
-            TextButton(onClick = {
-                dismissHaptics.lightTap()
-                onDismiss()
-            }) { Text(stringResource(android.R.string.cancel)) }
-        }
+            }
+        ),
+        dismiss = DialogAction(
+            label = stringResource(android.R.string.cancel),
+            onClick = { onDismiss() }
+        )
     )
 }
 

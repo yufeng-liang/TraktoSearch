@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -70,6 +69,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.DialogTone
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hazeTopBar
@@ -81,7 +83,6 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.settings.PanHubConfigDialog
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -274,31 +275,22 @@ fun SearchSourcesScreen(
 
     // ---- 冲突确认：同名/同地址源已存在 ----
     pendingImport?.let { source ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { pendingImport = null },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.search_sources_title)) },
-            text = { Text(stringResource(R.string.import_duplicate_warning)) },
-            confirmButton = {
-                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    confirmHaptics.tap()
+            title = stringResource(R.string.search_sources_title),
+            message = stringResource(R.string.import_duplicate_warning),
+            confirm = DialogAction(
+                label = stringResource(R.string.import_confirm),
+                onClick = {
                     pendingImport = null
                     viewModel.importSource(source, overwrite = true)
-                    confirmHaptics.confirm()
                     scope.launch { snackbarHostState.showSnackbar(importSuccessMessage) }
-                }) { Text(stringResource(R.string.import_confirm)) }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
-                    pendingImport = null
-                }) {
-                    Text(stringResource(android.R.string.cancel))
                 }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = { pendingImport = null }
+            )
         )
     }
 }
@@ -678,38 +670,26 @@ private fun CustomSourceRow(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.settings_delete_source)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.settings_delete_source_confirm,
-                        source.name.ifBlank { stringResource(R.string.settings_source_unnamed) }
-                    )
-                )
-            },
-            confirmButton = {
-                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    confirmHaptics.tap()
+            title = stringResource(R.string.settings_delete_source),
+            message = stringResource(
+                R.string.settings_delete_source_confirm,
+                source.name.ifBlank { stringResource(R.string.settings_source_unnamed) }
+            ),
+            confirm = DialogAction(
+                // 删除搜索源是破坏性确认：按钮走 error 填充色
+                label = stringResource(R.string.cd_delete),
+                onClick = {
                     showDeleteConfirm = false
                     onDelete()
-                }) {
-                    Text(stringResource(R.string.cd_delete), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
-                    showDeleteConfirm = false
-                }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
+                },
+                tone = DialogTone.Destructive
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = { showDeleteConfirm = false }
+            )
         )
     }
 }

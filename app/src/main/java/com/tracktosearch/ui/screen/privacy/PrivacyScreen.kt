@@ -58,7 +58,6 @@ import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -105,6 +104,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hasListScrolled
@@ -122,7 +123,6 @@ import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
@@ -289,24 +289,21 @@ fun PrivacyScreen(
             }
 
             if (showClearAiProfileDialog) {
-                AlertDialog(
+                AppAlertDialog(
                     onDismissRequest = { showClearAiProfileDialog = false },
-                    containerColor = floatingDialogColor(),
-                    title = { Text(stringResource(R.string.settings_ai_profile_clear_confirm_title)) },
-                    text = { Text(stringResource(R.string.settings_ai_profile_clear_confirm_message)) },
-                    confirmButton = {
-                        TextButton(onClick = {
+                    title = stringResource(R.string.settings_ai_profile_clear_confirm_title),
+                    message = stringResource(R.string.settings_ai_profile_clear_confirm_message),
+                    confirm = DialogAction(
+                        label = stringResource(R.string.settings_ai_profile_clear_action),
+                        onClick = {
                             showClearAiProfileDialog = false
                             viewModel.clearAiProfile()
-                        }) {
-                            Text(stringResource(R.string.settings_ai_profile_clear_action))
                         }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showClearAiProfileDialog = false }) {
-                            Text(stringResource(android.R.string.cancel))
-                        }
-                    }
+                    ),
+                    dismiss = DialogAction(
+                        label = stringResource(android.R.string.cancel),
+                        onClick = { showClearAiProfileDialog = false }
+                    )
                 )
             }
 

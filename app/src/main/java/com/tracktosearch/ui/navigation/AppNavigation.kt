@@ -19,13 +19,11 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -81,6 +79,8 @@ import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.WatchlistMediaType
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.BackdropProvider
@@ -123,7 +123,6 @@ import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import com.tracktosearch.ui.theme.LocalMainColorScheme
 import com.tracktosearch.ui.theme.VintagePaperPage
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.data.util.CurrentPageHolder
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.data.util.UserActionTracker
@@ -1784,34 +1783,33 @@ fun AppNavigation(
             }
 
             autoImportConflict?.let { source ->
-                AlertDialog(
+                AppAlertDialog(
                     onDismissRequest = {
                         autoImportConflict = null
                         autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                         autoImportHit = null
                     },
-                    containerColor = floatingDialogColor(),
-                    title = { Text(stringResource(R.string.search_sources_title)) },
-                    text = { Text(stringResource(R.string.import_duplicate_warning)) },
-                    confirmButton = {
-                        TextButton(onClick = {
+                    title = stringResource(R.string.search_sources_title),
+                    message = stringResource(R.string.import_duplicate_warning),
+                    confirm = DialogAction(
+                        label = stringResource(R.string.import_confirm),
+                        onClick = {
                             autoImportConflict = null
                             autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                             autoImportHit = null
                             autoImportVm.importSource(source, overwrite = true)
                             outcomeHaptics.confirm()
                             scope.launch { appSnackbarHostState.showSnackbar(importSuccessMessage) }
-                        }) { Text(stringResource(R.string.import_confirm)) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
+                        }
+                    ),
+                    dismiss = DialogAction(
+                        label = stringResource(android.R.string.cancel),
+                        onClick = {
                             autoImportConflict = null
                             autoImportHit?.let { autoImportVm.markAutoImportIgnored(it) }
                             autoImportHit = null
-                        }) {
-                            Text(stringResource(android.R.string.cancel))
                         }
-                    }
+                    )
                 )
             }
 

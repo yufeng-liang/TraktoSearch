@@ -6,16 +6,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -23,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,11 +39,13 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.WatchedGreen
-import com.tracktosearch.ui.theme.floatingDialogColor
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 // ==================== 标记已看弹窗（电视剧季/集勾选） ====================
@@ -103,20 +101,23 @@ internal fun MarkWatchedDialog(
         }
     }
 
-    AlertDialog(
+    // 所有已勾选季的集列表均已加载完成后才允许确认，避免未加载季的勾选被静默丢弃
+    val confirmEnabled = selectedEpisodes.value.entries.all { (seasonNum, epNums) ->
+        epNums.isEmpty() || episodes[seasonNum] != null
+    }
+
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.detail_mark_watched_title)) },
-        text = {
-            // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
+        title = stringResource(R.string.detail_mark_watched_title),
+        content = {
+            // content 槽在自己的组合作用域里，Checkbox 的触感句柄单独取一份
             val haptics = rememberAppHaptics()
             // 第0季（特别篇）放到最后
             val sortedSeasons = remember(seasons) {
                 seasons.filter { it.number > 0 } + seasons.filter { it.number == 0 }
             }
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.heightIn(max = 400.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(sortedSeasons.size, key = { sortedSeasons[it].number }) { index ->
                     val season = sortedSeasons[index]
@@ -132,13 +133,13 @@ internal fun MarkWatchedDialog(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(DesignToken.Card)
                             .hapticClickable(
                                 semantic = if (isExpanded) HapticSemantic.TOGGLE_OFF else HapticSemantic.TOGGLE_ON
                             ) { toggleSeasonExpand(season.number) },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = DesignToken.Card,
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
@@ -267,45 +268,33 @@ internal fun MarkWatchedDialog(
                 }
             }
         },
-        confirmButton = {
-            // confirmButton 与 text 是各自独立的 subcomposition，各取一份
-            val confirmHaptics = rememberAppHaptics()
-            // 所有已勾选季的集列表均已加载完成后才允许确认，避免未加载季的勾选被静默丢弃
-            val confirmEnabled = selectedEpisodes.value.entries.all { (seasonNum, epNums) ->
-                epNums.isEmpty() || episodes[seasonNum] != null
-            }
-            TextButton(
-                enabled = confirmEnabled,
-                onClick = {
-                    confirmHaptics.tap()
-                    // 收集所有已勾选集的 trakt ID；已看过的集仅预勾展示，提交时排除避免 Trakt history 重复
-                    val selectedIds = mutableListOf<Int>()
-                    selectedEpisodes.value.forEach { (seasonNum, epNums) ->
-                        val watched = watchedEpisodeNumbers[seasonNum] ?: emptySet()
-                        epNums.forEach { epNum ->
-                            if (epNum !in watched) {
-                                episodes[seasonNum]?.find { it.number == epNum }?.ids?.trakt?.let {
-                                    selectedIds.add(it)
-                                }
+        confirm = DialogAction(
+            label = stringResource(R.string.common_confirm),
+            enabled = confirmEnabled,
+            onClick = {
+                // 收集所有已勾选集的 trakt ID；已看过的集仅预勾展示，提交时排除避免 Trakt history 重复
+                val selectedIds = mutableListOf<Int>()
+                selectedEpisodes.value.forEach { (seasonNum, epNums) ->
+                    val watched = watchedEpisodeNumbers[seasonNum] ?: emptySet()
+                    epNums.forEach { epNum ->
+                        if (epNum !in watched) {
+                            episodes[seasonNum]?.find { it.number == epNum }?.ids?.trakt?.let {
+                                selectedIds.add(it)
                             }
                         }
                     }
-                    // 过滤后没有新增集（全部已看过）则不提交直接关闭
-                    if (selectedIds.isNotEmpty()) {
-                        onSubmit(selectedIds)
-                    } else {
-                        onDismiss()
-                    }
                 }
-            ) {
-                Text(stringResource(R.string.common_confirm))
+                // 过滤后没有新增集（全部已看过）则不提交直接关闭
+                if (selectedIds.isNotEmpty()) {
+                    onSubmit(selectedIds)
+                } else {
+                    onDismiss()
+                }
             }
-        },
-        dismissButton = {
-            val dismissHaptics = rememberAppHaptics()
-            TextButton(onClick = { dismissHaptics.lightTap(); onDismiss() }) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
+        ),
+        dismiss = DialogAction(
+            label = stringResource(R.string.common_cancel),
+            onClick = { onDismiss() }
+        )
     )
 }

@@ -32,8 +32,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +72,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -352,43 +352,24 @@ fun ActivationLoginScreen(
     }
 
     if (showWhatIsTraktDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showWhatIsTraktDialog = false },
-            containerColor = LoginPaperLight,
-            titleContentColor = LoginTitleInk,
-            textContentColor = LoginSecondaryInk,
-            title = { Text(stringResource(R.string.login_what_is_trakt_title)) },
-            text = { Text(stringResource(R.string.login_what_is_trakt_desc)) },
-            confirmButton = {
-                // 不发触感：CustomTabs 只是打开 trakt.tv 注册页去看，属真的离开本应用。
-                // 与票上那行 Trakt 登录的区别在「回不回来」，不是「有没有用 CustomTabs」
-                Button(
-                    onClick = {
-                        showWhatIsTraktDialog = false
-                        CustomTabsIntent.Builder().build()
-                            .launchUrl(context, Uri.parse("https://api2.trakt.tv/auth/signup_method"))
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = LoginTitleInk,
-                        contentColor = LoginPaperLight
-                    )
-                ) { Text(stringResource(R.string.login_what_is_trakt_register)) }
-            },
-            dismissButton = {
-                // 槽是独立 subcomposition（对话框自己的宿主 View），单独取一份
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(
-                    onClick = {
-                        dismissHaptics.lightTap()
-                        showWhatIsTraktDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = LoginActionInk
-                    )
-                ) {
-                    Text(stringResource(R.string.login_what_is_trakt_close))
+            title = stringResource(R.string.login_what_is_trakt_title),
+            message = stringResource(R.string.login_what_is_trakt_desc),
+            confirm = DialogAction(
+                // CustomTabs 打开 trakt.tv 注册页去看，属真的离开本应用；
+                // 统一按钮行按主按钮档位给按压触感（与开源页外跳 GitHub 同一取舍）
+                label = stringResource(R.string.login_what_is_trakt_register),
+                onClick = {
+                    showWhatIsTraktDialog = false
+                    CustomTabsIntent.Builder().build()
+                        .launchUrl(context, Uri.parse("https://api2.trakt.tv/auth/signup_method"))
                 }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.login_what_is_trakt_close),
+                onClick = { showWhatIsTraktDialog = false }
+            )
         )
     }
 }

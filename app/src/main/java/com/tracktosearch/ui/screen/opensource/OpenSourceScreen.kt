@@ -21,11 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -34,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.Icons
@@ -65,13 +61,13 @@ import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
-import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
-import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -391,21 +387,11 @@ private fun OssLibraryCard(lib: OssLibrary, onClick: () -> Unit) {
 @Composable
 private fun OssLibraryDialog(lib: OssLibrary, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = {
-            Text(
-                text = lib.name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+        title = lib.name,
+        content = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = stringResource(R.string.opensource_version_label, lib.version),
                     style = MaterialTheme.typography.bodyMedium,
@@ -435,28 +421,17 @@ private fun OssLibraryDialog(lib: OssLibrary, onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = {
-            // confirmButton 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取。
-            // 外跳 GitHub 仍给 tap()：弹窗主按钮的档位由显著度决定，压过「外跳静默」那条 ——
-            // 否则这个弹窗里唯一会震的会是「取消」，主次颠倒
-            val confirmHaptics = rememberAppHaptics()
-            TextButton(onClick = {
-                confirmHaptics.tap()
+        confirm = DialogAction(
+            // 外跳 GitHub 的「查看仓库」仍是主按钮，按压触感由按钮行按主按钮档位给出
+            label = stringResource(R.string.opensource_view_repo),
+            onClick = {
                 CustomTabsIntent.Builder().build()
                     .launchUrl(context, lib.repoUrl.toUri())
-            }) {
-                Text(stringResource(R.string.opensource_view_repo))
             }
-        },
-        dismissButton = {
-            // dismissButton 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取
-            val dismissHaptics = rememberAppHaptics()
-            TextButton(onClick = {
-                dismissHaptics.lightTap()
-                onDismiss()
-            }) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
+        ),
+        dismiss = DialogAction(
+            label = stringResource(R.string.common_cancel),
+            onClick = { onDismiss() }
+        )
     )
 }

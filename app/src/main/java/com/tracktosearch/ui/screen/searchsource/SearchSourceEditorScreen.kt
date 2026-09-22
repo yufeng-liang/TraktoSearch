@@ -29,7 +29,6 @@ import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,7 +42,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,11 +60,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -298,30 +297,24 @@ fun SearchSourceEditorScreen(
     }
 
     if (showConflictDialog) {
-        AlertDialog(
+        // 保存结果触感（成功 confirm / 失败 reject）与按压触感无关，组件不代管，留在调用点
+        val resultHaptics = rememberAppHaptics()
+        AppAlertDialog(
             onDismissRequest = { showConflictDialog = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.search_sources_title)) },
-            text = { Text(stringResource(R.string.import_duplicate_warning)) },
-            confirmButton = {
-                // 每个槽是独立 subcomposition（自己的宿主 View），单独取一份
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    confirmHaptics.tap()
+            title = stringResource(R.string.search_sources_title),
+            message = stringResource(R.string.import_duplicate_warning),
+            confirm = DialogAction(
+                label = stringResource(R.string.import_confirm),
+                onClick = {
                     showConflictDialog = false
-                    if (viewModel.save() != null) confirmHaptics.confirm() else confirmHaptics.reject()
+                    if (viewModel.save() != null) resultHaptics.confirm() else resultHaptics.reject()
                     onSaved()
-                }) {
-                    Text(stringResource(R.string.import_confirm))
                 }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
-                    showConflictDialog = false
-                }) { Text(stringResource(android.R.string.cancel)) }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = { showConflictDialog = false }
+            )
         )
     }
 }

@@ -36,7 +36,6 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,7 +51,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -107,10 +105,12 @@ import com.tracktosearch.data.ai.mediaKeyFor
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.DetailTopBarIcon
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.LocalBackdrop
@@ -148,7 +148,6 @@ import com.tracktosearch.ui.screen.ai.sceneArtFor
 import com.tracktosearch.ui.screen.ai.shouldShowWatchlistAddedScene
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
@@ -1433,33 +1432,26 @@ fun DetailScreen(
             if (uiState.showLoginPrompt) {
                 val loginTarget = uiState.loginTarget
                 val dismissLoginPrompt: () -> Unit = viewModel::dismissLoginPrompt
-                AlertDialog(
+                AppAlertDialog(
                     onDismissRequest = dismissLoginPrompt,
-                    containerColor = floatingDialogColor(),
-                    title = { Text(stringResource(R.string.detail_login_required_title)) },
-                    text = { Text(stringResource(R.string.detail_login_required_message)) },
-                    confirmButton = {
-                        // AlertDialog 的每个槽是独立 subcomposition，各取一份
-                        val confirmHaptics = rememberAppHaptics()
-                        TextButton(onClick = {
-                            confirmHaptics.tap()
+                    title = stringResource(R.string.detail_login_required_title),
+                    message = stringResource(R.string.detail_login_required_message),
+                    confirm = DialogAction(
+                        label = stringResource(R.string.detail_login_go),
+                        onClick = {
                             dismissLoginPrompt()
                             when (loginTarget) {
                                 DetailLoginTarget.TRAKT -> onTraktLogin()
                                 DetailLoginTarget.DOUBAN -> onDoubanLogin()
                                 null -> Unit
                             }
-                        }) {
-                            Text(stringResource(R.string.detail_login_go))
                         }
-                    },
-                    dismissButton = {
-                        val dismissHaptics = rememberAppHaptics()
-                        TextButton(onClick = { dismissHaptics.lightTap(); dismissLoginPrompt() }) {
-                            // 用应用内资源而非 android.R.string.cancel（平台串随系统语言变化）
-                            Text(stringResource(R.string.common_cancel))
-                        }
-                    }
+                    ),
+                    dismiss = DialogAction(
+                        // 用应用内资源而非 android.R.string.cancel（平台串随系统语言变化）
+                        label = stringResource(R.string.common_cancel),
+                        onClick = { dismissLoginPrompt() }
+                    )
                 )
             }
 
