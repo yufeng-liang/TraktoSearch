@@ -1,17 +1,11 @@
 package com.tracktosearch.ui.component
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.CrashHandler
 import com.tracktosearch.R
@@ -33,7 +26,6 @@ import com.tracktosearch.data.util.CrashPromptDecision
 import com.tracktosearch.data.util.UploadState
 import com.tracktosearch.data.util.UploadToastPolicy
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -133,38 +125,36 @@ fun CrashReportDialogHost(
     if (!dialogVisible) return
 
     when (val kind = dialogKind) {
-        is DialogKind.Authorize -> AlertDialog(
+        is DialogKind.Authorize -> AppAlertDialog(
             onDismissRequest = { /* 不可取消 */ },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.crash_auth_dialog_title)) },
-            text = { Text(stringResource(R.string.crash_auth_dialog_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptics.tap()
-                    // 乐观切换上传中，避免关闭后再弹的闪烁空窗
+            title = stringResource(R.string.crash_auth_dialog_title),
+            message = stringResource(R.string.crash_auth_dialog_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.crash_auth_dialog_agree),
+                // 乐观切换上传中，避免关闭后再弹的闪烁空窗
+                onClick = {
                     dialogKind = DialogKind.Uploading
                     scope.launch {
                         crashLogStorage.setEnabled(true)
                         crashLogUploader.uploadPendingLogs()
                     }
-                }) { Text(stringResource(R.string.crash_auth_dialog_agree)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    haptics.lightTap()
+                }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.crash_auth_dialog_decline),
+                onClick = {
                     dialogVisible = false
                     scope.launch {
                         crashLogStorage.setPrompted(true)
                         withContext(Dispatchers.IO) { CrashHandler.clearCrashLogs(context) }
                     }
-                }) { Text(stringResource(R.string.crash_auth_dialog_decline)) }
-            },
+                }
+            ),
         )
-        DialogKind.Uploading -> AlertDialog(
+        DialogKind.Uploading -> AppAlertDialog(
             onDismissRequest = { /* 上传中不可取消 */ },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.crash_uploading)) },
-            text = {
+            title = stringResource(R.string.crash_uploading),
+            content = {
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -172,39 +162,21 @@ fun CrashReportDialogHost(
                     CircularProgressIndicator()
                 }
             },
-            confirmButton = {},
         )
-        is DialogKind.Retry -> AlertDialog(
+        is DialogKind.Retry -> AppAlertDialog(
             onDismissRequest = { /* 需用户明确取消 */ },
-            containerColor = floatingDialogColor(),
             icon = { Icon(Icons.Rounded.WarningAmber, contentDescription = null) },
-            title = { Text(stringResource(R.string.crash_upload_failed)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.crash_upload_fail_hint))
-                    if (kind.error.isNotBlank()) {
-                        Text(
-                            kind.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptics.tap()
-                    scope.launch { crashLogUploader.uploadPendingLogs() }
-                }) { Text(stringResource(R.string.crash_upload_retry)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    haptics.lightTap()
-                    dialogVisible = false
-                }) {
-                    Text(stringResource(R.string.crash_dialog_cancel))
-                }
-            },
+            title = stringResource(R.string.crash_upload_failed),
+            message = stringResource(R.string.crash_upload_fail_hint),
+            supportMessage = kind.error.takeIf { it.isNotBlank() },
+            confirm = DialogAction(
+                label = stringResource(R.string.crash_upload_retry),
+                onClick = { scope.launch { crashLogUploader.uploadPendingLogs() } }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.crash_dialog_cancel),
+                onClick = { dialogVisible = false }
+            ),
         )
     }
 }

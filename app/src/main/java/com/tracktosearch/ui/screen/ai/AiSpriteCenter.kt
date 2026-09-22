@@ -47,7 +47,6 @@ import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.RateReview
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WavingHand
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -96,12 +95,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -266,68 +266,42 @@ fun AiSpriteCenter(
     // 一次 DataStore 挂起读，而且弹出来的不是他要的那一页。这一记是在标记这次改道
     PopupShowEffect(state.showTasteConsent)
     if (state.showTasteConsent) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = viewModel::onTasteConsentDismissed,
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.ai_taste_consent_title)) },
-            text = { Text(stringResource(R.string.ai_taste_consent_message)) },
-            confirmButton = {
-                // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    confirmHaptics.tap()
-                    viewModel.onTasteConsentAgreed()
-                }) {
-                    Text(stringResource(R.string.ai_taste_consent_agree))
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
-                    viewModel.onTasteConsentDismissed()
-                }) {
-                    Text(stringResource(R.string.ai_taste_consent_decline))
-                }
-            }
+            title = stringResource(R.string.ai_taste_consent_title),
+            message = stringResource(R.string.ai_taste_consent_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.ai_taste_consent_agree),
+                onClick = { viewModel.onTasteConsentAgreed() }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.ai_taste_consent_decline),
+                onClick = { viewModel.onTasteConsentDismissed() }
+            )
         )
     }
     // 功能被设置页开关关闭时的引导弹窗：确认后跳设置页
     PopupShowEffect(state.showTasteDisabled)
     if (state.showTasteDisabled) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = viewModel::onTasteDisabledDismiss,
-            containerColor = floatingDialogColor(),
-            text = {
-                Text(
-                    stringResource(
-                        R.string.ai_taste_disabled_message,
-                        stringResource(R.string.ai_feature_taste)
-                    )
-                )
-            },
-            confirmButton = {
-                // 同上，槽内单独取一份。跳的是本应用自己的设置页签（MainTabNavigator），
-                // 不是系统设置，所以不属于「离开本应用」那条静默规则
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    confirmHaptics.tap()
+            message = stringResource(
+                R.string.ai_taste_disabled_message,
+                stringResource(R.string.ai_feature_taste)
+            ),
+            confirm = DialogAction(
+                label = stringResource(R.string.ai_taste_go_settings),
+                // 跳的是本应用自己的设置页签（MainTabNavigator），不是系统设置
+                onClick = {
                     // 先收弹窗再跳转：弹窗标志挂在共享 ViewModel 上，离开页面前必须清掉
                     viewModel.onTasteDisabledDismiss()
                     onOpenSettings()
-                }) {
-                    Text(stringResource(R.string.ai_taste_go_settings))
                 }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
-                    viewModel.onTasteDisabledDismiss()
-                }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = { viewModel.onTasteDisabledDismiss() }
+            )
         )
     }
 }
@@ -1196,11 +1170,10 @@ private fun TextActivationDialog(
 ) {
     var input by remember(character.id) { mutableStateOf("") }
     val valid = isTextActivationInputValid(input)
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.ai_sprite_text_fallback_title)) },
-        text = {
+        title = stringResource(R.string.ai_sprite_text_fallback_title),
+        content = {
             Column {
                 Text(
                     text = stringResource(R.string.ai_sprite_text_fallback_dialog_hint, character.activationWord),
@@ -1216,25 +1189,15 @@ private fun TextActivationDialog(
                 )
             }
         },
-        confirmButton = {
-            // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
-            val confirmHaptics = rememberAppHaptics()
-            TextButton(onClick = {
-                confirmHaptics.tap()
-                onConfirm(input)
-            }, enabled = valid) {
-                Text(stringResource(R.string.ai_sprite_text_fallback_confirm))
-            }
-        },
-        dismissButton = {
-            val dismissHaptics = rememberAppHaptics()
-            TextButton(onClick = {
-                dismissHaptics.lightTap()
-                onDismiss()
-            }) {
-                Text(stringResource(R.string.common_cancel))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(R.string.ai_sprite_text_fallback_confirm),
+            enabled = valid,
+            onClick = { onConfirm(input) }
+        ),
+        dismiss = DialogAction(
+            label = stringResource(R.string.common_cancel),
+            onClick = { onDismiss() }
+        )
     )
 }
 

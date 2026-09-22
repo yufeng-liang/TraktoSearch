@@ -23,7 +23,6 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 import androidx.compose.ui.unit.dp
 
 /**
@@ -149,28 +148,14 @@ private fun InlineErrorState(
     }
 
     if (showError) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showError = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.error_detail_title)) },
-            text = {
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            },
-            confirmButton = {
-                // 对话框有自己的宿主 View，按 ComposeHaptics 的约定在这一层重新取一份
-                val dialogHaptics = rememberAppHaptics()
-                TextButton(
-                    onClick = {
-                        dialogHaptics.lightTap()
-                        showError = false
-                    }
-                ) {
-                    Text(stringResource(R.string.error_detail_close))
-                }
-            }
+            title = stringResource(R.string.error_detail_title),
+            message = message,
+            confirm = DialogAction(
+                label = stringResource(R.string.error_detail_close),
+                onClick = { showError = false }
+            )
         )
     }
 }

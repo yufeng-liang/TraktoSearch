@@ -54,7 +54,6 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -104,9 +103,11 @@ import kotlinx.coroutines.launch
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.ConnectivityObserver
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.rememberShimmer
 import com.tracktosearch.ui.component.shimmer
@@ -124,7 +125,6 @@ import com.tracktosearch.data.ai.AiNameSignal
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.ai.AiTasteEvidence
 import com.tracktosearch.data.ai.AiTasteAnalysis
-import com.tracktosearch.ui.theme.floatingDialogColor
 
 /** 服务端插图状态：生成中（后台生图，完成后由静默刷新补拉）。 */
 private const val ILLUSTRATION_STATUS_GENERATING = "generating"
@@ -433,38 +433,24 @@ fun AiFeatureScreen(
         }
 
         if (discardQuizConfirmVisible && canShowRefreshConfirm) {
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { discardQuizConfirmVisible = false },
-                containerColor = floatingDialogColor(),
-                title = { Text(stringResource(R.string.ai_quiz_refresh_title)) },
-                text = {
-                    Text(
-                        stringResource(
-                            R.string.ai_quiz_refresh_message,
-                            answeredQuizCount(state.quiz, state.quizAnswers)
-                        )
-                    )
-                },
-                confirmButton = {
-                    // AlertDialog 的槽是独立 subcomposition（Dialog 有自己的宿主 View），单独取一份
-                    val confirmHaptics = rememberAppHaptics()
-                    TextButton(onClick = {
-                        confirmHaptics.tap()
+                title = stringResource(R.string.ai_quiz_refresh_title),
+                message = stringResource(
+                    R.string.ai_quiz_refresh_message,
+                    answeredQuizCount(state.quiz, state.quizAnswers)
+                ),
+                confirm = DialogAction(
+                    label = stringResource(R.string.ai_quiz_refresh_confirm),
+                    onClick = {
                         discardQuizConfirmVisible = false
                         onRefresh()
-                    }) {
-                        Text(stringResource(R.string.ai_quiz_refresh_confirm))
                     }
-                },
-                dismissButton = {
-                    val dismissHaptics = rememberAppHaptics()
-                    TextButton(onClick = {
-                        dismissHaptics.lightTap()
-                        discardQuizConfirmVisible = false
-                    }) {
-                        Text(stringResource(R.string.common_cancel))
-                    }
-                }
+                ),
+                dismiss = DialogAction(
+                    label = stringResource(R.string.common_cancel),
+                    onClick = { discardQuizConfirmVisible = false }
+                )
             )
         }
 
