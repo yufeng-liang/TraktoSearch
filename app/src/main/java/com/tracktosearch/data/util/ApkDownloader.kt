@@ -15,6 +15,13 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
+/**
+ * 下载完成但 SHA-256 不匹配。单独建类型而不是抛裸 Exception：
+ * toUserMessage 会把未知异常一律压成「下载失败，请尝试浏览器下载」，
+ * 用户照提示点浏览器下载就等于绕开了完整性校验。
+ */
+class ApkIntegrityException(message: String) : Exception(message)
+
 object ApkDownloader {
     private const val CHANNEL_ID = "apk_download"
     private const val NOTIFICATION_ID = 1001
@@ -64,7 +71,7 @@ object ApkDownloader {
                 val actualHash = computeSha256(finalResult)
                 if (!actualHash.equals(expectedSha256, ignoreCase = true)) {
                     finalResult.delete()
-                    throw Exception(context.getString(R.string.download_sha256_mismatch))
+                    throw ApkIntegrityException(context.getString(R.string.download_sha256_mismatch))
                 }
             }
 

@@ -70,6 +70,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
 import com.tracktosearch.data.util.ApkInstaller
+import com.tracktosearch.data.util.ApkIntegrityException
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.toUserMessage
@@ -789,6 +790,10 @@ fun UpdateDialog(
                                         // CancellationException 也会落进下面那个 catch。取消不是失败：
                                         // 既不该弹「下载失败」也不该震 reject，状态由取消处自己置回 Idle
                                         throw e
+                                    } catch (e: ApkIntegrityException) {
+                                        // 校验失败的文案已本地化，原样展示；走通用兜底会变成
+                                        // 「下载失败，请尝试浏览器下载」，等于引导用户绕开校验
+                                        failDownload(e.message ?: context.getString(R.string.update_download_failed))
                                     } catch (e: Exception) {
                                         failDownload(e.toUserMessage(context, R.string.update_download_failed))
                                     }
