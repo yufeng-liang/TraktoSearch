@@ -1,10 +1,12 @@
 package com.tracktosearch.ui.component
 
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,6 +36,7 @@ class AppDialogTest {
             val colors = dialogButtonColors(DialogTone.Primary, case.scheme)
             assertWithMessage(case.label).that(colors.containerColor).isEqualTo(case.scheme.primary)
             assertWithMessage(case.label).that(colors.contentColor).isEqualTo(case.scheme.onPrimary)
+            assertDisabledColorsMatchDesign(case.label, colors, case.scheme)
         }
     }
 
@@ -43,14 +46,32 @@ class AppDialogTest {
             val colors = dialogButtonColors(DialogTone.Destructive, case.scheme)
             assertWithMessage(case.label).that(colors.containerColor).isEqualTo(case.scheme.error)
             assertWithMessage(case.label).that(colors.contentColor).isEqualTo(case.scheme.onError)
+            assertDisabledColorsMatchDesign(case.label, colors, case.scheme)
         }
+    }
+
+    // 两档 disabled 配色是设计定稿（Global Constraints），两种 tone 共用同一组值：
+    // 回归了肉眼几乎看不出来（都是灰），所以逐色调锁死。
+    private fun assertDisabledColorsMatchDesign(
+        label: String,
+        colors: ButtonColors,
+        scheme: ColorScheme,
+    ) {
+        assertWithMessage(label).that(colors.disabledContainerColor)
+            .isEqualTo(scheme.onSurface.copy(alpha = 0.12f))
+        assertWithMessage(label).that(colors.disabledContentColor)
+            .isEqualTo(scheme.onSurface.copy(alpha = 0.38f))
     }
 
     @Test
     fun `两种 tone 的容器色不相同，确保破坏性有独立表达`() {
-        val scheme = ThemeTestSupport.allSchemes.first().scheme
-        assertThat(dialogButtonColors(DialogTone.Primary, scheme).containerColor)
-            .isNotEqualTo(dialogButtonColors(DialogTone.Destructive, scheme).containerColor)
+        // 遍历全部色调而不是只取 first()：风险最高的 VINTAGE_TICKET 是手写 scheme，
+        // 排在遍历末尾，单取一档正好漏掉它。
+        for (case in ThemeTestSupport.allSchemes) {
+            assertWithMessage(case.label)
+                .that(dialogButtonColors(DialogTone.Primary, case.scheme).containerColor)
+                .isNotEqualTo(dialogButtonColors(DialogTone.Destructive, case.scheme).containerColor)
+        }
     }
 
     // ==================== AppDialogActionRow：渲染与点击归属 ====================
@@ -81,7 +102,10 @@ class AppDialogTest {
     fun `primary 为空时不渲染填充按钮，次按钮仍渲染`() {
         showRow(primary = null, secondary = listOf(action("Done")))
         composeRule.onNodeWithText("Done").assertIsDisplayed()
-        composeRule.onNode(hasClickAction() and hasText("Confirm")).assertDoesNotExist()
+        // 断「可点击节点总数 = 1」，不断「不存在 label 为 Confirm 的节点」：本用例只传了 Done，
+        // 树里本来就没有 Confirm，那句不管生产代码怎么写都是绿的。总数才真正压住
+        // AppDialogActionRow 里 `if (primary != null)` 那道守卫。
+        composeRule.onAllNodes(hasClickAction()).assertCountEquals(1)
     }
 
     @Test
