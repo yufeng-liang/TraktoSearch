@@ -61,7 +61,7 @@ app/src/main/java/com/tracktosearch/
 
 ## ⬇️ 下载
 
-前往 [Gitee Releases](https://gitee.com/yufeng-liang/TraktoSearch-release/releases) 下载最新 APK。协作者也可从 [GitHub Releases](https://github.com/yufeng-liang/TraktoSearch/releases) 获取。
+从官网 [tracktosearch.pages.dev](https://tracktosearch.pages.dev/#section-download) 下载最新 APK（直链，国内可达），或从 [GitHub Releases](https://github.com/yufeng-liang/TraktoSearch/releases) 获取。
 
 ## 🙏 鸣谢
 
