@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
@@ -61,7 +60,6 @@ import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.Vibration
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,7 +72,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -116,7 +113,9 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticModeSummary
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.haptic.semantic
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.DoubanLogo
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
@@ -141,7 +140,6 @@ import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.component.SettingsEntryCardCorner
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
@@ -908,30 +906,18 @@ fun SettingsScreen(
     }
 
     if (showLogoutDialog) {
-        AlertDialog(
+        // Snackbar 回执文案在 onClick 里还要用，提前到调用点取
+        val traktLogoutDone = stringResource(R.string.settings_logout_button)
+        val reloginLabel = stringResource(R.string.settings_account_reconnect)
+        AppAlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.settings_account)) },
-            text = {
-                // 原来只有一句「确定要退出登录吗」，不说影响范围；豆瓣退出那侧早有条数提示与撤销入口
-                Column {
-                    Text(stringResource(R.string.settings_logout_confirm))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.settings_logout_confirm_impact),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                // 对话框每个按钮槽都是独立 subcomposition（自带宿主 View），触感实例逐槽取，
-                // 不能复用 SettingsScreen 外层的 —— 本文件下面每个对话框都照这条写
-                val haptics = rememberAppHaptics()
-                val traktLogoutDone = stringResource(R.string.settings_logout_button)
-                val reloginLabel = stringResource(R.string.settings_account_reconnect)
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.settings_account),
+            // 主句 + 副句形态：副句降为 supportMessage
+            message = stringResource(R.string.settings_logout_confirm),
+            supportMessage = stringResource(R.string.settings_logout_confirm_impact),
+            confirm = DialogAction(
+                label = stringResource(R.string.settings_logout_button),
+                onClick = {
                     showLogoutDialog = false
                     viewModel.clearUserProfile()
                     onLogout()
@@ -945,115 +931,90 @@ fun SettingsScreen(
                             onTraktLogin()
                         }
                     }
-                }) {
-                    Text(stringResource(R.string.settings_logout_button))
                 }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showLogoutDialog = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = { showLogoutDialog = false }
+            )
         )
     }
 
     // 豆瓣登出二次确认对话框(提示将清理本地 N 条标记，登出后用 Snackbar 提供"重新登录"入口)
     if (showDoubanLogoutDialog) {
-        AlertDialog(
+        // Snackbar 回执文案在 onClick 里还要用，提前到调用点取
+        val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
+        val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)
+        AppAlertDialog(
             onDismissRequest = { showDoubanLogoutDialog = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.douban_logout_confirm_title)) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.douban_logout_confirm_message, doubanLogoutCount))
-                    // 同步进行中时追加警告：退出会中断同步（clearDoubanCredentials 会取消进行中的任务）
-                    if (isDoubanSyncRunning) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.douban_logout_sync_in_progress_warning),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
+            title = stringResource(R.string.douban_logout_confirm_title),
+            message = stringResource(R.string.douban_logout_confirm_message, doubanLogoutCount),
+            // 同步进行中时追加警告：退出会中断同步（clearDoubanCredentials 会取消进行中的任务）；
+            // 警告是 error 色而非副句的 onSurfaceVariant，保留自绘 content 槽
+            content = {
+                if (isDoubanSyncRunning) {
+                    Text(
+                        text = stringResource(R.string.douban_logout_sync_in_progress_warning),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirm = DialogAction(
+                label = stringResource(R.string.settings_logout_button),
+                onClick = {
+                    showDoubanLogoutDialog = false
+                    viewModel.clearDoubanCredentials()
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = doubanLogoutDone,
+                            actionLabel = doubanSyncRelogin,
+                            duration = androidx.compose.material3.SnackbarDuration.Long
                         )
+                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                            onNavigateToDoubanLogin()
+                        }
                     }
                 }
-            },
-            confirmButton = {
-                    val haptics = rememberAppHaptics()
-                    val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
-                    val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)
-                    TextButton(onClick = {
-                        haptics.tap()
-                        showDoubanLogoutDialog = false
-                        viewModel.clearDoubanCredentials()
-                        scope.launch {
-                            val result = snackbarHostState.showSnackbar(
-                                message = doubanLogoutDone,
-                                actionLabel = doubanSyncRelogin,
-                                duration = androidx.compose.material3.SnackbarDuration.Long
-                            )
-                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                onNavigateToDoubanLogin()
-                            }
-                        }
-                    }) {
-                    Text(stringResource(R.string.settings_logout_button))
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLogoutDialog = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = { showDoubanLogoutDialog = false }
+            )
         )
     }
 
     if (showClearCacheDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.settings_cache)) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.settings_clear_cache_confirm))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.settings_cache_clear_all_impact),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.settings_cache),
+            // 主句 + 副句形态：副句降为 supportMessage
+            message = stringResource(R.string.settings_clear_cache_confirm),
+            supportMessage = stringResource(R.string.settings_cache_clear_all_impact),
+            confirm = DialogAction(
+                label = stringResource(R.string.settings_cache_clear),
+                onClick = {
                     showClearCacheDialog = false
                     viewModel.clearCache()
-                }) {
-                    Text(stringResource(R.string.settings_cache_clear))
                 }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showClearCacheDialog = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = { showClearCacheDialog = false }
+            )
         )
     }
 
     // 单项缓存清除确认对话框
     if (showClearCategoryDialog && pendingClearCategory != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = {
                 showClearCategoryDialog = false
                 pendingClearCategory = null
             },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.settings_cache_clear_category_confirm)) },
-            text = {
+            title = stringResource(R.string.settings_cache_clear_category_confirm),
+            // 主句需按分类现场算资源，主句+副句两行留在 content 槽自绘
+            content = {
                 val cat = pendingClearCategory!!
                 val labelRes = when (cat) {
                     SettingsViewModel.CacheCategory.IMAGE -> R.string.settings_cache_category_image
@@ -1065,41 +1026,33 @@ fun SettingsScreen(
                     SettingsViewModel.CacheCategory.MEDIA_DATA -> R.string.settings_cache_category_media_data_impact
                     SettingsViewModel.CacheCategory.HTTP -> R.string.settings_cache_category_http_impact
                 }
-                Column {
-                    Text(
-                        text = stringResource(labelRes),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(impactRes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = stringResource(labelRes),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(impactRes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            confirm = DialogAction(
+                label = stringResource(R.string.settings_cache_clear),
+                onClick = {
                     val cat = pendingClearCategory
                     showClearCategoryDialog = false
                     pendingClearCategory = null
                     cat?.let { viewModel.clearCategory(it) }
-                }) {
-                    Text(stringResource(R.string.settings_cache_clear))
                 }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
+            ),
+            dismiss = DialogAction(
+                label = stringResource(android.R.string.cancel),
+                onClick = {
                     showClearCategoryDialog = false
                     pendingClearCategory = null
-                }) {
-                    Text(stringResource(android.R.string.cancel))
                 }
-            }
+            )
         )
     }
 
@@ -1155,18 +1108,16 @@ fun SettingsScreen(
 
     // 冷却期内选择增量同步:弹引导对话框,提供「跳过」和「强制同步」
     if (showCooldownGuidance) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = {
                 showCooldownGuidance = false
                 pendingCooldownMode = null
             },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.cooldown_guidance_title)) },
-            text = { Text(stringResource(R.string.cooldown_guidance_message)) },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.cooldown_guidance_title),
+            message = stringResource(R.string.cooldown_guidance_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.cooldown_force_sync),
+                onClick = {
                     val mode = pendingCooldownMode
                     showCooldownGuidance = false
                     pendingCooldownMode = null
@@ -1177,17 +1128,16 @@ fun SettingsScreen(
                             onDoubanResync()
                         }
                     }
-                }) { Text(stringResource(R.string.cooldown_force_sync)) }
-            },
-            dismissButton = {
-                // 「跳过」在这个对话框里就是「稍后」，取轻一档
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    dismissHaptics.lightTap()
+                }
+            ),
+            // 「跳过」在这个对话框里就是「稍后」，取轻一档（触感由按钮行组件负责）
+            dismiss = DialogAction(
+                label = stringResource(R.string.cooldown_skip),
+                onClick = {
                     showCooldownGuidance = false
                     pendingCooldownMode = null
-                }) { Text(stringResource(R.string.cooldown_skip)) }
-            }
+                }
+            )
         )
     }
 
@@ -1216,38 +1166,32 @@ fun SettingsScreen(
 
     // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
     if (showConsistencyConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showConsistencyConfirm = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.consistency_check_confirm_title)) },
-            text = {
-                Column {
-                    val lastText = lastCheckTimeText
-                        ?: stringResource(R.string.consistency_check_confirm_never)
-                    Text(
-                        text = stringResource(R.string.consistency_check_confirm_last, lastText),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.consistency_check_confirm_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            title = stringResource(R.string.consistency_check_confirm_title),
+            // 主句需按「上次检查时间」现场拼资源，主句+副句留在 content 槽自绘
+            content = {
+                val lastText = lastCheckTimeText
+                    ?: stringResource(R.string.consistency_check_confirm_never)
+                Text(
+                    text = stringResource(R.string.consistency_check_confirm_last, lastText),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.consistency_check_confirm_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = { haptics.tap(); startConfirmedConsistencyCheck() }) {
-                    Text(stringResource(R.string.consistency_check_confirm_button))
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showConsistencyConfirm = false }) {
-                    Text(stringResource(R.string.douban_retry_cancel))
-                }
-            }
+            confirm = DialogAction(
+                label = stringResource(R.string.consistency_check_confirm_button),
+                onClick = { startConfirmedConsistencyCheck() }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.douban_retry_cancel),
+                onClick = { showConsistencyConfirm = false }
+            )
         )
     }
 
@@ -1279,73 +1223,58 @@ fun SettingsScreen(
 
     // 未登录豆瓣时点「重新同步豆瓣」:弹确认框引导前往登录
     if (showDoubanLoginPrompt) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showDoubanLoginPrompt = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
-            text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.settings_douban_not_logged_in_title),
+            message = stringResource(R.string.settings_douban_not_logged_in_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.settings_douban_not_logged_in_login),
+                onClick = {
                     showDoubanLoginPrompt = false
                     onNavigateToDoubanLogin()
-                }) { Text(stringResource(R.string.settings_douban_not_logged_in_login)) }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showDoubanLoginPrompt = false }) {
-                    Text(stringResource(R.string.common_cancel))
                 }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = { showDoubanLoginPrompt = false }
+            )
         )
     }
 
     if (showTraktLoginPrompt) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showTraktLoginPrompt = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.consistency_check_trakt_required_title)) },
-            text = { Text(stringResource(R.string.consistency_check_trakt_required_message)) },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.consistency_check_trakt_required_title),
+            message = stringResource(R.string.consistency_check_trakt_required_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.consistency_check_trakt_required_login),
+                onClick = {
                     showTraktLoginPrompt = false
                     onTraktLogin()
-                }) { Text(stringResource(R.string.consistency_check_trakt_required_login)) }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showTraktLoginPrompt = false }) {
-                    Text(stringResource(R.string.common_cancel))
                 }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = { showTraktLoginPrompt = false }
+            )
         )
     }
 
     consistencyCheckBlocker?.let { blocker ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { consistencyCheckBlocker = null },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.consistency_check_blocked_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        when (blocker) {
-                            ConsistencyCheckBlocker.DOUBAN_MODE -> R.string.consistency_check_blocked_douban_mode
-                            ConsistencyCheckBlocker.DOUBAN_SYNC_RUNNING -> R.string.consistency_check_blocked_sync
-                            else -> R.string.consistency_check_already_running
-                        }
-                    )
-                )
-            },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = { haptics.tap(); consistencyCheckBlocker = null }) {
-                    Text(stringResource(R.string.common_confirm))
+            title = stringResource(R.string.consistency_check_blocked_title),
+            message = stringResource(
+                when (blocker) {
+                    ConsistencyCheckBlocker.DOUBAN_MODE -> R.string.consistency_check_blocked_douban_mode
+                    ConsistencyCheckBlocker.DOUBAN_SYNC_RUNNING -> R.string.consistency_check_blocked_sync
+                    else -> R.string.consistency_check_already_running
                 }
-            }
+            ),
+            confirm = DialogAction(
+                label = stringResource(R.string.common_confirm),
+                onClick = { consistencyCheckBlocker = null }
+            )
         )
     }
 }

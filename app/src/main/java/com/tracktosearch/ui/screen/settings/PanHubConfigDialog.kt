@@ -2,9 +2,7 @@ package com.tracktosearch.ui.screen.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -21,11 +19,12 @@ import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.floatingDialogColor
 
 @Composable
 fun PanHubConfigDialog(
@@ -43,17 +42,15 @@ fun PanHubConfigDialog(
     var enabledPlugins by remember(config) { mutableStateOf(config.enabledPlugins) }
     var enabledChannels by remember(config) { mutableStateOf(config.enabledChannels) }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.panhub_config_title)) },
-        text = {
-            // text 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取
+        title = stringResource(R.string.panhub_config_title),
+        content = {
+            // text 槽是独立 subcomposition（自带宿主 View），触感实例得在槽内取；
+            // 限高与滚动由组件内容槽负责（原手写 verticalScroll 删除）
             val haptics = rememberAppHaptics()
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 启用开关（顶部，Panhub 卡片只负责进入此弹窗）
@@ -269,13 +266,10 @@ fun PanHubConfigDialog(
                 }
             }
         },
-        confirmButton = {
-            // confirmButton 槽自带宿主 View，不能复用 text 槽那份
-            val confirmHaptics = rememberAppHaptics()
-            TextButton(onClick = { confirmHaptics.tap(); onDismiss() }) {
-                Text(stringResource(R.string.common_done))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(R.string.common_done),
+            onClick = { onDismiss() }
+        )
     )
 }
 

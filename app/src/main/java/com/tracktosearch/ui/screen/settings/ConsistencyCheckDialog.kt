@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,8 +29,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.ConsistencyCheckService
+import com.tracktosearch.ui.component.AppDialogActionRow
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 import kotlinx.coroutines.delay
 
 internal fun consistencySubPhaseForDisplay(phase: String, subPhase: String): String? {
@@ -92,16 +93,15 @@ fun ConsistencyCheckDialog(
         if (clean) outcomeHaptics.confirm() else outcomeHaptics.reject()
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = {
             // 检查运行中不允许点击外部关闭（需点「转后台」或「取消」）
             if (!p.isRunning) onDismiss()
         },
-        containerColor = floatingDialogColor(),
-        title = {
-            Text(text = stringResource(R.string.consistency_check_title))
-        },
-        text = {
+        title = stringResource(R.string.consistency_check_title),
+        // 按钮行随进度状态变化且非单一「确认/取消」语义（多分支多按钮），按迁移配方
+        // 整体并入 content 末尾改用 AppDialogActionRow，原 confirmButton 槽废弃
+        content = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // 主进度（阶段 + current/total）
                 val displaySubPhase = consistencySubPhaseForDisplay(p.phase, p.subPhase)
@@ -218,77 +218,79 @@ fun ConsistencyCheckDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-        },
-        confirmButton = {
-            // confirmButton 槽是独立 subcomposition（自带宿主 View），触感实例必须在槽内取；
-            // 三个分支同属这一个槽，共用一份即可
-            val haptics = rememberAppHaptics()
-            when {
-                p.isRunning -> {
-                    Row {
-                        TextButton(
-                            // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
-                            enabled = !p.isCancelling,
-                            onClick = {
-                                haptics.tap()
-                                if (ConsistencyCheckService.start(context)) onBackground()
-                                else onBackgroundUnavailable?.invoke()
-                            }
-                        ) {
-                            Text(stringResource(R.string.consistency_check_background))
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(
-                            // 正在取消时禁用取消按钮避免重复调用 + 改文案为"正在取消..."
-                            enabled = !p.isCancelling,
-                            onClick = {
-                                haptics.lightTap()
-                                viewModel.cancelConsistencyCheck()
-                            }
-                        ) {
-                            Text(
-                                stringResource(
+
+                // 按钮行（原 confirmButton 槽内容，触感由 AppDialogActionRow 统一负责）
+                Spacer(modifier = Modifier.height(8.dp))
+                when {
+                    p.isRunning -> AppDialogActionRow(
+                        primary = null,
+                        secondary = listOf(
+                            DialogAction(
+                                label = stringResource(R.string.consistency_check_background),
+                                // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
+                                enabled = !p.isCancelling,
+                                onClick = {
+                                    if (ConsistencyCheckService.start(context)) onBackground()
+                                    else onBackgroundUnavailable?.invoke()
+                                }
+                            ),
+                            DialogAction(
+                                label = stringResource(
                                     if (p.isCancelling) R.string.consistency_check_cancelling
                                     else R.string.consistency_check_cancel
-                                )
+                                ),
+                                // 正在取消时禁用取消按钮避免重复调用 + 改文案为"正在取消..."
+                                enabled = !p.isCancelling,
+                                onClick = { viewModel.cancelConsistencyCheck() }
                             )
-                        }
-                    }
-                }
-                p.isComplete -> {
-                    Row {
-                        if ((p.cookieExpired || p.neverLoggedInDouban) && onLogin != null) {
-                            TextButton(onClick = { haptics.tap(); onLogin() }) {
-                                Text(stringResource(R.string.consistency_check_login))
-                            }
-                        }
-                        if (p.errors > 0 && onRetry != null) {
-                            TextButton(onClick = { haptics.tap(); onRetry() }) {
-                                Text(stringResource(R.string.consistency_check_retry))
-                            }
-                        }
-                        if (p.conflictsFound > 0 && onViewConflicts != null) {
-                            // 「查看冲突」是转去另一个页面的次级入口，不是本对话框的主操作
-                            TextButton(onClick = { haptics.lightTap(); onViewConflicts() }) {
-                                Text(stringResource(R.string.consistency_check_view_conflicts))
-                            }
-                        }
-                        TextButton(onClick = { haptics.tap(); onDismiss() }) {
-                            Text(stringResource(R.string.consistency_check_phase_done))
-                        }
-                    }
-                }
-                else -> {
-                    // 初始状态：显示加载指示器
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.height(16.dp).width(16.dp),
-                            strokeWidth = 2.dp
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
-                            Text(stringResource(R.string.consistency_check_cancel))
+                    )
+                    p.isComplete -> AppDialogActionRow(
+                        // 「完成」是主推进按钮（填充在右），条件出现的入口均为次级文字按钮
+                        primary = DialogAction(
+                            label = stringResource(R.string.consistency_check_phase_done),
+                            onClick = { onDismiss() }
+                        ),
+                        secondary = buildList {
+                            if ((p.cookieExpired || p.neverLoggedInDouban) && onLogin != null) {
+                                add(
+                                    DialogAction(
+                                        label = stringResource(R.string.consistency_check_login),
+                                        onClick = { onLogin() }
+                                    )
+                                )
+                            }
+                            if (p.errors > 0 && onRetry != null) {
+                                add(
+                                    DialogAction(
+                                        label = stringResource(R.string.consistency_check_retry),
+                                        onClick = { onRetry() }
+                                    )
+                                )
+                            }
+                            if (p.conflictsFound > 0 && onViewConflicts != null) {
+                                // 「查看冲突」是转去另一个页面的次级入口，不是本对话框的主操作
+                                add(
+                                    DialogAction(
+                                        label = stringResource(R.string.consistency_check_view_conflicts),
+                                        onClick = { onViewConflicts() }
+                                    )
+                                )
+                            }
+                        }
+                    )
+                    else -> {
+                        // 初始状态：加载指示器与取消按钮同行；spinner 不是 DialogAction，
+                        // 无法走 AppDialogActionRow，保守保留原 Row 结构（手写触感已删）
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.height(16.dp).width(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { onDismiss() }) {
+                                Text(stringResource(R.string.consistency_check_cancel))
+                            }
                         }
                     }
                 }

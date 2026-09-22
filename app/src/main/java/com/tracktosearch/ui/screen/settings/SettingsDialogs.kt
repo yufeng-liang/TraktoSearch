@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,16 +20,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragIndicator
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -81,19 +76,18 @@ import com.tracktosearch.ui.theme.GlassVariant
 import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.theme.isDarkScheme
 import com.tracktosearch.ui.theme.floatingDialogColor
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.foundation.layout.height
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -104,11 +98,11 @@ internal fun ThemeSelectionDialog(
     onThemeSelected: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.settings_theme)) },
-        text = {
+        title = stringResource(R.string.settings_theme),
+        // 选项行留在 content 槽自绘；本弹窗只靠点选行生效，无按钮
+        content = {
             Column {
                 ThemeOptionRow(
                     label = stringResource(R.string.theme_system),
@@ -126,8 +120,7 @@ internal fun ThemeSelectionDialog(
                     onClick = { onThemeSelected(ThemeStorage.MODE_LIGHT) }
                 )
             }
-        },
-        confirmButton = {}
+        }
     )
 }
 
@@ -165,13 +158,14 @@ internal fun HapticModeSelectionDialog(
     onOpenSystemSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.settings_haptic)) },
-        text = {
-            // 四行都带一句说明，加上底部可能出现的限制提示，小屏放不下，给一条竖向滚动
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        title = stringResource(R.string.settings_haptic),
+        // 限制提示 + 四行选项留在 content 槽自绘；滚动与限高由组件内置（原手写 verticalScroll 删除），
+        // 本弹窗只靠点选行生效，无按钮
+        content = {
+            // 四行都带一句说明，加上底部可能出现的限制提示，小屏放不下，组件内容槽自带竖向滚动
+            Column {
                 HapticModeOptionRow(
                     label = stringResource(R.string.settings_haptic_off),
                     description = stringResource(R.string.settings_haptic_off_desc),
@@ -214,8 +208,7 @@ internal fun HapticModeSelectionDialog(
                     else -> Unit
                 }
             }
-        },
-        confirmButton = {}
+        }
     )
 }
 
@@ -445,11 +438,10 @@ internal fun AccentColorDialog(
         it.preset == (if (currentMeshEnabled) currentMeshPreset else null)
     }?.title ?: stringResource(R.string.bg_glow_off)
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(dialogTitle ?: stringResource(R.string.settings_accent_color)) },
-        text = {
+        title = dialogTitle ?: stringResource(R.string.settings_accent_color),
+        content = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -798,13 +790,10 @@ internal fun AccentColorDialog(
                 }
             }
         },
-        confirmButton = {
-            // confirmButton 槽是独立 subcomposition（自带宿主 View），不能复用 text 槽里那些
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.tap(); onDismiss() }) {
-                Text(stringResource(R.string.common_done))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(R.string.common_done),
+            onClick = { onDismiss() }
+        )
     )
 
     // 自由调色弹窗：添加（editingArgb=null）或编辑（回填原色）共用同一面板
@@ -856,17 +845,11 @@ internal fun CustomAccentDialog(
         monetColorScheme(seed = currentColor, dark = darkTheme)
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = {
-            Text(
-                text = stringResource(R.string.settings_accent_custom),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
+        // titleLarge + Bold 由组件默认提供，调用点不再手写
+        title = stringResource(R.string.settings_accent_custom),
+        content = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -887,20 +870,17 @@ internal fun CustomAccentDialog(
                 HctColorSchemePreviewGrid(scheme = previewScheme)
             }
         },
-        confirmButton = {
-            val confirmHaptics = rememberAppHaptics()
-            Button(onClick = {
-                confirmHaptics.tap()
+        confirm = DialogAction(
+            label = stringResource(R.string.common_confirm),
+            onClick = {
                 onColorConfirmed(currentColor.toArgb().toLong())
                 onDismiss()
-            }) { Text(stringResource(R.string.common_confirm)) }
-        },
-        dismissButton = {
-            val dismissHaptics = rememberAppHaptics()
-            TextButton(onClick = { dismissHaptics.lightTap(); onDismiss() }) {
-                Text(stringResource(R.string.common_cancel))
             }
-        }
+        ),
+        dismiss = DialogAction(
+            label = stringResource(R.string.common_cancel),
+            onClick = { onDismiss() }
+        )
     )
 }
 
@@ -911,11 +891,11 @@ internal fun LanguageSelectionDialog(
     onLanguageSelected: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.settings_language)) },
-        text = {
+        title = stringResource(R.string.settings_language),
+        // 选项行留在 content 槽自绘；点选即生效并关闭，无按钮
+        content = {
             Column {
                 LanguageOptionRow(
                     label = stringResource(R.string.language_system),
@@ -958,8 +938,7 @@ internal fun LanguageSelectionDialog(
                     }
                 )
             }
-        },
-        confirmButton = {}
+        }
     )
 }
 
@@ -998,16 +977,11 @@ fun ChangelogDialog(
     val changelog by viewModel.changelog.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoadingChangelog.collectAsStateWithLifecycle()
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = null,
-        text = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-            ) {
+        // 无标题弹窗：title 槽整省略；内容限高由组件内置（原手写 heightIn 删除）
+        content = {
+            Box(modifier = Modifier.fillMaxWidth()) {
                 when {
                     isLoading && changelog == null -> {
                         Row(
@@ -1034,13 +1008,10 @@ fun ChangelogDialog(
                 }
             }
         },
-        confirmButton = {
-            // confirmButton 槽自带宿主 View
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.tap(); onDismiss() }) {
-                Text(stringResource(android.R.string.ok))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(android.R.string.ok),
+            onClick = { onDismiss() }
+        )
     )
 }
 
@@ -1065,10 +1036,10 @@ fun DiscoverSectionsDialog(
         viewModel.setSectionOrder(reorderedSections.map { it.id })
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = {
+        // 标题 + 副提示两行结构，走 titleContent 整槽接管
+        titleContent = {
             Column {
                 Text(stringResource(R.string.settings_discover_sections))
                 Text(
@@ -1079,14 +1050,13 @@ fun DiscoverSectionsDialog(
                 )
             }
         },
-        text = {
-            // text 槽自带宿主 View；把手那一记在槽内取实例（DiscoverSectionRow 里那份是它自己的）
+        content = {
+            // text 槽自带宿主 View；把手那一记在槽内取实例（DiscoverSectionRow 里那份是它自己的）；
+            // 限高与滚动由组件内容槽负责（原手写 heightIn(max=500.dp) 删除）
             val haptics = rememberAppHaptics()
             LazyColumn(
                 state = lazyListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 500.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 items(reorderedSections, key = { it.id }) { section ->
                     ReorderableItem(
@@ -1114,12 +1084,10 @@ fun DiscoverSectionsDialog(
                 }
             }
         },
-        confirmButton = {
-            val confirmHaptics = rememberAppHaptics()
-            TextButton(onClick = { confirmHaptics.tap(); onDismiss() }) {
-                Text(stringResource(android.R.string.ok))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(android.R.string.ok),
+            onClick = { onDismiss() }
+        )
     )
 }
 
@@ -1193,20 +1161,14 @@ fun DetailSectionsDialog(
 ) {
     val sections by viewModel.detailSections.collectAsStateWithLifecycle()
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = {
-            Text(stringResource(R.string.settings_detail_sections))
-        },
-        text = {
-            // text 槽是独立 subcomposition（有自己的宿主 View），触感实例必须在槽内取
+        title = stringResource(R.string.settings_detail_sections),
+        content = {
+            // text 槽是独立 subcomposition（有自己的宿主 View），触感实例必须在槽内取；
+            // 限高与滚动由组件内容槽负责（原手写 heightIn(max=400.dp) 删除）
             val haptics = rememberAppHaptics()
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 sections.forEach { section ->
                     Row(
                         modifier = Modifier
@@ -1231,13 +1193,10 @@ fun DetailSectionsDialog(
                 }
             }
         },
-        confirmButton = {
-            // 与 text 槽里那份分开取：两个槽各有自己的宿主 View
-            val confirmHaptics = rememberAppHaptics()
-            TextButton(onClick = { confirmHaptics.tap(); onDismiss() }) {
-                Text(stringResource(android.R.string.ok))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(android.R.string.ok),
+            onClick = { onDismiss() }
+        )
     )
 }
 
@@ -1261,11 +1220,11 @@ internal fun DefaultTabSelectionDialog(
     onTabSelected: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.settings_default_tab)) },
-        text = {
+        title = stringResource(R.string.settings_default_tab),
+        // 选项行留在 content 槽自绘；点选即生效并关闭，无按钮
+        content = {
             // text 槽是独立 subcomposition（有自己的宿主 View），触感实例必须在槽内取
             val haptics = rememberAppHaptics()
             Column {
@@ -1293,7 +1252,6 @@ internal fun DefaultTabSelectionDialog(
                     }
                 }
             }
-        },
-        confirmButton = {}
+        }
     )
 }
