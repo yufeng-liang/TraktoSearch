@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -13,25 +14,38 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.floatingDialogColor
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 /*
  * 统一弹窗组件，三族共用一份按钮行与配色，按「对话框 → 浮动卡片 → 底部面板」组织，
@@ -265,6 +279,69 @@ fun AppFloatingDialog(
                     AppDialogActionRow(primary = confirm, secondary = listOfNotNull(dismiss))
                 }
             }
+        }
+    }
+}
+
+/**
+ * 全 App 唯一的底部弹层。把 discover 系 6 处用的 DiscoverModalBottomSheet 与
+ * 另外 7 处散写 ModalBottomSheet 合并，并补上那 7 份逐字相同的标题栏。
+ *
+ * skipPartiallyExpanded 默认 true：项目里的弹层几乎都是内容型，停在半展开
+ * 要用户再拖一把，现有 9/13 处已经这么写。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppBottomSheet(
+    onDismissRequest: () -> Unit,
+    title: String? = null,
+    dragHandle: (@Composable () -> Unit)? = { BottomSheetDefaults.DragHandle() },
+    skipPartiallyExpanded: Boolean = true,
+    contentWindowInsets: @Composable () -> WindowInsets = { BottomSheetDefaults.windowInsets },
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartiallyExpanded),
+        containerColor = floatingSheetColor(),
+        dragHandle = dragHandle,
+        contentWindowInsets = contentWindowInsets,
+    ) {
+        if (title != null) {
+            AppSheetHeader(title = title, onDismiss = onDismissRequest)
+        }
+        content()
+    }
+}
+
+/** 弹层标题栏：标题占满剩余宽度，关闭用 IconButton 而非文字，把宽度让给标题。 */
+@Composable
+private fun AppSheetHeader(title: String, onDismiss: () -> Unit) {
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 8.dp),
+        )
+        IconButton(onClick = { haptics.lightTap(); onDismiss() }) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.common_close),
+            )
         }
     }
 }

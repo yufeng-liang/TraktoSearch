@@ -9,9 +9,11 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
@@ -266,5 +268,38 @@ class AppDialogTest {
         }
         composeRule.onNodeWithText("Body only").assertIsDisplayed()
         composeRule.onAllNodes(hasClickAction()).assertCountEquals(0)
+    }
+
+    // ==================== AppBottomSheet：弹层标题栏与关闭按钮 ====================
+
+    @Test
+    fun `AppBottomSheet 带标题时渲染统一标题栏与关闭按钮`() {
+        var dismissed = 0
+        composeRule.setContent {
+            MaterialTheme {
+                AppBottomSheet(onDismissRequest = { dismissed++ }, title = "Sheet head") {
+                    Text("Sheet body")
+                }
+            }
+        }
+        composeRule.onNodeWithText("Sheet head").assertIsDisplayed()
+        composeRule.onNodeWithText("Sheet body").assertIsDisplayed()
+        // 关闭按钮是 Icon(contentDescription)，不是 Text 节点，onNodeWithText 匹配不到
+        composeRule.onNodeWithContentDescription("Close").performClick()
+        assertThat(dismissed).isEqualTo(1)
+    }
+
+    @Test
+    fun `AppBottomSheet 无标题时不渲染标题栏`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppBottomSheet(onDismissRequest = {}) { Text("Plain body") }
+            }
+        }
+        composeRule.onNodeWithText("Plain body").assertIsDisplayed()
+        // 标题栏若误渲染，IconButton 合并出的节点会同时带点击与 contentDescription=Close，
+        // 按 contentDescription 断言才有鉴别力（按 Text 断是恒真的假绿）
+        composeRule.onAllNodes(hasClickAction() and hasContentDescription("Close"))
+            .assertCountEquals(0)
     }
 }
