@@ -1,8 +1,15 @@
 name: Build release APK
 
-# 当前是「影子构建」阶段：只产出签名 APK 与 R8 mapping 作为 workflow artifact，
-# 不碰 R2、不上传任何 Release，现有发布链路一字不动。
-# 接 on: release: types: [published] 并把产物推上 R2 + GitHub Release 是后续阶段的事。
+# 触发方式两条：
+#   1. on: release: types: [published] —— 正式发版。本地只负责提交/版本号/tag/中文日志/
+#      建 Release，构建与分发全在这里：签名 APK → 本仓库 Release 附件 + R2，
+#      最后把 manifest/latest.json 指针移过去。
+#   2. workflow_dispatch —— 传 tag 或分支 ref 做构建验证；publish 开关默认 false，
+#      即「影子构建」，只出 artifact 不碰任何线上对象。
+#
+# 写入顺序是有意的：不可变对象（APK / mapping / manifest/v<name>.json）先写，
+# 全量日志其次，指针 manifest/latest.json 最后。任何一步失败都停在「线上仍是旧版」，
+# 不会出现「有更新提示但下载 404」。
 on:
   workflow_dispatch:
     inputs:
@@ -10,12 +17,18 @@ on:
         description: "发布用 tag（如 v3.6.0）；传分支 ref 则进入自检模式，版本号取自代码"
         required: true
         type: string
+      publish:
+        description: "true 时把产物推到 GitHub Release 附件与 R2（清单指针最后写）。默认只构建。"
+        type: boolean
+        default: false
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-apk-${{ github.event.inputs.tag }}
+  group: release-apk-${{ github.event.release.tag_name || github.event.inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -27,19 +40,33 @@ jobs:
     timeout-minutes: 60
     # 保留 environment 是为了以后加审批时不用改作业结构；但当前账号套餐（私有仓 + Free）
     # 不支持 required reviewers，实测 PUT 返回 422，环境建成了裸的、不拦任何东西。
-    # 所以现在真正的闸门只有两个：手动 dispatch，以及 P4 之后「人工 publish release」这一步。
+    # 所以现在真正的闸门只有两个：手动 dispatch，以及「人工 publish release」这一步。
     environment: production
+    # gh release upload 要往本仓库挂附件，只有这个作业需要写权限，故不开在 workflow 级
+    permissions:
+      contents: write
+    env:
+      PUBLISH: ${{ github.event_name == 'release' || inputs.publish }}
+      RELEASE_REF: ${{ github.event.release.tag_name || inputs.tag }}
+      # 官网与应用内共同读的清单域，也是回读校验的靶子
+      SITE_ORIGIN: https://tracktosearch.pages.dev
+      R2_BUCKET: tracktosearch-releases
+      # 与本机验证过的版本对齐；不固定版本会让发版流水线跟着 wrangler 漂移
+      WRANGLER_VERSION: 4.118.0
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.tag }}
+          # 这里刻意不用 ${{ env.RELEASE_REF }}：with: 里能不能读 env 是个上下文可用性的坑，
+          # 而 checkout 拿错 ref 的后果是构建错的树、把不对的包发出去。内联表达式没有歧义。
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: 解析版本号
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           case "$TAG" in
@@ -58,6 +85,10 @@ jobs:
               [ -n "$version" ] || { echo "::error::无法从 app/build.gradle.kts 解析 versionName"; exit 1; }
               echo "::notice::自检模式（ref=$TAG），versionName 取自代码：$version"
               echo "EXPECTED_VERSION_NAME=$version" >> "$GITHUB_ENV"
+              if [ "$PUBLISH" = "true" ]; then
+                echo "::error::自检模式（ref 不是 v* tag）不允许发布，产物来源不可追溯"
+                exit 1
+              fi
               ;;
           esac
 
@@ -68,6 +99,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           AES_KEY: ${{ secrets.CONFIG_AES_KEY }}
+          CF_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCT: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           missing=0
@@ -82,6 +115,10 @@ jobs:
           check RELEASE_KEY_ALIAS "$KEY_ALIAS"
           check RELEASE_KEY_PASSWORD "$KEY_PASSWORD"
           check CONFIG_AES_KEY "$AES_KEY"
+          if [ "$PUBLISH" = "true" ]; then
+            check CF_API_TOKEN "$CF_TOKEN"
+            check CF_ACCOUNT_ID "$CF_ACCT"
+          fi
           exit "$missing"
 
       - name: 还原签名材料与构建配置
@@ -170,7 +207,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk-${{ inputs.tag }}
+          name: release-apk-${{ github.event.release.tag_name || inputs.tag }}
           path: out/
           retention-days: 30
 
@@ -178,6 +215,168 @@ jobs:
         # R8 fullMode 下的线上崩溃栈只有这份 mapping 能解，先随 artifact 留存
         uses: actions/upload-artifact@v4
         with:
-          name: r8-mapping-${{ inputs.tag }}
+          name: r8-mapping-${{ github.event.release.tag_name || inputs.tag }}
           path: app/build/outputs/mapping/release/
           retention-days: 90
+
+      # ============================================================
+      # 以下全部只在 publish 打开时跑
+      # ============================================================
+
+      - name: 汇总产物元数据
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          script=".ci/make-manifest.mjs"
+          [ -f "$script" ] || { echo "::error::$script 不在被检出的这棵树里，无法生成清单"; exit 1; }
+          apk="out/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk"
+          sha=$(sha256sum "$apk" | cut -d' ' -f1)
+          size=$(stat -c%s "$apk")
+          vc=$(awk '/^[[:space:]]*versionCode = /{print $3; exit}' app/build.gradle.kts)
+          ms=$(awk '/^[[:space:]]*minSdk = /{print $3; exit}' app/build.gradle.kts)
+          {
+            echo "APK_SHA256=$sha"
+            echo "APK_SIZE=$size"
+            echo "APK_VERSION_CODE=$vc"
+            echo "APK_MIN_SDK=$ms"
+          } >> "$GITHUB_ENV"
+          echo "APK sha256=$sha size=$size versionCode=$vc minSdk=$ms"
+
+      - name: 取 Release 正文与日期
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_REF" --json tagName,createdAt,body > release.json
+          # 存原始正文，不预先加「## vX.X.X 更新内容（日期）」标题：App 侧
+          # injectDateIntoChangelog 会自己按 releaseDate 补，多包一层就是重复标题
+          node -e 'const r=JSON.parse(require("fs").readFileSync("release.json","utf8"));process.stdout.write(r.body || "")' > changelog.md
+          created=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("release.json","utf8")).createdAt)')
+          # 日期取东八区那天，与迁移前 App 展示一致（旧解析器用设备时区，16:00Z 之后会显示成次日）
+          echo "RELEASE_DATE=$(TZ=Asia/Shanghai date -d "$created" +%F)" >> "$GITHUB_ENV"
+          echo "正文 $(wc -c < changelog.md) 字节，releaseDate=$RELEASE_DATE"
+
+      - name: 生成分版清单与全量日志
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ env.EXPECTED_VERSION_NAME }}
+          VERSION_CODE: ${{ env.APK_VERSION_CODE }}
+          FILE_NAME: TraktoSearch-v${{ env.EXPECTED_VERSION_NAME }}.apk
+          SHA256: ${{ env.APK_SHA256 }}
+          SIZE: ${{ env.APK_SIZE }}
+          MIN_SDK: ${{ env.APK_MIN_SDK }}
+          CHANGELOG_ZH_FILE: changelog.md
+        run: |
+          set -euo pipefail
+          mkdir -p manifest
+          node .ci/make-manifest.mjs latest --out "manifest/v${VERSION_NAME}.json"
+          # 全量日志每次发版重算：清单是唯一真相，不留增量合并的边界情况
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate > releases.json
+          node .ci/make-manifest.mjs history --releases releases.json --out manifest/history.json
+          cp "manifest/v${VERSION_NAME}.json" manifest/latest.json
+          ls -l manifest/
+
+      - name: 版本单调断言（写任何对象之前）
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o live.json -w '%{http_code}' "$SITE_ORIGIN/manifest/latest.json" || echo 000)
+          case "$code" in
+            404)
+              echo "::notice::线上还没有清单（首次发布），跳过单调断言"
+              ;;
+            200)
+              live=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("live.json","utf8")).latest.versionCode)')
+              echo "线上 versionCode=$live，本次 $APK_VERSION_CODE"
+              # 挡住两类事故：dry-run 产物顶掉线上真版本；同一 versionCode 出两个不同的包
+              # （App 侧 hasUpdate 只比 versionName，同号不同包会让用户拿到对不上校验值的 APK）
+              [ "$APK_VERSION_CODE" -gt "$live" ] || {
+                echo "::error::versionCode 未超过线上 $live，拒绝发布。请确认版本号已递增、且本次不是重跑旧 tag"; exit 1; }
+              ;;
+            *)
+              # 读不到线上清单就当失败：跳过断言等于把闸门拆了
+              echo "::error::读 $SITE_ORIGIN/manifest/latest.json 失败（HTTP $code），无法做版本单调断言"; exit 1
+              ;;
+          esac
+
+      - name: 准备 wrangler
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          npm install --global "wrangler@$WRANGLER_VERSION"
+          wrangler --version
+
+      - name: 推 GitHub Release 附件
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # 主仓库 Release 附件保留作为镜像：Functions 挂掉时官网次按钮与应用降级链都指这里
+          gh release upload "$RELEASE_REF" "out/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk" --clobber
+
+      - name: 上传不可变产物到 R2
+        if: env.PUBLISH == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          # --remote 必须显式带：wrangler 的 r2 object 子命令默认读写本机 .wrangler/state，
+          # 不加会打印 "Upload complete." 而云上什么都没有。put-remote() 顺手把这行日志
+          # 断言掉，让「写到本地」直接失败而不是静默通过。
+          put-remote() {
+            local key="$1" file="$2" ctype="$3"
+            # 2>&1：'Resource location:' 走哪条流不该由我猜，两条都收下再断言
+            wrangler r2 object put "$R2_BUCKET/$key" --file "$file" --content-type "$ctype" --remote 2>&1 \
+              | tee /tmp/put.log
+            grep -q 'Resource location: remote' /tmp/put.log || {
+              echo "::error::写 $key 时没看到 'Resource location: remote'，可能落到本机 state 而非云上"; exit 1; }
+          }
+          # mapping 走私有前缀：站点函数只暴露 /dl/*.apk 与 /manifest/*.json，
+          # 这个前缀从公网取不到，但 R8 fullMode 的线上崩溃栈必须长期可解
+          gzip -c app/build/outputs/mapping/release/mapping.txt > mapping.txt.gz
+          put-remote "apk/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk" \
+            "out/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk" "application/vnd.android.package-archive"
+          put-remote "mapping/${EXPECTED_VERSION_NAME}/mapping.txt.gz" mapping.txt.gz "application/gzip"
+          put-remote "manifest/v${EXPECTED_VERSION_NAME}.json" "manifest/v${EXPECTED_VERSION_NAME}.json" "application/json"
+          put-remote "manifest/history.json" manifest/history.json "application/json"
+
+      - name: 移动清单指针（最后一步，即回滚点）
+        if: env.PUBLISH == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          # 指针可覆写就是回滚手段：manifest/v<旧版本>.json 还在，把它重新 put 成
+          # latest.json 即可退回，APK 对象一个都不用删。
+          wrangler r2 object put "$R2_BUCKET/manifest/latest.json" \
+            --file manifest/latest.json --content-type "application/json" --remote 2>&1 | tee /tmp/put.log
+          grep -q 'Resource location: remote' /tmp/put.log || {
+            echo "::error::latest.json 没写到云上"; exit 1; }
+
+      - name: 发布后回读校验
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          got=$(curl -fsS "$SITE_ORIGIN/manifest/latest.json")
+          echo "$got" | node -e '
+            const m = JSON.parse(require("fs").readFileSync(0, "utf8")).latest;
+            const want = process.env;
+            const bad = [];
+            if (m.versionName !== want.EXPECTED_VERSION_NAME) bad.push(`versionName ${m.versionName}`);
+            if (m.sha256 !== want.APK_SHA256) bad.push(`sha256 ${m.sha256}`);
+            if (String(m.size) !== want.APK_SIZE) bad.push(`size ${m.size}`);
+            if (bad.length) { console.error("::error::回读与产物不一致：" + bad.join(", ")); process.exit(1); }
+            console.log("清单回读一致：", m.versionName, m.url);
+          '
+          # 直链必须带 Content-Length：应用内进度条拿不到总量会退化成不确定的转圈。
+          # 先 tr -d '\r'：HTTP 头以 CRLF 结尾，留着 \r 的话 "$" 锚点永远匹配不上。
+          head=$(curl -sIL "$SITE_ORIGIN/dl/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk" | tr -d '\r')
+          echo "$head" | grep -qi '^content-length: *'"${APK_SIZE}$'" \
+            || { echo "::error::直链响应缺 Content-Length 或体积不符"; echo "$head"; exit 1; }
+          echo "$head" | grep -qi 'attachment; filename=' \
+            || { echo "::error::直链响应没有 Content-Disposition attachment"; exit 1; }
