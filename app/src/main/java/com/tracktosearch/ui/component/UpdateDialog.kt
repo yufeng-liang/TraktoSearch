@@ -62,6 +62,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -345,7 +346,9 @@ fun StickyHeaderChangelogContent(
     text: String,
     headerColor: Color,
     // 由调用方传 state 才能在外层画「下面还有内容」的渐隐遮罩；设置页沿用默认值不受影响
-    listState: LazyListState = rememberLazyListState()
+    listState: LazyListState = rememberLazyListState(),
+    // 标题行的横向内边距：容器自带留白时（设置页）要留 8dp，正文直接铺在弹窗上时给 0 才能与正文对齐
+    headerHorizontalPadding: Dp = 8.dp
 ) {
     val sections = remember(text) { parseChangelogSections(text) }
 
@@ -364,7 +367,7 @@ fun StickyHeaderChangelogContent(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                                .padding(horizontal = headerHorizontalPadding, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -765,35 +768,19 @@ fun UpdateDialog(
                     .fillMaxWidth()
                     .padding(24.dp)
             ) {
-                // 头部：徽标 + 版本迁移行
+                // 头部只留一句放大的徽标行；当前→新版本的迁移信息由下面日志区的
+                // 「v3.7.0 更新内容（日期）」吸顶标题承担，两处都写就是重复
                 Text(
                     text = stringResource(R.string.update_dialog_badge),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
-                )
-                // 版本迁移行：旧版本号与箭头弱化，新版本号 primary 加粗
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                            append("v${BuildConfig.VERSION_NAME} → ")
-                        }
-                        withStyle(
-                            SpanStyle(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        ) {
-                            append("v${updateInfo.latestVersion}")
-                        }
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(Modifier.height(16.dp))
 
-                // 更新日志区：surface 背景营造层次，圆角裁剪；changelog 为空时兜底显示版本号
+                // 更新日志区：不再套卡片，直接铺在弹窗底色上；changelog 为空时兜底显示版本号
+                val dialogColor = floatingDialogColor()
                 val changelogListState = rememberLazyListState()
                 // 列表下面还有内容时画一道渐隐，替掉「最后一行被硬切一半」那种像渲染坏了的观感
                 val changelogHasMore = remember {
@@ -807,22 +794,17 @@ fun UpdateDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 420.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    // 横向留白：日志组件标题自带 8dp 内边距，正文行无边距，这里统一加内边距防贴圆角边
-                    Column(
-                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
-                    ) {
-                        StickyHeaderChangelogContent(
-                            text = updateInfo.changelog.ifBlank {
-                                stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}"
-                            },
-                            // 标题吸顶后的填充色跟日志区圆角盒同色
-                            headerColor = MaterialTheme.colorScheme.surface,
-                            listState = changelogListState
-                        )
-                    }
+                    StickyHeaderChangelogContent(
+                        text = updateInfo.changelog.ifBlank {
+                            stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}"
+                        },
+                        // 吸顶标题的填充色必须等于弹窗底色，否则钉住时会露出一条色块
+                        headerColor = dialogColor,
+                        // 弹窗已有 24dp 内边距，标题行不再自己缩进，否则与正文左边缘不齐
+                        headerHorizontalPadding = 0.dp,
+                        listState = changelogListState
+                    )
                     if (changelogHasMore.value) {
                         Box(
                             modifier = Modifier
@@ -832,7 +814,7 @@ fun UpdateDialog(
                                 .background(
                                     Brush.verticalGradient(
                                         0f to Color.Transparent,
-                                        1f to MaterialTheme.colorScheme.surface
+                                        1f to dialogColor
                                     )
                                 )
                         )
