@@ -49,3 +49,11 @@
 -keep class android.os.HapticPlayer { *; }
 -dontwarn android.os.VibrationAttributes
 -dontwarn android.os.VibrationEffect$Composition
+
+# OpenImage 的 `openimage-coil` 模块把 Coil2 与 Coil3 两套适配层都打进来了，
+# 而本项目只提供 Coil2（io.coil-kt:coil-compose，包名 coil.*）。Coil3 适配层引用的
+# coil3.* 全都不在 classpath 上，R8 按「缺类即错误」处理，assembleRelease 直接失败。
+# app 代码不引用 openimagecoillib 任何类（全仓 grep 为零命中），那条路径是死代码，
+# 所以按 AGP 生成的建议抑制，而不是去补一个用不上的 Coil3 依赖。
+# 缺这条规则的代价不是"警告变多"：R8 会真的编不过，CI 与本机空缓存构建都会红。
+-dontwarn coil3.**
