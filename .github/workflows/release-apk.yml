@@ -132,8 +132,19 @@ jobs:
           wrangler --version
           # 只读探测放在构建之前：token 缺 R2 权限、桶名写错这类问题，
           # 不该等十几分钟构建完、走到上传那步才暴露。
-          # 对象写入是否真落到云上，由「上传不可变产物到 R2」里的 'Resource location: remote' 断言管。
           wrangler r2 bucket info "$R2_BUCKET" --json
+          # 再探一次「写」：CF_API_TOKEN 完全可能只给了读权限，那样整条发布链
+          # 会在真实发版时才第一次失败。写一个 dryrun/ 下的小对象就够，
+          # 站点函数只暴露 /dl/*.apk 与 /manifest/*.json，这个键公网取不到。
+          # 故意不删：token 未必带 delete 权限，删失败会误伤真实发版。
+          printf 'ci-probe run=%s attempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > ci-probe.txt
+          wrangler r2 object put "$R2_BUCKET/dryrun/ci-probe.txt" \
+            --file ci-probe.txt --content-type "text/plain" --remote 2>&1 | tee /tmp/probe.log
+          # 不带 --remote 时 wrangler 的 object 子命令会静默读写本机 .wrangler/state，
+          # 照样打印 "Upload complete."；实测 get 不加 --remote 会对云上存在的键报
+          # "The specified key does not exist"。所以必须断言这一行，而不是看退出码。
+          grep -q 'Resource location: remote' /tmp/probe.log || {
+            echo "::error::R2 写探测落到了本机 state，不是云上"; exit 1; }
 
       - name: 还原签名材料与构建配置
         env:
