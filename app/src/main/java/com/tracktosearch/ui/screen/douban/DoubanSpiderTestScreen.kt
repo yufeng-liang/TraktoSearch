@@ -81,7 +81,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -99,8 +98,8 @@ import com.tracktosearch.data.remote.douban.RatingWriteTestResult
 import com.tracktosearch.data.remote.douban.RecommendTestResult
 import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.component.AppFloatingDialog
 import com.tracktosearch.ui.component.isAppDarkTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -1711,37 +1710,26 @@ private fun CachedItemsPickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = floatingDialogColor()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(
-                    text = stringResource(R.string.douban_spider_test_pick_cached_title) +
-                        if (items.isNotEmpty()) " (${items.size})" else "",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                if (items.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.douban_spider_test_no_cached),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier.heightIn(max = 420.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(items) { item ->
-                            CachedItemCard(item = item, onClick = { onPick(item.doubanUrl) })
-                        }
-                    }
+    AppFloatingDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.douban_spider_test_pick_cached_title) +
+            if (items.isNotEmpty()) " (${items.size})" else ""
+    ) {
+        if (items.isEmpty()) {
+            Text(
+                text = stringResource(R.string.douban_spider_test_no_cached),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.heightIn(max = 420.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(items) { item ->
+                    CachedItemCard(item = item, onClick = { onPick(item.doubanUrl) })
                 }
             }
         }

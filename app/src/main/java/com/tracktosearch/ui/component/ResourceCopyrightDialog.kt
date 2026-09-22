@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,11 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Gavel
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,14 +33,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
-import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
-import com.tracktosearch.ui.theme.floatingDialogColor
 
 /** 资源卡片的动作类型，决定确认按钮文案。 */
 enum class ResourceCopyrightAction {
@@ -65,43 +57,44 @@ fun ResourceCopyrightDialog(
     onDismiss: () -> Unit
 ) {
     var dontShowAgain by remember { mutableStateOf(false) }
-    Dialog(
+    // 头部的图标+标题留在正文里自绘（组件不为单个调用点开 icon 槽）；
+    // 确认文案按动作分支，触感由 AppDialogActionRow 统一承担。
+    AppFloatingDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        confirm = DialogAction(
+            label = stringResource(
+                when (action) {
+                    ResourceCopyrightAction.OPEN -> R.string.resource_copyright_continue_open
+                    ResourceCopyrightAction.COPY -> R.string.resource_copyright_continue_copy
+                }
+            ),
+            onClick = { onConfirm(dontShowAgain) }
+        ),
+        dismiss = DialogAction(
+            label = stringResource(R.string.common_cancel),
+            onClick = onDismiss
+        ),
+        // 浮在内容之上需要抬升感，这里保留原有的 tonal 抬升
+        tonalElevation = DesignToken.ElevationFloating
     ) {
-        Surface(
+        // 小屏或大字体档下内容可能高于弹窗可用高度：允许纵向滚动，正常档位无感。
+        // 24dp 内边距由 AppFloatingDialog 的 contentPadding 承担，这里不再重复。
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            shape = DesignToken.Dialog,
-            color = floatingDialogColor(),
-            tonalElevation = DesignToken.ElevationFloating
+                .verticalScroll(rememberScrollState())
         ) {
-            // 小屏或大字体档下内容可能高于弹窗可用高度：允许纵向滚动，正常档位无感。
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                DialogHeader()
-                Spacer(modifier = Modifier.height(18.dp))
-                CopyrightPoint(text = stringResource(R.string.resource_copyright_body_1))
-                Spacer(modifier = Modifier.height(10.dp))
-                CopyrightPoint(text = stringResource(R.string.resource_copyright_body_2))
-                Spacer(modifier = Modifier.height(10.dp))
-                CopyrightPoint(text = stringResource(R.string.resource_copyright_body_3))
-                Spacer(modifier = Modifier.height(18.dp))
-                DontShowAgainRow(
-                    checked = dontShowAgain,
-                    onCheckedChange = { dontShowAgain = it }
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-                DialogActions(
-                    action = action,
-                    onConfirm = { onConfirm(dontShowAgain) },
-                    onDismiss = onDismiss
-                )
-            }
+            DialogHeader()
+            Spacer(modifier = Modifier.height(18.dp))
+            CopyrightPoint(text = stringResource(R.string.resource_copyright_body_1))
+            Spacer(modifier = Modifier.height(10.dp))
+            CopyrightPoint(text = stringResource(R.string.resource_copyright_body_2))
+            Spacer(modifier = Modifier.height(10.dp))
+            CopyrightPoint(text = stringResource(R.string.resource_copyright_body_3))
+            Spacer(modifier = Modifier.height(18.dp))
+            DontShowAgainRow(
+                checked = dontShowAgain,
+                onCheckedChange = { dontShowAgain = it }
+            )
         }
     }
 }
@@ -228,49 +221,5 @@ private fun DontShowAgainRow(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
-    }
-}
-
-/** 底部操作：次级取消 + 主题色主按钮，动作语义直接写在按钮上。 */
-@Composable
-private fun DialogActions(
-    action: ResourceCopyrightAction,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val haptics = rememberAppHaptics()
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        androidx.compose.material3.OutlinedButton(
-            onClick = {
-                haptics.perform(HapticSemantic.LIGHT_TAP)
-                onDismiss()
-            },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Text(stringResource(R.string.common_cancel))
-        }
-        Button(
-            onClick = {
-                haptics.tap()
-                onConfirm()
-            },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
-        ) {
-            Text(
-                stringResource(
-                    when (action) {
-                        ResourceCopyrightAction.OPEN -> R.string.resource_copyright_continue_open
-                        ResourceCopyrightAction.COPY -> R.string.resource_copyright_continue_copy
-                    }
-                ),
-                fontWeight = FontWeight.SemiBold
-            )
-        }
     }
 }

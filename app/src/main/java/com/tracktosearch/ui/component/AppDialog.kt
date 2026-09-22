@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -246,6 +247,9 @@ fun AppDialogActionRow(
  *
  * usePlatformDefaultWidth = false 是刻意的：这四类里有带列表、带进度的宽内容，
  * 吃平台默认宽度会在平板上窄成一竖条。横向 24dp 缩进 + 28dp 圆角由本组件负责。
+ *
+ * tonalElevation 默认 0.dp（与遮罩同色平铺）；浮在内容上需要抬升感的调用点
+ * （如版权确认弹窗）显式传 [DesignToken.ElevationFloating]，原样透传给内部 Surface。
  */
 @Composable
 fun AppFloatingDialog(
@@ -255,6 +259,7 @@ fun AppFloatingDialog(
     dismiss: DialogAction? = null,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(DesignToken.DialogPadding),
+    tonalElevation: Dp = 0.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(
@@ -267,6 +272,7 @@ fun AppFloatingDialog(
                 .padding(horizontal = DesignToken.DialogPadding),
             shape = DesignToken.Dialog,
             color = floatingDialogColor(),
+            tonalElevation = tonalElevation,
         ) {
             Column(modifier = Modifier.padding(contentPadding)) {
                 if (title != null) {

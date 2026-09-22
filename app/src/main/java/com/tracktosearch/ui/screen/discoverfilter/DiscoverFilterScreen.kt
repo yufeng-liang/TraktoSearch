@@ -83,7 +83,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.graphics.drawable.toBitmap
@@ -95,6 +94,8 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
+import com.tracktosearch.ui.component.AppFloatingDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -111,7 +112,6 @@ import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.appSwitchColors
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -1080,70 +1080,47 @@ private fun MultiSelectDialog(
     useScrollableList: Boolean = false
 ) {
     val scrollState = rememberScrollState()
-    Dialog(onDismissRequest = onDismiss) {
-        // Dialog 内容是独立 subcomposition（自己的宿主 View），单独取一份
-        val dialogHaptics = rememberAppHaptics()
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    floatingDialogColor(),
-                    RoundedCornerShape(16.dp)
-                )
-                .padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            if (useScrollableList) {
-                // 可滚动的矩形块标签布局：FlowRow 自动换行，整体垂直可滚动
-                FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(scrollState),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    options.forEach { (id, name) ->
-                        GlassFilterChip(
-                            selected = id in selectedIds,
-                            onClick = { onToggle(id) },
-                            text = name
-                        )
-                    }
-                }
-            } else {
-                // FlowRow 标签布局（无滚动）
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    options.forEach { (id, name) ->
-                        GlassFilterChip(
-                            selected = id in selectedIds,
-                            onClick = { onToggle(id) },
-                            text = name
-                        )
-                    }
+    // 「完成」是这个弹窗唯一的确认按钮，关掉的同时由调用方发起搜索；
+    // 点外部关闭走 onDismissRequest，按约定静默。触感由 AppDialogActionRow 统一承担。
+    AppFloatingDialog(
+        onDismissRequest = onDismiss,
+        title = title,
+        confirm = DialogAction(
+            label = stringResource(R.string.common_done),
+            onClick = onDismiss
+        )
+    ) {
+        if (useScrollableList) {
+            // 可滚动的矩形块标签布局：FlowRow 自动换行，整体垂直可滚动
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(scrollState),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                options.forEach { (id, name) ->
+                    GlassFilterChip(
+                        selected = id in selectedIds,
+                        onClick = { onToggle(id) },
+                        text = name
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
+        } else {
+            // FlowRow 标签布局（无滚动）
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 「完成」是这个弹窗唯一的确认按钮，关掉的同时由调用方发起搜索；
-                // 点外部关闭走 onDismissRequest，按约定静默
-                TextButton(onClick = {
-                    dialogHaptics.tap()
-                    onDismiss()
-                }) {
-                    Text(stringResource(R.string.common_done))
+                options.forEach { (id, name) ->
+                    GlassFilterChip(
+                        selected = id in selectedIds,
+                        onClick = { onToggle(id) },
+                        text = name
+                    )
                 }
             }
         }

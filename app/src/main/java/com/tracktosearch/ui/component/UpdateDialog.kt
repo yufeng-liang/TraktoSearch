@@ -29,15 +29,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -64,8 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
@@ -566,78 +561,6 @@ private fun DownloadProgressContent(state: DownloadState.Downloading) {
     }
 }
 
-/** 主按钮：48dp 高、14dp 圆角 */
-@Composable
-private fun PrimaryButton(text: String, onClick: () -> Unit) {
-    val haptics = rememberAppHaptics()
-    Button(
-        onClick = {
-            haptics.tap()
-            onClick()
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-/** 次按钮：44dp 高、14dp 圆角，弱于主按钮形成层次 */
-@Composable
-private fun SecondaryButton(text: String, onClick: () -> Unit) {
-    val haptics = rememberAppHaptics()
-    OutlinedButton(
-        onClick = {
-            haptics.lightTap()
-            onClick()
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Text(text = text, style = MaterialTheme.typography.labelLarge)
-    }
-}
-
-/**
- * 弱操作行：无边框文字按钮平铺一行。
- * 用来替掉「浏览器下载」「稍后提醒」这类满宽描边按钮 —— 三个满宽按钮要占 150dp，
- * 而更新日志卡片正缺这点高度。
- */
-@Composable
-private fun TertiaryButtonRow(vararg items: Pair<String, () -> Unit>) {
-    val haptics = rememberAppHaptics()
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items.forEach { (label, onClick) ->
-            TextButton(
-                onClick = {
-                    haptics.lightTap()
-                    onClick()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
 @Composable
 fun UpdateDialog(
     updateInfo: UpdateInfo,
@@ -749,176 +672,210 @@ fun UpdateDialog(
         }
     }
 
-    Dialog(
-        onDismissRequest = { if (canDismiss) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    AppFloatingDialog(
+        onDismissRequest = { if (canDismiss) onDismiss() }
     ) {
-        Surface(
+        // 28dp 圆角与 24dp 内边距由 AppFloatingDialog 承担；animateContentSize 留在内容侧
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
                 // 状态切换会让内容高度变一点（进度区 / 错误文案），弹窗是居中的，
                 // 不动画就是整块往上跳一下
-                .animateContentSize(animationSpec = tween(220)),
-            shape = RoundedCornerShape(28.dp),
-            color = floatingDialogColor()
+                .animateContentSize(animationSpec = tween(220))
         ) {
-            Column(
+            // 头部只留一句放大的徽标行；当前→新版本的迁移信息由下面日志区的
+            // 「v3.7.0 更新内容（日期）」吸顶标题承担，两处都写就是重复
+            Text(
+                text = stringResource(R.string.update_dialog_badge),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            // 更新日志区：不再套卡片，直接铺在弹窗底色上；changelog 为空时兜底显示版本号
+            val dialogColor = floatingDialogColor()
+            val changelogListState = rememberLazyListState()
+            // 列表下面还有内容时画一道渐隐，替掉「最后一行被硬切一半」那种像渲染坏了的观感
+            val changelogHasMore = remember {
+                derivedStateOf {
+                    val info = changelogListState.layoutInfo
+                    val last = info.visibleItemsInfo.lastOrNull()
+                    last != null && last.offset + last.size > info.viewportEndOffset
+                }
+            }
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp)
+                    .heightIn(max = 420.dp)
             ) {
-                // 头部只留一句放大的徽标行；当前→新版本的迁移信息由下面日志区的
-                // 「v3.7.0 更新内容（日期）」吸顶标题承担，两处都写就是重复
-                Text(
-                    text = stringResource(R.string.update_dialog_badge),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                StickyHeaderChangelogContent(
+                    text = updateInfo.changelog.ifBlank {
+                        stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}"
+                    },
+                    // 吸顶标题的填充色必须等于弹窗底色，否则钉住时会露出一条色块
+                    headerColor = dialogColor,
+                    // 弹窗已有 24dp 内边距，标题行不再自己缩进，否则与正文左边缘不齐
+                    headerHorizontalPadding = 0.dp,
+                    listState = changelogListState
                 )
-
-                Spacer(Modifier.height(16.dp))
-
-                // 更新日志区：不再套卡片，直接铺在弹窗底色上；changelog 为空时兜底显示版本号
-                val dialogColor = floatingDialogColor()
-                val changelogListState = rememberLazyListState()
-                // 列表下面还有内容时画一道渐隐，替掉「最后一行被硬切一半」那种像渲染坏了的观感
-                val changelogHasMore = remember {
-                    derivedStateOf {
-                        val info = changelogListState.layoutInfo
-                        val last = info.visibleItemsInfo.lastOrNull()
-                        last != null && last.offset + last.size > info.viewportEndOffset
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 420.dp)
-                ) {
-                    StickyHeaderChangelogContent(
-                        text = updateInfo.changelog.ifBlank {
-                            stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}"
-                        },
-                        // 吸顶标题的填充色必须等于弹窗底色，否则钉住时会露出一条色块
-                        headerColor = dialogColor,
-                        // 弹窗已有 24dp 内边距，标题行不再自己缩进，否则与正文左边缘不齐
-                        headerHorizontalPadding = 0.dp,
-                        listState = changelogListState
-                    )
-                    if (changelogHasMore.value) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .height(28.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        0f to Color.Transparent,
-                                        1f to dialogColor
-                                    )
+                if (changelogHasMore.value) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(28.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to Color.Transparent,
+                                    1f to dialogColor
                                 )
+                            )
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // 状态区 + 操作区一起随下载状态切换。
+            // Idle 与 Downloading 两态高度刻意做齐（主按钮+文字行 ≈ 进度条+信息行+取消按钮），
+            // 剩余的差异交给外层的 animateContentSize 平滑掉，不再整块跳。
+            when (val state = downloadState) {
+                is DownloadState.Idle -> {
+                    if (updateInfo.downloadUrl.isEmpty()) {
+                        // 下载链接为空：提示并引导前往发布页
+                        Text(
+                            text = stringResource(R.string.update_download_unavailable),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.update_release_page),
+                                onClick = { openUrl(RELEASE_PAGE_URL) }
+                            ),
+                            secondary = listOf(
+                                DialogAction(
+                                    label = stringResource(R.string.update_later),
+                                    onClick = onDismiss
+                                )
+                            )
+                        )
+                    } else {
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.update_download_builtin),
+                                onClick = { startDownload() }
+                            ),
+                            secondary = listOf(
+                                DialogAction(
+                                    label = stringResource(R.string.update_download_browser),
+                                    onClick = { openUrl(updateInfo.downloadUrl) }
+                                ),
+                                DialogAction(
+                                    label = stringResource(R.string.update_later),
+                                    onClick = onDismiss
+                                )
+                            )
                         )
                     }
                 }
-
-                Spacer(Modifier.height(16.dp))
-
-                // 状态区 + 操作区一起随下载状态切换。
-                // Idle 与 Downloading 两态高度刻意做齐（主按钮+文字行 ≈ 进度条+信息行+取消按钮），
-                // 剩余的差异交给 Surface 上的 animateContentSize 平滑掉，不再整块跳。
-                when (val state = downloadState) {
-                    is DownloadState.Idle -> {
-                        if (updateInfo.downloadUrl.isEmpty()) {
-                            // 下载链接为空：提示并引导前往发布页
-                            Text(
-                                text = stringResource(R.string.update_download_unavailable),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                is DownloadState.Downloading -> {
+                    DownloadProgressContent(state)
+                    Spacer(Modifier.height(12.dp))
+                    // 取消：先停掉阻塞的读流，再收协程，最后把状态收回 Idle。
+                    // 单独的取消动作走次按钮槽（纯文字），不给它主按钮的填充强调
+                    AppDialogActionRow(
+                        primary = null,
+                        secondary = listOf(
+                            DialogAction(
+                                label = stringResource(R.string.update_cancel_download),
+                                onClick = {
+                                    ApkDownloader.cancelActiveDownload()
+                                    downloadJob?.cancel()
+                                    downloadState = DownloadState.Idle
+                                }
                             )
-                            Spacer(Modifier.height(12.dp))
-                            PrimaryButton(text = stringResource(R.string.update_release_page)) {
-                                openUrl(RELEASE_PAGE_URL)
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            TertiaryButtonRow(stringResource(R.string.update_later) to onDismiss)
-                        } else {
-                            PrimaryButton(text = stringResource(R.string.update_download_builtin)) {
-                                startDownload()
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            TertiaryButtonRow(
-                                stringResource(R.string.update_download_browser) to {
-                                    openUrl(updateInfo.downloadUrl)
-                                },
-                                stringResource(R.string.update_later) to onDismiss
-                            )
-                        }
-                    }
-                    is DownloadState.Downloading -> {
-                        DownloadProgressContent(state)
-                        Spacer(Modifier.height(12.dp))
-                        // 取消：先停掉阻塞的读流，再收协程，最后把状态收回 Idle
-                        SecondaryButton(text = stringResource(R.string.update_cancel_download)) {
-                            ApkDownloader.cancelActiveDownload()
-                            downloadJob?.cancel()
-                            downloadState = DownloadState.Idle
-                        }
-                    }
-                    is DownloadState.Completed -> {
-                        // 勾选图标 + 提示文案（自动唤起安装由上方 LaunchedEffect 处理）
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.update_download_complete),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        PrimaryButton(text = stringResource(R.string.update_install)) {
-                            try {
-                                ApkInstaller.installApk(context, state.file)
-                                onDismiss()
-                            } catch (e: SecurityException) {
-                                failDownload(signatureInvalidMsg)
-                            } catch (_: Exception) {
-                                // 文件被清理/FileProvider 异常/无安装器等,避免崩溃
-                                failDownload(downloadFailedMsg)
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        TertiaryButtonRow(stringResource(R.string.update_later) to onDismiss)
-                    }
-                    is DownloadState.Error -> {
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
                         )
-                        Spacer(Modifier.height(12.dp))
-                        PrimaryButton(text = stringResource(R.string.error_retry)) {
-                            startDownload()
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        // 只有「没拿到文件」类失败才给浏览器入口；完整性校验失败时
-                        // 同一个 URL 换浏览器下来的还是同一份文件，给了等于教用户绕开校验
-                        if (state.suggestBrowserFallback) {
-                            TertiaryButtonRow(
-                                stringResource(R.string.update_download_browser) to {
-                                    openUrl(updateInfo.downloadUrl)
-                                },
-                                stringResource(R.string.update_close) to onDismiss
-                            )
-                        } else {
-                            TertiaryButtonRow(stringResource(R.string.update_close) to onDismiss)
-                        }
+                    )
+                }
+                is DownloadState.Completed -> {
+                    // 勾选图标 + 提示文案（自动唤起安装由上方 LaunchedEffect 处理）
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.update_download_complete),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
+                    Spacer(Modifier.height(12.dp))
+                    AppDialogActionRow(
+                        primary = DialogAction(
+                            label = stringResource(R.string.update_install),
+                            onClick = {
+                                try {
+                                    ApkInstaller.installApk(context, state.file)
+                                    onDismiss()
+                                } catch (e: SecurityException) {
+                                    failDownload(signatureInvalidMsg)
+                                } catch (_: Exception) {
+                                    // 文件被清理/FileProvider 异常/无安装器等,避免崩溃
+                                    failDownload(downloadFailedMsg)
+                                }
+                            }
+                        ),
+                        secondary = listOf(
+                            DialogAction(
+                                label = stringResource(R.string.update_later),
+                                onClick = onDismiss
+                            )
+                        )
+                    )
+                }
+                is DownloadState.Error -> {
+                    Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    // 只有「没拿到文件」类失败才给浏览器入口；完整性校验失败时
+                    // 同一个 URL 换浏览器下来的还是同一份文件，给了等于教用户绕开校验
+                    val errorSecondary = if (state.suggestBrowserFallback) {
+                        listOf(
+                            DialogAction(
+                                label = stringResource(R.string.update_download_browser),
+                                onClick = { openUrl(updateInfo.downloadUrl) }
+                            ),
+                            DialogAction(
+                                label = stringResource(R.string.update_close),
+                                onClick = onDismiss
+                            )
+                        )
+                    } else {
+                        listOf(
+                            DialogAction(
+                                label = stringResource(R.string.update_close),
+                                onClick = onDismiss
+                            )
+                        )
+                    }
+                    AppDialogActionRow(
+                        primary = DialogAction(
+                            label = stringResource(R.string.error_retry),
+                            onClick = { startDownload() }
+                        ),
+                        secondary = errorSecondary
+                    )
                 }
             }
         }
