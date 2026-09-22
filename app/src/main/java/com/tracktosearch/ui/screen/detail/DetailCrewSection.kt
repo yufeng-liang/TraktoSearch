@@ -27,11 +27,8 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +58,7 @@ import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.util.PersonAvatarColorStore
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ShimmerState
@@ -68,8 +66,6 @@ import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.personAvatarSharedKey
 import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.hapticClickable
-import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingSheetColor
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 
@@ -325,32 +321,11 @@ internal fun FullCastCrewSheet(
     val avatarColors = remember { mutableMapOf<Int, Color>() }
     val listState = rememberLazyListState()
 
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = floatingSheetColor()
+        title = stringResource(R.string.detail_cast_all_title)
     ) {
-        // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
-        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            // 标题栏
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.detail_cast_all_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = { sheetHaptics.lightTap(); onDismiss() }) {
-                    Text(stringResource(R.string.detail_cast_close))
-                }
-            }
-
             // 分组列表
             LazyColumn(
                 state = listState,

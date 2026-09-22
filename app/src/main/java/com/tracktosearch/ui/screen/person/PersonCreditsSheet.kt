@@ -4,40 +4,25 @@ import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
-import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingSheetColor
 
 /** 全部参演电影弹窗 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,39 +49,11 @@ internal fun AllMovieCreditsSheet(
             }
     }
 
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = floatingSheetColor()
+        title = title
     ) {
-        // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
-        val haptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            // 标题栏
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                // 面板的「关闭」按取消档给轻一记；滑下去关 / 点遮罩关走 onDismissRequest，照旧静默
-                IconButton(onClick = {
-                    haptics.lightTap()
-                    onDismiss()
-                }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
-
             // Grid 列表
             LazyVerticalGrid(
                 state = gridState,
@@ -167,39 +124,11 @@ internal fun AllTvCreditsSheet(
             }
     }
 
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = floatingSheetColor()
+        title = title
     ) {
-        // 同上，ModalBottomSheet 内容是独立 subcomposition，单独取一份
-        val haptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            // 标题栏
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                // 面板的「关闭」按取消档给轻一记；滑下去关 / 点遮罩关走 onDismissRequest，照旧静默
-                IconButton(onClick = {
-                    haptics.lightTap()
-                    onDismiss()
-                }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
-
             // Grid 列表
             LazyVerticalGrid(
                 state = gridState,

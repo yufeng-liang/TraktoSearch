@@ -48,13 +48,11 @@ import androidx.compose.material.icons.rounded.RateReview
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WavingHand
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -98,12 +96,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.floatingDialogColor
-import com.tracktosearch.ui.theme.floatingSheetColor
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -1347,10 +1345,9 @@ private fun CharacterPickerSheet(
     onReloadCharacters: () -> Unit,
     onSelectCharacter: (String) -> Unit
 ) {
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = floatingSheetColor(),
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        skipPartiallyExpanded = false
     ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(

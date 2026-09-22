@@ -13,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,9 +26,9 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchSourceTemplate
 import com.tracktosearch.data.local.SearchSourceTemplates
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
-import com.tracktosearch.ui.theme.floatingSheetColor
 
 /**
  * 模板库半屏弹层：网格展示内置模板 + 底部导入快捷通道。
@@ -43,9 +42,9 @@ fun SourceTemplateSheet(
     onImport: (() -> Unit)?,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = floatingSheetColor(),
+        skipPartiallyExpanded = false,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Text(

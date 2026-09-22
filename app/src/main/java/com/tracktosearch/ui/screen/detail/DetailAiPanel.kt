@@ -20,11 +20,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -38,7 +36,7 @@ import androidx.compose.ui.geometry.Rect
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiDetailInterestLevel
 import com.tracktosearch.data.ai.AiDetailWatchTiming
-import com.tracktosearch.ui.theme.floatingSheetColor
+import com.tracktosearch.ui.component.AppBottomSheet
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,11 +50,7 @@ fun DetailAiPanel(
     onBoundsChanged: (Rect) -> Unit = {}
 ) {
     if (!state.panelVisible) return
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = floatingSheetColor()
-    ) {
+    AppBottomSheet(onDismissRequest = onDismiss) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()

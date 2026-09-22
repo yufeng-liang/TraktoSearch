@@ -41,12 +41,10 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,7 +57,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,6 +66,7 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.recordOpenImageBounds
 import com.tracktosearch.ui.component.rememberShimmer
@@ -76,7 +74,6 @@ import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingSheetColor
 import kotlinx.coroutines.launch
 
 // ==================== 预告片与截图 ====================
@@ -355,38 +352,16 @@ internal fun FullVideosImagesSheet(
     val selectedTabIndex = pagerState.currentPage
     val scope = rememberCoroutineScope()
 
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = floatingSheetColor(),
+        title = stringResource(R.string.detail_videos_all_title),
         dragHandle = null
     ) {
-        // ModalBottomSheet 的内容是独立 subcomposition（有自己的宿主 View），单独取一份
+        // 弹层内容是独立 subcomposition（有自己的宿主 View），单独取一份
         val sheetHaptics = rememberAppHaptics()
         // 三列网格共享一条 shimmer，避免每格各跑一条无限动画；与详情页栏目骨架同用低对比档
         val sheetShimmer = rememberShimmer(subtle = true)
         Column(modifier = Modifier.fillMaxWidth()) {
-            // 标题栏
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.detail_videos_all_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = { sheetHaptics.lightTap(); onDismiss() }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
-
             // Tab 行
             if (tabCount > 1) {
                 PrimaryTabRow(

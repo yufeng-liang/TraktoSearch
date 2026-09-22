@@ -79,13 +79,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -153,7 +151,7 @@ import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
-import com.tracktosearch.ui.component.DiscoverModalBottomSheet
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.GlassHighlight
@@ -205,7 +203,6 @@ import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.theme.readableOn
 import dagger.hilt.EntryPoint
@@ -652,13 +649,11 @@ fun SearchScreen(
 
         // 权限提示弹窗
         if (showPermissionDialog) {
-            ModalBottomSheet(
+            AppBottomSheet(
                 onDismissRequest = {
                     interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
                     cloudThemeManager.onPermissionDismissed()
                 },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = floatingSheetColor(),
                 dragHandle = null
             ) {
                 // Sheet 内容是独立 subcomposition（自己的宿主 View），单独取一份而不是复用外层
@@ -1843,38 +1838,11 @@ fun DoubanHotAllSheet(
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    DiscoverModalBottomSheet(
-        onDismissRequest = onDismiss
+    AppBottomSheet(
+        onDismissRequest = onDismiss,
+        title = doubanCategoryLabel(category.id)
     ) {
-        // Sheet 内容是独立 subcomposition（自己的宿主 View），单独取一份
-        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = doubanCategoryLabel(category.id),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                // 显式的关闭按钮，不是 onDismissRequest：按「对话框的关闭」给 LIGHT_TAP
-                IconButton(
-                    onClick = {
-                        sheetHaptics.lightTap()
-                        onDismiss()
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
-
             when {
                 // 首载骨架：页 1 加载中且无任何条目时给占位，避免弹层白板
                 category.items.isEmpty() && category.isLoading -> {

@@ -65,7 +65,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppVisualSurface
-import com.tracktosearch.ui.component.DiscoverModalBottomSheet
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
@@ -196,10 +196,10 @@ internal fun TmdbAllSheet(
             }
     }
 
-    DiscoverModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss
     ) {
-        // ModalBottomSheet 的内容是独立 subcomposition（自己的宿主 View），
+        // 弹层内容是独立 subcomposition（自己的宿主 View），
         // 必须在这一层取，不能复用调用页那一份
         val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -321,34 +321,11 @@ internal fun TraktMovieAllSheet(
             }
     }
 
-    DiscoverModalBottomSheet(
-        onDismissRequest = onDismiss
+    AppBottomSheet(
+        onDismissRequest = onDismiss,
+        title = title
     ) {
-        // Sheet 内容有自己的宿主 View，单独取一份
-        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = {
-                    sheetHaptics.lightTap()
-                    onDismiss()
-                }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
@@ -396,34 +373,11 @@ internal fun TraktShowAllSheet(
 ) {
     val listState = rememberLazyGridState()
 
-    DiscoverModalBottomSheet(
-        onDismissRequest = onDismiss
+    AppBottomSheet(
+        onDismissRequest = onDismiss,
+        title = title
     ) {
-        // Sheet 内容有自己的宿主 View，单独取一份
-        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = {
-                    sheetHaptics.lightTap()
-                    onDismiss()
-                }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
@@ -459,34 +413,11 @@ internal fun TraktAnticipatedAllSheet(
 ) {
     val listState = rememberLazyGridState()
 
-    DiscoverModalBottomSheet(
-        onDismissRequest = onDismiss
+    AppBottomSheet(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.discover_trakt_anticipated)
     ) {
-        // Sheet 内容有自己的宿主 View，单独取一份
-        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.discover_trakt_anticipated),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = {
-                    sheetHaptics.lightTap()
-                    onDismiss()
-                }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
@@ -529,32 +460,11 @@ internal fun TrendingListsAllSheet(
     onListClick: (listId: Int, listName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    DiscoverModalBottomSheet(
-        onDismissRequest = onDismiss
+    AppBottomSheet(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.discover_trending_lists)
     ) {
-        // Sheet 内容有自己的宿主 View，单独取一份
-        val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.discover_trending_lists),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = {
-                    sheetHaptics.lightTap()
-                    onDismiss()
-                }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.common_close)
-                    )
-                }
-            }
             LazyColumn(
                 modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -562,7 +472,7 @@ internal fun TrendingListsAllSheet(
             ) {
                 itemsIndexed(lists, key = { _, item -> item.list.ids.slug }, contentType = { _, _ -> "list" }) { _, listResponse ->
                     // 与发现页里的同一批卡片共用 TrendingListCard，规格必须一致。
-                    // 这一侧不挂 appSharedBounds：ModalBottomSheet 在自己的窗口里，配不上共享元素。
+                    // 这一侧不挂 appSharedBounds：弹层在自己的窗口里，配不上共享元素。
                     TrendingListCard(
                         title = listResponse.list.name,
                         meta = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),

@@ -95,7 +95,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
@@ -105,7 +104,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -177,6 +175,7 @@ import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
@@ -217,7 +216,6 @@ import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
-import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -2036,7 +2034,7 @@ fun WatchlistScreen(
             )
         }
 
-        // 筛选 ModalBottomSheet
+        // 筛选弹层
         if (showFilterSheet) {
             WatchlistFilterSheet(
                 filterState = filterState,
@@ -2246,7 +2244,7 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
 }
 
 /**
- * 筛选 ModalBottomSheet：类型多选 + 年代多选 + 标记时间区间 + 排序方向 + Trakt 评分区间。
+ * 筛选弹层：类型多选 + 年代多选 + 标记时间区间 + 排序方向 + Trakt 评分区间。
  * 布局参考影视筛选页：年份/评分/排序/标记时间均标题+内容同一行。
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -2263,11 +2261,8 @@ private fun WatchlistFilterSheet(
     onReset: () -> Unit,
     onApply: () -> Unit
 ) {
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onApply,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        // 统一背景色与发现页查看全部 sheet 一致
-        containerColor = floatingSheetColor(),
         // 去除默认 drag 条,内容更紧凑
         dragHandle = null
     ) {
@@ -2277,7 +2272,7 @@ private fun WatchlistFilterSheet(
                 .padding(horizontal = 16.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 取在 sheet 内容里：ModalBottomSheet 有自己的宿主 View，
+            // 取在 sheet 内容里：弹层有自己的宿主 View，
             // 在 WatchlistFilterSheet 顶部取会捕获到页面那个 View
             val haptics = rememberAppHaptics()
             // 类型多选(chip 按估算宽度降序排列:长块先占位,短块填缝,行数少且每行数量均衡)
@@ -2403,7 +2398,7 @@ private fun WatchlistFilterSheet(
                         .padding(end = 8.dp)
                         .nestedScroll(ratingScrollConnection)
                         // 拦截竖直拖拽:RangeSlider 拖动是 pointerInput 级别,不走 nestedScroll。
-                        // 斜向拖动时竖直分量会冒泡到 ModalBottomSheet 的 anchoredDraggable 触发 sheet 移动。
+                        // 斜向拖动时竖直分量会冒泡到弹层的 anchoredDraggable 触发 sheet 移动。
                         // 用 draggable(Vertical, startDragImmediately=true) 跳过 touch slop,
                         // 在第一个 move 事件就立即消费竖直分量,使 anchoredDraggable 永远无法累积
                         // 竖直 slop 启动拖拽。RangeSlider(子节点,Main pass 先处理)仍能正常检测水平拖拽。

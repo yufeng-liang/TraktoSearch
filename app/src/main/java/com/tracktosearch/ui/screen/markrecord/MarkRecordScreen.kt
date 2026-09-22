@@ -50,12 +50,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +94,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.session.SessionModeManager
+import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.GlassScene
@@ -112,7 +111,6 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.navigation.DetailSeedStore
 import com.tracktosearch.ui.animation.EnterMode
@@ -669,11 +667,9 @@ fun MarkRecordScreen(
 
     // 筛选弹窗
     if (showFilterSheet) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
+        AppBottomSheet(
             onDismissRequest = { showFilterSheet = false },
-            sheetState = sheetState,
-            containerColor = floatingSheetColor()
+            skipPartiallyExpanded = false
         ) {
             FilterSheetContent(
                 mediaTypes = uiState.filterMediaTypes,

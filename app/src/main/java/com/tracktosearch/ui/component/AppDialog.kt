@@ -284,11 +284,12 @@ fun AppFloatingDialog(
 }
 
 /**
- * 全 App 唯一的底部弹层。把 discover 系 6 处用的 DiscoverModalBottomSheet 与
- * 另外 7 处散写 ModalBottomSheet 合并，并补上那 7 份逐字相同的标题栏。
+ * 全 App 唯一的底部弹层。原先 12 处散写 ModalBottomSheet 与经 DiscoverModalBottomSheet
+ * 包装的 6 处调用已全部收口于此（迁移后全仓 raw ModalBottomSheet 仅剩本组件内部一处），
+ * 标题栏统一由本组件的 AppSheetHeader 提供。
  *
  * skipPartiallyExpanded 默认 true：项目里的弹层几乎都是内容型，停在半展开
- * 要用户再拖一把，现有 9/13 处已经这么写。
+ * 要用户再拖一把；仅模板库、筛选等半展开场景由调用点显式传 false。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
