@@ -45,7 +45,7 @@ import org.robolectric.annotation.Config
  * - "Background" / "Cancel" / "Cancelling..." / "Sync Complete" / "Re-login" / "Login Trakt"
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanSyncDialogTest {
 
     @get:Rule

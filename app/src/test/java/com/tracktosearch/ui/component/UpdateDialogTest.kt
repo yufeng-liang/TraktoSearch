@@ -9,8 +9,12 @@ import com.tracktosearch.data.repository.UpdateInfo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
+// 必须显式指定 plain Application：不写 @Config 会继承 robolectric.properties 并启动真实
+// Application，那会初始化 SQLCipher Room 库，JVM 侧没有 so 而整个类全红。
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [33], application = android.app.Application::class)
 class UpdateDialogTest {
 
     @get:Rule

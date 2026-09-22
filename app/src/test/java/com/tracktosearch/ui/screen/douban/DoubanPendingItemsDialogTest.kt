@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 
 /** 豆瓣续传选项的真实 Compose 点击行为测试。 */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanPendingItemsDialogTest {
 
     @get:Rule

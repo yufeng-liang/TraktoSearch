@@ -38,7 +38,7 @@ import org.robolectric.annotation.Config
  * 命中多个节点；完成态使用非空 phase 避免与 "Done" 按钮文案冲突。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class ConsistencyCheckDialogTest {
 
     @get:Rule
