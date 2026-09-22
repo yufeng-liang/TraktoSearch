@@ -23,7 +23,9 @@ jobs:
     name: assembleRelease
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # 动用正式发布密钥的作业，跑之前要过 environment 审批
+    # 保留 environment 是为了以后加审批时不用改作业结构；但当前账号套餐（私有仓 + Free）
+    # 不支持 required reviewers，实测 PUT 返回 422，环境建成了裸的、不拦任何东西。
+    # 所以现在真正的闸门只有两个：手动 dispatch，以及 P4 之后「人工 publish release」这一步。
     environment: production
     steps:
       - name: Checkout
