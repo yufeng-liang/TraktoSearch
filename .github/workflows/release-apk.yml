@@ -121,6 +121,20 @@ jobs:
           fi
           exit "$missing"
 
+      - name: 探测发布凭据与 R2 可达
+        if: env.PUBLISH == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npm install --global "wrangler@$WRANGLER_VERSION"
+          wrangler --version
+          # 只读探测放在构建之前：token 缺 R2 权限、桶名写错这类问题，
+          # 不该等十几分钟构建完、走到上传那步才暴露。
+          # 对象写入是否真落到云上，由「上传不可变产物到 R2」里的 'Resource location: remote' 断言管。
+          wrangler r2 bucket info "$R2_BUCKET" --json
+
       - name: 还原签名材料与构建配置
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
@@ -300,13 +314,6 @@ jobs:
               echo "::error::读 $SITE_ORIGIN/manifest/latest.json 失败（HTTP $code），无法做版本单调断言"; exit 1
               ;;
           esac
-
-      - name: 准备 wrangler
-        if: env.PUBLISH == 'true'
-        run: |
-          set -euo pipefail
-          npm install --global "wrangler@$WRANGLER_VERSION"
-          wrangler --version
 
       - name: 推 GitHub Release 附件
         if: env.PUBLISH == 'true'
