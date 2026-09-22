@@ -78,6 +78,10 @@ android {
         buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")
         // 授权网关根域名（固定，不可被远程配置替换）
         buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
+        // 发版清单与 APK 下载直链的同一来源（R2 + Pages Function 的官网域名）。
+        // 应用内检查更新与「打开官网下载」都以此为根，换域名只改这一处；
+        // 本机/CI 可用 update.base.url 指到 Pages 预览部署做验证。
+        buildConfigField("String", "UPDATE_BASE_URL", "\"${properties.getProperty("update.base.url", "https://tracktosearch.pages.dev/")}\"")
         // 开源相关页的版本号由 Version Catalog 构建期快照提供；升级 libs.versions.toml 后页面自动同步。
         buildConfigField(
             "String",

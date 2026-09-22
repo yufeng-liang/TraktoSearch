@@ -1,14 +1,18 @@
 package com.tracktosearch.data.repository
 
+import android.app.Application
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.ChangelogStorage
 import com.tracktosearch.data.local.ChangelogStorage.CachedUpdateInfo
+import com.tracktosearch.data.remote.update.GitHubAsset
 import com.tracktosearch.data.remote.update.GitHubRelease
+import com.tracktosearch.data.remote.update.HistoryEntry
+import com.tracktosearch.data.remote.update.UpdateHistory
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
-import com.tracktosearch.data.remote.update.GiteeAsset
-import com.tracktosearch.data.remote.update.GiteeRelease
-import com.tracktosearch.data.remote.update.GiteeUpdateApiService
+import com.tracktosearch.data.remote.update.ManifestRelease
+import com.tracktosearch.data.remote.update.UpdateManifest
+import com.tracktosearch.data.remote.update.UpdateManifestApiService
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -23,150 +27,227 @@ import org.robolectric.annotation.Config
 /**
  * UpdateRepository 单元测试。
  *
+ * 主源是 CI 写在 R2 上的发版清单（manifest/latest.json），GitHub Release 只作降级；
  * 覆盖点：
- * - checkForUpdate：缓存命中/过期/force、GitHub→Gitee 降级链路、hasUpdate 重算、版本号比较
- * - fetchDownloadUrl：多 APK 选择策略、无 APK 场景
- * - sanitizeChangelog：乱码（问号占比 >30%）清理
- * - injectDateIntoChangelog：ISO 日期注入、空日期不崩溃
- * - fetchChangelog：内存缓存命中/未命中
- * - fetchAllChangelogs：磁盘缓存命中、GitHub 成功、GitHub 失败降级 Gitee
+ * - checkForUpdate：清单命中/字段缺失/失效、force、2 小时缓存、hasUpdate 重算、版本比较
+ * - 直链拼接：清单里的相对路径必须落到 UPDATE_BASE_URL 同一个站点上
+ * - sha256 与体积：清单带来的值必须穿过缓存回来（过去只存 4 个字段，缓存命中即丢校验）
+ * - 降级：清单失败回 GitHub 取版本与日志；两者都失败返回 null
+ * - changelog：日期注入、乱码清理
+ * - fetchChangelog / fetchAllChangelogs 的缓存层级
  *
  * 使用 Robolectric：BuildConfig.VERSION_NAME + android.util.Log。
+ *
+ * application 必须指定成裸 Application：默认会用 AndroidManifest 里的 TraktSearchApp，
+ * 而它注入 Hilt 单例图时会走到 DatabaseModule 的 SQLiteDatabase.loadLibs()，
+ * 本机没有桌面版 sqlcipher 原生库（app/src/test/jniLibs 不存在），于是 25 个用例
+ * 全部以 UnsatisfiedLinkError 收场。本测试的三个依赖都是 mock，不需要真实 Application 图。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = Application::class)
 class UpdateRepositoryTest {
 
     private val gitHubApi = mockk<GitHubUpdateApiService>(relaxed = true)
-    private val giteeApi = mockk<GiteeUpdateApiService>(relaxed = true)
+    private val manifestApi = mockk<UpdateManifestApiService>(relaxed = true)
     private val changelogStorage = mockk<ChangelogStorage>(relaxed = true)
     private lateinit var repository: UpdateRepository
 
+    /** 64 位十六进制的假摘要，够长且格式合法 */
+    private val fakeSha = "a" + "0".repeat(63)
+
     @Before
     fun setUp() {
-        // 清除前序测试的 stub 和调用记录，确保 coVerify(exactly = 0) 不受干扰
-        clearMocks(gitHubApi, giteeApi, changelogStorage)
-        // 每个测试创建新的实例，避免 cachedChangelog/cachedFullChangelog/cachedLatestVersion 状态泄漏
-        repository = UpdateRepository(gitHubApi, giteeApi, changelogStorage)
+        clearMocks(gitHubApi, manifestApi, changelogStorage)
+        // 默认让「全量历史清单」为空 —— 空视为不可用，使只关心 checkForUpdate 的用例
+        // 走既有的 GitHub 降级语义，不必每个测试都显式打桩。
+        coEvery { manifestApi.getHistory() } returns UpdateHistory()
+        // 每个测试新建实例，避免 cachedChangelog/cachedFullChangelog/cachedLatestVersion 泄漏
+        repository = UpdateRepository(gitHubApi, manifestApi, changelogStorage)
     }
 
     // ============================================================
-    // 辅助函数
+    // 辅助构造
     // ============================================================
 
-    /** 构造 GitHubRelease mock 对象 */
+    private fun buildManifest(
+        versionName: String = "99.0.0",
+        fileName: String = "TraktoSearch-v99.0.0.apk",
+        url: String = "/dl/TraktoSearch-v99.0.0.apk",
+        sha256: String = fakeSha,
+        size: Long = 38627497L,
+        releaseDate: String = "2024-01-15",
+        changelog: String = "## v99.0.0 更新内容\n- 清单里的新功能"
+    ): UpdateManifest = UpdateManifest(
+        schema = 1,
+        latest = ManifestRelease(
+            versionName = versionName,
+            versionCode = 65,
+            fileName = fileName,
+            url = url,
+            sha256 = sha256,
+            size = size,
+            releaseDate = releaseDate,
+            minSdk = 26,
+            changelog = mapOf("zh-CN" to changelog)
+        )
+    )
+
     private fun buildGitHubRelease(
         tagName: String = "v99.0.0",
         body: String = "更新内容",
-        createdAt: String = "2024-01-15T00:00:00Z"
-    ): GitHubRelease = GitHubRelease(
-        tag_name = tagName,
-        body = body,
-        created_at = createdAt
-    )
-
-    /** 构造 GiteeRelease mock 对象 */
-    private fun buildGiteeRelease(
-        tagName: String = "v99.0.0",
-        body: String = "更新内容",
         createdAt: String = "2024-01-15T00:00:00Z",
-        assets: List<GiteeAsset> = emptyList()
-    ): GiteeRelease = GiteeRelease(
+        assets: List<GitHubAsset> = emptyList()
+    ): GitHubRelease = GitHubRelease(
         tag_name = tagName,
         body = body,
         created_at = createdAt,
         assets = assets
     )
 
-    /** 构造 CachedUpdateInfo */
     private fun buildCachedUpdateInfo(
         latestVersion: String = "99.0.0",
         changelog: String = "缓存的更新日志",
         hasUpdate: Boolean = true,
-        downloadUrl: String = "https://example.com/cached.apk"
+        downloadUrl: String = "https://tracktosearch.pages.dev/dl/TraktoSearch-v99.0.0.apk",
+        sha256: String = fakeSha,
+        fileSize: Long = 38627497L
     ): CachedUpdateInfo = CachedUpdateInfo(
         latestVersion = latestVersion,
         changelog = changelog,
         hasUpdate = hasUpdate,
-        downloadUrl = downloadUrl
+        downloadUrl = downloadUrl,
+        sha256 = sha256,
+        fileSize = fileSize
     )
 
+    /** 清单与 GitHub 都失败时用于避免 relaxed mock 返回空对象干扰 */
+    private fun stubManifestFailure() {
+        coEvery { manifestApi.getLatest() } throws RuntimeException("清单不可达")
+    }
+
     // ============================================================
-    // checkForUpdate 缓存逻辑测试
+    // 清单主源
     // ============================================================
 
     @Test
-    fun checkForUpdate_非force且2小时内缓存命中_returns缓存结果且不调用网络() = runTest {
-        val now = System.currentTimeMillis()
-        // 1小时前检查过，在2小时有效期内
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns now - 3600_000
-        coEvery { changelogStorage.getCachedUpdateInfo() } returns buildCachedUpdateInfo(
-            latestVersion = "99.0.0",
-            changelog = "缓存日志",
-            hasUpdate = true,
-            downloadUrl = "https://example.com/cached.apk"
-        )
+    fun checkForUpdate_清单命中_绝对直链加sha256加体积() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest()
+
+        val result = repository.checkForUpdate()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.hasUpdate).isTrue()
+        assertThat(result.latestVersion).isEqualTo("99.0.0")
+        // 清单里是相对路径，必须落在同一个站点根上
+        assertThat(result.downloadUrl)
+            .isEqualTo(BuildConfig.UPDATE_BASE_URL.trimEnd('/') + "/dl/TraktoSearch-v99.0.0.apk")
+        assertThat(result.sha256).isEqualTo(fakeSha)
+        assertThat(result.fileSize).isEqualTo(38627497L)
+        // 主源成功就不该再请求 GitHub
+        coVerify(exactly = 0) { gitHubApi.getLatestRelease(any(), any()) }
+    }
+
+    @Test
+    fun checkForUpdate_清单缺sha256_仍可下载且校验值为空() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest(sha256 = "")
+
+        val result = repository.checkForUpdate()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.hasUpdate).isTrue()
+        assertThat(result.downloadUrl).isNotEmpty()
+        assertThat(result.sha256).isEmpty()
+    }
+
+    @Test
+    fun checkForUpdate_清单版本等于当前_hasUpdateFalse() = runTest {
+        val current = BuildConfig.VERSION_NAME.removePrefix("v")
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest(versionName = current)
+
+        val result = repository.checkForUpdate()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.hasUpdate).isFalse()
+        assertThat(result.latestVersion).isEqualTo(current)
+    }
+
+    @Test
+    fun checkForUpdate_清单字段不全_视为失败并走降级() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        // url 为空的清单不可用于下载，应判为无效
+        coEvery { manifestApi.getLatest() } returns buildManifest(url = "")
+        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease()
 
         val result = repository.checkForUpdate()
 
         assertThat(result).isNotNull()
         assertThat(result!!.latestVersion).isEqualTo("99.0.0")
-        assertThat(result.changelog).isEqualTo("缓存日志")
-        assertThat(result.downloadUrl).isEqualTo("https://example.com/cached.apk")
-        // 验证不调用网络
-        coVerify(exactly = 0) { gitHubApi.getLatestRelease(any(), any()) }
-        coVerify(exactly = 0) { giteeApi.getLatestRelease(any(), any()) }
+        coVerify(exactly = 1) { gitHubApi.getLatestRelease(any(), any()) }
     }
 
     @Test
-    fun checkForUpdate_非force但缓存过期_调用GitHubApi() = runTest {
-        val now = System.currentTimeMillis()
-        // 3小时前检查过，超过2小时有效期
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns now - 3 * 3600_000
+    fun checkForUpdate_清单latest为空_视为失败并走降级() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns UpdateManifest(schema = 1, latest = null)
         coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease()
 
         val result = repository.checkForUpdate()
 
         assertThat(result).isNotNull()
-        coVerify(exactly = 1) { gitHubApi.getLatestRelease(any(), any()) }
-    }
-
-    @Test
-    fun checkForUpdate_force为true_跳过缓存调用GitHubApi() = runTest {
-        val now = System.currentTimeMillis()
-        // 缓存有效，但 force=true 应跳过缓存
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns now
-        coEvery { changelogStorage.getCachedUpdateInfo() } returns buildCachedUpdateInfo()
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease()
-
-        val result = repository.checkForUpdate(force = true)
-
-        assertThat(result).isNotNull()
-        coVerify(exactly = 1) { gitHubApi.getLatestRelease(any(), any()) }
+        assertThat(result!!.hasUpdate).isTrue()
     }
 
     // ============================================================
-    // checkForUpdate 降级链路测试
+    // 降级与失败
     // ============================================================
 
     @Test
-    fun checkForUpdate_GitHub成功且有新版本_returnsHasUpdateTrue并获取下载链接() = runTest {
+    fun checkForUpdate_清单失败_降级GitHub取版本与日志() = runTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        stubManifestFailure()
         coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
             tagName = "v99.0.0",
-            body = "新版本更新内容"
+            body = "GitHub 兜底更新内容"
         )
-        // mock 公开仓库返回 APK 下载链接
-        coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        } returns listOf(
-            buildGiteeRelease(
-                tagName = "v99.0.0",
-                assets = listOf(
-                    GiteeAsset(
-                        name = "TraktoSearch-v99.0.0.apk",
-                        browser_download_url = "https://gitee.com/download/v99.0.0.apk"
-                    )
+
+        val result = repository.checkForUpdate()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.hasUpdate).isTrue()
+        assertThat(result.latestVersion).isEqualTo("99.0.0")
+        assertThat(result.changelog).contains("GitHub 兜底更新内容")
+        // 降级路径没有可用的 APK 来源，直链留空由 UI 走「打开下载页」
+        assertThat(result.downloadUrl).isEmpty()
+    }
+
+    @Test
+    fun checkForUpdate_清单与GitHub都失败_returnsNull() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        stubManifestFailure()
+        coEvery { gitHubApi.getLatestRelease(any(), any()) } throws RuntimeException("GitHub 错误")
+
+        assertThat(repository.checkForUpdate()).isNull()
+    }
+
+    @Test
+    fun checkForUpdate_降级GitHub带APK附件_也返回直链与体积() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        stubManifestFailure()
+        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
+            assets = listOf(
+                GitHubAsset(name = "notes.bin", browser_download_url = "https://example.com/notes.bin"),
+                GitHubAsset(
+                    name = "TraktoSearch-v98.0.0.apk",
+                    browser_download_url = "https://github.com/dl/v98.apk",
+                    size = 100L
+                ),
+                GitHubAsset(
+                    name = "TraktoSearch-v99.0.0.apk",
+                    browser_download_url = "https://github.com/dl/v99.apk",
+                    size = 38000000L
                 )
             )
         )
@@ -174,140 +255,108 @@ class UpdateRepositoryTest {
         val result = repository.checkForUpdate()
 
         assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isTrue()
-        assertThat(result.latestVersion).isEqualTo("99.0.0")
-        assertThat(result.downloadUrl).isEqualTo("https://gitee.com/download/v99.0.0.apk")
-        // 验证调用了公开仓库获取下载链接
-        coVerify { giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release") }
-    }
-
-    @Test
-    fun checkForUpdate_GitHub成功但版本相同_returnsHasUpdateFalse() = runTest {
-        val currentVersion = BuildConfig.VERSION_NAME.removePrefix("v")
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v$currentVersion",  // 当前版本
-            body = "当前版本内容"
-        )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isFalse()
-        assertThat(result.latestVersion).isEqualTo(currentVersion)
-        // 版本相同时不调用 fetchDownloadUrl
-        coVerify(exactly = 0) {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        }
-    }
-
-    @Test
-    fun checkForUpdate_GitHub失败_降级Gitee成功() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } throws RuntimeException("GitHub 网络错误")
-        coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        } returnsMany listOf(
-            listOf(buildGiteeRelease(tagName = "v99.0.0", body = "Gitee 更新内容")),
-            listOf(buildGiteeRelease(
-                tagName = "v99.0.0",
-                assets = listOf(
-                    GiteeAsset(
-                        name = "TraktoSearch-v99.0.0.apk",
-                        browser_download_url = "https://gitee.com/v99.apk"
-                    )
-                )
-            ))
-        )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isTrue()
-        assertThat(result.latestVersion).isEqualTo("99.0.0")
-        assertThat(result.changelog).contains("Gitee 更新内容")
-    }
-
-    @Test
-    fun checkForUpdate_GitHub和Gitee都失败_returnsNull() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } throws RuntimeException("GitHub 错误")
-        coEvery { giteeApi.getLatestRelease(any(), any()) } throws RuntimeException("Gitee 错误")
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNull()
+        // 同名前缀取最后一个，与清单的命名约定一致
+        assertThat(result!!.downloadUrl).isEqualTo("https://github.com/dl/v99.apk")
+        assertThat(result.fileSize).isEqualTo(38000000L)
+        // GitHub 侧拿不到摘要，留空表示跳过校验，不能伪造一个
+        assertThat(result.sha256).isEmpty()
     }
 
     // ============================================================
-    // checkForUpdate 缓存 hasUpdate 重算测试
+    // 缓存层级
     // ============================================================
 
     @Test
-    fun checkForUpdate_缓存命中时用当前版本重算hasUpdate() = runTest {
-        val currentVersion = BuildConfig.VERSION_NAME.removePrefix("v")
+    fun checkForUpdate_两小时内缓存命中_不发网络且带回落盘sha256() = runTest {
         val now = System.currentTimeMillis()
-        // 缓存的 latestVersion 等于当前版本，但缓存中 hasUpdate=true
         coEvery { changelogStorage.getLastCheckTimestamp() } returns now - 3600_000
         coEvery { changelogStorage.getCachedUpdateInfo() } returns buildCachedUpdateInfo(
-            latestVersion = currentVersion,  // 等于当前版本
-            changelog = "缓存日志",
-            hasUpdate = true,  // 缓存中 hasUpdate=true
-            downloadUrl = "https://example.com/old.apk"
+            sha256 = fakeSha,
+            fileSize = 38627497L
         )
 
         val result = repository.checkForUpdate()
 
         assertThat(result).isNotNull()
-        // 重算后 hasUpdate 应为 false（版本相同）
-        assertThat(result!!.hasUpdate).isFalse()
-        assertThat(result.latestVersion).isEqualTo(currentVersion)
-        // 验证不调用网络
+        assertThat(result!!.latestVersion).isEqualTo("99.0.0")
+        // 关键回归：sha256 与体积必须穿过缓存回来，否则下载完的校验会被静默跳过
+        assertThat(result.sha256).isEqualTo(fakeSha)
+        assertThat(result.fileSize).isEqualTo(38627497L)
+        coVerify(exactly = 0) { manifestApi.getLatest() }
         coVerify(exactly = 0) { gitHubApi.getLatestRelease(any(), any()) }
     }
 
-    // ============================================================
-    // isNewerVersion 矩阵测试（通过 checkForUpdate 间接覆盖）
-    // ============================================================
-
     @Test
-    fun checkForUpdate_3段版本号比较_GitHub返回更新版本_returnsHasUpdateTrue() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0"  // 3段，明显大于当前版本
+    fun checkForUpdate_缓存命中时用当前版本重算hasUpdate() = runTest {
+        val current = BuildConfig.VERSION_NAME.removePrefix("v")
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns System.currentTimeMillis() - 3600_000
+        coEvery { changelogStorage.getCachedUpdateInfo() } returns buildCachedUpdateInfo(
+            latestVersion = current,
+            hasUpdate = true
         )
-        coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        } returns emptyList()
 
         val result = repository.checkForUpdate()
 
         assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isTrue()
+        assertThat(result!!.hasUpdate).isFalse()
+        assertThat(result.latestVersion).isEqualTo(current)
+        coVerify(exactly = 0) { manifestApi.getLatest() }
     }
 
     @Test
-    fun checkForUpdate_4段vs3段版本号比较_有更新() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0.1"  // 4段版本号
-        )
-        coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        } returns emptyList()
+    fun checkForUpdate_缓存过期_重新请求清单() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns System.currentTimeMillis() - 3 * 3600_000
+        coEvery { manifestApi.getLatest() } returns buildManifest()
 
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isTrue()
+        assertThat(repository.checkForUpdate()).isNotNull()
+        coVerify(exactly = 1) { manifestApi.getLatest() }
     }
 
     @Test
-    fun checkForUpdate_旧版本_returnsHasUpdateFalse() = runTest {
+    fun checkForUpdate_force跳过缓存() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns System.currentTimeMillis()
+        coEvery { changelogStorage.getCachedUpdateInfo() } returns buildCachedUpdateInfo()
+        coEvery { manifestApi.getLatest() } returns buildManifest()
+
+        assertThat(repository.checkForUpdate(force = true)).isNotNull()
+        coVerify(exactly = 1) { manifestApi.getLatest() }
+    }
+
+    @Test
+    fun checkForUpdate_网络成功_落盘时带上sha256与体积() = runTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v0.0.1"  // 比当前版本小
-        )
+        coEvery { manifestApi.getLatest() } returns buildManifest()
+
+        repository.checkForUpdate()
+
+        coVerify {
+            changelogStorage.saveCachedUpdateInfo(
+                latestVersion = "99.0.0",
+                changelog = any(),
+                hasUpdate = true,
+                downloadUrl = any(),
+                sha256 = fakeSha,
+                fileSize = 38627497L
+            )
+        }
+    }
+
+    // ============================================================
+    // 版本号比较
+    // ============================================================
+
+    @Test
+    fun checkForUpdate_四段版本号比三段新_判定有更新() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest(versionName = "99.0.0.1")
+
+        assertThat(repository.checkForUpdate()!!.hasUpdate).isTrue()
+    }
+
+    @Test
+    fun checkForUpdate_清单版本更旧_判定无更新() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest(versionName = "0.0.1")
 
         val result = repository.checkForUpdate()
 
@@ -317,183 +366,127 @@ class UpdateRepositoryTest {
     }
 
     // ============================================================
-    // fetchDownloadUrl 测试（通过 checkForUpdate 间接覆盖）
+    // changelog 处理
     // ============================================================
 
     @Test
-    fun fetchDownloadUrl_多APK取最后一个TraktoSearch命名的() = runTest {
+    fun checkForUpdate_清单日期注入标题行末尾() = runTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(tagName = "v99.0.0")
-        // 公开仓库返回多个 APK，含多个 TraktoSearch-*.apk
+        coEvery { manifestApi.getLatest() } returns buildManifest(releaseDate = "2024-01-15")
+
+        assertThat(repository.checkForUpdate()!!.changelog)
+            .contains("## v99.0.0 更新内容（2024-01-15）")
+    }
+
+    @Test
+    fun checkForUpdate_清单无日期_原标题保持不变() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest(releaseDate = "")
+
+        assertThat(repository.checkForUpdate()!!.changelog)
+            .isEqualTo("## v99.0.0 更新内容\n- 清单里的新功能")
+    }
+
+    @Test
+    fun checkForUpdate_清单无标题_补外层header() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest(changelog = "- 只有一条改动")
+
+        val changelog = repository.checkForUpdate()!!.changelog
+
+        assertThat(changelog).startsWith("## v99.0.0 更新内容")
+        assertThat(changelog).contains("- 只有一条改动")
+    }
+
+    @Test
+    fun checkForUpdate_清单缺中文日志_回落其他语言() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
         coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        } returns listOf(
-            buildGiteeRelease(
-                tagName = "v99.0.0",
-                assets = listOf(
-                    GiteeAsset(name = "other.apk", browser_download_url = "https://example.com/other.apk"),
-                    GiteeAsset(name = "TraktoSearch-v98.0.0.apk", browser_download_url = "https://example.com/v98.apk"),
-                    GiteeAsset(name = "TraktoSearch-v99.0.0.apk", browser_download_url = "https://example.com/v99.apk")
+            manifestApi.getLatest()
+        } returns buildManifest().let { m ->
+            m.copy(latest = m.latest!!.copy(changelog = mapOf("en" to "- english only")))
+        }
+
+        assertThat(repository.checkForUpdate()!!.changelog).contains("english only")
+    }
+
+    @Test
+    fun checkForUpdate_乱码日志被清理() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        // 35 个问号 + 5 个字母，问号占比 87.5% > 30%
+        coEvery {
+            manifestApi.getLatest()
+        } returns buildManifest(changelog = "???????????????????????????????????update")
+
+        val changelog = repository.checkForUpdate()!!.changelog
+
+        assertThat(changelog).doesNotContain("?????")
+        assertThat(changelog).contains("## v99.0.0 更新内容")
+    }
+
+    // ============================================================
+    // fetchChangelog / fetchAllChangelogs
+    // ============================================================
+
+    @Test
+    fun fetchChangelog_内存缓存命中_不再请求网络() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { manifestApi.getLatest() } returns buildManifest()
+
+        val first = repository.fetchChangelog()
+        val second = repository.fetchChangelog()
+
+        assertThat(first).isNotEmpty()
+        assertThat(second).isEqualTo(first)
+        coVerify(exactly = 1) { manifestApi.getLatest() }
+    }
+
+    @Test
+    fun fetchAllChangelogs_磁盘缓存命中_不发网络() = runTest {
+        val disk = "## v1.0.0 更新内容\n- 功能1"
+        coEvery { changelogStorage.getChangelog() } returns disk
+
+        assertThat(repository.fetchAllChangelogs()).isEqualTo(disk)
+        coVerify(exactly = 0) { gitHubApi.getAllReleases(any(), any()) }
+    }
+
+    @Test
+    fun fetchAllChangelogs_历史清单命中_按序渲染且不请求GitHub() = runTest {
+        coEvery { changelogStorage.getChangelog() } returns null
+        coEvery { manifestApi.getHistory() } returns UpdateHistory(
+            schema = 1,
+            releases = listOf(
+                HistoryEntry(
+                    versionName = "3.6.0",
+                    tagName = "v3.6.0",
+                    releaseDate = "2026-07-28",
+                    changelog = mapOf("zh-CN" to "## v3.6.0 更新内容\n- 反馈系统")
+                ),
+                HistoryEntry(
+                    versionName = "3.5.0",
+                    tagName = "",
+                    releaseDate = "2026-07-26",
+                    changelog = mapOf("zh-CN" to "- 只有正文没有标题")
                 )
             )
         )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isTrue()
-        // 应取最后一个 TraktoSearch-*.apk 命名的
-        assertThat(result.downloadUrl).isEqualTo("https://example.com/v99.apk")
-    }
-
-    @Test
-    fun fetchDownloadUrl_无APK_返回空字符串() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(tagName = "v99.0.0")
-        // 公开仓库返回不含 APK 的 release
-        coEvery {
-            giteeApi.getLatestRelease("yufeng-liang", "TraktoSearch-release")
-        } returns listOf(
-            buildGiteeRelease(
-                tagName = "v99.0.0",
-                assets = listOf(
-                    GiteeAsset(name = "readme.txt", browser_download_url = "https://example.com/readme.txt")
-                )
-            )
-        )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.hasUpdate).isTrue()
-        assertThat(result.downloadUrl).isEmpty()
-    }
-
-    // ============================================================
-    // sanitizeChangelog 测试（通过 checkForUpdate 间接覆盖）
-    // ============================================================
-
-    @Test
-    fun checkForUpdate_changelog含大量问号_乱码被清理() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        // body 含 >30% 问号，应被 sanitizeChangelog 清理为空
-        // 35个问号 + 5个字母 = 40字符，问号占比 87.5% > 30%
-        val garbledBody = "???????????????????????????????????update"
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0",
-            body = garbledBody,
-            createdAt = "2024-01-15T00:00:00Z"
-        )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        // sanitizeChangelog 返回空，injectDateIntoChangelog 补一个 header
-        // 返回的 changelog 不应包含原始的乱码内容
-        assertThat(result!!.changelog).doesNotContain("?????")
-        // 应包含 header
-        assertThat(result.changelog).contains("## v99.0.0 更新内容")
-    }
-
-    // ============================================================
-    // injectDateIntoChangelog 测试（通过 checkForUpdate 间接覆盖）
-    // ============================================================
-
-    @Test
-    fun checkForUpdate_changelog注入日期_ISO格式CreatedAt() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0",
-            body = "## v99.0.0 更新内容\n- 新功能",
-            createdAt = "2024-01-15T00:00:00Z"
-        )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        assertThat(result!!.changelog).contains("2024-01-15")
-        // 日期应注入到标题行末尾
-        assertThat(result.changelog).contains("## v99.0.0 更新内容（2024-01-15）")
-    }
-
-    @Test
-    fun checkForUpdate_changelog注入日期_空CreatedAt不崩溃() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0",
-            body = "## v99.0.0 更新内容\n- 新功能",
-            createdAt = ""  // 空日期
-        )
-
-        val result = repository.checkForUpdate()
-
-        assertThat(result).isNotNull()
-        // 空日期时不追加日期括号，返回原文
-        assertThat(result!!.changelog).isEqualTo("## v99.0.0 更新内容\n- 新功能")
-    }
-
-    // ============================================================
-    // fetchChangelog 测试
-    // ============================================================
-
-    @Test
-    fun fetchChangelog_有内存缓存_直接返回() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0",
-            body = "更新日志内容"
-        )
-
-        // 第一次调用：走网络，填充 cachedChangelog
-        val firstResult = repository.fetchChangelog()
-        assertThat(firstResult).isNotEmpty()
-
-        // 第二次调用：应直接返回内存缓存
-        val secondResult = repository.fetchChangelog()
-        assertThat(secondResult).isEqualTo(firstResult)
-
-        // 验证 gitHubApi 只被调用一次（第二次走内存缓存）
-        coVerify(exactly = 1) { gitHubApi.getLatestRelease(any(), any()) }
-    }
-
-    @Test
-    fun fetchChangelog_无缓存_调用CheckForUpdate() = runTest {
-        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
-        coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(
-            tagName = "v99.0.0",
-            body = "更新日志内容"
-        )
-
-        val result = repository.fetchChangelog()
-
-        // 返回的 changelog 经过 injectDateIntoChangelog 处理
-        assertThat(result).isNotEmpty()
-        assertThat(result).contains("更新日志内容")
-        coVerify(exactly = 1) { gitHubApi.getLatestRelease(any(), any()) }
-    }
-
-    // ============================================================
-    // fetchAllChangelogs 测试
-    // ============================================================
-
-    @Test
-    fun fetchAllChangelogs_磁盘缓存命中_返回磁盘缓存() = runTest {
-        val diskChangelog = "## v1.0.0 更新内容\n- 功能1\n\n---\n\n## v0.9.0 更新内容\n- 功能0"
-        coEvery { changelogStorage.getChangelog() } returns diskChangelog
 
         val result = repository.fetchAllChangelogs()
 
-        assertThat(result).isEqualTo(diskChangelog)
+        assertThat(result).contains("## v3.6.0 更新内容（2026-07-28）")
+        // 无标题的条目补 header；tagName 缺失时由 versionName 推出
+        assertThat(result).contains("## v3.5.0 更新内容（2026-07-26）")
+        // 顺序沿用清单（新→旧），客户端不重排
+        assertThat(result.indexOf("v3.6.0")).isLessThan(result.indexOf("v3.5.0"))
         coVerify(exactly = 0) { gitHubApi.getAllReleases(any(), any()) }
-        coVerify(exactly = 0) { giteeApi.getAllReleases(any(), any(), any()) }
     }
 
     @Test
-    fun fetchAllChangelogs_无缓存_GitHub成功返回所有版本日志() = runTest {
+    fun fetchAllChangelogs_无缓存_取GitHub全部版本并注入日期() = runTest {
         coEvery { changelogStorage.getChangelog() } returns null
         coEvery { gitHubApi.getAllReleases(any(), any()) } returns listOf(
-            GitHubRelease(tag_name = "v1.0.0", body = "v1.0.0 更新内容", created_at = "2024-01-15T00:00:00Z"),
-            GitHubRelease(tag_name = "v0.9.0", body = "v0.9.0 更新内容", created_at = "2024-01-10T00:00:00Z")
+            GitHubRelease("v1.0.0", "v1.0.0 更新内容", "2024-01-15T00:00:00Z"),
+            GitHubRelease("v0.9.0", "v0.9.0 更新内容", "2024-01-10T00:00:00Z")
         )
 
         val result = repository.fetchAllChangelogs()
@@ -502,20 +495,14 @@ class UpdateRepositoryTest {
         assertThat(result).contains("v0.9.0 更新内容")
         assertThat(result).contains("2024-01-15")
         assertThat(result).contains("2024-01-10")
-        coVerify(exactly = 0) { giteeApi.getAllReleases(any(), any(), any()) }
     }
 
     @Test
-    fun fetchAllChangelogs_GitHub失败降级Gitee() = runTest {
+    fun fetchAllChangelogs_历史清单与GitHub都失败_返回空() = runTest {
         coEvery { changelogStorage.getChangelog() } returns null
+        coEvery { manifestApi.getHistory() } throws RuntimeException("清单不可达")
         coEvery { gitHubApi.getAllReleases(any(), any()) } throws RuntimeException("GitHub 网络错误")
-        coEvery { giteeApi.getAllReleases(any(), any(), any()) } returns listOf(
-            GiteeRelease(tag_name = "v1.0.0", body = "Gitee v1.0.0 更新内容", created_at = "2024-01-15T00:00:00Z")
-        )
 
-        val result = repository.fetchAllChangelogs()
-
-        assertThat(result).contains("Gitee v1.0.0 更新内容")
-        assertThat(result).contains("2024-01-15")
+        assertThat(repository.fetchAllChangelogs()).isEmpty()
     }
 }

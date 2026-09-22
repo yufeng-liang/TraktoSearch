@@ -19,7 +19,7 @@ import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.media.MediaMetadataApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
-import com.tracktosearch.data.remote.update.GiteeUpdateApiService
+import com.tracktosearch.data.remote.update.UpdateManifestApiService
 import com.tracktosearch.data.remote.weather.XiaomiWeatherApi
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import com.tracktosearch.data.util.ConnectivityObserver
@@ -533,15 +533,19 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideGiteeUpdateApiService(
-        @Named("gitee") okHttpClient: OkHttpClient
-    ): GiteeUpdateApiService {
+    fun provideUpdateManifestApiService(
+        baseClient: OkHttpClient
+    ): UpdateManifestApiService {
+        // 清单与 APK 都在 Cloudflare 上，直连即可。刻意不复用带 AuthInterceptor 的网关 client：
+        // 那会把网关 JWT 发给第三方域名。
+        // 结尾斜杠要补齐 —— BuildConfig 默认值带，但用 update.base.url 覆盖成预览地址时容易漏，
+        // 而 Retrofit 的 baseUrl 不以 / 结尾会直接抛异常。
         return Retrofit.Builder()
-            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/gitee/")
-            .client(okHttpClient)
+            .baseUrl(BuildConfig.UPDATE_BASE_URL.trimEnd('/') + "/")
+            .client(baseClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-            .create(GiteeUpdateApiService::class.java)
+            .create(UpdateManifestApiService::class.java)
     }
 
     /** 豆瓣失败项云端同步专用 Gitee Contents API（走网关代理，worker 注入 token） */

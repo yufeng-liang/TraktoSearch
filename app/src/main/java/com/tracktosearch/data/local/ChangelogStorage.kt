@@ -26,6 +26,8 @@ class ChangelogStorage @Inject constructor(
     private val cachedChangelogKey = stringPreferencesKey("cached_update_changelog")
     private val cachedHasUpdateKey = booleanPreferencesKey("cached_has_update")
     private val cachedDownloadUrlKey = stringPreferencesKey("cached_download_url")
+    private val cachedSha256Key = stringPreferencesKey("cached_sha256")
+    private val cachedFileSizeKey = longPreferencesKey("cached_file_size")
 
     suspend fun getChangelog(): String? {
         return context.changelogDataStore.data.map { it[key] }.first()
@@ -43,6 +45,8 @@ class ChangelogStorage @Inject constructor(
             it.remove(cachedChangelogKey)
             it.remove(cachedHasUpdateKey)
             it.remove(cachedDownloadUrlKey)
+            it.remove(cachedSha256Key)
+            it.remove(cachedFileSizeKey)
         }
     }
 
@@ -51,7 +55,12 @@ class ChangelogStorage @Inject constructor(
         return context.changelogDataStore.data.map { it[lastCheckTsKey] ?: 0L }.first()
     }
 
-    /** 读取缓存的更新检查结果（24 小时内有效），任一字段缺失返回 null */
+    /**
+     * 读取缓存的更新检查结果（24 小时内有效），版本/日志/链接任一缺失返回 null。
+     *
+     * sha256 与体积按「缺省即空/0」处理而不是判为缓存不完整：清单一向会带，
+     * 但 GitHub 降级路径拿不到摘要，若把空摘要当不完整就会每次启动都重拉网络。
+     */
     suspend fun getCachedUpdateInfo(): CachedUpdateInfo? {
         val prefs = context.changelogDataStore.data.first()
         val version = prefs[cachedVersionKey] ?: return null
@@ -62,7 +71,9 @@ class ChangelogStorage @Inject constructor(
             latestVersion = version,
             changelog = changelog,
             hasUpdate = hasUpdate,
-            downloadUrl = downloadUrl
+            downloadUrl = downloadUrl,
+            sha256 = prefs[cachedSha256Key].orEmpty(),
+            fileSize = prefs[cachedFileSizeKey] ?: 0L
         )
     }
 
@@ -71,7 +82,9 @@ class ChangelogStorage @Inject constructor(
         latestVersion: String,
         changelog: String,
         hasUpdate: Boolean,
-        downloadUrl: String
+        downloadUrl: String,
+        sha256: String = "",
+        fileSize: Long = 0L
     ) {
         context.changelogDataStore.edit {
             it[lastCheckTsKey] = System.currentTimeMillis()
@@ -79,6 +92,8 @@ class ChangelogStorage @Inject constructor(
             it[cachedChangelogKey] = changelog
             it[cachedHasUpdateKey] = hasUpdate
             it[cachedDownloadUrlKey] = downloadUrl
+            it[cachedSha256Key] = sha256
+            it[cachedFileSizeKey] = fileSize
         }
     }
 
@@ -86,6 +101,9 @@ class ChangelogStorage @Inject constructor(
         val latestVersion: String,
         val changelog: String,
         val hasUpdate: Boolean,
-        val downloadUrl: String
+        val downloadUrl: String,
+        /** APK 期望 SHA-256；空串表示这次检查没拿到摘要，客户端跳过校验 */
+        val sha256: String = "",
+        val fileSize: Long = 0L
     )
 }

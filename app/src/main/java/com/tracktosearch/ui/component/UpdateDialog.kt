@@ -79,7 +79,11 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 
-private const val RELEASE_PAGE_URL = "https://gitee.com/yufeng-liang/TraktoSearch-release/releases"
+// 下载兜底入口：清单与 APK 都在官网上，主链接失效时把用户送到官网下载区。
+// 锚点必须是 #section-download —— 官网下载区的 id 就是它（站内导航同款），
+// 写成 #download 会是个能打开但滚不动的死锚点。
+// 不能声明成 const —— BuildConfig 字段不是 Kotlin 编译期常量。
+private val RELEASE_PAGE_URL = BuildConfig.UPDATE_BASE_URL.trimEnd('/') + "/#section-download"
 
 /** 下载速度采样窗口：只保留最近 3 秒样本计算平均速度 */
 private const val SPEED_WINDOW_MS = 3000L

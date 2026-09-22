@@ -4,7 +4,7 @@ import android.util.Log
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.ChangelogStorage
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
-import com.tracktosearch.data.remote.update.GiteeUpdateApiService
+import com.tracktosearch.data.remote.update.UpdateManifestApiService
 import kotlinx.coroutines.CancellationException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -13,32 +13,27 @@ import javax.inject.Singleton
 
 data class UpdateInfo(
     val latestVersion: String,
-    val downloadUrl: String,       // 公开 Gitee 仓库的 APK 下载链接
+    /** APK 直链（发版清单给出的绝对地址）；降级到 GitHub 时没有可用直链，为空 */
+    val downloadUrl: String,
     val changelog: String,
     val fileSize: Long,
     val hasUpdate: Boolean,
-    /** APK 期望 SHA-256（来自发布时上传的 .sha256 sidecar 文件，空表示无校验） */
+    /** APK 期望 SHA-256，空表示这次没拿到摘要，客户端跳过校验 */
     val sha256: String = ""
 )
 
 @Singleton
 class UpdateRepository @Inject constructor(
     private val gitHubApi: GitHubUpdateApiService,
-    private val giteeApi: GiteeUpdateApiService,
+    private val manifestApi: UpdateManifestApiService,
     private val changelogStorage: ChangelogStorage
 ) {
     companion object {
         private const val TAG = "UpdateRepository"
         private const val GITHUB_OWNER = "yufeng-liang"
         private const val GITHUB_REPO = "TraktoSearch"
-        private const val GITEE_OWNER = "yufeng-liang"
-        private const val GITEE_REPO = "TraktoSearch-release"
-        // 公开仓库，专门存放 release APK
-        private const val RELEASE_REPO_OWNER = "yufeng-liang"
-        private const val RELEASE_REPO = "TraktoSearch-release"
         // 启动时自动检查更新的最小间隔（2 小时）。
-        // 缩短以覆盖"一天内多次发版"场景：用户当日再次启动即可拉到最新 release。
-        // 仍远低于 GitHub 未鉴权限流（60 次/小时），按每次启动计即使重度使用也远达不到。
+        // 缩短以覆盖"一天内多次发版"场景：用户当日再次启动即可拉到最新版本。
         private const val UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000L
     }
 
@@ -76,14 +71,28 @@ class UpdateRepository @Inject constructor(
             return diskCached
         }
 
-        // 网络获取
-        val result = tryFetchAllFromGitHub() ?: tryFetchAllFromGitee()
+        // 网络获取：全量日志也优先读清单（与更新弹窗同源，且在国内可达），
+        // 清单不可用时才退回网关代理的 GitHub releases 列表
+        val result = tryFetchAllFromManifest() ?: tryFetchAllFromGitHub()
         if (result != null) {
             cachedFullChangelog = result
             changelogStorage.saveChangelog(result)
             return result
         }
         return ""
+    }
+
+    private suspend fun tryFetchAllFromManifest(): String? {
+        return try {
+            val releases = manifestApi.getHistory().releases
+            if (releases.isEmpty()) return null
+            formatAllChangelogs(
+                releases.map { ReleaseInfo(it.resolvedTagName(), it.changelogText(), it.releaseDate) }
+            )
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w(TAG, "Update history manifest fetch failed", e)
+            null
+        }
     }
 
     private suspend fun tryFetchAllFromGitHub(): String? {
@@ -93,17 +102,6 @@ class UpdateRepository @Inject constructor(
             formatAllChangelogs(releases.map { ReleaseInfo(it.tag_name, it.body, it.created_at) })
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "GitHub fetch all releases failed", e)
-            null
-        }
-    }
-
-    private suspend fun tryFetchAllFromGitee(): String? {
-        return try {
-            val releases = giteeApi.getAllReleases(GITEE_OWNER, GITEE_REPO)
-            if (releases.isEmpty()) return null
-            formatAllChangelogs(releases.map { ReleaseInfo(it.tag_name, it.body, it.created_at) })
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w(TAG, "Gitee fetch all releases failed", e)
             null
         }
     }
@@ -167,12 +165,13 @@ class UpdateRepository @Inject constructor(
 
     /**
      * 检查更新。
-     * @param force true 时强制走网络（设置页手动检查用）；false 时 24 小时内复用上次结果，避免每次启动都请求 GitHub API
+     * @param force true 时强制走网络（设置页手动检查用）；false 时在有效期内复用上次结果，
+     *  避免每次启动都请求清单与 GitHub。
      */
     suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? {
         val currentVersion = BuildConfig.VERSION_NAME
 
-        // 非强制检查：24 小时内复用缓存结果，避免每次启动都请求 GitHub
+        // 非强制检查：有效期内复用缓存结果，避免每次启动都请求网络
         if (!force) {
             val lastTs = changelogStorage.getLastCheckTimestamp()
             val now = System.currentTimeMillis()
@@ -183,72 +182,47 @@ class UpdateRepository @Inject constructor(
                     cachedLatestVersion = cached.latestVersion
                     // 重要：不能用缓存的 hasUpdate，必须用当前 versionName 重新判断
                     // 场景：用户在 v1.8.0 启动缓存了 hasUpdate=true（latest=1.9.0），
-                    // 升级到 v1.9.0 后再启动仍在 24h 内，若透传缓存值会继续提示"有更新到 1.9.0"
+                    // 升级到 v1.9.0 后再启动仍在有效期内，若透传缓存值会继续提示"有更新到 1.9.0"
                     val hasUpdate = isNewerVersion(cached.latestVersion, currentVersion)
                     return UpdateInfo(
                         latestVersion = cached.latestVersion,
                         downloadUrl = cached.downloadUrl,
                         changelog = cached.changelog,
-                        fileSize = 0,
-                        hasUpdate = hasUpdate
+                        fileSize = cached.fileSize,
+                        hasUpdate = hasUpdate,
+                        sha256 = cached.sha256
                     )
                 }
             }
         }
 
-        // 优先尝试 GitHub（版本检测）
-        val gitHubResult = tryFetchFromGitHub()
-        if (gitHubResult != null) {
-            cachedChangelog = gitHubResult.changelog
-            cachedLatestVersion = gitHubResult.latestVersion
-            if (isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
-                // 有新版本：将该版本 changelog 追加到完整日志缓存，设置页打开时直接用缓存
-                appendToFullChangelog(gitHubResult.latestVersion, gitHubResult.changelog)
-                val (downloadUrl, sha256) = fetchDownloadAsset(gitHubResult.latestVersion)
-                // 下载链接为空时仍返回 hasUpdate=true,避免旧版本因下载链接获取失败而看不到更新提示
-                val info = gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true, sha256 = sha256)
-                changelogStorage.saveCachedUpdateInfo(
-                    info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
-                )
-                return info
-            }
-            // 版本相同，返回 hasUpdate=false 的信息以便 UI 显示"已是最新"
-            val info = gitHubResult.copy(hasUpdate = false)
-            changelogStorage.saveCachedUpdateInfo(
-                info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
-            )
-            return info
-        }
+        // 主源是 CI 发布时写入 R2 的清单：版本号、日志、直链、摘要、体积一次拿全。
+        // 清单不可用时退回 GitHub Release —— 那边只够告知"有新版本"和展示日志，没有可用直链。
+        val primary = tryFetchFromManifest() ?: tryFetchFromGitHub() ?: return null
 
-        // GitHub 请求失败，降级到 Gitee
-        val giteeResult = tryFetchFromGitee()
-        if (giteeResult != null) {
-            cachedChangelog = giteeResult.changelog
-            cachedLatestVersion = giteeResult.latestVersion
-            if (isNewerVersion(giteeResult.latestVersion, currentVersion)) {
-                appendToFullChangelog(giteeResult.latestVersion, giteeResult.changelog)
-                val (downloadUrl, sha256) = fetchDownloadAsset(giteeResult.latestVersion)
-                // 下载链接为空时仍返回 hasUpdate=true(同 GitHub 路径)
-                val info = giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true, sha256 = sha256)
-                changelogStorage.saveCachedUpdateInfo(
-                    info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
-                )
-                return info
-            }
-            val info = giteeResult.copy(hasUpdate = false)
-            changelogStorage.saveCachedUpdateInfo(
-                info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
-            )
-            return info
+        cachedChangelog = primary.changelog
+        cachedLatestVersion = primary.latestVersion
+        val hasUpdate = isNewerVersion(primary.latestVersion, currentVersion)
+        if (hasUpdate) {
+            // 将该版本 changelog 追加到完整日志缓存，设置页打开时直接用缓存
+            appendToFullChangelog(primary.latestVersion, primary.changelog)
         }
-
-        return null
+        val info = primary.copy(hasUpdate = hasUpdate)
+        changelogStorage.saveCachedUpdateInfo(
+            latestVersion = info.latestVersion,
+            changelog = info.changelog,
+            hasUpdate = info.hasUpdate,
+            downloadUrl = info.downloadUrl,
+            sha256 = info.sha256,
+            fileSize = info.fileSize
+        )
+        return info
     }
 
     /**
      * 将新版本的 changelog 追加到完整更新日志缓存（磁盘 + 内存）开头。
      * 如果该版本已存在则跳过。这样设置页打开更新日志时直接用缓存，无需再次请求网络。
-     * 注意:传入的 changelog 已由 tryFetchFromGitHub/Gitee 经 injectDateIntoChangelog 注入日期标题,
+     * 注意:传入的 changelog 已经过 injectDateIntoChangelog 注入日期标题,
      * 这里直接作为 entry,不再外包 header,避免重复标题。
      */
     private suspend fun appendToFullChangelog(version: String, changelog: String) {
@@ -263,75 +237,61 @@ class UpdateRepository @Inject constructor(
         changelogStorage.saveChangelog(updated)
     }
 
-    /**
-     * 从公开仓库获取 APK 下载链接 + SHA-256 校验值。
-     *
-     * 选择策略：在所有 .apk 附件中优先按命名规则匹配（TraktoSearch-*.apk），
-     * 若有多个匹配则在匹配集中取最后一个（后上传的排在后面）。
-     *
-     * SHA-256 来源：release body 中的 `SHA-256: <hex>` 行（由 release skill 发布时写入）。
-     * 缺失时返回空字符串，客户端跳过校验（向后兼容旧 release）。
-     */
-    private suspend fun fetchDownloadAsset(version: String): Pair<String, String> {
+    private suspend fun tryFetchFromManifest(): UpdateInfo? {
         return try {
-            val releases = giteeApi.getLatestRelease(RELEASE_REPO_OWNER, RELEASE_REPO)
-            val release = releases.firstOrNull() ?: return "" to ""
-
-            val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
-            if (apkAssets.isEmpty()) return "" to ""
-
-            // 优先 TraktoSearch-*.apk 命名的附件；候选中取最后一个（后上传的排在后面）
-            val namedCandidates = apkAssets.filter {
-                it.name.startsWith("TraktoSearch-", ignoreCase = true)
+            val release = manifestApi.getLatest().latest ?: return null
+            if (!release.isValid()) {
+                // 版本号或下载路径缺失就没法下载，判为清单不可用，交给 GitHub 兜底
+                Log.w(TAG, "Update manifest incomplete: version='${release.versionName}' url='${release.url}'")
+                return null
             }
-            val apkAsset = (namedCandidates.ifEmpty { apkAssets })
-                .lastOrNull()
-
-            val apkUrl = apkAsset?.browser_download_url ?: ""
-            val sha256 = parseSha256FromBody(release.body)
-            apkUrl to sha256
+            UpdateInfo(
+                latestVersion = release.versionName,
+                downloadUrl = absoluteDownloadUrl(release.url),
+                changelog = injectDateIntoChangelog(
+                    "v${release.versionName}",
+                    release.changelogText(),
+                    release.releaseDate
+                ),
+                fileSize = release.size,
+                hasUpdate = false,
+                sha256 = release.sha256.lowercase()
+            )
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch download URL from release repo", e)
-            "" to ""
+            Log.w(TAG, "Update manifest fetch failed", e)
+            null
         }
     }
 
-    /** 从 release body 解析 SHA-256（格式：`SHA-256: <64-hex>`，大小写不敏感） */
-    private fun parseSha256FromBody(body: String): String {
-        if (body.isBlank()) return ""
-        val regex = Regex("""(?i)sha-256:\s*([a-f0-9]{64})""")
-        return regex.find(body)?.groupValues?.getOrNull(1)?.lowercase()?.trim().orEmpty()
+    /**
+     * 清单存的是相对路径，这样站点换域名时只改 UPDATE_BASE_URL 一处；
+     * 这里补成绝对地址，已带协议的（迁移期手写的清单值）原样透传。
+     */
+    private fun absoluteDownloadUrl(url: String): String {
+        if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+            return url
+        }
+        return BuildConfig.UPDATE_BASE_URL.trimEnd('/') + "/" + url.trimStart('/')
     }
 
     private suspend fun tryFetchFromGitHub(): UpdateInfo? {
         return try {
             val release = gitHubApi.getLatestRelease(GITHUB_OWNER, GITHUB_REPO)
+            // 兜底源带就取：CI 会把同一枚 APK 也挂到本仓库 Release 上。
+            // 优先 TraktoSearch- 前缀的最后一个（与清单命名一致，后上传的排在后面）。
+            // 国内拉 GitHub 资产不稳，所以只作降级；GitHub 不暴露摘要，sha256 留空即跳过校验。
+            val apks = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+            val apk = apks.lastOrNull { it.name.startsWith("TraktoSearch-", ignoreCase = true) }
+                ?: apks.lastOrNull()
             UpdateInfo(
                 latestVersion = release.tag_name.removePrefix("v"),
-                downloadUrl = "",
+                downloadUrl = apk?.browser_download_url.orEmpty(),
                 changelog = injectDateIntoChangelog(release.tag_name, release.body, release.created_at),
-                fileSize = 0,
+                fileSize = apk?.size ?: 0L,
                 hasUpdate = false
             )
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "GitHub update check failed", e)
-            null
-        }
-    }
-
-    private suspend fun tryFetchFromGitee(): UpdateInfo? {
-        return try {
-            val releases = giteeApi.getLatestRelease(GITEE_OWNER, GITEE_REPO)
-            val release = releases.firstOrNull() ?: return null
-            UpdateInfo(
-                latestVersion = release.tag_name.removePrefix("v"),
-                downloadUrl = "",
-                changelog = injectDateIntoChangelog(release.tag_name, release.body, release.created_at),
-                fileSize = 0,
-                hasUpdate = false
-            )
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w(TAG, "Gitee update check failed", e)
             null
         }
     }
