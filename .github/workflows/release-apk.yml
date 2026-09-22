@@ -123,7 +123,13 @@ jobs:
       - name: assembleRelease
         # -I 的 init script 把官方源前置到国内镜像之前，绕开 CI 空缓存下阿里云缺构件的坑，
         # 详见 .ci/gradle-ci.init.gradle.kts
-        run: ./gradlew :app:assembleRelease --stacktrace -I "$GITHUB_WORKSPACE/.ci/gradle-ci.init.gradle.kts"
+        #
+        # chmod 不能省：构建 checkout 的是 tag 的内容，历史 tag 里 gradlew 仍是 100644
+        # （Windows 工作树 core.fileMode=false 丢了执行位），master 上补的执行位对旧 tag 无效，
+        # 直接 ./gradlew 会报 Permission denied / exit 126。
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --stacktrace -I "$GITHUB_WORKSPACE/.ci/gradle-ci.init.gradle.kts"
 
       - name: 校验产物签名指纹
         run: |
