@@ -30,6 +30,12 @@ object DesignToken {
     val ChipPaddingV = 6.dp
     val ChipGap = 8.dp
 
+    // ====== 弹窗与浮层（仅 AppDialog.kt 使用，别处不要引用） ======
+    val DialogPadding = 24.dp
+    val DialogActionGap = 12.dp
+    val DialogActionMinHeight = 44.dp
+    val DialogContentMaxHeight = 400.dp
+
     // ====== 阴影 ======
     val ElevationCard = 2.dp
     val ElevationPoster = 8.dp
