@@ -233,4 +233,38 @@ class AppDialogTest {
         composeRule.onNodeWithText("Only head").assertIsDisplayed()
         composeRule.onAllNodes(hasClickAction()).assertCountEquals(0)
     }
+
+    // ==================== AppFloatingDialog：裸 Dialog 外壳 ====================
+
+    @Test
+    fun `AppFloatingDialog 渲染标题、内容与按钮行`() {
+        var confirmed = 0
+        composeRule.setContent {
+            MaterialTheme {
+                AppFloatingDialog(
+                    onDismissRequest = {},
+                    title = "Floating head",
+                    confirm = DialogAction("Confirm", onClick = { confirmed++ }),
+                    dismiss = DialogAction("Cancel", onClick = {}),
+                ) {
+                    Text("Floating body")
+                }
+            }
+        }
+        composeRule.onNodeWithText("Floating head").assertIsDisplayed()
+        composeRule.onNodeWithText("Floating body").assertIsDisplayed()
+        composeRule.onNodeWithText("Confirm").performClick()
+        assertThat(confirmed).isEqualTo(1)
+    }
+
+    @Test
+    fun `AppFloatingDialog 无 title 与无按钮时只渲染内容`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppFloatingDialog(onDismissRequest = {}) { Text("Body only") }
+            }
+        }
+        composeRule.onNodeWithText("Body only").assertIsDisplayed()
+        composeRule.onAllNodes(hasClickAction()).assertCountEquals(0)
+    }
 }

@@ -2,11 +2,14 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
@@ -216,6 +221,49 @@ fun AppDialogActionRow(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 自绘浮层的统一外壳，收编 DiscoverFilter / DoubanSpiderTest /
+ * ResourceCopyright / UpdateDialog 四处裸 Dialog。
+ *
+ * usePlatformDefaultWidth = false 是刻意的：这四类里有带列表、带进度的宽内容，
+ * 吃平台默认宽度会在平板上窄成一竖条。横向 24dp 缩进 + 28dp 圆角由本组件负责。
+ */
+@Composable
+fun AppFloatingDialog(
+    onDismissRequest: () -> Unit,
+    title: String? = null,
+    confirm: DialogAction? = null,
+    dismiss: DialogAction? = null,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(DesignToken.DialogPadding),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = DesignToken.DialogPadding),
+            shape = DesignToken.Dialog,
+            color = floatingDialogColor(),
+        ) {
+            Column(modifier = Modifier.padding(contentPadding)) {
+                if (title != null) {
+                    AppDialogTitle(title)
+                    Spacer(modifier = Modifier.height(DesignToken.DialogActionGap))
+                }
+                content()
+                if (confirm != null || dismiss != null) {
+                    Spacer(modifier = Modifier.height(DesignToken.DialogPadding))
+                    AppDialogActionRow(primary = confirm, secondary = listOfNotNull(dismiss))
+                }
             }
         }
     }
