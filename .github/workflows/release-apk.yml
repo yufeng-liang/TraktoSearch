@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要构建的 tag，例如 v3.6.0"
+        description: "发布用 tag（如 v3.6.0）；传分支 ref 则进入自检模式，版本号取自代码"
         required: true
         type: string
 
@@ -43,11 +43,23 @@ jobs:
         run: |
           set -euo pipefail
           case "$TAG" in
-            v[0-9]*) ;;
-            *) echo "::error::tag 必须是 v 开头的版本号，收到 '$TAG'"; exit 1 ;;
+            v[0-9]*)
+              # 正式路径：tag 版本号必须与 DSL 里的 versionName 一致，
+              # 不一致由 verifyReleaseVersion 直接构建失败
+              echo "EXPECTED_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
+              ;;
+            *)
+              # 自检路径：CI 辅助文件（.ci/…）只存在于较新的提交里，拿历史 tag 验证流水线
+              # 会缺文件；这里允许传分支 ref，版本号从被检出的代码里读，只证明构建链通，
+              # 不代表发版。真实发版一定走上面的 v* 分支。
+              # 用 awk 而不是 sed|head：set -o pipefail 下 head 提前关管道会让 sed 吃 SIGPIPE
+              # 以 141 退出，把「成功取到版本号」变成步骤失败。
+              version="$(awk -F'"' '/^[[:space:]]*versionName = /{print $2; exit}' app/build.gradle.kts)"
+              [ -n "$version" ] || { echo "::error::无法从 app/build.gradle.kts 解析 versionName"; exit 1; }
+              echo "::notice::自检模式（ref=$TAG），versionName 取自代码：$version"
+              echo "EXPECTED_VERSION_NAME=$version" >> "$GITHUB_ENV"
+              ;;
           esac
-          # verifyReleaseVersion 用它比对 app/build.gradle.kts 的 versionName，不一致就构建失败
-          echo "EXPECTED_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
 
       - name: 校验签名材料齐备
         env:
@@ -129,7 +141,12 @@ jobs:
         # 直接 ./gradlew 会报 Permission denied / exit 126。
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:assembleRelease --stacktrace -I "$GITHUB_WORKSPACE/.ci/gradle-ci.init.gradle.kts"
+          init_script=".ci/gradle-ci.init.gradle.kts"
+          if [ ! -f "$init_script" ]; then
+            echo "::error::$init_script 不在被检出的这棵树里（历史 tag 上还没有它）。要验证流水线请传分支 ref，正式发版则不受影响。"
+            exit 1
+          fi
+          ./gradlew :app:assembleRelease --stacktrace -I "$GITHUB_WORKSPACE/$init_script"
 
       - name: 校验产物签名指纹
         run: |
