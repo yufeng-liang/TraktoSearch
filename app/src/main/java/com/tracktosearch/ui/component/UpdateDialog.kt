@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.SystemUpdateAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -766,50 +765,31 @@ fun UpdateDialog(
                     .fillMaxWidth()
                     .padding(24.dp)
             ) {
-                // 头部：图标容器 + 徽标 + 版本迁移行
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.SystemUpdateAlt,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            text = stringResource(R.string.update_dialog_badge),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        // 版本迁移行：旧版本号与箭头弱化，新版本号 primary 加粗
-                        Text(
-                            text = buildAnnotatedString {
-                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                                    append("v${BuildConfig.VERSION_NAME} → ")
-                                }
-                                withStyle(
-                                    SpanStyle(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                ) {
-                                    append("v${updateInfo.latestVersion}")
-                                }
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                // 头部：徽标 + 版本迁移行
+                Text(
+                    text = stringResource(R.string.update_dialog_badge),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                // 版本迁移行：旧版本号与箭头弱化，新版本号 primary 加粗
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                            append("v${BuildConfig.VERSION_NAME} → ")
+                        }
+                        withStyle(
+                            SpanStyle(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        ) {
+                            append("v${updateInfo.latestVersion}")
+                        }
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Spacer(Modifier.height(16.dp))
 
