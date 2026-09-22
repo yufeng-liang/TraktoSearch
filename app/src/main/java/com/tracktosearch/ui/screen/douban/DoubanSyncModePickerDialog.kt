@@ -13,12 +13,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Replay
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,8 +32,9 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.repository.SyncMode
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 
 /**
  * 豆瓣重新导入模式选择对话框(设置页「重新同步豆瓣」按钮触发)。
@@ -62,78 +61,61 @@ fun DoubanSyncModePickerDialog(
     var showFullRewriteConfirm by remember { mutableStateOf(false) }
 
     if (showFullRewriteConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showFullRewriteConfirm = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.douban_sync_mode_c_title)) },
-            text = { Text(stringResource(R.string.douban_sync_mode_warning_c)) },
-            confirmButton = {
-                // AlertDialog 的槽是独立 subcomposition，单独取一份
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.douban_sync_mode_c_title),
+            message = stringResource(R.string.douban_sync_mode_warning_c),
+            confirm = DialogAction(
+                label = stringResource(R.string.douban_sync_mode_confirm),
+                onClick = {
                     showFullRewriteConfirm = false
                     onDismiss()
                     onModeSelected(SyncMode.FULL_REWRITE)
-                }) {
-                    Text(stringResource(R.string.douban_sync_mode_confirm))
                 }
-            },
-            dismissButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = { haptics.lightTap(); showFullRewriteConfirm = false }) {
-                    Text(stringResource(R.string.douban_retry_cancel))
-                }
-            }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.douban_retry_cancel),
+                onClick = { showFullRewriteConfirm = false }
+            )
         )
         return
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(if (neverSynced) R.string.douban_sync_mode_picker_title_first else R.string.douban_sync_mode_picker_title)) },
-        text = {
-            Column {
-                Text(
-                    stringResource(
-                        if (isDoubanOnly) R.string.douban_sync_mode_scope_douban_only
-                        else R.string.douban_sync_mode_scope_trakt
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                ModeOptionItem(
-                    icon = Icons.Rounded.Refresh,
-                    title = stringResource(R.string.douban_sync_mode_b_title),
-                    desc = stringResource(R.string.douban_sync_mode_b_desc),
-                    example = stringResource(R.string.douban_sync_mode_b_example),
-                    onClick = {
-                        onDismiss()
-                        onModeSelected(SyncMode.INCREMENTAL_WITH_CHANGES)
-                    },
-                    trailing = { CooldownBadge(cooldownStatus) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ModeOptionItem(
-                    icon = Icons.Rounded.Replay,
-                    title = stringResource(R.string.douban_sync_mode_c_title),
-                    desc = stringResource(R.string.douban_sync_mode_c_desc),
-                    example = stringResource(R.string.douban_sync_mode_c_example, syncedCount),
-                    onClick = {
-                        // 模式 B 需二次确认
-                        showFullRewriteConfirm = true
-                    }
-                )
-            }
+        title = stringResource(if (neverSynced) R.string.douban_sync_mode_picker_title_first else R.string.douban_sync_mode_picker_title),
+        supportMessage = stringResource(
+            if (isDoubanOnly) R.string.douban_sync_mode_scope_douban_only
+            else R.string.douban_sync_mode_scope_trakt
+        ),
+        content = {
+            ModeOptionItem(
+                icon = Icons.Rounded.Refresh,
+                title = stringResource(R.string.douban_sync_mode_b_title),
+                desc = stringResource(R.string.douban_sync_mode_b_desc),
+                example = stringResource(R.string.douban_sync_mode_b_example),
+                onClick = {
+                    onDismiss()
+                    onModeSelected(SyncMode.INCREMENTAL_WITH_CHANGES)
+                },
+                trailing = { CooldownBadge(cooldownStatus) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ModeOptionItem(
+                icon = Icons.Rounded.Replay,
+                title = stringResource(R.string.douban_sync_mode_c_title),
+                desc = stringResource(R.string.douban_sync_mode_c_desc),
+                example = stringResource(R.string.douban_sync_mode_c_example, syncedCount),
+                onClick = {
+                    // 模式 B 需二次确认
+                    showFullRewriteConfirm = true
+                }
+            )
         },
-        confirmButton = {
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
-                Text(stringResource(R.string.douban_retry_cancel))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(R.string.douban_retry_cancel),
+            onClick = onDismiss
+        )
     )
 }
 
@@ -239,30 +221,21 @@ fun DoubanFirstSyncGuideDialog(
     onStartImport: () -> Unit,
     isDoubanOnly: Boolean = false
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
         icon = { Icon(Icons.Rounded.AddCircle, contentDescription = null) },
-        title = { Text(stringResource(R.string.douban_first_sync_title)) },
-        text = {
-            Text(
-                stringResource(
-                    if (isDoubanOnly) R.string.douban_first_sync_message_douban_only
-                    else R.string.douban_first_sync_message
-                )
-            )
-        },
-        confirmButton = {
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.tap(); onStartImport() }) {
-                Text(stringResource(R.string.douban_first_sync_start))
-            }
-        },
-        dismissButton = {
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
-                Text(stringResource(R.string.douban_first_sync_later))
-            }
-        }
+        title = stringResource(R.string.douban_first_sync_title),
+        message = stringResource(
+            if (isDoubanOnly) R.string.douban_first_sync_message_douban_only
+            else R.string.douban_first_sync_message
+        ),
+        confirm = DialogAction(
+            label = stringResource(R.string.douban_first_sync_start),
+            onClick = onStartImport
+        ),
+        dismiss = DialogAction(
+            label = stringResource(R.string.douban_first_sync_later),
+            onClick = onDismiss
+        )
     )
 }

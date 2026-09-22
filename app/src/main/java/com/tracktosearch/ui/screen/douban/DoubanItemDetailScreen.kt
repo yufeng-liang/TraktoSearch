@@ -63,7 +63,6 @@ import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -153,9 +152,12 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.DetailTopBarIcon
 import com.tracktosearch.ui.component.DropdownAnchorMenu
+import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.DialogTone
 import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
@@ -183,7 +185,6 @@ import com.tracktosearch.ui.screen.detail.FilterSection
 import com.tracktosearch.ui.screen.detail.detailBarColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterColor
 import com.tracktosearch.ui.screen.detail.detailOnPosterVariantColor
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.RatingGoldDim
 import com.tracktosearch.ui.util.ToastEffect
@@ -1924,11 +1925,10 @@ fun DoubanItemDetailScreen(
     if (uiState.showSubtitleDialog) {
         val failure = uiState.failure
         if (failure != null) {
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { viewModel.showSubtitleDialog(false) },
-                containerColor = floatingDialogColor(),
-                title = { Text(stringResource(R.string.screen_douban_item_detail_subtitle_edit)) },
-                text = {
+                title = stringResource(R.string.screen_douban_item_detail_subtitle_edit),
+                content = {
                     OutlinedTextField(
                         value = subtitleInput,
                         onValueChange = { subtitleInput = it },
@@ -1938,52 +1938,39 @@ fun DoubanItemDetailScreen(
                         )
                     )
                 },
-                confirmButton = {
-                    // AlertDialog 的槽是独立 subcomposition，单独取一份
-                    val confirmHaptics = rememberAppHaptics()
-                    TextButton(onClick = {
-                        confirmHaptics.tap()
+                confirm = DialogAction(
+                    label = stringResource(R.string.douban_sync_mode_confirm),
+                    onClick = {
                         viewModel.updateSubtitle(failure.doubanId, subtitleInput)
                         viewModel.showSubtitleDialog(false)
-                    }) {
-                        Text(stringResource(R.string.douban_sync_mode_confirm))
                     }
-                },
-                dismissButton = {
-                    val dismissHaptics = rememberAppHaptics()
-                    TextButton(onClick = { dismissHaptics.lightTap(); viewModel.showSubtitleDialog(false) }) {
-                        Text(stringResource(R.string.douban_retry_cancel))
-                    }
-                }
+                ),
+                dismiss = DialogAction(
+                    label = stringResource(R.string.douban_retry_cancel),
+                    onClick = { viewModel.showSubtitleDialog(false) }
+                )
             )
         }
     }
 
     // 取消豆瓣标记二次确认弹窗(删除收藏后会移除该失败条目)
     if (showRemoveConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showRemoveConfirm = false },
-                containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
-            text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
-            confirmButton = {
-                val confirmHaptics = rememberAppHaptics()
-                TextButton(
-                    onClick = {
-                        confirmHaptics.tap()
-                        showRemoveConfirm = false
-                        viewModel.removeMark()
-                    }
-                ) {
-                    Text(stringResource(R.string.douban_writeback_remove_confirm_yes))
-                }
-            },
-            dismissButton = {
-                val dismissHaptics = rememberAppHaptics()
-                TextButton(onClick = { dismissHaptics.lightTap(); showRemoveConfirm = false }) {
-                    Text(stringResource(R.string.douban_retry_cancel))
-                }
-            }
+            title = stringResource(R.string.douban_writeback_remove_confirm_title),
+            message = stringResource(R.string.douban_writeback_remove_confirm_text),
+            confirm = DialogAction(
+                label = stringResource(R.string.douban_writeback_remove_confirm_yes),
+                onClick = {
+                    showRemoveConfirm = false
+                    viewModel.removeMark()
+                },
+                tone = DialogTone.Destructive
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.douban_retry_cancel),
+                onClick = { showRemoveConfirm = false }
+            )
         )
     }
 

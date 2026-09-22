@@ -13,12 +13,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,8 +29,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.AppDialogActionRow
+import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.DialogTone
 import com.tracktosearch.ui.haptic.rememberAppHaptics
-import com.tracktosearch.ui.theme.floatingDialogColor
 
 /**
  * 豆瓣同步续传对话框。
@@ -54,46 +55,40 @@ fun DoubanPendingItemsDialog(
     onContinue: () -> Unit,    // 继续同步(走 startResume)
     onFullSync: () -> Unit     // 完整同步(清空 pending items + 走 startSync)
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.douban_resume_title)) },
-        text = {
-            Column {
-                Text(
-                    stringResource(R.string.douban_resume_subtitle, pendingCount),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
+        title = stringResource(R.string.douban_resume_title),
+        content = {
+            Text(
+                stringResource(R.string.douban_resume_subtitle, pendingCount),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
 
-                // 选项 1:继续同步(推荐)
-                ResumeOptionItem(
-                    icon = Icons.Rounded.PlayArrow,
-                    title = stringResource(R.string.douban_resume_continue),
-                    subtitle = stringResource(R.string.douban_resume_continue_desc),
-                    onClick = onContinue,
-                    isRecommended = true
-                )
+            // 选项 1:继续同步(推荐)
+            ResumeOptionItem(
+                icon = Icons.Rounded.PlayArrow,
+                title = stringResource(R.string.douban_resume_continue),
+                subtitle = stringResource(R.string.douban_resume_continue_desc),
+                onClick = onContinue,
+                isRecommended = true
+            )
 
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                // 选项 2:完整同步
-                ResumeOptionItem(
-                    icon = Icons.Rounded.Refresh,
-                    title = stringResource(R.string.douban_resume_full),
-                    subtitle = stringResource(R.string.douban_resume_full_desc),
-                    onClick = onFullSync
-                )
-            }
+            // 选项 2:完整同步
+            ResumeOptionItem(
+                icon = Icons.Rounded.Refresh,
+                title = stringResource(R.string.douban_resume_full),
+                subtitle = stringResource(R.string.douban_resume_full_desc),
+                onClick = onFullSync
+            )
         },
-        confirmButton = {
-            // AlertDialog 的槽是独立 subcomposition，单独取一份
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
-                Text(stringResource(R.string.douban_resume_cancel))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(R.string.douban_resume_cancel),
+            onClick = onDismiss
+        )
     )
 }
 
@@ -115,51 +110,46 @@ fun DoubanRollbackDialog(
     onRestore: () -> Unit,    // 恢复标记
     onDiscard: () -> Unit     // 丢弃,不恢复
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.douban_rollback_title)) },
-        text = {
-            Column {
-                Text(
-                    stringResource(R.string.douban_rollback_subtitle, rollbackCount),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
+        title = stringResource(R.string.douban_rollback_title),
+        content = {
+            Text(
+                stringResource(R.string.douban_rollback_subtitle, rollbackCount),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
 
-                // 选项 1:恢复标记(推荐)
-                ResumeOptionItem(
-                    icon = Icons.Rounded.Refresh,
-                    title = stringResource(R.string.douban_rollback_restore),
-                    subtitle = stringResource(R.string.douban_rollback_restore_desc),
-                    onClick = {
-                        onDismiss()
-                        onRestore()
-                    },
-                    isRecommended = true
-                )
+            // 选项 1:恢复标记(推荐)
+            ResumeOptionItem(
+                icon = Icons.Rounded.Refresh,
+                title = stringResource(R.string.douban_rollback_restore),
+                subtitle = stringResource(R.string.douban_rollback_restore_desc),
+                onClick = {
+                    onDismiss()
+                    onRestore()
+                },
+                isRecommended = true
+            )
 
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                // 选项 2:不恢复
-                ResumeOptionItem(
-                    icon = Icons.Rounded.ChevronRight,
-                    title = stringResource(R.string.douban_rollback_discard),
-                    subtitle = stringResource(R.string.douban_rollback_discard_desc),
-                    onClick = {
-                        onDismiss()
-                        onDiscard()
-                    }
-                )
-            }
+            // 选项 2:不恢复
+            ResumeOptionItem(
+                icon = Icons.Rounded.ChevronRight,
+                title = stringResource(R.string.douban_rollback_discard),
+                subtitle = stringResource(R.string.douban_rollback_discard_desc),
+                onClick = {
+                    onDismiss()
+                    onDiscard()
+                }
+            )
         },
-        confirmButton = {
-            val haptics = rememberAppHaptics()
-            TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
-                Text(stringResource(R.string.douban_resume_cancel))
-            }
-        }
+        confirm = DialogAction(
+            label = stringResource(R.string.douban_resume_cancel),
+            onClick = onDismiss
+        )
     )
 }
 
@@ -236,67 +226,65 @@ fun DoubanPendingItemsDialogWithDiscard(
 ) {
     var showDiscardConfirmation by remember { mutableStateOf(false) }
     if (showDiscardConfirmation) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showDiscardConfirmation = false },
-            containerColor = floatingDialogColor(),
-            title = { Text(stringResource(R.string.douban_resume_discard_title)) },
-            text = { Text(stringResource(R.string.douban_resume_discard_message, pendingCount)) },
-            confirmButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = {
-                    haptics.tap()
+            title = stringResource(R.string.douban_resume_discard_title),
+            message = stringResource(R.string.douban_resume_discard_message, pendingCount),
+            confirm = DialogAction(
+                label = stringResource(R.string.douban_resume_discard_confirm),
+                onClick = {
                     showDiscardConfirmation = false
                     onDiscardPending()
                     onDismiss()
-                }) { Text(stringResource(R.string.douban_resume_discard_confirm)) }
-            },
-            dismissButton = {
-                val haptics = rememberAppHaptics()
-                TextButton(onClick = { haptics.lightTap(); showDiscardConfirmation = false }) {
-                    Text(stringResource(R.string.douban_resume_discard_cancel))
-                }
-            }
+                },
+                tone = DialogTone.Destructive
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.douban_resume_discard_cancel),
+                onClick = { showDiscardConfirmation = false }
+            )
         )
         return
     }
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.douban_resume_title)) },
-        text = {
-            Column {
-                Text(
-                    stringResource(R.string.douban_resume_subtitle, pendingCount),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        title = stringResource(R.string.douban_resume_title),
+        content = {
+            Text(
+                stringResource(R.string.douban_resume_subtitle, pendingCount),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            ResumeOptionItem(
+                icon = Icons.Rounded.PlayArrow,
+                title = stringResource(R.string.douban_resume_continue),
+                subtitle = stringResource(R.string.douban_resume_continue_desc),
+                onClick = onContinue,
+                isRecommended = true
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ResumeOptionItem(
+                icon = Icons.Rounded.Refresh,
+                title = stringResource(R.string.douban_resume_full),
+                subtitle = stringResource(R.string.douban_resume_full_desc),
+                onClick = onFullSync
+            )
+            // 原多按钮 Row 收口到统一按钮行:主推进「放弃未处理数据」为破坏性填充按钮居右
+            Spacer(modifier = Modifier.height(12.dp))
+            AppDialogActionRow(
+                primary = DialogAction(
+                    label = stringResource(R.string.douban_resume_discard),
+                    onClick = { showDiscardConfirmation = true },
+                    tone = DialogTone.Destructive
+                ),
+                secondary = listOf(
+                    DialogAction(
+                        label = stringResource(R.string.douban_resume_cancel),
+                        onClick = onDismiss
+                    )
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                ResumeOptionItem(
-                    icon = Icons.Rounded.PlayArrow,
-                    title = stringResource(R.string.douban_resume_continue),
-                    subtitle = stringResource(R.string.douban_resume_continue_desc),
-                    onClick = onContinue,
-                    isRecommended = true
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ResumeOptionItem(
-                    icon = Icons.Rounded.Refresh,
-                    title = stringResource(R.string.douban_resume_full),
-                    subtitle = stringResource(R.string.douban_resume_full_desc),
-                    onClick = onFullSync
-                )
-            }
-        },
-        confirmButton = {
-            val haptics = rememberAppHaptics()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { haptics.tap(); showDiscardConfirmation = true }) {
-                    Text(stringResource(R.string.douban_resume_discard))
-                }
-                TextButton(onClick = { haptics.lightTap(); onDismiss() }) {
-                    Text(stringResource(R.string.douban_resume_cancel))
-                }
-            }
+            )
         }
     )
 }

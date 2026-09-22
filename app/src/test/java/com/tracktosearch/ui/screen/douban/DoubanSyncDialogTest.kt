@@ -126,7 +126,8 @@ class DoubanSyncDialogTest {
         ))
         var dismissed = false
         setContent(onDismiss = { dismissed = true })
-        composeRule.onNodeWithText("Sync Complete").performClick()
+        // 统一弹窗后内容在 400dp 限高滚动区内，Robolectric 弹窗窗口外的节点未放置，先滚进来再点
+        composeRule.onNodeWithText("Sync Complete").performScrollTo().performClick()
         assertThat(dismissed).isTrue()
     }
 
@@ -142,7 +143,7 @@ class DoubanSyncDialogTest {
         ))
         var reloginCalled = false
         setContent(onRelogin = { reloginCalled = true })
-        composeRule.onNodeWithText("Re-login").performClick()
+        composeRule.onNodeWithText("Re-login").performScrollTo().performClick()
         assertThat(reloginCalled).isTrue()
     }
 
@@ -157,7 +158,7 @@ class DoubanSyncDialogTest {
         ))
         var loginCalled = false
         setContent(onTraktLogin = { loginCalled = true })
-        composeRule.onNodeWithText("Login Trakt").performClick()
+        composeRule.onNodeWithText("Login Trakt").performScrollTo().performClick()
         assertThat(loginCalled).isTrue()
     }
 
@@ -185,9 +186,10 @@ class DoubanSyncDialogTest {
         )
         setContent()
 
-        composeRule.onNodeWithText("Processing").assertIsDisplayed()
-        composeRule.onNodeWithText("Processing one").assertIsDisplayed()
-        composeRule.onNodeWithText("Processing three").assertIsDisplayed()
+        // 内容超出 Robolectric 弹窗窗口的部分未放置，统一先滚动到目标再断言
+        composeRule.onNodeWithText("Processing").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Processing one").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Processing three").performScrollTo().assertIsDisplayed()
         composeRule.onAllNodesWithText("Processing four").assertCountEquals(0)
         composeRule.onNodeWithText("Pending").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Pending 5").performScrollTo().assertIsDisplayed()
@@ -270,7 +272,8 @@ class DoubanSyncDialogTest {
             )
         )
         setContent()
-        composeRule.onNodeWithText("Error: Network error", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Error: Network error", substring = true)
+            .performScrollTo().assertIsDisplayed()
     }
 
     // ==================== 失败项展示 ====================

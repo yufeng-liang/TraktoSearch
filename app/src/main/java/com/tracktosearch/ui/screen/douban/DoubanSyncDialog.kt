@@ -7,11 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,9 +36,11 @@ import com.tracktosearch.data.repository.DoubanSyncStage
 import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.service.DoubanSyncService
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.AppDialogActionRow
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.watchlist.hasLiveCountProgress
-import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -124,16 +121,15 @@ fun DoubanSyncDialog(
         if (clean) outcomeHaptics.confirm() else outcomeHaptics.reject()
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = {
             if (!p.isRunning) onDismiss()
         },
-        containerColor = floatingDialogColor(),
-        title = { Text(stringResource(R.string.douban_sync_title)) },
-        text = {
-            // AlertDialog 的 text 与 confirmButton 是各自独立的 subcomposition，各取一份
+        title = stringResource(R.string.douban_sync_title),
+        content = {
+            // content 槽是独立 subcomposition，单独取一份触感；限高与滚动由组件内置
             val textHaptics = rememberAppHaptics()
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Column {
                 val stageLabel = stringResource(p.stage.labelRes())
                 val subStageLabel = p.subStage.labelRes()?.let { stringResource(it) }
                 val showRecentItems = p.stage == DoubanSyncStage.FETCHING_LIST
@@ -476,88 +472,107 @@ fun DoubanSyncDialog(
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            val buttonHaptics = rememberAppHaptics()
-            // 「完成」虽然只是关掉弹窗（同步早已跑完、结果已落库），但它是这个弹窗的主按钮 → tap()。
-            // lightTap() 只留给下面标着「取消」的那一侧
-            when {
-                p.isComplete &&
-                    p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
-                    p.loginTarget == DoubanSyncLoginTarget.TRAKT -> {
-                    Row {
-                        if (onTraktLogin != null) {
-                            TextButton(onClick = {
-                                buttonHaptics.tap()
-                                onDismiss()
-                                onTraktLogin()
-                            }) { Text(stringResource(R.string.douban_sync_login_trakt)) }
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
-                    }
-                }
-                p.isComplete &&
-                    p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
-                    p.loginTarget == DoubanSyncLoginTarget.DOUBAN &&
-                    !p.cookieExpired -> {
-                    Row {
-                        if (onRelogin != null) {
-                            TextButton(onClick = {
-                                buttonHaptics.tap()
-                                onDismiss()
-                                onRelogin()
-                            }) { Text(stringResource(R.string.douban_sync_login_douban)) }
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
-                    }
-                }
-                p.isComplete &&
-                    p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
-                    p.loginTarget == DoubanSyncLoginTarget.DOUBAN &&
-                    p.cookieExpired -> {
-                    Row {
-                        if (onRelogin != null) {
-                            TextButton(onClick = {
-                                buttonHaptics.tap()
-                                onDismiss()
-                                onRelogin()
-                            }) { Text(stringResource(R.string.douban_sync_relogin)) }
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
-                    }
-                }
-                p.isComplete -> {
-                    TextButton(onClick = { buttonHaptics.tap(); onDismiss() }) { Text(stringResource(R.string.douban_sync_complete)) }
-                }
-                p.isRunning -> {
-                    Row {
-                        TextButton(
-                            enabled = !p.isCancelling,
-                            onClick = {
-                                buttonHaptics.tap()
-                                if (DoubanSyncService.start(context)) {
-                                    onBackground()
-                                } else {
-                                    onBackgroundUnavailable?.invoke()
+
+                // 原多按钮 confirmButton Row 收口到统一按钮行：主推进填充居右，
+                // 次动作纯文字居左；触感由按钮行统一负责，不再逐按钮手写
+                when {
+                    p.isComplete &&
+                        p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
+                        p.loginTarget == DoubanSyncLoginTarget.TRAKT -> {
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.douban_sync_complete),
+                                onClick = onDismiss
+                            ),
+                            secondary = listOfNotNull(
+                                onTraktLogin?.let {
+                                    DialogAction(
+                                        label = stringResource(R.string.douban_sync_login_trakt),
+                                        onClick = {
+                                            onDismiss()
+                                            it()
+                                        }
+                                    )
                                 }
-                            }
-                        ) { Text(stringResource(R.string.douban_sync_background)) }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(
-                            enabled = !p.isCancelling,
-                            onClick = { buttonHaptics.lightTap(); viewModel.cancel() }
-                        ) {
-                            Text(
-                                stringResource(
-                                    if (p.isCancelling) R.string.douban_sync_cancelling
-                                    else R.string.douban_sync_cancel
+                            )
+                        )
+                    }
+                    p.isComplete &&
+                        p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
+                        p.loginTarget == DoubanSyncLoginTarget.DOUBAN &&
+                        !p.cookieExpired -> {
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.douban_sync_complete),
+                                onClick = onDismiss
+                            ),
+                            secondary = listOfNotNull(
+                                onRelogin?.let {
+                                    DialogAction(
+                                        label = stringResource(R.string.douban_sync_login_douban),
+                                        onClick = {
+                                            onDismiss()
+                                            it()
+                                        }
+                                    )
+                                }
+                            )
+                        )
+                    }
+                    p.isComplete &&
+                        p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
+                        p.loginTarget == DoubanSyncLoginTarget.DOUBAN &&
+                        p.cookieExpired -> {
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.douban_sync_complete),
+                                onClick = onDismiss
+                            ),
+                            secondary = listOfNotNull(
+                                onRelogin?.let {
+                                    DialogAction(
+                                        label = stringResource(R.string.douban_sync_relogin),
+                                        onClick = {
+                                            onDismiss()
+                                            it()
+                                        }
+                                    )
+                                }
+                            )
+                        )
+                    }
+                    p.isComplete -> {
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.douban_sync_complete),
+                                onClick = onDismiss
+                            )
+                        )
+                    }
+                    p.isRunning -> {
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.douban_sync_background),
+                                enabled = !p.isCancelling,
+                                onClick = {
+                                    if (DoubanSyncService.start(context)) {
+                                        onBackground()
+                                    } else {
+                                        onBackgroundUnavailable?.invoke()
+                                    }
+                                }
+                            ),
+                            secondary = listOf(
+                                DialogAction(
+                                    label = stringResource(
+                                        if (p.isCancelling) R.string.douban_sync_cancelling
+                                        else R.string.douban_sync_cancel
+                                    ),
+                                    enabled = !p.isCancelling,
+                                    onClick = { viewModel.cancel() }
                                 )
                             )
-                        }
+                        )
                     }
                 }
             }
