@@ -64,9 +64,12 @@ class UpdateRepository @Inject constructor(
     suspend fun fetchAllChangelogs(): String {
         cachedFullChangelog?.let { return it }
 
-        // 磁盘缓存：app 重启后仍可用，避免每次打开设置页都走网络
+        // 磁盘缓存：app 重启后仍可用，避免每次打开设置页都走网络。
+        // 必须确认它来自一次完整拉取——检查更新后的预热追加也会往这个键里写，
+        // 那份只有一条，认了它设置页就永远只显示一个版本。
+        // 修复前被预热占过的老缓存没有完整性标记，会走重拉分支并覆写，自愈。
         val diskCached = changelogStorage.getChangelog()
-        if (!diskCached.isNullOrBlank()) {
+        if (!diskCached.isNullOrBlank() && changelogStorage.isFullChangelogComplete()) {
             cachedFullChangelog = diskCached
             return diskCached
         }
@@ -76,7 +79,7 @@ class UpdateRepository @Inject constructor(
         val result = tryFetchAllFromManifest() ?: tryFetchAllFromGitHub()
         if (result != null) {
             cachedFullChangelog = result
-            changelogStorage.saveChangelog(result)
+            changelogStorage.saveCompleteChangelog(result)
             return result
         }
         return ""
@@ -229,10 +232,13 @@ class UpdateRepository @Inject constructor(
         if (changelog.isBlank()) return
         val entry = changelog
         val existing = cachedFullChangelog ?: changelogStorage.getChangelog() ?: ""
+        // 缓存还不存在时不建：只有一条的缓存会被 fetchAllChangelogs 当成完整历史，
+        // 设置页从此只显示这一个版本。等用户真打开更新日志走一次完整拉取后再追加。
+        if (existing.isBlank()) return
         // 检查是否已包含该版本(匹配 "## v$version 更新内容" 前缀,兼容带日期括号的情况)
         val versionHeaderPrefix = "## v$version 更新内容"
         if (existing.contains(versionHeaderPrefix)) return
-        val updated = if (existing.isBlank()) entry else "$entry\n\n---\n\n$existing"
+        val updated = "$entry\n\n---\n\n$existing"
         cachedFullChangelog = updated
         changelogStorage.saveChangelog(updated)
     }

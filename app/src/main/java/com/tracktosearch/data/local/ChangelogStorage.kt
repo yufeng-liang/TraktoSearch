@@ -21,6 +21,7 @@ class ChangelogStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val key = stringPreferencesKey("full_changelog_v2")
+    private val fullChangelogCompleteKey = booleanPreferencesKey("full_changelog_complete")
     private val lastCheckTsKey = longPreferencesKey("last_update_check_ts")
     private val cachedVersionKey = stringPreferencesKey("cached_latest_version")
     private val cachedChangelogKey = stringPreferencesKey("cached_update_changelog")
@@ -33,13 +34,35 @@ class ChangelogStorage @Inject constructor(
         return context.changelogDataStore.data.map { it[key] }.first()
     }
 
+    /**
+     * 只写正文、不动完整性标记。给「检查更新后把新版本日志预热追加进缓存」用——
+     * 那次写入只是局部拼接，不能冒充一次完整拉取的结果。
+     */
     suspend fun saveChangelog(text: String) {
         context.changelogDataStore.edit { it[key] = text }
+    }
+
+    /** 写正文并标记为完整。只允许由一次成功的全量拉取调用。 */
+    suspend fun saveCompleteChangelog(text: String) {
+        context.changelogDataStore.edit {
+            it[key] = text
+            it[fullChangelogCompleteKey] = true
+        }
+    }
+
+    /**
+     * 磁盘上的全量日志是否来自一次完整拉取。
+     * 缺省 false 是有意的：修复前被预热追加污染过的缓存没有这个标记，
+     * 读作「不完整」→ 重拉一次并覆写，老安装自愈。
+     */
+    suspend fun isFullChangelogComplete(): Boolean {
+        return context.changelogDataStore.data.map { it[fullChangelogCompleteKey] ?: false }.first()
     }
 
     suspend fun clear() {
         context.changelogDataStore.edit {
             it.remove(key)
+            it.remove(fullChangelogCompleteKey)
             it.remove(lastCheckTsKey)
             it.remove(cachedVersionKey)
             it.remove(cachedChangelogKey)

@@ -17,6 +17,7 @@ import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -442,12 +443,14 @@ class UpdateRepositoryTest {
     }
 
     @Test
-    fun fetchAllChangelogs_磁盘缓存命中_不发网络() = runTest {
+    fun fetchAllChangelogs_磁盘缓存完整_不发网络() = runTest {
         val disk = "## v1.0.0 更新内容\n- 功能1"
         coEvery { changelogStorage.getChangelog() } returns disk
+        coEvery { changelogStorage.isFullChangelogComplete() } returns true
 
         assertThat(repository.fetchAllChangelogs()).isEqualTo(disk)
         coVerify(exactly = 0) { gitHubApi.getAllReleases(any(), any()) }
+        coVerify(exactly = 0) { manifestApi.getHistory() }
     }
 
     @Test
@@ -501,8 +504,67 @@ class UpdateRepositoryTest {
     fun fetchAllChangelogs_历史清单与GitHub都失败_返回空() = runTest {
         coEvery { changelogStorage.getChangelog() } returns null
         coEvery { manifestApi.getHistory() } throws RuntimeException("清单不可达")
-        coEvery { gitHubApi.getAllReleases(any(), any()) } throws RuntimeException("GitHub 网络错误")
+        coEvery { gitHubApi.getAllReleases(any(), any()) } throws RuntimeException("GitHub 错误")
 
         assertThat(repository.fetchAllChangelogs()).isEmpty()
+    }
+
+    // ============================================================
+    // 全量日志缓存的完整性（预热追加不能冒充完整缓存）
+    // ============================================================
+
+    @Test
+    fun fetchAllChangelogs_磁盘缓存被单条预热占位_重拉完整清单并标记完成() = runTest {
+        // 旧版本留下的污染状态：追加预热写过一条，正文非空但并不是完整历史
+        coEvery { changelogStorage.getChangelog() } returns "## v99.0.0 更新内容\n- 只有这一条"
+        coEvery { changelogStorage.isFullChangelogComplete() } returns false
+        coEvery { manifestApi.getHistory() } returns UpdateHistory(
+            schema = 1,
+            releases = listOf(
+                HistoryEntry("3.6.0", "v3.6.0", "2026-07-28", mapOf("zh-CN" to "- 反馈系统")),
+                HistoryEntry("3.5.0", "v3.5.0", "2026-07-26", mapOf("zh-CN" to "- Trakt 搜索"))
+            )
+        )
+
+        val result = repository.fetchAllChangelogs()
+
+        assertThat(result).contains("## v3.6.0 更新内容")
+        assertThat(result).contains("## v3.5.0 更新内容")
+        assertThat(result).doesNotContain("只有这一条")
+        coVerify(exactly = 1) { manifestApi.getHistory() }
+        coVerify(exactly = 1) { changelogStorage.saveCompleteChangelog(any()) }
+        coVerify(exactly = 0) { changelogStorage.saveChangelog(any()) }
+    }
+
+    @Test
+    fun checkForUpdate_有更新但全量日志还没缓存_不凭空建缓存() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { changelogStorage.getChangelog() } returns null
+        coEvery { manifestApi.getLatest() } returns buildManifest()
+
+        val result = repository.checkForUpdate()
+
+        assertThat(result!!.hasUpdate).isTrue()
+        // 预热追加只该往已有完整缓存里插条目；从空缓存建一份会让设置页误以为「已完整」，
+        // 从此永远只显示这一个版本
+        coVerify(exactly = 0) { changelogStorage.saveChangelog(any()) }
+        coVerify(exactly = 0) { changelogStorage.saveCompleteChangelog(any()) }
+    }
+
+    @Test
+    fun checkForUpdate_已有完整缓存_预热把新版本追加到开头() = runTest {
+        coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { changelogStorage.getChangelog() } returns "## v3.5.0 更新内容\n- 旧条目"
+        coEvery { manifestApi.getLatest() } returns buildManifest()
+
+        assertThat(repository.checkForUpdate()!!.hasUpdate).isTrue()
+
+        val saved = slot<String>()
+        coVerify(exactly = 1) { changelogStorage.saveChangelog(capture(saved)) }
+        assertThat(saved.captured).contains("## v99.0.0 更新内容")
+        assertThat(saved.captured).contains("## v3.5.0 更新内容")
+        assertThat(saved.captured.indexOf("v99.0.0")).isLessThan(saved.captured.indexOf("v3.5.0"))
+        // 追加不升级完整性标记，也不该走完整拉取的写入口
+        coVerify(exactly = 0) { changelogStorage.saveCompleteChangelog(any()) }
     }
 }
