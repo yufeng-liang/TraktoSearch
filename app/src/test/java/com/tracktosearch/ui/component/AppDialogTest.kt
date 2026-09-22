@@ -3,11 +3,15 @@ package com.tracktosearch.ui.component
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
@@ -141,5 +145,92 @@ class AppDialogTest {
         composeRule.onNodeWithText("Confirm").assertIsNotEnabled()
         composeRule.onNodeWithText("Confirm").performClick()
         assertThat(calls).isEqualTo(0)
+    }
+
+    // ==================== AppAlertDialog：槽位编排与内容限高 ====================
+
+    @Test
+    fun `title 与 message 渲染，按钮回调接通`() {
+        var confirmed = 0
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Head",
+                    message = "Body",
+                    confirm = DialogAction("Confirm", onClick = { confirmed++ }),
+                    dismiss = DialogAction("Cancel", onClick = {}),
+                )
+            }
+        }
+        composeRule.onNodeWithText("Head").assertIsDisplayed()
+        composeRule.onNodeWithText("Body").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("Confirm").performClick()
+        assertThat(confirmed).isEqualTo(1)
+    }
+
+    @Test
+    fun `supportMessage 渲染为副句，且不与主句同节点`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Head",
+                    message = "Main line",
+                    supportMessage = "Sub line",
+                    confirm = DialogAction("Confirm", onClick = {}),
+                )
+            }
+        }
+        // 两条都按「精确整串」匹配：主副句若被并进同一个 Text，节点值是
+        // "Main line\nSub line"，这两句会同时找不到——所以这里不需要额外的断言
+        // 来证明它们不在同一个节点上。
+        composeRule.onNodeWithText("Main line").assertIsDisplayed()
+        composeRule.onNodeWithText("Sub line").assertIsDisplayed()
+    }
+
+    @Test
+    fun `titleContent 优先于 title，供两行标题使用`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Ignored",
+                    titleContent = { Text("Custom head") },
+                    confirm = DialogAction("Confirm", onClick = {}),
+                )
+            }
+        }
+        composeRule.onNodeWithText("Custom head").assertIsDisplayed()
+        composeRule.onNodeWithText("Ignored").assertDoesNotExist()
+    }
+
+    @Test
+    fun `content 槽可滚动，用于承载超长内容`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Head",
+                    confirm = DialogAction("Confirm", onClick = {}),
+                    content = { Text("Long content") },
+                )
+            }
+        }
+        // 限高本身不在单测断言（Robolectric 密度会让像素断言不稳），由真机截图核验；
+        // 这里只锁「内容槽一定带滚动能力」这一条契约。
+        composeRule.onNodeWithTag(DialogContentTag).assert(hasScrollAction())
+    }
+
+    @Test
+    fun `没有按钮时不渲染按钮行，仍渲染标题`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(onDismissRequest = {}, title = "Only head")
+            }
+        }
+        composeRule.onNodeWithText("Only head").assertIsDisplayed()
+        composeRule.onAllNodes(hasClickAction()).assertCountEquals(0)
     }
 }
