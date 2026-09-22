@@ -1403,7 +1403,11 @@
     <string name="download_preparing">ダウンロードの準備中…</string>
     <string name="download_failed_both">メインURLとフォールバックURLのダウンロードに失敗</string>
     <string name="download_failed">ダウンロード失敗</string>
-    <string name="download_sha256_mismatch">APK 整合性チェック失敗（SHA-256 不一致）、再試行またはブラウザでダウンロードしてください</string>
+    <string name="download_sha256_mismatch">ダウンロードしたファイルの整合性チェック（SHA-256）に失敗したため破棄しました。転送の破損が考えられます。時間をおいて再試行してください。</string>
+    <string name="download_remaining_time">残り %1$s</string>
+    <string name="update_notification_title">v%1$s をダウンロード中</string>
+    <string name="download_time_seconds">%1$d秒</string>
+    <string name="download_time_minutes">%1$d分%2$d秒</string>
     <string name="search_test_keyword">流浪地球</string>
     <string name="error_unknown">不明なエラー</string>
 

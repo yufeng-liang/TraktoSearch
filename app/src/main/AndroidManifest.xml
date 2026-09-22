@@ -103,6 +103,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- 下载进度通知上的「取消下载」动作 -->
+        <receiver
+            android:name=".data.util.ApkDownloadActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.tracktosearch.CANCEL_APK_DOWNLOAD" />
+            </intent-filter>
+        </receiver>
+
         <!-- 豆瓣标记同步前台服务 -->
         <service
             android:name=".service.DoubanSyncService"

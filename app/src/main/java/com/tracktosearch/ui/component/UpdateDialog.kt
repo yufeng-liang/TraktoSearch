@@ -1,17 +1,14 @@
 package com.tracktosearch.ui.component
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,10 +38,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +70,7 @@ import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
+import com.tracktosearch.data.util.ApkDownloadCancelledException
 import com.tracktosearch.data.util.ApkInstaller
 import com.tracktosearch.data.util.ApkIntegrityException
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -95,7 +97,12 @@ private sealed class DownloadState {
     /** progress: 0..1；totalBytes 未知（<=0）时 UI 用 indeterminate 进度条，不显示百分比 */
     data class Downloading(val progress: Float, val bytesRead: Long, val totalBytes: Long) : DownloadState()
     data class Completed(val file: File) : DownloadState()
-    data class Error(val message: String) : DownloadState()
+
+    /**
+     * suggestBrowserFallback: 只有「这份文件没拿到」类失败才值得引导改走浏览器。
+     * 完整性校验失败时浏览器下的还是同一份坏文件，提示等于教用户绕开校验。
+     */
+    data class Error(val message: String, val suggestBrowserFallback: Boolean = true) : DownloadState()
 }
 
 /**
@@ -113,7 +120,7 @@ private val DownloadStateSaver = Saver<DownloadState, String>(
             is DownloadState.Idle -> "idle"
             is DownloadState.Downloading -> "downloading:${state.progress}:${state.bytesRead}:${state.totalBytes}"
             is DownloadState.Completed -> "completed:${state.file.absolutePath}"
-            is DownloadState.Error -> "error:${state.message}"
+            is DownloadState.Error -> "error:${state.suggestBrowserFallback}:${state.message}"
         }
     },
     restore = { saved ->
@@ -132,8 +139,14 @@ private val DownloadStateSaver = Saver<DownloadState, String>(
                 DownloadState.Completed(File(path))
             }
             saved.startsWith("error:") -> {
-                val message = saved.removePrefix("error:")
-                DownloadState.Error(message)
+                val rest = saved.removePrefix("error:")
+                when {
+                    rest.startsWith("true:") -> DownloadState.Error(rest.removePrefix("true:"))
+                    rest.startsWith("false:") ->
+                        DownloadState.Error(rest.removePrefix("false:"), suggestBrowserFallback = false)
+                    // 旧格式没带标志位：整串当消息，按可建议浏览器下载处理
+                    else -> DownloadState.Error(rest)
+                }
             }
             else -> DownloadState.Idle
         }
@@ -152,6 +165,18 @@ private fun formatBytes(bytes: Long): String {
 
 /** 下载速度格式化："2.4 MB/s" */
 private fun formatSpeed(bytesPerSecond: Long): String = "${formatBytes(bytesPerSecond)}/s"
+
+/**
+ * 剩余时间口语化："39 秒" / "1 分 20 秒"。
+ * 不用 android.text.format.Formatter#formatShortElapsedTime —— 那是系统隐藏 API，
+ * 应用侧 android.jar 里根本没有；单位文案走 string 资源，四语各自决定要不要空格。
+ */
+private fun formatRemainingTime(context: Context, seconds: Long): String =
+    if (seconds < 60) {
+        context.getString(R.string.download_time_seconds, seconds)
+    } else {
+        context.getString(R.string.download_time_minutes, seconds / 60, seconds % 60)
+    }
 
 /**
  * 轻量级更新日志渲染：
@@ -319,10 +344,11 @@ private fun parseChangelogSections(text: String): List<ChangelogSection> {
 @Composable
 fun StickyHeaderChangelogContent(
     text: String,
-    headerColor: Color
+    headerColor: Color,
+    // 由调用方传 state 才能在外层画「下面还有内容」的渐隐遮罩；设置页沿用默认值不受影响
+    listState: LazyListState = rememberLazyListState()
 ) {
     val sections = remember(text) { parseChangelogSections(text) }
-    val listState = rememberLazyListState()
 
     LazyColumn(
         state = listState,
@@ -419,14 +445,21 @@ private fun RenderLine(line: String) {
 }
 
 /**
- * 下载进度区：进度条 + 「已下载/总量 + 速度·百分比」信息行。
- * totalBytes 未知（<=0）时用 indeterminate 进度条，只显示已下载字节数与速度，不显示百分比。
+ * 下载进度区：进度条 + 「已下载/总量 · 速度 · 剩余时间 · 百分比」信息行。
+ *
+ * 区块自带 Column：它曾经直接吐三个兄弟节点，被 AnimatedVisibility 按 Box 摆放，
+ * 结果进度条和文字叠在同一行（真机截图实测到的）。纵向布局由组件自己负责，
+ * 不再依赖调用方给的容器。
+ *
+ * totalBytes 未知（<=0）时用 indeterminate 进度条，只显示已下载字节数与速度。
  */
 @Composable
 private fun DownloadProgressContent(state: DownloadState.Downloading) {
+    val context = LocalContext.current
     // 速度采样：记录 (elapsedRealtime, bytesRead) 样本，只保留最近 3 秒，取窗口首尾差算平均速度
     val samples = remember { mutableStateListOf<Pair<Long, Long>>() }
     var lastSampledBytes by remember { mutableStateOf(-1L) }
+    val startedAtMs = remember { SystemClock.elapsedRealtime() }
     SideEffect {
         // 字节数回退（如取消后重下）说明是新一轮下载，旧样本作废
         val lastBytes = samples.lastOrNull()?.second ?: -1L
@@ -441,11 +474,20 @@ private fun DownloadProgressContent(state: DownloadState.Downloading) {
             }
         }
     }
-    // 窗口平均速度；样本不足（<2 个）或窗口内无进展返回 0，UI 显示 "—"
-    val bytesPerSecond: Long = if (samples.size >= 2) {
+    // 窗口平均速度；样本不足（<2 个）或窗口内无进展时退回「已下载 / 已用时」，
+    // 否则起步那几秒只能看着一个「—」，用户不知道是没开始还是坏了
+    val windowSpeed: Long = if (samples.size >= 2) {
         val dtMs = samples.last().first - samples.first().first
         val deltaBytes = samples.last().second - samples.first().second
         if (dtMs > 0 && deltaBytes > 0) deltaBytes * 1000 / dtMs else 0L
+    } else {
+        0L
+    }
+    val elapsedMs = SystemClock.elapsedRealtime() - startedAtMs
+    val bytesPerSecond = if (windowSpeed > 0) {
+        windowSpeed
+    } else if (elapsedMs > 300 && state.bytesRead > 0) {
+        state.bytesRead * 1000 / elapsedMs
     } else {
         0L
     }
@@ -458,52 +500,67 @@ private fun DownloadProgressContent(state: DownloadState.Downloading) {
         label = "downloadProgress"
     )
 
-    if (determinate) {
-        LinearProgressIndicator(
-            progress = { animatedProgress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-        )
-    } else {
-        // 总大小未知：indeterminate 进度条
-        LinearProgressIndicator(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-        )
-    }
-    Spacer(Modifier.height(8.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        // 左侧：已下载/总量；总量未知时只显示已下载
-        Text(
-            text = if (determinate) {
-                "${formatBytes(state.bytesRead)} / ${formatBytes(state.totalBytes)}"
-            } else {
-                formatBytes(state.bytesRead)
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        // 右侧：速度 + 百分比（仅总量已知时显示百分比）
-        Text(
-            text = buildString {
-                append(if (bytesPerSecond > 0) formatSpeed(bytesPerSecond) else "—")
-                if (determinate) append(" · ${(state.progress * 100).toInt().coerceIn(0, 100)}%")
-            },
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (determinate) {
+            LinearProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            )
+        } else {
+            // 总大小未知：indeterminate 进度条
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // 左侧：已下载/总量；总量未知时只显示已下载
+            Text(
+                text = if (determinate) {
+                    "${formatBytes(state.bytesRead)} / ${formatBytes(state.totalBytes)}"
+                } else {
+                    formatBytes(state.bytesRead)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // 右侧：速度 + 剩余时间 + 百分比。剩余时间按 5 秒取整，
+            // 逐块刷新会让它每秒跳一下，读起来反而不像在动
+            Text(
+                text = buildString {
+                    append(if (bytesPerSecond > 0) formatSpeed(bytesPerSecond) else "—")
+                    if (determinate && bytesPerSecond > 0) {
+                        val remainMs = (state.totalBytes - state.bytesRead) * 1000 / bytesPerSecond
+                        val rounded = ((remainMs + 4999) / 5000) * 5000
+                        append(
+                            " · " + context.getString(
+                                R.string.download_remaining_time,
+                                formatRemainingTime(context, rounded / 1000)
+                            )
+                        )
+                    }
+                    if (determinate) append(" · ${(state.progress * 100).toInt().coerceIn(0, 100)}%")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
@@ -547,6 +604,38 @@ private fun SecondaryButton(text: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * 弱操作行：无边框文字按钮平铺一行。
+ * 用来替掉「浏览器下载」「稍后提醒」这类满宽描边按钮 —— 三个满宽按钮要占 150dp，
+ * 而更新日志卡片正缺这点高度。
+ */
+@Composable
+private fun TertiaryButtonRow(vararg items: Pair<String, () -> Unit>) {
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items.forEach { (label, onClick) ->
+            TextButton(
+                onClick = {
+                    haptics.lightTap()
+                    onClick()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun UpdateDialog(
     updateInfo: UpdateInfo,
@@ -577,9 +666,54 @@ fun UpdateDialog(
 
     // 失败态统一从这里落：下载失败与三处安装失败散在四个 catch 里，各自记得配一记 reject()
     // 迟早会漏一个。触感与错误文案同一个出口，就漏不掉了
-    fun failDownload(message: String) {
+    fun failDownload(message: String, suggestBrowserFallback: Boolean = true) {
         haptics.reject()
-        downloadState = DownloadState.Error(message)
+        downloadState = DownloadState.Error(message, suggestBrowserFallback)
+    }
+
+    /** 主按钮与「重试」共用这一条下载路径 */
+    fun startDownload() {
+        downloadState = DownloadState.Downloading(0f, 0L, 0L)
+        downloadJob = scope.launch {
+            try {
+                val file = ApkDownloader.downloadApk(
+                    context = context,
+                    url = updateInfo.downloadUrl,
+                    fileName = "TraktoSearch-v${updateInfo.latestVersion}.apk",
+                    onProgress = { bytesRead, totalBytes ->
+                        // 总量未知（<=0）时 progress 置 0，UI 走 indeterminate
+                        val progress = if (totalBytes > 0) {
+                            bytesRead.toFloat() / totalBytes
+                        } else {
+                            0f
+                        }
+                        downloadState = DownloadState.Downloading(progress, bytesRead, totalBytes)
+                    },
+                    expectedSha256 = updateInfo.sha256,
+                    version = updateInfo.latestVersion
+                )
+                downloadState = DownloadState.Completed(file)
+                // 校验通过、文件落盘了才算成功；紧接着自动唤起安装器，
+                // 这一记是「包拿到了」，安装结果由下面那个 effect 各自表态
+                haptics.confirm()
+            } catch (e: CancellationException) {
+                // 组件销毁时协程被取消：既不该弹「下载失败」也不该震 reject
+                throw e
+            } catch (_: ApkDownloadCancelledException) {
+                // 用户自己按的取消（弹窗按钮或通知栏动作），收回初始态就行
+                downloadState = DownloadState.Idle
+            } catch (e: ApkIntegrityException) {
+                // 校验失败的文案已本地化，原样展示；走通用兜底会变成
+                // 「下载失败，请尝试浏览器下载」，等于引导用户绕开校验。
+                // 这里也不给浏览器入口：同一个 URL 换浏览器下来的还是同一份坏文件
+                failDownload(
+                    e.message ?: context.getString(R.string.update_download_failed),
+                    suggestBrowserFallback = false
+                )
+            } catch (e: Exception) {
+                failDownload(e.toUserMessage(context, R.string.update_download_failed))
+            }
+        }
     }
 
     // 旋屏后 downloadJob 为 null，若 downloadState 仍是 Downloading，重置为 Idle（下载已实际停止）
@@ -589,9 +723,12 @@ fun UpdateDialog(
         }
     }
 
-    // 组件销毁时取消下载
+    // 组件销毁时取消下载：读流是阻塞的，光 cancel 协程停不下来，必须连 call 一起取消
     DisposableEffect(Unit) {
-        onDispose { downloadJob?.cancel() }
+        onDispose {
+            ApkDownloader.cancelActiveDownload()
+            downloadJob?.cancel()
+        }
     }
 
     val canDismiss = downloadState !is DownloadState.Downloading
@@ -617,7 +754,10 @@ fun UpdateDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp)
+                // 状态切换会让内容高度变一点（进度区 / 错误文案），弹窗是居中的，
+                // 不动画就是整块往上跳一下
+                .animateContentSize(animationSpec = tween(220)),
             shape = RoundedCornerShape(28.dp),
             color = floatingDialogColor()
         ) {
@@ -674,10 +814,19 @@ fun UpdateDialog(
                 Spacer(Modifier.height(16.dp))
 
                 // 更新日志区：surface 背景营造层次，圆角裁剪；changelog 为空时兜底显示版本号
+                val changelogListState = rememberLazyListState()
+                // 列表下面还有内容时画一道渐隐，替掉「最后一行被硬切一半」那种像渲染坏了的观感
+                val changelogHasMore = remember {
+                    derivedStateOf {
+                        val info = changelogListState.layoutInfo
+                        val last = info.visibleItemsInfo.lastOrNull()
+                        last != null && last.offset + last.size > info.viewportEndOffset
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 320.dp)
+                        .heightIn(max = 420.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
@@ -690,62 +839,31 @@ fun UpdateDialog(
                                 stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}"
                             },
                             // 标题吸顶后的填充色跟日志区圆角盒同色
-                            headerColor = MaterialTheme.colorScheme.surface
+                            headerColor = MaterialTheme.colorScheme.surface,
+                            listState = changelogListState
+                        )
+                    }
+                    if (changelogHasMore.value) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(28.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        0f to Color.Transparent,
+                                        1f to MaterialTheme.colorScheme.surface
+                                    )
+                                )
                         )
                     }
                 }
 
-                // 下载进度区：Downloading 时展开，切走时收起（进出场动效）
-                AnimatedVisibility(
-                    visible = downloadState is DownloadState.Downloading,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    // 退出动画期间 state 已切走（Completed/Error），保留最近一次 Downloading 值渲染，避免内容瞬间消失
-                    var heldDownloading by remember { mutableStateOf<DownloadState.Downloading?>(null) }
-                    SideEffect {
-                        (downloadState as? DownloadState.Downloading)?.let { heldDownloading = it }
-                    }
-                    heldDownloading?.let { ds ->
-                        Spacer(Modifier.height(16.dp))
-                        DownloadProgressContent(ds)
-                    }
-                }
+                Spacer(Modifier.height(16.dp))
 
-                // 下载完成态：勾选图标 + 提示文案（自动唤起安装由上方 LaunchedEffect 处理）
-                val completedState = downloadState as? DownloadState.Completed
-                if (completedState != null) {
-                    Spacer(Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.update_download_complete),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // 下载失败态：显示具体错误信息（toUserMessage 结果），供用户决定重试或改走浏览器
-                val errorState = downloadState as? DownloadState.Error
-                if (errorState != null) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = errorState.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // 按钮区：随状态切换
+                // 状态区 + 操作区一起随下载状态切换。
+                // Idle 与 Downloading 两态高度刻意做齐（主按钮+文字行 ≈ 进度条+信息行+取消按钮），
+                // 剩余的差异交给 Surface 上的 animateContentSize 平滑掉，不再整块跳。
                 when (val state = downloadState) {
                     is DownloadState.Idle -> {
                         if (updateInfo.downloadUrl.isEmpty()) {
@@ -759,62 +877,48 @@ fun UpdateDialog(
                             PrimaryButton(text = stringResource(R.string.update_release_page)) {
                                 openUrl(RELEASE_PAGE_URL)
                             }
-                            Spacer(Modifier.height(8.dp))
-                            SecondaryButton(text = stringResource(R.string.update_later), onClick = onDismiss)
+                            Spacer(Modifier.height(10.dp))
+                            TertiaryButtonRow(stringResource(R.string.update_later) to onDismiss)
                         } else {
                             PrimaryButton(text = stringResource(R.string.update_download_builtin)) {
-                                downloadState = DownloadState.Downloading(0f, 0L, 0L)
-                                downloadJob = scope.launch {
-                                    try {
-                                        val file = ApkDownloader.downloadApk(
-                                            context = context,
-                                            url = updateInfo.downloadUrl,
-                                            fileName = "TraktoSearch-v${updateInfo.latestVersion}.apk",
-                                            onProgress = { bytesRead, totalBytes ->
-                                                // 总量未知（<=0）时 progress 置 0，UI 走 indeterminate
-                                                val progress = if (totalBytes > 0) {
-                                                    bytesRead.toFloat() / totalBytes
-                                                } else {
-                                                    0f
-                                                }
-                                                downloadState = DownloadState.Downloading(progress, bytesRead, totalBytes)
-                                            },
-                                            expectedSha256 = updateInfo.sha256
-                                        )
-                                        downloadState = DownloadState.Completed(file)
-                                        // 校验通过、文件落盘了才算成功；紧接着自动唤起安装器，
-                                        // 这一记是「包拿到了」，安装结果由上面那个 effect 各自表态
-                                        haptics.confirm()
-                                    } catch (e: CancellationException) {
-                                        // 「取消下载」按钮 cancel 掉这个 job，downloadApk 从挂起点抛
-                                        // CancellationException 也会落进下面那个 catch。取消不是失败：
-                                        // 既不该弹「下载失败」也不该震 reject，状态由取消处自己置回 Idle
-                                        throw e
-                                    } catch (e: ApkIntegrityException) {
-                                        // 校验失败的文案已本地化，原样展示；走通用兜底会变成
-                                        // 「下载失败，请尝试浏览器下载」，等于引导用户绕开校验
-                                        failDownload(e.message ?: context.getString(R.string.update_download_failed))
-                                    } catch (e: Exception) {
-                                        failDownload(e.toUserMessage(context, R.string.update_download_failed))
-                                    }
-                                }
+                                startDownload()
                             }
-                            Spacer(Modifier.height(8.dp))
-                            SecondaryButton(text = stringResource(R.string.update_download_browser)) {
-                                openUrl(updateInfo.downloadUrl)
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            SecondaryButton(text = stringResource(R.string.update_later), onClick = onDismiss)
+                            Spacer(Modifier.height(10.dp))
+                            TertiaryButtonRow(
+                                stringResource(R.string.update_download_browser) to {
+                                    openUrl(updateInfo.downloadUrl)
+                                },
+                                stringResource(R.string.update_later) to onDismiss
+                            )
                         }
                     }
                     is DownloadState.Downloading -> {
-                        // 取消下载：终止协程并回到 Idle
+                        DownloadProgressContent(state)
+                        Spacer(Modifier.height(12.dp))
+                        // 取消：先停掉阻塞的读流，再收协程，最后把状态收回 Idle
                         SecondaryButton(text = stringResource(R.string.update_cancel_download)) {
+                            ApkDownloader.cancelActiveDownload()
                             downloadJob?.cancel()
                             downloadState = DownloadState.Idle
                         }
                     }
                     is DownloadState.Completed -> {
+                        // 勾选图标 + 提示文案（自动唤起安装由上方 LaunchedEffect 处理）
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.update_download_complete),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
                         PrimaryButton(text = stringResource(R.string.update_install)) {
                             try {
                                 ApkInstaller.installApk(context, state.file)
@@ -826,19 +930,32 @@ fun UpdateDialog(
                                 failDownload(downloadFailedMsg)
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        SecondaryButton(text = stringResource(R.string.update_later), onClick = onDismiss)
+                        Spacer(Modifier.height(10.dp))
+                        TertiaryButtonRow(stringResource(R.string.update_later) to onDismiss)
                     }
                     is DownloadState.Error -> {
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(12.dp))
                         PrimaryButton(text = stringResource(R.string.error_retry)) {
-                            downloadState = DownloadState.Idle
+                            startDownload()
                         }
-                        Spacer(Modifier.height(8.dp))
-                        SecondaryButton(text = stringResource(R.string.update_download_browser)) {
-                            openUrl(updateInfo.downloadUrl)
+                        Spacer(Modifier.height(10.dp))
+                        // 只有「没拿到文件」类失败才给浏览器入口；完整性校验失败时
+                        // 同一个 URL 换浏览器下来的还是同一份文件，给了等于教用户绕开校验
+                        if (state.suggestBrowserFallback) {
+                            TertiaryButtonRow(
+                                stringResource(R.string.update_download_browser) to {
+                                    openUrl(updateInfo.downloadUrl)
+                                },
+                                stringResource(R.string.update_close) to onDismiss
+                            )
+                        } else {
+                            TertiaryButtonRow(stringResource(R.string.update_close) to onDismiss)
                         }
-                        Spacer(Modifier.height(8.dp))
-                        SecondaryButton(text = stringResource(R.string.update_close), onClick = onDismiss)
                     }
                 }
             }
