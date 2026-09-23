@@ -34,6 +34,7 @@ import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.DialogTone
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 
 /**
@@ -67,11 +68,13 @@ fun DoubanSyncModePickerDialog(
             message = stringResource(R.string.douban_sync_mode_warning_c),
             confirm = DialogAction(
                 label = stringResource(R.string.douban_sync_mode_confirm),
+                // 清空已同步标记后重写，属清数据类破坏性确认，按钮走 error 填充色
                 onClick = {
                     showFullRewriteConfirm = false
                     onDismiss()
                     onModeSelected(SyncMode.FULL_REWRITE)
-                }
+                },
+                tone = DialogTone.Destructive
             ),
             dismiss = DialogAction(
                 label = stringResource(R.string.douban_retry_cancel),

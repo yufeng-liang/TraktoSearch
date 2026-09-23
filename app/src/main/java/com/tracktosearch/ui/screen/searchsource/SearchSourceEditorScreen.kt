@@ -62,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.DialogTone
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -305,11 +306,13 @@ fun SearchSourceEditorScreen(
             message = stringResource(R.string.import_duplicate_warning),
             confirm = DialogAction(
                 label = stringResource(R.string.import_confirm),
+                // 同名冲突导入会覆盖已有搜索源，属破坏性确认，按钮走 error 填充色
                 onClick = {
                     showConflictDialog = false
                     if (viewModel.save() != null) resultHaptics.confirm() else resultHaptics.reject()
                     onSaved()
-                }
+                },
+                tone = DialogTone.Destructive
             ),
             dismiss = DialogAction(
                 label = stringResource(android.R.string.cancel),
