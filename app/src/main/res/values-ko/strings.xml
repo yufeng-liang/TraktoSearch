@@ -319,8 +319,8 @@
     <string name="settings_haptic_open_system_settings">시스템 설정 열기</string>
     <string name="splash_quote_skip">탭하여 건너뛰기</string>
 
-    <!-- 하루 도장 -->
-    <string name="daily_stamp_title">하루 도장</string>
+    <!-- 대사 캘린더（原「하루 도장」） -->
+    <string name="daily_stamp_title">대사 캘린더</string>
     <string name="daily_stamp_splash_quote_settings">오늘의 대사 설정</string>
     <string name="daily_stamp_previous_month">지난달</string>
     <string name="daily_stamp_next_month">다음 달</string>
@@ -1637,6 +1637,13 @@
     <string name="mark_records_help_entry_location">입구: 설정 페이지 상단의 「표시 기록」 카드 (로그인 필요)</string>
     <string name="mark_records_help_data_source">시청 기록은 Trakt 히스토리에서, 관심목록/제거 기록은 앱 내 작업 로그에서 가져옵니다</string>
     <string name="mark_records_help_history_limit">기능 출시 전의 관심목록/제거 작업은 추적할 수 없습니다 (Trakt에 보관되지 않음)</string>
+
+    <!-- 대사 캘린더 도움말 -->
+    <string name="help_daily_stamp">대사 캘린더</string>
+    <string name="help_daily_stamp_b1">그날 처음 앱을 열면 스플래시에서 영화 대사 한 줄을 포스터와 함께 보여줍니다. 방문한 날은 캘린더에 칸이 남아 그날의 포스터와 키워드가 찍힙니다. 진입점은 "마이" 페이지 위쪽의 캘린더 아이콘이며 설정에서도 열 수 있습니다.</string>
+    <string name="help_daily_stamp_b2">종이는 두 가지입니다. 실제로 앱을 연 날은 새 종이, 안 연 날은 조금 낡은 종이. 연속 일수와 누적 일수는 새 종이만 세므로, 나중에 열어 본 날이 방문한 날로 바뀌지 않습니다.</string>
+    <string name="help_daily_stamp_b3">낡은 종이에서 흐린 포스터는 "그날 대사 하나가 있었지만 아직 읽지 않았다"는 뜻입니다. 카드를 한 번 열면 선명한 포스터로 바뀌고 아래에 키워드도 찍힙니다. 다음부터 다시 열 필요는 없습니다.</string>
+    <string name="help_daily_stamp_b4">아직 오지 않은 날은 종이를 접은 모양이고, 열어도 색 덩어리만 보입니다. 그날 어떤 대사가 올지는 그날이 되어야 정해집니다. 처음 사용한 날보다 이전은 종이가 비어 있습니다.</string>
 
     <!-- Settings Section Titles -->
 

@@ -138,6 +138,17 @@ internal val HelpCatalog: List<HelpSectionSpec> = listOf(
         ),
     ),
     HelpSectionSpec(
+        key = HelpSections.DAILY_STAMP,
+        group = HelpGroup.RECORDS,
+        title = R.string.help_daily_stamp,
+        bullets = listOf(
+            R.string.help_daily_stamp_b1,
+            R.string.help_daily_stamp_b2,
+            R.string.help_daily_stamp_b3,
+            R.string.help_daily_stamp_b4,
+        ),
+    ),
+    HelpSectionSpec(
         key = HelpSections.DATA,
         group = HelpGroup.RECORDS,
         title = R.string.help_data,
@@ -281,6 +292,7 @@ object HelpSections {
     const val WATCHLIST = "watchlist"
     const val STATISTICS = "statistics"
     const val MARK_RECORDS = "markRecords"
+    const val DAILY_STAMP = "dailyStamp"
     const val NOTIFICATION = "notification"
     const val DATA = "data"
     const val CUSTOM_SOURCE = "customSource"

@@ -319,8 +319,8 @@
     <string name="settings_haptic_open_system_settings">システム設定を開く</string>
     <string name="splash_quote_skip">タップでスキップ</string>
 
-    <!-- 日めくり -->
-    <string name="daily_stamp_title">日めくり</string>
+    <!-- 台詞カレンダー（原「日めくり」） -->
+    <string name="daily_stamp_title">台詞カレンダー</string>
     <string name="daily_stamp_splash_quote_settings">今日の台詞の設定</string>
     <string name="daily_stamp_previous_month">前の月</string>
     <string name="daily_stamp_next_month">次の月</string>
@@ -1637,6 +1637,13 @@
     <string name="mark_records_help_entry_location">入口：設定ページ上部の「マーク記録」カード（ログイン必要）</string>
     <string name="mark_records_help_data_source">視聴記録はTrakt履歴から、ウォッチリスト/削除記録はアプリ内操作ログから取得</string>
     <string name="mark_records_help_history_limit">機能リリース前のウォッチリスト/削除操作は追溯できません（Traktに保存されないため）</string>
+
+    <!-- 台詞カレンダー ヘルプ -->
+    <string name="help_daily_stamp">台詞カレンダー</string>
+    <string name="help_daily_stamp_b1">その日初めてアプリを開くと、スプラッシュ画面で映画の台詞を一行、そのポスターと一緒に表示します。訪れた日はカレンダーに一格残り、その日のポスターとキーワードが印刷されます。入口は「マイ」ページの上部にあるカレンダーアイコン、設定からも開けます。</string>
+    <string name="help_daily_stamp_b2">紙は二段階です。実際にアプリを開いた日は新しい紙、開かなかった日は少し古い紙。連続日数と累計日数は新しい紙だけを集計するので、後から読んでもその日に訪れたことにはなりません。</string>
+    <string name="help_daily_stamp_b3">古い紙でぼやけているポスターは「あの日に一行ありましたが、まだ読んでいない」の意味です。カードを一度開くと鮮明なポスターに変わり、下にキーワードも印刷されます。次回から開き直す必要はありません。</string>
+    <string name="help_daily_stamp_b4">まだ来ていない日は紙の角を折った形で、開いても色のかたまりだけが見えます。その日にどの台詞が来るかは、その日になるまで決まりません。初めて使った日より前は紙が空白のままです。</string>
 
     <!-- Settings Section Titles -->
 

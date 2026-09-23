@@ -60,6 +60,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -132,9 +135,10 @@ fun DailyStampScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val splashQuoteEnabled by viewModel.splashQuoteEnabled.collectAsState()
+    val readDays by viewModel.readDays.collectAsState()
     val palette = rememberDailyStampPalette()
     val cardPalette = rememberDailyStampCardPalette()
-    val content = rememberDailyStampContent(state)
+    val content = rememberDailyStampContent(state, readDays)
     val haptics = rememberAppHaptics()
     var showSplashQuoteSettings by remember { mutableStateOf(false) }
 
@@ -246,14 +250,27 @@ internal data class DailyStampContent(
 )
 
 @Composable
-internal fun rememberDailyStampContent(state: DailyStampUiState): DailyStampContent {
+internal fun rememberDailyStampContent(
+    state: DailyStampUiState,
+    readDays: Set<Long>,
+): DailyStampContent {
     // 语言从 Configuration 取而不是读设置项：「跟随系统」这一档只有 Configuration 知道
     // 最终落到了哪种语言，而 applyLanguage 已经把用户选的语言同步进来了。
     val locale = LocalConfiguration.current.locales[0]
     val lang = remember(locale) { SplashQuote.resolveLang(locale.language) }
     val today = remember { LocalDate.now() }
-    val cells = remember(state.stamps, lang) {
-        state.stamps.associate { it.date to it.toCell(lang) }
+    val cells = remember(state.stamps, state.missed, readDays, lang) {
+        buildMap<LocalDate, DailyStampCellUi> {
+            state.stamps.forEach { put(it.date, it.toCell(lang)) }
+            // 错过签到那天也上格子，糊不糊看读过没有，见 [toMissedCell]。纸色照旧走
+            // tileMissed——补看过不等于那天真打开过 App，两件事各说各的。
+            state.missed.forEach { stamp ->
+                put(
+                    stamp.date,
+                    stamp.toMissedCell(lang, read = stamp.date.toEpochDay() in readDays),
+                )
+            }
+        }
     }
     // 三类日子合成一张表：签到过的、错过的、还没到的。错过的那天没有落库的行，台词是
     // 现算的（见 DailyStampRepository.missedMonth）；还没到的只带一张糊掉的海报。
@@ -400,7 +417,7 @@ private fun DailyStampTopBar(
                 )
             }
             Text(
-                text = stringResource(R.string.splash_quote_title),
+                text = stringResource(R.string.daily_stamp_title),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -814,9 +831,13 @@ private fun MonthGrid(
  *
  * 四种日子（[DayKind]）靠纸和标记区分，不靠字的深浅：
  * - 签到过：整张纸 + 海报 + 关键词，这是这一屏的奖励，只有真的来过那天才有
- * - 错过：旧一档的纸，海报的位置留一圈虚线，位子在人没来；点开仍能读到那天的台词
+ * - 错过：旧一档的纸，海报先糊着画、关键词也不印——那天有一句话，只是还没读；卡片展示
+ *   过一次之后才换成清晰海报并印上关键词。海报没下载成的那天退回一圈虚线，位子在人没来
  * - 你来之前：连纸都没有，只有一个日期数字——空白本身就是「那时你还没来」
  * - 还没到：纸还在，右上角折起来一角，像那一页还没翻开；折角按距今天数递减
+ *
+ * 纸和清晰度各说各的：纸说那天有没有打开过 App，糊不糊说那天的卡片读过没有。补看过
+ * 错过的某天，纸仍是旧那一档，不会因此变成「来过」。
  *
  * 纸上的日期数字走 [DailyStampPalette.tileInk]（8.1:1），海报上那个走白色压在渐变上。
  * 没有纸的那一档（你来之前）才用主题的 [DailyStampPalette.inkHint]。
@@ -906,11 +927,16 @@ private fun DayCell(
                 .aspectRatio(POSTER_ASPECT)
                 .clip(RoundedCornerShape(3.dp))
                 .drawBehind {
-                    if (kind == DayKind.Missed) drawMissedFrame(missedStroke)
+                    // 有海报可画时不画虚线框：真图外面再套一圈虚线是噪音，「那天没来过」
+                    // 由纸色 tileMissed 说就够了。海报没下载成的那天照旧画框——那是真的
+                    // 什么都没有，虚线本身就是「这里该有东西」的写法
+                    if (kind == DayKind.Missed && cell?.poster == null) {
+                        drawMissedFrame(missedStroke)
+                    }
                 },
         ) {
             if (cell?.poster != null) {
-                CellPoster(model = cell.poster)
+                CellPoster(model = cell.poster, blurred = cell.blurred)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1051,20 +1077,29 @@ private fun dayDescription(
  * 铺在深色格子上，满亮度会一格一格地扎眼，那是没有纸的时候的事。
  */
 @Composable
-private fun CellPoster(model: Any) {
+private fun CellPoster(model: Any, blurred: Boolean = false) {
     val context = LocalContext.current
-    val request = remember(model) {
+    val request = remember(model, blurred) {
         ImageRequest.Builder(context)
             .data(model)
-            .size(POSTER_DECODE_PX)
+            .size(if (blurred) LATENT_DECODE_PX else POSTER_DECODE_PX)
             .scale(Scale.FILL)
             .crossfade(false)
+            // 糊的那档关硬件位图：12px 的图没有复用价值，而 ColorMatrix 压在硬件位图上
+            // 各版本行为不一致，没必要为省一点内存去赌
+            .apply { if (blurred) allowHardware(false) }
             .build()
+    }
+    val desaturate = remember {
+        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(LATENT_SATURATION) })
     }
     AsyncImage(
         model = request,
         contentDescription = null,
         contentScale = ContentScale.Crop,
+        colorFilter = if (blurred) desaturate else null,
+        // 显式写出来：默认值哪天改成最近邻，糊图会变成马赛克，反而把轮廓切得更清楚
+        filterQuality = if (blurred) FilterQuality.Low else FilterQuality.None,
         modifier = Modifier.fillMaxSize(),
     )
 }

@@ -21,6 +21,13 @@ data class DailyStampCellUi(
     val date: LocalDate,
     val keyword: String,
     val poster: Any?,
+    /**
+     * 海报要不要糊着画。
+     *
+     * 只有「错过签到、但那天的卡片还没读过」的那些天是 true，此时 [keyword] 一并留空：
+     * 糊海报说的是「那天有一句话，你还没看」，关键词一印上去就等于先透了底。
+     */
+    val blurred: Boolean = false,
 )
 
 /**
@@ -143,6 +150,19 @@ internal fun DailyStamp.toCell(lang: String) = DailyStampCellUi(
     keyword = quote?.keywordFor(lang).orEmpty(),
     poster = poster,
 )
+
+/**
+ * 错过签到那天的格子。
+ *
+ * 没读过只给一张糊海报，卡片展示过一次之后才和签到格一样印清晰的图和词。关键词一并留空
+ * 是同一件事的两半：糊海报说的是「那天有一句话，你还没看」，词先印上去等于把答案透了一半。
+ *
+ * 纸色不在这里管——格子按 [DayKind.Missed] 取旧那一档，和读没读过无关。
+ */
+internal fun DailyStamp.toMissedCell(lang: String, read: Boolean): DailyStampCellUi {
+    val cell = toCell(lang)
+    return if (read) cell else cell.copy(keyword = "", blurred = true)
+}
 
 /**
  * 台词解析不出来（id 已下线）时返回 null，调用方不开卡片。

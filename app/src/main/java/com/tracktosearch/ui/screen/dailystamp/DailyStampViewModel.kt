@@ -39,8 +39,11 @@ data class DailyStampUiState(
     val stamps: List<DailyStamp> = emptyList(),
     /**
      * 当月错过签到的那些天，台词是按日期现算的（见 [DailyStampRepository.missedMonth]）。
-     * 和 [stamps] 分开存：这些天不算签到，不进连续天数、不进累计、格子上不印海报，
+     * 和 [stamps] 分开存：这些天不算签到，不进连续天数、不进累计，
      * 混进同一个列表只会让每处用到的地方都要再筛一次。
+     *
+     * 格子上印不印海报看 DailyStampViewModel.readDays：没读过的那天只给一张糊海报，
+     * 读过之后才换清晰的。
      */
     val missed: List<DailyStamp> = emptyList(),
     /** 当月未来的那些天，只用得上海报地址 */
@@ -79,6 +82,7 @@ private const val FUTURE_MONTHS = 12L
 class DailyStampViewModel @Inject constructor(
     private val repository: DailyStampRepository,
     private val splashQuoteStorage: com.tracktosearch.data.local.SplashQuoteStorage,
+    private val readStorage: com.tracktosearch.data.local.DailyStampReadStorage,
 ) : ViewModel() {
 
     private val month = MutableStateFlow(YearMonth.now())
@@ -94,6 +98,15 @@ class DailyStampViewModel @Inject constructor(
      * [uiState]：它跟日历的加载、翻月、选中都没有关系，混进去会让每次切月都带上它。
      */
     val splashQuoteEnabled: StateFlow<Boolean> = splashQuoteStorage.enabledState
+
+    /**
+     * 已经读过卡片的那些天（epochDay）。
+     *
+     * 只影响错过签到的那几格：没读过给糊海报，读过换清晰的。和
+     * [splashQuoteEnabled] 一样不进 [uiState]——它不参与翻月、也不参与任何计数，
+     * 混进去只会让每次切月都带上它。
+     */
+    val readDays: StateFlow<Set<Long>> = readStorage.readDays
 
     fun setSplashQuoteEnabled(enabled: Boolean) {
         viewModelScope.launch { splashQuoteStorage.setEnabled(enabled) }
@@ -126,9 +139,21 @@ class DailyStampViewModel @Inject constructor(
         switchTo(month.value.plusMonths(1))
     }
 
-    /** 打开某天的卡片；传 null 关闭 */
+    /**
+     * 打开某天的卡片；传 null 关闭。
+     *
+     * 打开的同时记下「这天读过」，格子上那张糊海报就此换成清晰的。只记错过签到的那些天：
+     * 签到过的当天就把台词念出来了，还没到的那天只有一张糊卡、没有可读的东西，
+     * 给它们留标记只是往集合里塞一堆永远用不上的日子。
+     *
+     * 记在「打开」而不是「关掉」那一刻：卡片排左右滑过去同样走这里，滑过即看过，
+     * 不必等用户专门退回日历一次。
+     */
     fun select(date: LocalDate?) {
         _uiState.update { it.copy(selected = date) }
+        if (date != null && _uiState.value.missed.any { it.date == date }) {
+            viewModelScope.launch { readStorage.markRead(date.toEpochDay()) }
+        }
     }
 
     /**

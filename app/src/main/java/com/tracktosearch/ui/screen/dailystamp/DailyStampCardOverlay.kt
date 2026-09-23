@@ -1250,8 +1250,11 @@ private val BAND_MAX: Dp = 600.dp
  *
  * 十几个像素放到 112dp 宽的开窗里，双线性插值出来的就是一团糊掉的色块：留下的是那天的
  * 色调，不是那部片。这个数字本身就是保密强度，往上调一档就是在多给一点答案。
+ *
+ * 格子上那层「还没读过」的海报也用它（见 DailyStampScreen 的 CellPoster）：两处要一样糊，
+ * 否则点进卡片之前反而看得更清楚。
  */
-private const val LATENT_DECODE_PX = 12
+internal const val LATENT_DECODE_PX = 12
 
 /** 走真模糊那条路时的解码宽度。配上 [LATENT_BLUR] 已经什么都读不出来，见 [LatentPoster] */
 private const val LATENT_BLUR_DECODE_PX = 40
@@ -1264,8 +1267,11 @@ private const val LATENT_BLUR_DECODE_PX = 40
  */
 private val LATENT_BLUR: Dp = 14.dp
 
-/** 未显影海报压掉多少饱和度：留下色相的方向，压掉「这是一张彩色海报」的存在感 */
-private const val LATENT_SATURATION = 0.45f
+/**
+ * 未显影海报压掉多少饱和度：留下色相的方向，压掉「这是一张彩色海报」的存在感。
+ * 格子上的「还没读过」同样用这一档，见 DailyStampScreen 的 CellPoster。
+ */
+internal const val LATENT_SATURATION = 0.45f
 
 /** 墨条的浓度。看得出那儿有一行字，读不出写的是什么；再深就像真印了些什么上去 */
 private const val LATENT_BAR_ALPHA = 0.16f

@@ -54,6 +54,27 @@ class DailyStampModelsTest {
         assertThat(cell.date).isEqualTo(date)
         assertThat(cell.keyword).isEqualTo("命定")
         assertThat(cell.poster).isEqualTo("poster-model")
+        // 签到过的那天当天就把台词念出来了，不存在没读过，永远不该是糊的
+        assertThat(cell.blurred).isFalse()
+    }
+
+    @Test
+    fun `错过那天没读过时只给糊海报不印关键词`() {
+        val cell = stamp(quote()).toMissedCell("zh", read = false)
+
+        // 海报照画，只是糊着：它说的是「那天有一句话」。词一印上去就先透了底
+        assertThat(cell.poster).isEqualTo("poster-model")
+        assertThat(cell.blurred).isTrue()
+        assertThat(cell.keyword).isEmpty()
+    }
+
+    @Test
+    fun `错过那天读过之后印清晰的图和词`() {
+        val cell = stamp(quote()).toMissedCell("zh", read = true)
+
+        assertThat(cell.blurred).isFalse()
+        assertThat(cell.keyword).isEqualTo("命定")
+        assertThat(cell.poster).isEqualTo("poster-model")
     }
 
     @Test

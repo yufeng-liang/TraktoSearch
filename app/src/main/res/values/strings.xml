@@ -569,8 +569,8 @@
     <string name="settings_haptic_open_system_settings">Open system settings</string>
     <string name="splash_quote_skip">TAP TO SKIP</string>
 
-    <!-- Daily Stamp -->
-    <string name="daily_stamp_title">Daily Stamp</string>
+    <!-- Quote Calendar（台词日历）。开屏那个开关是另一件事，仍叫 splash_quote_title -->
+    <string name="daily_stamp_title">Quote Calendar</string>
     <string name="daily_stamp_splash_quote_settings">Daily line settings</string>
     <string name="daily_stamp_previous_month">Previous month</string>
     <string name="daily_stamp_next_month">Next month</string>
@@ -1631,6 +1631,13 @@ Config:
     <string name="mark_records_help_entry_location">Entry: Settings → Mark Records card (login required)</string>
     <string name="mark_records_help_data_source">Watched records from Trakt history; watchlist/removed records from in-app action log</string>
     <string name="mark_records_help_history_limit">Watchlist/removal actions before feature launch cannot be traced (Trakt doesn\'t retain them)</string>
+
+    <!-- Quote Calendar help -->
+    <string name="help_daily_stamp">Quote Calendar</string>
+    <string name="help_daily_stamp_b1">The first time you open the app each day, the splash screen shows one movie line with its poster. Every day you actually came leaves a cell in the calendar, printed with that day\'s poster and keyword. Open it from the calendar icon in the top bar of the Me tab, or from Settings.</string>
+    <string name="help_daily_stamp_b2">Paper comes in two tones: fresh paper for days you really opened the app, aged paper for days you didn\'t. Streak and total count only the fresh paper, so catching up later never makes a day count as visited.</string>
+    <string name="help_daily_stamp_b3">A blurred poster on aged paper means there was a line that day you haven\'t read yet. Open the card once and the cell turns into a sharp poster with its keyword printed under it, and it stays that way next time you visit.</string>
+    <string name="help_daily_stamp_b4">Days that have not arrived have a folded corner, and opening one shows only a wash of colour: which line a day gets is not decided until that day comes. Days before your first visit stay blank.</string>
 
     <!-- Settings Section Titles -->
 

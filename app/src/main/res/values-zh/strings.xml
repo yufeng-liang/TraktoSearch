@@ -569,8 +569,8 @@
     <string name="settings_haptic_open_system_settings">打开系统设置</string>
     <string name="splash_quote_skip">轻触跳过</string>
 
-    <!-- 日签 -->
-    <string name="daily_stamp_title">日签</string>
+    <!-- 台词日历（原「日签」）。开屏那个开关是另一件事，仍叫 splash_quote_title -->
+    <string name="daily_stamp_title">台词日历</string>
     <string name="daily_stamp_splash_quote_settings">每日台词设置</string>
     <string name="daily_stamp_previous_month">上个月</string>
     <string name="daily_stamp_next_month">下个月</string>
@@ -1623,6 +1623,13 @@
     <string name="mark_records_help_entry_location">入口：设置页顶部「标记记录」卡片（需登录）</string>
     <string name="mark_records_help_data_source">已看记录来自 Trakt 观看历史；想看/移除记录为 App 内操作流水</string>
     <string name="mark_records_help_history_limit">功能上线前的想看/移除操作无法追溯（Trakt 不留存）</string>
+
+    <!-- 台词日历帮助 -->
+    <string name="help_daily_stamp">台词日历</string>
+    <string name="help_daily_stamp_b1">每天第一次打开 App，开屏会念一句电影台词并配上它的海报。来过的那天在日历上留一格，格子上印着那天的海报和关键词。入口在「我的」顶栏的日历图标，设置页里也有一处。</string>
+    <string name="help_daily_stamp_b2">纸分两档：当天真的打开过 App 的是新纸，没打开过的是旧一档的纸。连续天数和累计天数只认新纸，事后补看不会把某天算成来过。</string>
+    <string name="help_daily_stamp_b3">旧纸上那张糊掉的海报，说的是「那天有一句话，你还没读」。点开看一眼，那一格就换成清晰海报并在下面印上关键词，之后再进来不用重新点。</string>
+    <string name="help_daily_stamp_b4">还没到的日子纸角折起来，点开只有一团色调——那天给哪句台词，要等那天到了才算得出来。比你第一次用这个 App 更早的日子，纸上什么都不印。</string>
 
     <!-- Settings Section Titles -->
 
