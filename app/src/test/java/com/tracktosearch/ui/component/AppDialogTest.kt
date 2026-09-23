@@ -4,6 +4,7 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -16,8 +17,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.sp
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import com.tracktosearch.ui.theme.Typography
 import com.tracktosearch.ui.theme.ThemeTestSupport
 import org.junit.Rule
 import org.junit.Test
@@ -193,19 +196,21 @@ class AppDialogTest {
     }
 
     @Test
-    fun `titleContent 优先于 title，供两行标题使用`() {
+    fun `title + supportMessage 即可组出两行标题，不需要整槽自绘`() {
+        // 原 titleContent 槽唯一的用法就是这个两行结构，而 discover 板块设置弹窗改走
+        // 本配方后不再自绘。副句必须独立成节点：并进主句会让字号字重重新脱离组件管控。
         composeRule.setContent {
             MaterialTheme {
                 AppAlertDialog(
                     onDismissRequest = {},
-                    title = "Ignored",
-                    titleContent = { Text("Custom head") },
+                    title = "Head",
+                    supportMessage = "Sub line",
                     confirm = DialogAction("Confirm", onClick = {}),
                 )
             }
         }
-        composeRule.onNodeWithText("Custom head").assertIsDisplayed()
-        composeRule.onNodeWithText("Ignored").assertDoesNotExist()
+        composeRule.onNodeWithText("Head").assertIsDisplayed()
+        composeRule.onNodeWithText("Sub line").assertIsDisplayed()
     }
 
     @Test
@@ -301,5 +306,34 @@ class AppDialogTest {
         // 按 contentDescription 断言才有鉴别力（按 Text 断是恒真的假绿）
         composeRule.onAllNodes(hasClickAction() and hasContentDescription("Close"))
             .assertCountEquals(0)
+    }
+
+    // ==================== 标题两档：纯函数，不依赖组合 ====================
+    //
+    // 语义树不暴露字号，组合侧断不了，所以断这两个纯函数（与 dialogButtonColors 同理）。
+    // 锁的是绝对值而不是「等于 Typography.titleLarge」：后者是恒真式，上游哪天调了
+    // titleLarge 它也照样绿，而 18/16 这两档正是这次统一要守住的数。
+
+    @Test
+    fun `对话框标题档为 18sp Bold`() {
+        val style = dialogTitleStyle(Typography)
+        assertWithMessage("对话框/浮动卡片标题字号").that(style.fontSize).isEqualTo(18.sp)
+        assertWithMessage("对话框/浮动卡片标题字重").that(style.fontWeight).isEqualTo(FontWeight.Bold)
+    }
+
+    @Test
+    fun `面板标题档为 16sp Bold`() {
+        val style = sheetTitleStyle(Typography)
+        assertWithMessage("底部面板标题字号").that(style.fontSize).isEqualTo(16.sp)
+        assertWithMessage("底部面板标题字重").that(style.fontWeight).isEqualTo(FontWeight.Bold)
+    }
+
+    @Test
+    fun `两档标题字号不同，确保没有并成一档`() {
+        // 并档是这次统一最容易发生的退化：两个函数都还「对」，但面板标题在窄屏会挤到
+        // maxLines=1 截断。字号相等即红。
+        assertWithMessage("对话框档与面板档必须不同字号")
+            .that(dialogTitleStyle(Typography).fontSize)
+            .isNotEqualTo(sheetTitleStyle(Typography).fontSize)
     }
 }

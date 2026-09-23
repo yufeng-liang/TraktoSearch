@@ -1038,18 +1038,10 @@ fun DiscoverSectionsDialog(
 
     AppAlertDialog(
         onDismissRequest = onDismiss,
-        // 标题 + 副提示两行结构，走 titleContent 整槽接管
-        titleContent = {
-            Column {
-                Text(stringResource(R.string.settings_discover_sections))
-                Text(
-                    text = stringResource(R.string.settings_discover_sections_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-        },
+        title = stringResource(R.string.settings_discover_sections),
+        // 副提示走 supportMessage：它就是「标题下方一行小字」，与组件里 message+supportMessage
+        // 的配方同构，不必再自绘两行标题把字号交回调用点。
+        supportMessage = stringResource(R.string.settings_discover_sections_hint),
         content = {
             // text 槽自带宿主 View；把手那一记在槽内取实例（DiscoverSectionRow 里那份是它自己的）；
             // 限高与滚动由组件内容槽负责（原手写 heightIn(max=500.dp) 删除）

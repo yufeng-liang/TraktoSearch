@@ -479,6 +479,9 @@ internal fun RatingDialog(
 
     AppAlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
+        // 「评分」原先画在内容里当小字提示用，但它语义上就是本弹窗的标题，
+        // 归位后由组件统一字号字重。
+        title = stringResource(R.string.detail_rating_dialog_title),
         dismiss = DialogAction(
             label = stringResource(R.string.detail_rating_cancel),
             enabled = !isSubmitting,
@@ -494,17 +497,10 @@ internal fun RatingDialog(
         content = {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 0.dp),
+                    .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                // 标题
-                Text(
-                    text = stringResource(R.string.detail_rating_dialog_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 // 大号评分数字
                 Row(
                     verticalAlignment = Alignment.Bottom,

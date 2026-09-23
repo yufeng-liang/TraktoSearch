@@ -120,8 +120,7 @@ private fun DialogHeader() {
         Spacer(modifier = Modifier.width(14.dp))
         Text(
             text = stringResource(R.string.resource_copyright_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            style = dialogTitleStyle(MaterialTheme.typography),
             color = MaterialTheme.colorScheme.onSurface
         )
     }

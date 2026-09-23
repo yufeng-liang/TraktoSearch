@@ -673,7 +673,10 @@ fun UpdateDialog(
     }
 
     AppFloatingDialog(
-        onDismissRequest = { if (canDismiss) onDismiss() }
+        onDismissRequest = { if (canDismiss) onDismiss() },
+        // 「发现新版本」就是本弹窗的标题，走 title 槽；原先自绘时给它上过 primary 色，
+        // 但下方整段 changelog 已经是内容主体，标题再着色属于重复强调。
+        title = stringResource(R.string.update_dialog_badge),
     ) {
         // 28dp 圆角与 24dp 内边距由 AppFloatingDialog 承担；animateContentSize 留在内容侧
         Column(
@@ -683,16 +686,8 @@ fun UpdateDialog(
                 // 不动画就是整块往上跳一下
                 .animateContentSize(animationSpec = tween(220))
         ) {
-            // 头部只留一句放大的徽标行；当前→新版本的迁移信息由下面日志区的
-            // 「v3.7.0 更新内容（日期）」吸顶标题承担，两处都写就是重复
-            Text(
-                text = stringResource(R.string.update_dialog_badge),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(Modifier.height(16.dp))
+            // 当前→新版本的迁移信息由下面日志区的「v3.7.0 更新内容（日期）」吸顶标题承担，
+            // 两处都写就是重复
 
             // 更新日志区：不再套卡片，直接铺在弹窗底色上；changelog 为空时兜底显示版本号
             val dialogColor = floatingDialogColor()

@@ -98,6 +98,7 @@ import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppBottomSheet
 import com.tracktosearch.ui.component.DialogAction
+import com.tracktosearch.ui.component.sheetTitleStyle
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -1320,7 +1321,9 @@ private fun CharacterPickerSheet(
             ),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(stringResource(R.string.ai_sprite_character_picker_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            // 装饰性大标题（headlineSmall + ExtraBold）归回面板档：面板标题只有一档，
+            // 它下面那行提示才是正文。
+            Text(stringResource(R.string.ai_sprite_character_picker_title), style = sheetTitleStyle(MaterialTheme.typography))
             Text(stringResource(R.string.ai_sprite_character_picker_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             state.characters.forEach { item ->

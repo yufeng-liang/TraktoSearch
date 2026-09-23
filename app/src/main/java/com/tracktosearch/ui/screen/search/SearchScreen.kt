@@ -168,6 +168,7 @@ import com.tracktosearch.ui.component.glassSceneForContent
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.neumorphicShadow
 import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.component.sheetTitleStyle
 import com.tracktosearch.ui.screen.ai.AI_SPRITE_IDLE_DELAY_MS
 import com.tracktosearch.ui.screen.ai.AiSceneEvent
 import com.tracktosearch.ui.screen.ai.AiSpriteAnchor
@@ -678,10 +679,10 @@ fun SearchScreen(
                             .padding(top = 20.dp, start = 27.dp, end = 27.dp, bottom = 20.dp)
                     ) {
                         // 层 1：可爱标题（顶部预留猫头探出空间，保持居中）
+                        // 居中是这版插画构图的一部分，豁免对齐；字号字重走面板档出口。
                         Text(
                             text = stringResource(R.string.permission_cloud_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            style = sheetTitleStyle(MaterialTheme.typography),
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 20.dp)
                         )
@@ -1391,7 +1392,7 @@ private fun SearchHistoryTwoRow(
                 text = stringResource(R.string.search_history_title),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold
             )
             // 一键清空全部历史，无二次确认，按有后果的主操作给 TAP
             TextButton(
@@ -1514,7 +1515,7 @@ private fun PopularSearchesSectionNew(
                 text = stringResource(R.string.hot_search),
                 style = MaterialTheme.typography.titleSmall.copy(shadow = ambientTextHalo()),
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold
             )
             // 手动刷新入口：热词失败只有 ON_RESUME 自动重试，标题行补一个小刷新按钮
             IconButton(

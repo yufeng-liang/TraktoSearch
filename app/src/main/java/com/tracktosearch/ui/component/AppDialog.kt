@@ -32,12 +32,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,7 +114,6 @@ internal const val DialogContentTag = "app_dialog_content"
 fun AppAlertDialog(
     onDismissRequest: () -> Unit,
     title: String? = null,
-    titleContent: (@Composable () -> Unit)? = null,
     message: String? = null,
     supportMessage: String? = null,
     confirm: DialogAction? = null,
@@ -123,10 +124,9 @@ fun AppAlertDialog(
     content: (@Composable () -> Unit)? = null,
 ) {
     val hasTextSlot = message != null || supportMessage != null || content != null
-    // titleContent 整槽接管标题：自定义结构（两行标题等）与 title 不同时生效，
-    // 传了 titleContent 就把 title 丢掉，避免两处描述互相打架。
-    val titleSlot: (@Composable () -> Unit)? = titleContent
-        ?: title?.let { text -> @Composable { AppDialogTitle(text) } }
+    // 标题只有 title 一个入口，没有 titleContent 逃生舱：整槽接管等于把字号字重
+    // 交回调用点手写，两行标题请改用 title + supportMessage。
+    val titleSlot: (@Composable () -> Unit)? = title?.let { text -> @Composable { AppDialogTitle(text) } }
     // 槽位内容先单独建成 lambda、再在 if 里按引用三目：把 @Composable { } 直接写在
     // `if (cond) @Composable { } else null` 的分支上，Kotlin 会把它当「分支 lambda」，
     // 整个表达式推成 Unit? 编译不过。三字段全空时传 null 而不是空 lambda：
@@ -182,13 +182,26 @@ fun AppAlertDialog(
     )
 }
 
-/** 弹窗标题：统一 titleLarge + Bold，调用点不再手写。 */
+/**
+ * 弹窗标题的两档字号字重，唯一出口。
+ *
+ * 抽成纯函数（同 [dialogButtonColors] 的理由）：Compose 语义树不暴露字号，留在
+ * @Composable 里就只能靠截图看，而色调有十来套、自绘标题的调用点也有十来处。
+ * 对话框与浮动卡片一档，底部面板一档：面板通栏贴底还带关闭键，18sp 在窄屏会挤到
+ * 换行，而面板标题是 maxLines = 1，会直接截断。
+ */
+internal fun dialogTitleStyle(tp: Typography): TextStyle =
+    tp.titleLarge.copy(fontWeight = FontWeight.Bold)
+
+internal fun sheetTitleStyle(tp: Typography): TextStyle =
+    tp.titleMedium.copy(fontWeight = FontWeight.Bold)
+
+/** 弹窗标题：统一走 [dialogTitleStyle]，调用点不再手写。 */
 @Composable
 internal fun AppDialogTitle(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
+        style = dialogTitleStyle(MaterialTheme.typography),
     )
 }
 
@@ -357,8 +370,7 @@ private fun AppSheetHeader(title: String, onDismiss: () -> Unit) {
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            style = sheetTitleStyle(MaterialTheme.typography),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier

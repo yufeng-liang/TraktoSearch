@@ -71,6 +71,7 @@ import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.sheetTitleStyle
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 
@@ -212,8 +213,9 @@ internal fun TmdbAllSheet(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    // 标题栏右侧还要挂时间窗切换等动作，收进 AppSheetHeader 会挤掉它们；
+                    // 但字号字重仍走面板档的唯一出口。
+                    style = sheetTitleStyle(MaterialTheme.typography)
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

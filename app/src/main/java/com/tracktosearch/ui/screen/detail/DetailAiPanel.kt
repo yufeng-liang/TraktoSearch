@@ -37,6 +37,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiDetailInterestLevel
 import com.tracktosearch.data.ai.AiDetailWatchTiming
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.sheetTitleStyle
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,8 +74,9 @@ fun DetailAiPanel(
                         )
                         Text(
                             text = stringResource(R.string.detail_ai_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            // 标题前有 AI 图标、这栏要随列表吸顶，收进 AppSheetHeader 会丢结构；
+                            // 字号字重仍走面板档出口，不再单独占一档。
+                            style = sheetTitleStyle(MaterialTheme.typography),
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(start = 8.dp)

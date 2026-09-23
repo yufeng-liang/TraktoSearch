@@ -44,18 +44,12 @@ fun SourceTemplateSheet(
 ) {
     AppBottomSheet(
         onDismissRequest = onDismiss,
+        // 标题走组件标题栏：居中手写档与面板档只差对齐与字重，收进来后与其它带标题
+        // 面板共用同一条标题栏（含右上角关闭）。
+        title = stringResource(R.string.template_library_title),
         skipPartiallyExpanded = false,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
-        Text(
-            text = stringResource(R.string.template_library_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp)
-        )
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             val chunks = SearchSourceTemplates.all.chunked(2)
             chunks.forEach { rowTemplates ->
