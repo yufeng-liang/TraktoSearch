@@ -331,8 +331,9 @@ fun AppFloatingDialog(
  * skipPartiallyExpanded 默认 true：项目里的弹层几乎都是内容型，停在半展开
  * 要用户再拖一把；仅模板库、筛选等半展开场景由调用点显式传 false。
  *
- * drag 条跟着 skipPartiallyExpanded 走，不再单开参数：半展开时它是「还能往上拉」
- * 的唯一提示，必须显示；全展开时关闭键与下滑手势都在，它只是重复信息，一律不显示。
+ * drag 条跟着「有没有标题栏 + 是否半展开」推导，不再单开参数：只有停在半展开、
+ * 又没有标题栏的面板才需要它——那时它是「还能往上拉」的唯一提示。带标题栏时标题栏
+ * 已经占了顶部并给出关闭键，再压一条 drag 条就是重复信息；全展开同理。
  * 原先 4 处手写 dragHandle = null、其余默认显示，正是缺这条界线才飘的。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -349,7 +350,7 @@ fun AppBottomSheet(
     // `if (cond) @Composable { } else null` 的分支上会被推成 ComposableFunction0<Unit>?，编不过。
     val dragHandleContent: @Composable () -> Unit = { BottomSheetDefaults.DragHandle() }
     val sheetDragHandle: (@Composable () -> Unit)? =
-        if (skipPartiallyExpanded) null else dragHandleContent
+        if (title == null && !skipPartiallyExpanded) dragHandleContent else null
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
