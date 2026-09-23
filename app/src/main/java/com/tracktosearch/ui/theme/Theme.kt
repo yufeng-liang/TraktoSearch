@@ -61,8 +61,8 @@ val LocalMainColorScheme =
  * tone94/7，见 NeutralFloating*）；票根主题保持牛皮纸，分别回退到 surfaceVariant /
  * surfaceContainerLow，这样弹窗/sheet 的底色与纸面保持一致。
  *
- * 使用处：AlertDialog/Dialog 的 containerColor 用 [floatingDialogColor]，ModalBottomSheet /
- * 自定义底部弹层的 containerColor 用 [floatingSheetColor]。卡片、输入框、顶栏等非浮层
+ * 使用处：AppAlertDialog / AppFloatingDialog 的 containerColor 用 [floatingDialogColor]，
+ * AppBottomSheet 的 containerColor 用 [floatingSheetColor]。卡片、输入框、顶栏等非浮层
  * 容器继续读各自原来的 scheme 槽位，不受这两个 token 影响。
  */
 val LocalFloatingDialogColor = staticCompositionLocalOf<Color> { Color.Unspecified }

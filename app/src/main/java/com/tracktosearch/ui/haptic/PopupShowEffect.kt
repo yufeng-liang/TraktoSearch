@@ -20,7 +20,8 @@ import androidx.compose.runtime.setValue
  *
  * ### 不是每个弹窗都该用
  *
- * 全仓 71 个 `AlertDialog` / `ModalBottomSheet`，绝大多数是 `onClick = { showX = true }` ——
+ * 全仓弹窗已收口进 AppDialog 三族（AppAlertDialog / AppFloatingDialog / AppBottomSheet），
+ * 绝大多数是 `onClick = { showX = true }` ——
  * 用户按了按钮，按钮已经按 T8 的规则发过 `tap()` / `lightTap()`，弹窗跟着出现是**看得见的**
  * 确认。那种地方再补一记 `popupShow()`，两记落在同一帧里凑成一团糊响，反而把「按下」与
  * 「出现了」这两件事的区分抹掉。

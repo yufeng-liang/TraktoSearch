@@ -1378,7 +1378,7 @@ fun DetailScreen(
             )
             } // CompositionLocalProvider
 
-            // YouTube 内置播放器（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
+            // YouTube 内置播放器（用 Dialog 包裹以确保覆盖在 AppBottomSheet 之上）
             playingVideoKey?.let { key ->
                 Dialog(
                     onDismissRequest = { playingVideoKey = null },
@@ -1406,7 +1406,7 @@ fun DetailScreen(
                         playingVideoKey = video.key
                     },
                     onBackdropClick = { index ->
-                        // sheet 保持打开直接走带转场入口：ModalBottomSheet 的 Dialog 是全屏窗口，
+                        // sheet 保持打开直接走带转场入口：AppBottomSheet 的 Dialog 是全屏窗口，
                         // 缩略图 boundsInWindow 就是屏幕坐标，OpenImage 能精确落到 sheet 内的缩略图；
                         // 返回时 sheet 仍开着，动画缩回原位。
                         val host = activity

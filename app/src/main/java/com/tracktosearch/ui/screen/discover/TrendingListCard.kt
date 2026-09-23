@@ -44,7 +44,7 @@ private val TrendingListCardShape = RoundedCornerShape(TraktListCardCorner)
  * 卡片边界能看出来，也是全套色阶里离页面底最远的一级。
  *
  * 这里不用 Glass 材质：发现页与「查看全部」弹窗里是同一批列表，两处必须长得一样，
- * 而弹窗在 ModalBottomSheet 自己的窗口里采不到页面 backdrop，玻璃在那侧只能退化成半透明色块。
+ * 而弹窗在 AppBottomSheet 自己的窗口里采不到页面 backdrop，玻璃在那侧只能退化成半透明色块。
  * 换成不透明卡面后两处天然一致，也顺带断掉了这些卡片对 backdrop 的采样。
  *
  * @param modifier 外层修饰符。发现页在这里挂 `appSharedBounds` + `appSkipToLookaheadSize`

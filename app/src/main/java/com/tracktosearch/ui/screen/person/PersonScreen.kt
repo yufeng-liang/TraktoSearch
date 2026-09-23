@@ -578,7 +578,7 @@ fun PersonScreen(
                         )
                     }
 
-                    // 全部人物图片底部弹窗（ModalBottomSheet）：sheet 的 Dialog 是全屏窗口，
+                    // 全部人物图片底部弹窗（AppBottomSheet）：sheet 的 Dialog 是全屏窗口，
                     // 网格缩略图矩形就是屏幕坐标，单元点击直接带转场打开查看器，sheet 保持打开
                     AllPersonImagesPanel(
                         visible = showAllPersonImages && uiState.personImages.isNotEmpty(),

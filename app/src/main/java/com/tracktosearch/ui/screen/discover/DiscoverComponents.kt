@@ -231,7 +231,7 @@ internal fun MovieCard(
             }
             if (ratingValue != null) {
                 // 评分角标：RatingBadge/DoubanRatingBadge 组件自身已含 scrim 半透明底 + 圆角细边框
-                // （与其他页面 PosterCard/DiscoverSheets 的用法一致），这里直接复用统一规格。
+                // （与其他页面 PosterCard/AppBottomSheet 弹层的用法一致），这里直接复用统一规格。
                 // 此前在组件外再套一层 chip 会导致双层黑底、两圈不同样式的边框叠加。
                 val badgeModifier = Modifier
                     .align(Alignment.TopEnd)

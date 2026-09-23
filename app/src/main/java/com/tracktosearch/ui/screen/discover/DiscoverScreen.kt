@@ -1106,7 +1106,7 @@ fun DiscoverScreen(
             lists = uiState.trendingLists,
             onListClick = { listId, listName ->
                 showTrendingListsAll = false
-                // 弹窗在 ModalBottomSheet 自己的窗口里，配不上共享元素：走常规页面转场
+                // 弹窗在 AppBottomSheet 自己的窗口里，配不上共享元素：走常规页面转场
                 onListClick(listId, listName, false)
             },
             onDismiss = { showTrendingListsAll = false }
@@ -1207,4 +1207,4 @@ private fun CategoryHeroCard(
 // - DiscoverScreen.kt：主函数 DiscoverScreen
 // - DiscoverComponents.kt：MovieCard, ErrorRetryRow, EmptyRow, SectionHeader, doubanCategoryLabel
 // - DiscoverSections.kt：TmdbMovieSection, TraktRecommendationSection, TraktTrendingMovieSection, TraktTrendingShowSection, TraktAnticipatedSection, TraktShowRecommendationSection
-// - DiscoverSheets.kt：TmdbAllSheet, TraktMovieAllSheet, TraktShowAllSheet, TraktAnticipatedAllSheet, TrendingListsAllSheet
+// - DiscoverSheets.kt：TmdbAllSheet, TraktMovieAllSheet, TraktShowAllSheet, TraktAnticipatedAllSheet, TrendingListsAllSheet（均走 AppBottomSheet）
