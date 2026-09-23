@@ -555,6 +555,10 @@
     <string name="settings_appearance">外观与触感</string>
     <string name="settings_splash_quote">每日台词</string>
     <string name="settings_splash_quote_subtitle">启动时展示一句经典电影台词和它的海报，轻触任意位置可跳过。</string>
+    <!-- 设置页通往台词日历页的入口。和上面那条分开：上面说的是开屏那个开关，
+         这条说的是整页（日历 + 开屏），两者共用一个 key 会把弹窗里的开关也叫成台词日历 -->
+    <string name="settings_daily_stamp_entry">台词日历</string>
+    <string name="settings_daily_stamp_entry_subtitle">开屏的每日影视台词可在这里查看</string>
     <string name="settings_haptic">触感反馈</string>
     <string name="settings_haptic_follow_system">跟随系统</string>
     <string name="settings_haptic_off">关闭</string>

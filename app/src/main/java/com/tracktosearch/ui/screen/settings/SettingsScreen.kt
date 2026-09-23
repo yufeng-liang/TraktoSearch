@@ -1528,10 +1528,13 @@ private fun PrivacyEntryCard(
 }
 
 /**
- * 开屏每日台词入口卡片（外观分组下，独占一行）。
+ * 台词日历入口卡片（外观分组下，独占一行）。
  *
- * 从开关改成入口：开屏那一句和日签是同一件事的两面，凑成一个二级页才说得清，
+ * 从开关改成入口：开屏那一句和日历是同一件事的两面，凑成一个二级页才说得清，
  * 见 DailyStampScreen。这里不再显示开关状态——状态在二级页顶栏右侧，点进去即可调整。
+ *
+ * 文案走自己的 key 而不是 settings_splash_quote：后者是二级页那个弹窗里开关行的字，
+ * 共用一个的话，把入口叫成「台词日历」就会连带把那个只管开屏的开关也改了名。
  */
 @Composable
 private fun SplashQuoteEntryCard(
@@ -1540,8 +1543,8 @@ private fun SplashQuoteEntryCard(
 ) {
     SettingsItemCard(
         icon = Icons.Rounded.FormatQuote,
-        title = stringResource(R.string.settings_splash_quote),
-        subtitle = stringResource(R.string.settings_splash_quote_subtitle),
+        title = stringResource(R.string.settings_daily_stamp_entry),
+        subtitle = stringResource(R.string.settings_daily_stamp_entry_subtitle),
         // 这一记归 SettingsItemCard 自己的 hapticClickable；开关本身搬去了
         // ui/screen/splashquote 那一页，触感跟着开关走
         onClick = onClick,

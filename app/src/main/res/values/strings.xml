@@ -555,6 +555,10 @@
     <string name="settings_appearance">Appearance &amp; Haptics</string>
     <string name="settings_splash_quote">Daily Movie Line</string>
     <string name="settings_splash_quote_subtitle">Show a classic movie line with its poster on the splash screen. Tap anywhere to skip.</string>
+    <!-- Entry into the Quote Calendar page. Separate from the two above: those describe the splash
+         toggle, this one describes the whole page; sharing a key would relabel the dialog toggle. -->
+    <string name="settings_daily_stamp_entry">Quote Calendar</string>
+    <string name="settings_daily_stamp_entry_subtitle">Read every line shown on the splash screen here</string>
     <string name="settings_haptic">Haptic Feedback</string>
     <string name="settings_haptic_follow_system">Follow system</string>
     <string name="settings_haptic_off">Off</string>

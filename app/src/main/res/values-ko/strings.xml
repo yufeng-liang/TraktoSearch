@@ -305,6 +305,9 @@
     <string name="settings_appearance">외관 및 촉감</string>
     <string name="settings_splash_quote">오늘의 명대사</string>
     <string name="settings_splash_quote_subtitle">앱을 열 때 명작 영화의 대사와 포스터를 보여줍니다. 화면을 탭하면 건너뜁니다.</string>
+    <!-- 대사 캘린더 페이지 진입점. 위의 두 줄은 시작 화면 스위치, 이 줄은 페이지 전체 -->
+    <string name="settings_daily_stamp_entry">대사 캘린더</string>
+    <string name="settings_daily_stamp_entry_subtitle">시작할 때 보여주는 매일의 영화·드라마 대사를 여기서 볼 수 있습니다</string>
     <string name="settings_haptic">햅틱 피드백</string>
     <string name="settings_haptic_follow_system">시스템 설정 따르기</string>
     <string name="settings_haptic_off">끄기</string>

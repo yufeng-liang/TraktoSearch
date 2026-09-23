@@ -305,6 +305,9 @@
     <string name="settings_appearance">外観と触覚</string>
     <string name="settings_splash_quote">毎日の名セリフ</string>
     <string name="settings_splash_quote_subtitle">起動時に名作映画のセリフとポスターを表示します。画面をタップするとスキップできます。</string>
+    <!-- 台詞カレンダーページへの入口。上の二つは起動時のスイッチの話、こちらはページ全体の話 -->
+    <string name="settings_daily_stamp_entry">台詞カレンダー</string>
+    <string name="settings_daily_stamp_entry_subtitle">起動時に表示される毎日の映画・ドラマのセリフはここで見られます</string>
     <string name="settings_haptic">触覚フィードバック</string>
     <string name="settings_haptic_follow_system">システムに従う</string>
     <string name="settings_haptic_off">オフ</string>
