@@ -9,7 +9,6 @@ import com.tracktosearch.ui.theme.BrandImdb
 import com.tracktosearch.ui.theme.BrandMetacritic
 import com.tracktosearch.ui.theme.BrandRottenTomatoes
 import com.tracktosearch.ui.theme.BrandTmdb
-import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.OnBrandImdb
 import com.tracktosearch.ui.theme.OnBrandTmdb
 import com.tracktosearch.ui.theme.RatingGold
@@ -32,11 +31,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.StarHalf
@@ -54,7 +51,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -488,6 +484,13 @@ internal fun RatingDialog(
             enabled = !isSubmitting,
             onClick = onDismiss,
         ),
+        // 提交中把「确定」的文字换成转圈，按钮行由 AppDialogActionRow 负责几何与触感
+        confirm = DialogAction(
+            label = stringResource(R.string.detail_rating_confirm),
+            enabled = !isSubmitting,
+            loading = isSubmitting,
+            onClick = { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) },
+        ),
         content = {
             Column(
                 modifier = Modifier
@@ -606,38 +609,6 @@ internal fun RatingDialog(
                     enabled = !isSubmitting,
                     shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(modifier = Modifier.height(20.dp))
-                // 全仓唯一保留自绘的主按钮：提交中要把文字换成转圈，AppDialogActionRow
-                // 的按钮不承载按钮内 loading，所以「确定」不走 confirm 槽，规格向按钮行看齐。
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        // 这一记就是评分弹窗「确定」的全部触感。DetailScreen 的
-                        // onConfirm 回调里原先也有一记，已删 —— 按钮才是手势的主人，
-                        // 且那一记捕获的是屏幕宿主 View 而不是弹窗自己的。
-                        .hapticClickable(
-                            semantic = HapticSemantic.TAP,
-                            enabled = !isSubmitting
-                        ) { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) }
-                        .heightIn(min = DesignToken.DialogActionMinHeight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isSubmitting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.detail_rating_confirm),
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
             }
         }
     )
