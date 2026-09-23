@@ -2262,9 +2262,7 @@ private fun WatchlistFilterSheet(
     onApply: () -> Unit
 ) {
     AppBottomSheet(
-        onDismissRequest = onApply,
-        // 去除默认 drag 条,内容更紧凑
-        dragHandle = null
+        onDismissRequest = onApply
     ) {
         Column(
             modifier = Modifier

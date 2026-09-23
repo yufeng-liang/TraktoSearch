@@ -61,8 +61,7 @@ internal fun AllPersonImagesPanel(
     }
     AppBottomSheet(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.person_images),
-        dragHandle = null
+        title = stringResource(R.string.person_images)
     ) {
         Column(
             modifier = Modifier

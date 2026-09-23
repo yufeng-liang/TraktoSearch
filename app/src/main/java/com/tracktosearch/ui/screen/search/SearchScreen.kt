@@ -654,8 +654,7 @@ fun SearchScreen(
                 onDismissRequest = {
                     interruptAiSprite(AiSpriteInterruptReason.BLOCKED)
                     cloudThemeManager.onPermissionDismissed()
-                },
-                dragHandle = null
+                }
             ) {
                 // Sheet 内容是独立 subcomposition（自己的宿主 View），单独取一份而不是复用外层
                 val permissionSheetHaptics = rememberAppHaptics()

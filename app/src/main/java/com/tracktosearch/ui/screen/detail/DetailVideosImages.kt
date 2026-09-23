@@ -354,8 +354,7 @@ internal fun FullVideosImagesSheet(
 
     AppBottomSheet(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.detail_videos_all_title),
-        dragHandle = null
+        title = stringResource(R.string.detail_videos_all_title)
     ) {
         // 弹层内容是独立 subcomposition（有自己的宿主 View），单独取一份
         val sheetHaptics = rememberAppHaptics()
