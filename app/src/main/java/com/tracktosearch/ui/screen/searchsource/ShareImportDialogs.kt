@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +32,6 @@ import com.tracktosearch.data.local.ShareCodec
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppDialogActionRow
 import com.tracktosearch.ui.component.DialogAction
-import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
 
 /** 分享配置弹层：编码文本 + 复制 + 系统分享面板 */
@@ -119,9 +117,26 @@ fun ImportSourceDialog(
     AppAlertDialog(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.editor_title_import),
+        // 粘贴是「对输入框的一次操作」，跟取消/确认不是同一层决定：放标题行右侧，
+        // 别在底部按钮行里跟两个决定动作抢同一档视觉重量
+        titleAction = DialogAction(
+            label = stringResource(R.string.import_paste),
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.let { pasted ->
+                    pasteText = pasted
+                    val decoded = ShareCodec.decode(pasted.trim())
+                    if (decoded == null) {
+                        invalid = true
+                        preview = null
+                    } else {
+                        invalid = false
+                        preview = decoded
+                    }
+                }
+            }
+        ),
         content = {
-            // content 槽在自己的组合作用域里，粘贴按钮的触感句柄单独取一份
-            val bodyHaptics = rememberAppHaptics()
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = pasteText,
@@ -134,22 +149,6 @@ fun ImportSourceDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2
                 )
-                TextButton(onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.let { it ->
-                        // 触感放在 let 里面：剪贴板为空时这一下什么也没做，不该震
-                        bodyHaptics.tap()
-                        pasteText = it
-                        val decoded = ShareCodec.decode(it.trim())
-                        if (decoded == null) {
-                            invalid = true
-                            preview = null
-                        } else {
-                            invalid = false
-                            preview = decoded
-                        }
-                    }
-                }) { Text(stringResource(R.string.import_paste)) }
                 if (invalid) {
                     Text(
                         stringResource(R.string.import_invalid),

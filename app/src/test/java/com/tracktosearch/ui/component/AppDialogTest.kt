@@ -241,6 +241,42 @@ class AppDialogTest {
         composeRule.onAllNodes(hasClickAction()).assertCountEquals(0)
     }
 
+    @Test
+    fun `titleAction 渲染在标题行并可点击，不进按钮行`() {
+        var pasted = 0
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Head",
+                    titleAction = DialogAction("Paste", onClick = { pasted++ }),
+                    content = { Text("Body") },
+                )
+            }
+        }
+        composeRule.onNodeWithText("Paste").performClick()
+        assertThat(pasted).isEqualTo(1)
+        // 可点节点只有标题行那一个：动作若同时被塞进按钮行，这里会是 2，届时两个 Paste
+        // 还会让上面的 onNodeWithText 直接因「匹配到多个节点」而报错——两条断言各锁一半。
+        composeRule.onAllNodes(hasClickAction()).assertCountEquals(1)
+    }
+
+    @Test
+    fun `没有 title 时 titleAction 不渲染`() {
+        // titleAction 挂在标题行上，没有标题行就无处安放；静默丢弃强过凭空造一行
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    titleAction = DialogAction("Paste", onClick = {}),
+                    content = { Text("Body") },
+                )
+            }
+        }
+        composeRule.onNodeWithText("Body").assertIsDisplayed()
+        composeRule.onAllNodes(hasClickAction()).assertCountEquals(0)
+    }
+
     // ==================== AppFloatingDialog：裸 Dialog 外壳 ====================
 
     @Test

@@ -109,11 +109,16 @@ internal const val DialogContentTag = "app_dialog_content"
  * 不放 dismissButton：M3 的按钮行是 FlowRow，两个按钮各占一槽会挤成右对齐小胶囊，
  * 撑满等宽必须合成一个 Row 交给 confirmButton（AlertDialogFlowRow 会把父约束
  * 原样传给子节点，故 Row.fillMaxWidth() 能铺满）。
+ *
+ * [titleAction] 是标题行的内联文字动作（眼下只有导入弹窗的「粘贴」在用）：它是「对输入框
+ * 的一次操作」而不是「对这个弹窗的决定」，混进底部按钮行会跟取消/确认抢同一档视觉重量。
+ * 它跟着 title 走 —— title 为空时这本就没有标题行，动作也一并消失。
  */
 @Composable
 fun AppAlertDialog(
     onDismissRequest: () -> Unit,
     title: String? = null,
+    titleAction: DialogAction? = null,
     message: String? = null,
     supportMessage: String? = null,
     confirm: DialogAction? = null,
@@ -125,8 +130,10 @@ fun AppAlertDialog(
 ) {
     val hasTextSlot = message != null || supportMessage != null || content != null
     // 标题只有 title 一个入口，没有 titleContent 逃生舱：整槽接管等于把字号字重
-    // 交回调用点手写，两行标题请改用 title + supportMessage。
-    val titleSlot: (@Composable () -> Unit)? = title?.let { text -> @Composable { AppDialogTitle(text) } }
+    // 交回调用点手写，两行标题请改用 title + supportMessage。内联动作走 titleAction，
+    // 由 AppDialogTitle 自己按可空处理，这里不再分叉槽位 lambda。
+    val titleSlot: (@Composable () -> Unit)? =
+        title?.let { text -> @Composable { AppDialogTitle(text, titleAction) } }
     // 槽位内容先单独建成 lambda、再在 if 里按引用三目：把 @Composable { } 直接写在
     // `if (cond) @Composable { } else null` 的分支上，Kotlin 会把它当「分支 lambda」，
     // 整个表达式推成 Unit? 编译不过。三字段全空时传 null 而不是空 lambda：
@@ -196,13 +203,48 @@ internal fun dialogTitleStyle(tp: Typography): TextStyle =
 internal fun sheetTitleStyle(tp: Typography): TextStyle =
     tp.titleMedium.copy(fontWeight = FontWeight.Bold)
 
-/** 弹窗标题：统一走 [dialogTitleStyle]，调用点不再手写。 */
+/**
+ * 弹窗标题：统一走 [dialogTitleStyle]，调用点不再手写。
+ *
+ * [action] 非空时改成「标题 + 右侧内联文字动作」的一行（[AppAlertDialog] 的 titleAction）：
+ * M3 的标题槽是个居左 Box，直接往里塞两个节点会上下堆叠，右侧动作得靠 Row 的
+ * SpaceBetween 才落得下去。
+ *
+ * 触感与 [AppDialogActionRow] 同一契约，由本组件发（本函数的组合作用域已在弹窗内，
+ * 拿到的是 `Dialog` 自己那个宿主 `View`）。若交给调用点在外面 remember 一份，句柄捕获的
+ * 是页面那个 `View`，弹窗盖着它时触感会派发到被遮住的宿主上——见 [rememberAppHaptics] 的
+ * KDoc 里「跨对话框必须重捕获」那条。
+ * 代价是内联动作即使什么也没做（粘贴时剪贴板为空）也会震一下——与「粘贴地址」按钮同款，
+ * 那点多出来的一记比整机无触感划算。
+ */
 @Composable
-internal fun AppDialogTitle(text: String) {
-    Text(
-        text = text,
-        style = dialogTitleStyle(MaterialTheme.typography),
-    )
+internal fun AppDialogTitle(text: String, action: DialogAction? = null) {
+    if (action == null) {
+        Text(
+            text = text,
+            style = dialogTitleStyle(MaterialTheme.typography),
+        )
+        return
+    }
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = text,
+            style = dialogTitleStyle(MaterialTheme.typography),
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(
+            onClick = { haptics.tap(); action.onClick() },
+            enabled = action.enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            Text(text = action.label)
+        }
+    }
 }
 
 /**
