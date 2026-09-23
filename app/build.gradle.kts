@@ -53,8 +53,8 @@ val openSourceVersionCatalogBase64 = Base64.getEncoder()
 
 android {
     namespace = "com.tracktosearch"
-    // 37.2 是扩展级版本（haze-blur-materials 2.0.0-rc01 的 AAR metadata 要求）；
-    // compileSdk 属性只收 Int，扩展版本必须用字符串形式指定 platform android-37.2
+    // 37.2 是扩展级版本，compileSdk 属性只收 Int，扩展版本必须用字符串形式指定 platform android-37.2。
+    // 选 37.2 是因为 haze 2.0.0-rc01 的 AAR metadata 要求 minor 2；2.0.0 已放宽到 minor 0，这里沿用不改。
     compileSdkVersion("android-37.2")
 
     defaultConfig {
