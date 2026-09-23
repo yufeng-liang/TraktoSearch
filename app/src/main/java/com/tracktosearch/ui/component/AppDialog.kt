@@ -215,6 +215,10 @@ fun AppDialogActionRow(
             TextButton(
                 onClick = { haptics.lightTap(); action.onClick() },
                 enabled = action.enabled,
+                // 三按钮等宽时每颗只有 90dp，material3 默认水平内边距（Button 24dp、
+                // TextButton 12dp）会把四五字中文标签挤成两行。纵向沿用默认 8.dp，
+                // 高度仍由下面的 min 兜住；文字居中，短标签观感不变。
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 modifier = Modifier.weight(action.weight),
             ) {
                 Text(
@@ -233,6 +237,7 @@ fun AppDialogActionRow(
                 // 库默认 ButtonDefaults.shape 虽是同款胶囊但是个 @Composable getter，
                 // 显式写 CircleShape 免得上游哪天改默认值把弹窗按钮一起带走。
                 shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 modifier = Modifier
                     .weight(primary.weight)
                     .heightIn(min = DesignToken.DialogActionMinHeight),
