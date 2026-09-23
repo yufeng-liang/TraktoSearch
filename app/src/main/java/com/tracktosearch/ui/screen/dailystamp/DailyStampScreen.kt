@@ -71,8 +71,10 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle as ComposeTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -1076,12 +1078,17 @@ private fun CellPoster(model: Any) {
  * 字号按关键词长度动态收缩：短词比旧版更醒目，长词仍能在窄格子里尽量完整显示。
  * 高度是**最小值**而不是固定值：系统字号放大时这一行可以自然长高，不会被框切掉。
  * 空关键词也要占住这个最小高度，整行都没有关键词时这一行不能比别行矮。
+ *
+ * 行高按字号收，且必须显式要 Tight 模式：中日韩衬线的自然行高约 1.44 倍字号，字面只占
+ * 其中一倍的量，多出来的那截全摊在词的上下两侧，看着就像这一行自带一圈垂直内边距，把词
+ * 从海报底下推远了一截。
  */
 @Composable
 private fun CellKeyword(
     keyword: String,
     palette: DailyStampPalette,
 ) {
+    val fontSize = dailyStampKeywordFontSize(keyword)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1092,16 +1099,42 @@ private fun CellKeyword(
             Text(
                 text = keyword,
                 color = palette.tileInkSoft,
-                fontSize = dailyStampKeywordFontSize(keyword),
+                fontSize = fontSize,
                 fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
+                lineHeight = fontSize * CELL_KEYWORD_LEADING,
+                style = ComposeTextStyle(lineHeightStyle = CELL_KEYWORD_LINE_HEIGHT),
             )
         }
     }
 }
+
+/**
+ * 关键词行高相对字号的倍数，见 [CellKeyword]。
+ *
+ * 收到 1.2 倍而不是 1 倍：留一点余量给西文的下伸部（g / p / y 那一捺），
+ * 又足够把 CJK 字体自带的那圈空压掉。
+ */
+private const val CELL_KEYWORD_LEADING = 1.2f
+
+/**
+ * 让上面那个行高真的生效。
+ *
+ * 行高默认走 [LineHeightStyle.Mode.Fixed]：首末行会由系统补回字体自带的上下留白，
+ * 单行文本于是永远按字体的自然行高排版，[CELL_KEYWORD_LEADING] 写了等于没写
+ * （真机量过，节点高度仍是 13sp × 1.44）。只有 [LineHeightStyle.Mode.Tight] 会把行高
+ * 压到首末行上，代价是过高的字形可能被裁——所以倍数留了余量，没有压到 1 倍。
+ *
+ * [LineHeightStyle.Trim] 只在字体留白关闭时才参与，而 Compose 1.12 起它默认就是关的。
+ */
+private val CELL_KEYWORD_LINE_HEIGHT = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Center,
+    trim = LineHeightStyle.Trim.Both,
+    mode = LineHeightStyle.Mode.Tight,
+)
 
 /** 日历格关键词字号：短词放大，长词逐级缩小以适应格子宽度。 */
 internal fun dailyStampKeywordFontSize(keyword: String): TextUnit {
@@ -1184,8 +1217,13 @@ private val TILE_RADIUS = 5.dp
 /** 海报四周留的那圈白边，照片裱在纸上的样子。再宽就吃海报，再窄就看不出有纸 */
 private val TILE_INSET = 2.5.dp
 
-/** 关键词那一行的最小高度，见 [CellKeyword] */
-private val KEYWORD_LINE = 17.dp
+/**
+ * 关键词那一行的最小高度，见 [CellKeyword]。
+ *
+ * 比最长那一档字号（13sp）只多出 2dp：这一行的松紧已经交给行高去管（见 [CellKeyword]），
+ * 这里只兜住空关键词和系统字号放大时不塌。也跟着反算网格预算与补空格子那一段。
+ */
+private val KEYWORD_LINE = 15.dp
 
 /** 格子里海报的解码宽度：格子宽 45dp 上下，160px 铺满还留余量 */
 private const val POSTER_DECODE_PX = 160
