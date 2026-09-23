@@ -108,6 +108,20 @@ class ThemeSemanticPaletteTest {
         }
     }
 
+    // ==================== 破坏性弹窗按钮 ====================
+
+    /**
+     * 破坏性操作（DialogTone.Destructive）的主按钮是 error 底 + onError 字，
+     * 十三色调 × 明暗两档全查：某一档不够 AA 就是真问题，不许靠降阈值或忽略绕过。
+     */
+    @Test
+    fun `破坏性弹窗主按钮的文字对比度达到 WCAG AA`() {
+        val failures = allSchemes
+            .filter { contrast(it.scheme.onError, it.scheme.error) < AA_NORMAL }
+            .map { it.label }
+        assertThat(failures).isEmpty()
+    }
+
     // ==================== readableOn 本身的性质 ====================
 
     @Test

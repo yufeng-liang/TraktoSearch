@@ -41,7 +41,7 @@ CAVEMAN MODE ACTIVE (full). Drop articles/filler/pleasantries/hedging. Fragments
 
 **风格**
 - 依赖统一 gradle/libs.versions.toml（含开源页版本，见 §5 约束）
-- AlertDialog containerColor = surfaceVariant；新建页面：标题栏 + Tab 用 Box + hazeSource/hazeEffect 毛玻璃吸顶，小白条沉浸用 Scaffold(contentWindowInsets = WindowInsets(0,0,0,0)) 或 Box
+- 弹窗一律走 AppDialog.*（AppAlertDialog / AppFloatingDialog / AppBottomSheet），不得直接调用 AlertDialog / ModalBottomSheet 或手传 floatingDialogColor()；主按钮填充、次按钮纯文字、等宽撑满由组件负责，破坏性操作用 DialogTone.Destructive；新建页面：标题栏 + Tab 用 Box + hazeSource/hazeEffect 毛玻璃吸顶，小白条沉浸用 Scaffold(contentWindowInsets = WindowInsets(0,0,0,0)) 或 Box
 - API 代码生成/配置步骤用 context7 MCP；逆向/对接第三方接口先 GitHub + CSDN/掘金 查现成实现，多源交叉验证
 - UI 设计用 PureShowWidget 内联展示；前端新页面 web-dev 技能实时预览，批准后 ai-self-loop-ui-workflow 截图闭环
 - 安卓 CLI/skills：android --no-metrics run/install/emulator/screen/layout/docs/sdk；测试用 android-emulator-qa（功能/复现/截图/logcat）与 android-performance（CPU/内存/帧率剖析）

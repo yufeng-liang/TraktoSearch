@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.glassBorderColor
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -8,6 +9,7 @@ import com.tracktosearch.ui.theme.BrandImdb
 import com.tracktosearch.ui.theme.BrandMetacritic
 import com.tracktosearch.ui.theme.BrandRottenTomatoes
 import com.tracktosearch.ui.theme.BrandTmdb
+import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.OnBrandImdb
 import com.tracktosearch.ui.theme.OnBrandTmdb
 import com.tracktosearch.ui.theme.RatingGold
@@ -30,9 +32,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.StarHalf
@@ -479,6 +483,11 @@ internal fun RatingDialog(
 
     AppAlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
+        dismiss = DialogAction(
+            label = stringResource(R.string.detail_rating_cancel),
+            enabled = !isSubmitting,
+            onClick = onDismiss,
+        ),
         content = {
             Column(
                 modifier = Modifier
@@ -598,59 +607,35 @@ internal fun RatingDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
                 Spacer(modifier = Modifier.height(20.dp))
-                // 圆角按钮行
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // 全仓唯一保留自绘的主按钮：提交中要把文字换成转圈，AppDialogActionRow
+                // 的按钮不承载按钮内 loading，所以「确定」不走 confirm 槽，规格向按钮行看齐。
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        // 这一记就是评分弹窗「确定」的全部触感。DetailScreen 的
+                        // onConfirm 回调里原先也有一记，已删 —— 按钮才是手势的主人，
+                        // 且那一记捕获的是屏幕宿主 View 而不是弹窗自己的。
+                        .hapticClickable(
+                            semantic = HapticSemantic.TAP,
+                            enabled = !isSubmitting
+                        ) { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) }
+                        .heightIn(min = DesignToken.DialogActionMinHeight),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // 取消按钮
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                            .hapticClickable(
-                                semantic = HapticSemantic.LIGHT_TAP,
-                                enabled = !isSubmitting
-                            ) { onDismiss() }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.detail_rating_cancel),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
-                    }
-                    // 确定按钮
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primary)
-                            // 这一记就是评分弹窗「确定」的全部触感。DetailScreen 的
-                            // onConfirm 回调里原先也有一记，已删 —— 按钮才是手势的主人，
-                            // 且那一记捕获的是屏幕宿主 View 而不是弹窗自己的。
-                            .hapticClickable(
-                                semantic = HapticSemantic.TAP,
-                                enabled = !isSubmitting
-                            ) { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Text(
-                                text = stringResource(R.string.detail_rating_confirm),
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.detail_rating_confirm),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
             }
