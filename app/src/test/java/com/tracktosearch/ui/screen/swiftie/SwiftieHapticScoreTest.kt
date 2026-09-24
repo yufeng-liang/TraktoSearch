@@ -201,21 +201,26 @@ class SwiftieHapticScoreTest {
         // 90ms：起手一格 30ms 冲上去、两格 60ms 收干。更长就开始读成嗡鸣
         assertThat(hit.durationMs).isEqualTo(90L)
         assertThat(hit.timingsMs).containsExactly(30, 30, 30).inOrder()
-        // 形状逐格钉死：30ms 从 0 爬到 0.8（箭扎进去那一下），其后两格落回 0。
+        // 形状逐格钉死：30ms 从 0 爬到 1.0（箭扎进去那一下），其后两格落回 0。
         // **这里不能用 peakIndices** —— 它按约定把两端排除在外（「单调收尾不是一个摆幅」），
         // 而这条包络的峰恰恰落在第一个控制点上（起手就是最重的那一下）
-        assertThat(hit.amplitudes).containsExactly(0.8f, 0.4f, 0f).inOrder()
+        assertThat(hit.amplitudes).containsExactly(1f, 0.5f, 0f).inOrder()
         // 与视觉心抖解耦：手上只要 90ms，眼里那 420ms 的衰减摆与它无关
         assertThat(hit.durationMs).isLessThan(LOVER_RECOIL_MS.toLong())
         // 峰在首格、其后严格收干：单峰是 RichTap 那层收得下的前提
         assertThat(hit.amplitudes.first()).isEqualTo(hit.amplitudes.max())
         // 收在 0，硬切会读成被掐断
         assertThat(hit.amplitudes.last()).isEqualTo(0f)
-        // 峰值比签名那支笔重、比 Lover 绽放轻：不抢全曲最重那一笔
+        // 比签名那支笔重得多：这一下是箭扎进心，那是一支笔在纸上走
         assertThat(hit.amplitudes.max())
             .isGreaterThan(score.envelope(SwiftieHapticCueKind.SIGNATURE_WRITE).amplitudes.max())
-        assertThat(hit.amplitudes.max())
-            .isLessThan(score.envelope(SwiftieHapticCueKind.LOVER_BLOOM).amplitudes.max())
+        // 「绽放是全曲最重的一笔」由**总能量**保证，不再由峰值：这一记已经顶到振幅上限
+        // 1.0，绽放的 0.85 在数值上不可能再高于它。3500ms 对 90ms，能量差约 154 倍。
+        // 谁把这一记拉长到接近绽放的时长，这条会先红 —— 那时该重新分配层次，而不是删断言
+        val hitEnergy = hit.amplitudes.sumOf { it.toDouble() } * hit.durationMs
+        val bloom = score.envelope(SwiftieHapticCueKind.LOVER_BLOOM)
+        val bloomEnergy = bloom.amplitudes.sumOf { it.toDouble() } * bloom.durationMs
+        assertThat(bloomEnergy).isGreaterThan(hitEnergy * 10)
     }
 
     /**

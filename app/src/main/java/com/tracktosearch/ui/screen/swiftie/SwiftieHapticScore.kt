@@ -402,6 +402,9 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
  * 锐利来自**快起手 + 短时长**，与峰值大小关系不大。所以触感时长与视觉的 420ms
  * 心抖**解耦**：视觉可以长，手上只要 90ms。整条曲线仍是**单峰**，RichTap 与
  * MiHaptic HE 两层都接得下。
+ *
+ * 峰值给到满幅 1.0（理由见 [LOVER_ARROW_PEAK_AMPLITUDE]）；「绽放仍是全曲最重一笔」
+ * 由总能量而非峰值保证。
  */
 private fun loverArrowCues(): List<SwiftieHapticCue> {
     val atMs = SwiftieTimeline.eraStartMs(SwiftieErasData.LOVER_INDEX) + LOVER_HIT_MS
@@ -706,12 +709,21 @@ private const val LOVER_ARROW_MS = 90L
 private const val LOVER_ARROW_POINTS = 3
 
 /**
- * 命中那一箭的峰值。
+ * 命中那一箭的峰值：**满幅**。
  *
- * 0.8 夹在两笔之间：比签名书写的 0.25（一支笔在纸上走）重得多 —— 这一下是箭扎进心；
- * 又比 Lover 绽放的 0.85（全曲最重一笔）轻，不让卡片段里的一记抢掉收尾那一笔。
+ * 2026-09-24 从 0.8 提到 1.0 —— 用户听 90ms 那版后仍觉偏弱。这一记是「箭扎进心」，
+ * 是卡片段里唯一的撞击，给到上限是合理的；签名书写的 0.25（一支笔在纸上走）远在其下。
+ *
+ * **提到 1.0 之后，「绽放最重」不再由峰值体现。** 1.0 是振幅上限，绽放的 0.85
+ * 在数值上再也不可能高于它 —— 那个判据改由**总能量**（振幅 × 时长）承担：
+ * 绽放 3500ms 的总能量是这一记 90ms 的**约 154 倍**，仍是全曲最重的一笔。
+ * 单测里对应两条断言，别只改一条。
+ *
+ * 另外 `playEnvelope` 刻意不受轻/强档位影响（理由见 `AppHaptics.playEnvelope`：
+ * 包络的振幅是编排的一部分），所以峰值是这一记**唯一的强度旋钮** ——
+ * 用户在设置里放大不了它，这里给满就是真的满。
  */
-private const val LOVER_ARROW_PEAK_AMPLITUDE = 0.8f
+private const val LOVER_ARROW_PEAK_AMPLITUDE = 1f
 
 /** 绽放 3500ms 切 14 格，每格 250ms。 */
 private const val LOVER_BLOOM_POINTS = 14
