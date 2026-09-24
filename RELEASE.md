@@ -36,7 +36,7 @@
 
    ```bash
    # 输出必须落在 .tmp/：changelog.md 与 CHANGELOG.md 在大小写不敏感的文件系统上是同一个文件，
-   # section 是覆盖写，写到仓库根的 changelog.md 会把 61 个版本的全量日志截断成只剩当前一版。
+   # section 是覆盖写，写到仓库根的 changelog.md 会把全量日志截断成只剩当前一版。
    node .ci/make-manifest.mjs section --version v<version> --out .tmp/changelog-body.md
    gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
    ```
