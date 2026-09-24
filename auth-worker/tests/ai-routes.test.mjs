@@ -1030,14 +1030,28 @@ test('activation rejects a character whose matching voice sample is missing', as
 });
 
 test('daily fallback always includes a source URL', async () => {
-    const { response, json } = await call('/api/ai/daily', {
-        method: 'POST',
-        body: { action: 'daily', sessionId: 'daily-session' },
-        env: createTestEnv(),
-    });
+    const originalFetch = globalThis.fetch;
+    try {
+        // 上游全挂时降级到审核过的种子条目，种子自带可信域来源，链接必须留给用户核验。
+        // 早先这里不桩 fetch：AI_TEST_MODE 的兜底 unit 本就以「AI 综合解读」占位
+        // （按规则来源链接恒空），断言于是去校验一个设计上就不该存在的 URL。
+        globalThis.fetch = async (_input, init) => {
+            if (init?.method === 'HEAD') return new Response(null, { status: 204 });
+            return new Response('upstream down', { status: 500 });
+        };
+        const { response, json } = await call('/api/ai/daily', {
+            method: 'POST',
+            body: { action: 'daily', sessionId: 'daily-fallback-source-session', forceRefresh: true },
+            env: createLegacyMimoTextEnv(),
+        });
 
-    assert.equal(response.status, 200);
-    assert.match(json.data.sourceUrl, /^https?:\/\//);
+        assert.equal(response.status, 200);
+        assert.match(json.data.unitId, /^seed-/);
+        assert.match(json.data.sourceUrl, /^https?:\/\//);
+        assert.notEqual(json.data.source?.name, 'AI 综合解读');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('daily nullifies the source URL when the HEAD check returns 404', async () => {
