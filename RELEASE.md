@@ -3,6 +3,7 @@
 版本号、签名、构建、分发全部由本文件约束。`.claude/skills/release` 只是入口，内容冲突时以本文件为准。
 
 一句话：**本地只负责「决定发什么」，CI 负责「构建与分发」。** 本机不再 `assembleRelease`，也不再手工上传 APK。
+**更新日志的唯一真相源是仓库内的 `CHANGELOG.md`**——GitHub Release 正文、R2 的 `manifest/history.json` 与 App 设置页的「更新日志」都由它派生。
 
 ## 产物与数据源
 
@@ -12,7 +13,7 @@
 | R2 `apk/<name>.apk` | 同上，不可变 | CI |
 | R2 `mapping/<name>/mapping.txt.gz` | R8 mapping，公网取不到 | CI |
 | R2 `manifest/v<name>.json` | 该版本清单快照 | CI |
-| R2 `manifest/history.json` | 全量更新日志 | CI（每次发版重算） |
+| R2 `manifest/history.json` | 全量更新日志 | CI（每次发版从 CHANGELOG.md 重算） |
 | R2 `manifest/latest.json` | **指针**，唯一决定 App 认为的最新版 | CI，最后写 |
 
 应用内检查更新与官网下载按钮读的都是 `https://tracktosearch.pages.dev/manifest/latest.json`，
@@ -28,14 +29,23 @@
 
 1. **提交**：按 Conventional Commits 中文分逻辑提交，别把无关改动混进来。
 2. **版本号**：`versionCode` +1，`versionName` 按改动大小递增。CI 的 `verifyReleaseVersion` 会拿 tag 与 `versionName` 对账，不一致直接构建失败。
-3. **更新日志**：写 `changelog.md`，标题 `## v<version> 更新内容`，正文分类列条目。
-   **不要在标题里塞日期**——App 侧 `injectDateIntoChangelog` 会按清单的 `releaseDate` 自动追加，多写一层就是重复括号。
+3. **更新日志**：在 `CHANGELOG.md` **顶部**（`# 更新日志` 之后、上一版本段之前）插入新段。
+   段头格式 `## v<version> 更新内容（<yyyy-MM-dd>）`，日期填**今天的东八区日期**，它就是这个版本的 `releaseDate`。
+   格式规范见 `CHANGELOG_STYLE.md`；生成时用 changelog-generator 技能，注意先过滤自动化噪音。
+   提交后，Release body 由 `section` 子命令从本文件切出：
+
+   ```bash
+   # 输出必须落在 .tmp/：changelog.md 与 CHANGELOG.md 在大小写不敏感的文件系统上是同一个文件，
+   # section 是覆盖写，写到仓库根的 changelog.md 会把 61 个版本的全量日志截断成只剩当前一版。
+   node .ci/make-manifest.mjs section --version v<version> --out .tmp/changelog-body.md
+   gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
+   ```
 4. **提交版本号改动并打 tag**：`git tag v<version>`。
 5. **推送**：`git push origin master && git push origin v<version>`；代码镜像 `git -c http.proxy="" push gitee master`（Gitee 只留代码镜像，不再发 APK）。
 6. **建 Release 即触发发布**：
 
    ```bash
-   gh release create v<version> --title "v<version>" --notes-file changelog.md
+   gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
    ```
 
    `published` 事件触发 `.github/workflows/release-apk.yml`：构建签名 APK → 断言证书指纹 → 挂 GitHub 附件 →
