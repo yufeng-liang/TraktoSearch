@@ -406,7 +406,6 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
         nickname: '小明',
         inviteCode: 'ABCD2345EFGH',
         siteUrl: 'https://tracktosearch.pages.dev',
-        expiresAt: 1_700_000_000,
     });
 
     assert.match(email.html, /ABCD2345EFGH/);
@@ -426,8 +425,14 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
     assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-three-watching-email\.png/);
     assert.doesNotMatch(email.html, /app-icon-email/);
     assert.match(email.html, /TraktoSearch 取票码已准备好，请打开邮件查看。/);
-    assert.match(email.html, /感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
-    assert.match(email.text, /感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
+    assert.match(email.html, /请在 App 取票机页面输入下列取票码。/);
+    assert.match(email.text, /请在 App 取票机页面输入下列取票码。/);
+    // 有效期与「只能用一次」已从邮件里删掉：票码 72 小时过期这条约束由 App 侧承担，
+    // 正文不再放会随发信时间变化的日期串
+    assert.doesNotMatch(email.html, /有效期至|只能使用一次|请不要转发/);
+    assert.doesNotMatch(email.text, /有效期至|只能使用一次|请不要转发/);
+    assert.doesNotMatch(email.html, /感谢你想试试|还没有安装 App/);
+    assert.doesNotMatch(email.text, /感谢你想试试|还没有安装 App/);
     assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);
@@ -446,7 +451,6 @@ test('invitation email offers an APK download that always tracks the latest rele
         nickname: '小明',
         inviteCode: '123456',
         siteUrl: 'https://preview.example/',
-        expiresAt: 1_700_000_000,
     });
 
     assert.match(email.html, /href="https:\/\/preview\.example\/dl\/latest\.apk"/);

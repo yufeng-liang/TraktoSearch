@@ -343,7 +343,6 @@ export async function issueInvitation(
                 nickname: request.nickname,
                 inviteCode,
                 siteUrl: env.PUBLIC_SITE_ORIGIN,
-                expiresAt,
             }),
         });
         await env.DB.prepare(`
@@ -482,7 +481,6 @@ export async function resendInvitation(
                 nickname: current.nickname,
                 inviteCode,
                 siteUrl: env.PUBLIC_SITE_ORIGIN,
-                expiresAt,
             }),
         });
     } catch (error) {
@@ -497,7 +495,6 @@ export function buildInvitationEmail(input: {
     nickname: string;
     inviteCode: string;
     siteUrl: string;
-    expiresAt: number;
 }): { html: string; text: string } {
     const name = escapeHtml(input.nickname);
     const code = escapeHtml(input.inviteCode);
@@ -509,12 +506,11 @@ export function buildInvitationEmail(input: {
     // 写死了就会把半年后翻出这封邮件的用户引向一个旧包。
     const apkUrl = escapeHtml(`${siteUrl}/dl/latest.apk`);
     const siteHost = escapeHtml(siteUrl.replace(/^https?:\/\//, ''));
-    const expiry = formatDate(input.expiresAt);
     return {
         html: emailLayout(`
             <p style="margin:0 0 18px;color:#6D685F;">你好，${name}：</p>
             <h1 style="margin:0 0 16px;font:600 30px/1.15 Georgia,serif;color:#1D1C19;">欢迎加入 TraktoSearch！</h1>
-            <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。</p>
+            <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">请在 App 取票机页面输入下列取票码。</p>
             <div style="margin:0 0 8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-align:center;text-transform:uppercase;">TICKET CODE</div>
             <div style="margin:0 0 12px;padding:18px 20px;background:#E9E2D4;border-left:4px solid #D95532;text-align:center;">
                 <div style="font:700 24px/1.2 'Courier New',monospace;letter-spacing:.12em;color:#1D1C19;">${code}</div>
@@ -522,9 +518,7 @@ export function buildInvitationEmail(input: {
             <div style="margin:0 0 12px;text-align:center;">
                 <img src="${imageUrl}" alt="吉伊" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0;">
             </div>
-            <p style="margin:0 0 12px;color:#6D685F;line-height:1.7;">取票码有效期至 ${expiry}，只能使用一次，请不要转发给他人。</p>
-            <div style="margin:0 0 10px;color:#6D685F;font-size:13px;line-height:1.7;text-align:center;">还没有安装 App？可以直接下载 Android 安装包：</div>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 8px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:14px 0 8px;">
                 <tr><td align="center" style="padding:0;">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                         <tr><td style="background:#D95532;border-radius:6px;">
@@ -537,7 +531,7 @@ export function buildInvitationEmail(input: {
             <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TraktoSearch" style="color:#D95532;">GitHub 仓库</a>，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。</p>
             <p style="margin:0;color:#9B9588;font-size:13px;line-height:1.7;">也可以打开 <a href="${url}" style="color:#D95532;">TraktoSearch 官网</a>，查看最新说明。</p>
         `, false, 'TraktoSearch 取票码已准备好，请打开邮件查看。'),
-        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。\n\n${input.inviteCode}\n\n取票码有效期至 ${expiry}，只能使用一次，请不要转发给他人。还没有安装 App 的话，Android 安装包（始终最新版）：${siteUrl}/dl/latest.apk\n\n欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TraktoSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
+        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！请在 App 取票机页面输入下列取票码。\n\n${input.inviteCode}\n\nAndroid 安装包（始终最新版）：${siteUrl}/dl/latest.apk\n\n欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TraktoSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
     };
 }
 
@@ -633,14 +627,6 @@ function emailLayout(content: string, showBrand = true, preheader = ''): string 
     // 深色模式加固：Gmail 移动端会剥离 <head>，因此配色声明必须同时内联在 html/body 上，
     // 否则整封邮件（含透明贴图露出的背景）会被强制反相压暗。
     return `<!doctype html><html lang="zh-CN" style="color-scheme:light only;supported-color-schemes:light only"><head><meta charset="utf-8"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>:root{color-scheme:light only;supported-color-schemes:light only}</style></head><body style="color-scheme:light only;supported-color-schemes:light only;margin:0;padding:0;background:#F6F2E9;color:#1D1C19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;">${hiddenPreheader}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#F6F2E9;"><tr><td align="center" style="padding:24px 16px;"><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background:#F6F2E9;"><tr><td style="${shellStyle}">${brand}${content}<div style="height:1px;background:#D8D0C1;margin:30px 0 16px;"></div><p style="margin:16px 0 0;color:#9B9588;font-size:12px;line-height:1.6;">TraktoSearch · 从想看到找到，再到看过</p></td></tr></table></td></tr></table></body></html>`;
-}
-
-function formatDate(timestamp: number): string {
-    return new Intl.DateTimeFormat('zh-CN', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Asia/Shanghai',
-    }).format(new Date(timestamp * 1000));
 }
 
 function escapeHtml(value: string): string {
