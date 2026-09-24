@@ -124,8 +124,20 @@ object SwiftieEggController {
     /** 遮罩总时长。比现有 fadeIn 的 200ms 长，揭示要看得见才有效。 */
     const val REVEAL_MS: Long = 520L
 
-    /** 扰动幅度上限，随进度线性收到 0。 */
+    /**
+     * 星形扰动的**振幅常数**（起手那一帧有多歪）。
+     *
+     * 衰减不记在这里：随进度收到 0 是 `revealWiggle` 的职责，这个常量只管幅度上限。
+     */
     const val REVEAL_WIGGLE_MAX: Float = 0.34f
+
+    /**
+     * 外沿羽化带占羽化带宽 `W` 的比例。
+     *
+     * 「铺满」的判据只落在这一条带上，所以 `revealBaseRadius` 的注释与 Task 4 的
+     * AGSL 着色器读的都是这一个数 —— 单一真值，别在着色器里另抄一遍字面量。
+     */
+    const val REVEAL_OUTER_BAND_RATIO: Float = 0.35f
 
     /**
      * 这一次打开到底走不走揭示。
@@ -145,23 +157,35 @@ object SwiftieEggController {
      *
      * 终点**不是** `maxCorner` 而是 `maxCorner + feather`：最后一帧如果只长到刚好
      * 够到四角，四角正好落在羽化带中心、alpha≈0.5，屏幕上留一圈半透明的边。
-     * 外沿带宽只有 0.35W，所以用 maxCorner + W 一并满足还多留 0.65W 余量。
+     * 外沿带宽只有 `REVEAL_OUTER_BAND_RATIO`·W，所以用 maxCorner + W 一并满足还多留余量。
+     *
+     * `eased` 钳到 0..1：过冲时不让半径长过终点值，理由同 `revealWiggle`。
      */
     fun revealBaseRadius(maxCornerPx: Float, featherPx: Float, eased: Float): Float =
-        (maxCornerPx + featherPx) * eased
+        (maxCornerPx + featherPx) * eased.coerceIn(0f, 1f)
 
     /**
      * 羽化带宽。
      *
      * 用 `eased` 而不是 `eased²`：平方会让它到 0.9 之前几乎不出现，而前半段最需要软。
+     *
+     * 三个参数单位同为**像素**：`maxFeatherPx` 与 `0.18f·maxCornerPx·eased` 直接取小值，
+     * dp 常量必须在传参前按 density 换算成 px，否则高 Density 屏上带宽会窄 2–3 倍。
+     * `eased` 钳到 0..1，过冲也不会让带宽越过上面的比例关系。
      */
     fun revealFeatherPx(maxCornerPx: Float, eased: Float, maxFeatherPx: Float): Float {
-        val edge = maxCornerPx * eased
+        val edge = maxCornerPx * eased.coerceIn(0f, 1f)
         return minOf(maxFeatherPx, 0.18f * edge)
     }
 
-    /** 扰动幅度。收尾必须精确为 0，最后一帧才是标准圆。 */
-    fun revealWiggle(eased: Float): Float = REVEAL_WIGGLE_MAX * (1f - eased)
+    /**
+     * 扰动幅度。收尾必须精确为 0，最后一帧才是标准圆。
+     *
+     * `eased` 钳到 0..1：`eased > 1` 会让返回值变负，星形扰动随之**静默反向**（外凸变
+     * 内凹）。今天用的 FastOutSlowInEasing 不过冲所以咬不到这条，但契约不该只活在注释里。
+     */
+    fun revealWiggle(eased: Float): Float =
+        REVEAL_WIGGLE_MAX * (1f - eased.coerceIn(0f, 1f))
 
     /**
      * 三朵互质频率叠加的形状函数。频率取 2/3/5：两两互质，叠出来「不均匀但没有
@@ -182,12 +206,17 @@ object SwiftieEggController {
      * AGSL 侧拿不到可依证的 `atan`，所以那里不调三角函数：c = dx/r 就是 cosθ、
      * s = dy/r 就是 sinθ，倍角全是多项式，而 sin(kθ+φ) 的 cosφ/sinφ 直接烤成常量。
      * 两个形式的等价由 `revealLobeSum_polynomialFormMatchesTrigonometricForm` 钉住。
+     *
+     * 别把它读成「三角形式那份是死代码」：`revealLobeSum` 是这条等价测的**参照物**，
+     * 也是 Kotlin 侧按 0..2π 等分采样角建 Path 时的推荐写法；遮罩几何逐像素求值走本函数。
      */
     fun revealLobeSumFromCosSin(cosTheta: Float, sinTheta: Float): Float {
         val c = cosTheta
         val s = sinTheta
         // 幂次要单独算：sin5θ = 16s⁵-20s³+5s 里的 s³ 是 s 的三次幂，不是 sin3θ。
-        // 直接拿下面的 sin3 变量去顶 s³ 是错的（实测最大误差 4.8，整条曲线全跑偏）。
+        // 拿下面的 sin3 变量去顶 s³ 是错的，而且偏差是 O(1) 不是 O(ε)：
+        // 该变体的最大偏差 4.2831 = 0.14 · cos0.7 · max|100s³ − 60s|（s=±1 处取到 40），
+        // 相对等价测 2e-5 的容差差五个数量级，一错就红，不会变成真机上难查的形状偏差。
         val s2 = s * s
         val s3 = s2 * s
         val s5 = s3 * s2

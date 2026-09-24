@@ -135,8 +135,11 @@ class SwiftieEggControllerTest {
 
     @Test
     fun cloudNudgeDegrees_clampsOutOfRangePhase() {
-        assertThat(SwiftieEggController.cloudNudgeDegrees(-3f)).isWithin(1e-6f).of(0f)
-        assertThat(SwiftieEggController.cloudNudgeDegrees(7f)).isWithin(1e-4f).of(0f)
+        // 必须用**非整数**越界相位。整数与半整数上 sin(2πp) 和 sin(πp) 同时恒零，
+        // 拿 -3f / 7f 做断言的话，把 coerceIn 整行删掉测试照样绿 —— 假覆盖。
+        // 同理别用 2.5f / 200f：半整数与整数一样是恒零点。
+        assertThat(SwiftieEggController.cloudNudgeDegrees(-0.25f)).isWithin(1e-4f).of(0f)
+        assertThat(SwiftieEggController.cloudNudgeDegrees(1.25f)).isWithin(1e-4f).of(0f)
     }
 
     @Test
@@ -159,8 +162,10 @@ class SwiftieEggControllerTest {
         val feather = 28f
         val base = SwiftieEggController.revealBaseRadius(maxCorner, feather, eased = 1f)
         assertThat(base).isWithin(1e-4f).of(maxCorner + feather)
-        // 真正的判据是外沿带宽，用更严的 maxCorner + W 当增长终点
-        assertThat(base).isAtLeast(maxCorner + 0.35f * feather)
+        // 真正的判据是外沿带宽，用更严的 maxCorner + W 当增长终点。
+        // 带宽比例走常量，Task 4 的 AGSL 读同一个数，不留字面量副本。
+        assertThat(base)
+            .isAtLeast(maxCorner + SwiftieEggController.REVEAL_OUTER_BAND_RATIO * feather)
     }
 
     @Test
@@ -227,12 +232,33 @@ class SwiftieEggControllerTest {
     }
 
     @Test
-    fun revealFeatherPx_cappedByDpAndShrinksAtTheStart() {
+    fun revealFeatherPx_cappedByMaxFeatherPxAndShrinksAtTheStart() {
+        // 注意单位：cap 这一参与 0.18·maxCornerPx·eased 直接取小值，两者都是**像素**。
+        // 下面写 28f 只是「换算后的 px 值」的占位，调用方传 dp 字面量 28f 的话，
+        // 高 Density 屏上带宽会窄 2–3 倍，羽化几乎看不见 —— 传参前必须 dp→px。
         val cap = 28f
-        // eased=1 时 0.18·maxCorner 远大于 28dp，取到上限
+        // eased=1 时 0.18·maxCorner 远大于 cap，取到上限
         assertThat(SwiftieEggController.revealFeatherPx(1400f, 1f, cap)).isWithin(1e-4f).of(cap)
         // edge 起手接近 0 时带宽必须一起缩掉，否则第一帧是「整屏蒙了一层灰」
         assertThat(SwiftieEggController.revealFeatherPx(1400f, 0.02f, cap)).isLessThan(cap)
         assertThat(SwiftieEggController.revealFeatherPx(1400f, 0f, cap)).isWithin(1e-6f).of(0f)
+    }
+
+    @Test
+    fun revealGeometry_clampsEasedSoOvershootCannotInvertTheLobe() {
+        // eased 的取值域是 0..1。插值器一旦过冲（或调用方手滑传 1.2f），不钳位的话
+        // revealWiggle 变负 —— 星形扰动**静默反向**（外凸变内凹），半径也会长过终点值。
+        // 断言值都挑了「不钳位就一定算错」的点：羽化那条特意用小 maxCorner 让 cap 不咬合，
+        // 否则 minOf 会先把越界吃掉，断言就证伪不掉了。
+        assertThat(SwiftieEggController.revealWiggle(1.2f)).isWithin(1e-6f).of(0f)
+        assertThat(SwiftieEggController.revealBaseRadius(1400f, 28f, 1.2f))
+            .isWithin(1e-4f).of(1428f)
+        assertThat(SwiftieEggController.revealFeatherPx(30f, 1.2f, 28f))
+            .isWithin(1e-4f).of(5.4f)
+        // 负 eased 同样钳到 0：第一帧不能已经歪过头、也不能起手就有半径
+        assertThat(SwiftieEggController.revealWiggle(-0.2f))
+            .isWithin(1e-6f).of(SwiftieEggController.REVEAL_WIGGLE_MAX)
+        assertThat(SwiftieEggController.revealBaseRadius(1400f, 28f, -0.2f))
+            .isWithin(1e-6f).of(0f)
     }
 }
