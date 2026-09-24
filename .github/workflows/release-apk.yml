@@ -267,39 +267,59 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "APK sha256=$sha size=$size versionCode=$vc minSdk=$ms"
 
-      - name: 取 Release 正文与日期
+      - name: 段头断言（CHANGELOG.md 是唯一真相源）
         if: env.PUBLISH == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release view "$RELEASE_REF" --json tagName,createdAt,body > release.json
-          # 存原始正文，不预先加「## vX.X.X 更新内容（日期）」标题：App 侧
-          # injectDateIntoChangelog 会自己按 releaseDate 补，多包一层就是重复标题
-          node -e 'const r=JSON.parse(require("fs").readFileSync("release.json","utf8"));process.stdout.write(r.body || "")' > changelog.md
-          created=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("release.json","utf8")).createdAt)')
-          # 日期取东八区那天，与迁移前 App 展示一致（旧解析器用设备时区，16:00Z 之后会显示成次日）
-          echo "RELEASE_DATE=$(TZ=Asia/Shanghai date -d "$created" +%F)" >> "$GITHUB_ENV"
-          echo "正文 $(wc -c < changelog.md) 字节，releaseDate=$RELEASE_DATE"
+          # 用生成器自己的解析器，避免断言与实现用两套规则
+          node -e '
+            const fs = require("fs");
+            import("./.ci/make-manifest.mjs").then((m) => {
+              const want = process.env.EXPECTED_VERSION_NAME;
+              const sections = m.parseChangelog(fs.readFileSync("CHANGELOG.md", "utf8"));
+              if (!sections.length) { console.error("::error::CHANGELOG.md 没有任何版本段"); process.exit(1); }
+              const top = sections[0];
+
+              // 1) 顶部段必须就是本次发布的版本。挡住「建了 Release 但忘了加段」：
+              //    那种情况顶部仍是上一版，history.json 会静默少一个新版本。
+              if (top.tagName !== `v${want}`) {
+                console.error(`::error::CHANGELOG.md 顶部段是 ${top.tagName}，本次发布 v${want}。请先在文件顶部补上本次版本的段`);
+                process.exit(1);
+              }
+
+              // 2) 日期不得倒退。用 >= 而非 >：线上存在同日发多个版本的情况
+              //    （如 2026-06-18 一天发了 v2.6.1…v2.7.4 六个版本），用 > 会误伤正常发版。
+              if (sections.length > 1 && top.releaseDate < sections[1].releaseDate) {
+                console.error(`::error::顶部段日期 ${top.releaseDate} 早于下一段 ${sections[1].releaseDate}，日期倒退了`);
+                process.exit(1);
+              }
+
+              // 3) 不得是未来日期（按东八区判断，与发布日期口径一致）
+              const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date());
+              if (top.releaseDate > today) {
+                console.error(`::error::顶部段日期 ${top.releaseDate} 晚于今天 ${today}`);
+                process.exit(1);
+              }
+
+              console.log(`段头断言通过：${top.tagName}（${top.releaseDate}），共 ${sections.length} 个版本`);
+            });
+          '
 
       - name: 生成分版清单与全量日志
         if: env.PUBLISH == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION_NAME: ${{ env.EXPECTED_VERSION_NAME }}
           VERSION_CODE: ${{ env.APK_VERSION_CODE }}
           FILE_NAME: TraktoSearch-v${{ env.EXPECTED_VERSION_NAME }}.apk
           SHA256: ${{ env.APK_SHA256 }}
           SIZE: ${{ env.APK_SIZE }}
           MIN_SDK: ${{ env.APK_MIN_SDK }}
-          CHANGELOG_ZH_FILE: changelog.md
         run: |
           set -euo pipefail
           mkdir -p manifest
           node .ci/make-manifest.mjs latest --out "manifest/v${VERSION_NAME}.json"
           # 全量日志每次发版重算：清单是唯一真相，不留增量合并的边界情况
-          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate > releases.json
-          node .ci/make-manifest.mjs history --releases releases.json --out manifest/history.json
+          node .ci/make-manifest.mjs history --out manifest/history.json
           cp "manifest/v${VERSION_NAME}.json" manifest/latest.json
           ls -l manifest/
 
