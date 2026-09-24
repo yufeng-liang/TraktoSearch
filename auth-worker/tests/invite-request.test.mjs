@@ -426,8 +426,8 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
     assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-three-watching-email\.png/);
     assert.doesNotMatch(email.html, /app-icon-email/);
     assert.match(email.html, /TraktoSearch 取票码已准备好，请打开邮件查看。/);
-    assert.match(email.html, /感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
-    assert.match(email.text, /感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
+    assert.match(email.html, /感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
+    assert.match(email.text, /感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。/);
     assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);
@@ -438,4 +438,30 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
     // Gmail 移动端会剥离 <head>，html/body 内联声明必须同时存在才能兜住反相
     assert.match(email.html, /<html lang="zh-CN" style="color-scheme:light only;supported-color-schemes:light only">/);
     assert.match(email.html, /<body style="color-scheme:light only;supported-color-schemes:light only;/);
+});
+
+test('invitation email offers an APK download that always tracks the latest release', () => {
+    // 故意用非生产域名：下载地址必须由 siteUrl 派生，写死域名在这里就会红
+    const email = buildInvitationEmail({
+        nickname: '小明',
+        inviteCode: '123456',
+        siteUrl: 'https://preview.example/',
+        expiresAt: 1_700_000_000,
+    });
+
+    assert.match(email.html, /href="https:\/\/preview\.example\/dl\/latest\.apk"/);
+    assert.match(email.text, /https:\/\/preview\.example\/dl\/latest\.apk/);
+    assert.match(email.html, /下载 Android 安装包/);
+    // 邮件会长期留在收件箱里，版本号写死就会把旧用户引向旧包
+    assert.doesNotMatch(email.html, /TraktoSearch-v\d/);
+    assert.doesNotMatch(email.text, /TraktoSearch-v\d/);
+    // 下载入口已独立成按钮，官网那句里再留「下载入口」就是重复信息
+    assert.doesNotMatch(email.html, /下载入口/);
+    // 票码是唯一主角，下载按钮只能排在票码之后
+    const codeCardIndex = email.html.indexOf('background:#E9E2D4');
+    const buttonIndex = email.html.indexOf('/dl/latest.apk');
+    assert.ok(codeCardIndex >= 0 && codeCardIndex < buttonIndex);
+    // 直链 APK 是钓鱼邮件的典型形状：正文里要点明来源域，让收件人能核对
+    assert.match(email.html, /安装包始终由 preview\.example 提供/);
+    assert.match(email.html, /未知来源/);
 });

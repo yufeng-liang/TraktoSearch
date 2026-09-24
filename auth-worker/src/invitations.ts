@@ -504,12 +504,17 @@ export function buildInvitationEmail(input: {
     const siteUrl = input.siteUrl.replace(/\/$/, '');
     const url = escapeHtml(siteUrl);
     const imageUrl = escapeHtml(`${siteUrl}/assets/chiikawa/ai-three-watching-email.png`);
+    // 票码由官网页面申请，收件人此刻往往还没装上 App。latest.apk 是 Pages 侧的
+    // 稳定别名，由 CI 移动 latest.json 指针决定指向，所以邮件里绝不写版本号——
+    // 写死了就会把半年后翻出这封邮件的用户引向一个旧包。
+    const apkUrl = escapeHtml(`${siteUrl}/dl/latest.apk`);
+    const siteHost = escapeHtml(siteUrl.replace(/^https?:\/\//, ''));
     const expiry = formatDate(input.expiresAt);
     return {
         html: emailLayout(`
             <p style="margin:0 0 18px;color:#6D685F;">你好，${name}：</p>
             <h1 style="margin:0 0 16px;font:600 30px/1.15 Georgia,serif;color:#1D1C19;">欢迎加入 TraktoSearch！</h1>
-            <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。</p>
+            <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。</p>
             <div style="margin:0 0 8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-align:center;text-transform:uppercase;">TICKET CODE</div>
             <div style="margin:0 0 12px;padding:18px 20px;background:#E9E2D4;border-left:4px solid #D95532;text-align:center;">
                 <div style="font:700 24px/1.2 'Courier New',monospace;letter-spacing:.12em;color:#1D1C19;">${code}</div>
@@ -518,10 +523,21 @@ export function buildInvitationEmail(input: {
                 <img src="${imageUrl}" alt="吉伊" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0;">
             </div>
             <p style="margin:0 0 12px;color:#6D685F;line-height:1.7;">取票码有效期至 ${expiry}，只能使用一次，请不要转发给他人。</p>
+            <div style="margin:0 0 10px;color:#6D685F;font-size:13px;line-height:1.7;text-align:center;">还没有安装 App？可以直接下载 Android 安装包：</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 8px;">
+                <tr><td align="center" style="padding:0;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr><td style="background:#D95532;border-radius:6px;">
+                            <a href="${apkUrl}" style="display:block;padding:13px 30px;font:600 15px/1.1 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;color:#FFFFFF;text-decoration:none;">下载 Android 安装包</a>
+                        </td></tr>
+                    </table>
+                </td></tr>
+            </table>
+            <p style="margin:0 0 24px;color:#9B9588;font-size:12px;line-height:1.7;text-align:center;">安装包始终由 ${siteHost} 提供，不会经过任何第三方站点；下载后需在系统提示中允许安装未知来源应用。</p>
             <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TraktoSearch" style="color:#D95532;">GitHub 仓库</a>，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。</p>
-            <p style="margin:0;color:#9B9588;font-size:13px;line-height:1.7;">也可以打开 <a href="${url}" style="color:#D95532;">TraktoSearch 官网</a>，查看最新说明和下载入口。</p>
+            <p style="margin:0;color:#9B9588;font-size:13px;line-height:1.7;">也可以打开 <a href="${url}" style="color:#D95532;">TraktoSearch 官网</a>，查看最新说明。</p>
         `, false, 'TraktoSearch 取票码已准备好，请打开邮件查看。'),
-        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！感谢你下载并体验 TraktoSearch，请在 App 取票机页面输入下列取票码。\n\n${input.inviteCode}\n\n取票码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TraktoSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
+        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！感谢你想试试 TraktoSearch，请在 App 取票机页面输入下列取票码。\n\n${input.inviteCode}\n\n取票码有效期至 ${expiry}，只能使用一次，请不要转发给他人。还没有安装 App 的话，Android 安装包（始终最新版）：${siteUrl}/dl/latest.apk\n\n欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TraktoSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
     };
 }
 
