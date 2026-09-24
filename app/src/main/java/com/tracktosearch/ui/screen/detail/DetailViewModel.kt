@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.annotation.StringRes
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
@@ -54,6 +55,7 @@ import com.tracktosearch.data.repository.MediaDetailBundle
 import com.tracktosearch.data.repository.MediaCollection
 import com.tracktosearch.data.repository.TitleSource
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UserRatingSnapshot
 import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
@@ -326,6 +328,7 @@ private fun mergeDoubanOverview(douban: String?, current: String): String =
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val tmdbRepository: TmdbRepository,
     private val mediaMetadataRepository: MediaMetadataRepository,
     private val traktRepository: TraktRepository,
@@ -347,6 +350,8 @@ class DetailViewModel @Inject constructor(
     val posterColorExtractor: PosterColorExtractor,
     // 本地评分+短评缓存(优先读取 Trakt 之外的本地值,提交/更新时写回)
     private val userReviewRepository: UserReviewRepository,
+    // 评分首帧镜像：init 阶段同步 peek，消除「未评分→已评分」的首帧跳变
+    private val userRatingSnapshot: UserRatingSnapshot,
     // 观影画像行为记录：只记用户主动完成的剧集，未授权时记录器自己静默返回
     private val aiProfileBehaviorRecorder: AiProfileBehaviorRecorder
 ) : ViewModel() {
@@ -388,7 +393,25 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    private val _uiState = MutableStateFlow(DetailUiState())
+    // 首帧评分种子：构造时同步从路由参数 + 内存镜像取，早于首次组合，所以首帧就是已评分。
+    // 只作提示，loadDetail 的异步读取照常覆盖它。
+    // 优先级与异步路径一致（doubanSupplement.userRating ?: current.userRating）：豆瓣分优先，
+    // 拿不到再退回 Trakt 分。豆瓣模式下 traktId 可能有效但评分只记在豆瓣表里，不能只看 traktId。
+    private val seededUserRating: Int? = run {
+        val traktId = savedStateHandle.get<Int>("traktId") ?: 0
+        val mediaType = if (savedStateHandle.get<String>("type") == "show") "show" else "movie"
+        val doubanId = savedStateHandle.get<String>("doubanId")?.takeIf { it.isNotBlank() }
+        val doubanRating = doubanId?.let { userRatingSnapshot.peekDouban(it) }
+        val traktRating = if (traktId > 0) {
+            userRatingSnapshot.peekTrakt(traktId.toLong(), mediaType)
+        } else {
+            null
+        }
+        doubanRating ?: traktRating
+    }
+
+    private val _uiState = MutableStateFlow(DetailUiState(userRating = seededUserRating))
+
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
     /** Toast 事件(参考 PersonViewModel 模式),用于豆瓣同步成功/失败提示 */
@@ -581,6 +604,9 @@ class DetailViewModel @Inject constructor(
                 isMarkedWatchlist = peekedStates?.first ?: cached.uiState.isMarkedWatchlist,
                 isMarkedWatched = peekedStates?.second ?: cached.uiState.isMarkedWatched,
                 ratingSource = restoredRatingSource,
+                // 缓存里若还没写上评分（上次在评分加载完成前就返回了），用首帧种子兜底，
+                // 否则这次进入又会先画一帧「未评分」
+                userRating = cached.uiState.userRating ?: seededUserRating,
                 // 缓存里已知有系列但卡片还没加载出来时，保持占位，避免返回详情后二次插入。
                 isCollectionLoading = cached.currentMediaType == MediaType.MOVIE &&
                     cached.currentCollectionId > 0 &&
@@ -720,6 +746,8 @@ class DetailViewModel @Inject constructor(
             year = seededYear,
             isMarkedWatchlist = inWatchlist,
             isMarkedWatched = isWatched,
+            // 首帧评分：构造时已从内存镜像取到，这里必须带上，否则新建 DetailUiState 会把它重置成 null
+            userRating = seededUserRating,
             isLoadingVideosImages = true,
             // 摘要确认有系列时首帧就占位；摘要未知则不凭空占位，避免无系列影片多出一块骨架。
             isCollectionLoading = seed?.collectionId != null,
@@ -3380,6 +3408,8 @@ class DetailViewModel @Inject constructor(
             pendingSync = pendingSync
         )
         runCatching { doubanSyncedItemDao.insertAll(listOf(item)) }
+        // 写穿首帧镜像：豆瓣写入都汇到这里，下次进详情页 init 阶段就能同步读到评分
+        userRatingSnapshot.putDouban(doubanId, item.rating)
     }
 
     /**

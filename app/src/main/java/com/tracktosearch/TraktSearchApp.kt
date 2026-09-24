@@ -63,6 +63,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     // 惰性 Provider：解析它会跑完 HapticCapabilities.probe（getSystemService、到 VibratorService
     // 的 IPC、三次类查找）与五个 backend 的构造，全是阻塞调用，详见 HapticModule 的类注释
     @Inject lateinit var appHapticsProvider: Provider<AppHaptics>
+    // 惰性 Provider：依赖 UserReviewDao/DoubanSyncedItemDao，直接注入会在主线程触发建库
+    @Inject lateinit var userRatingSnapshotProvider: Provider<com.tracktosearch.data.repository.UserRatingSnapshot>
 
     // CrashLogUploader 已改为 Hilt 单例：走网关 /api/crash-logs 代理，客户端不持有上报密钥。
 
@@ -126,6 +128,18 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                     }
                     appDatabaseProvider.get()
                     StartupTrace.mark("application.db_warmup.done")
+                    // 评分镜像预热：详情页 init 阶段要同步 peek 评分来消除「未评分→已评分」的首帧跳变，
+                    // 没预热完就进详情页会退回异步读取（即旧行为）。
+                    try {
+                        // 已在后台预热线程上，直接阻塞读完这两张小表
+                        runBlocking { userRatingSnapshotProvider.get().warmUp() }
+                        StartupTrace.mark("application.rating_snapshot_warmup.done")
+                    } catch (e: Exception) {
+                        StartupTrace.mark(
+                            "application.rating_snapshot_warmup.failed",
+                            "err=${e.javaClass.simpleName}"
+                        )
+                    }
                     // 海报主色缓存预热：详情页首帧要同步读内存层（peekColor 不读盘），
                     // 漏了这一步时冷启动后整轮都要等详情页海报解码完才出沉浸色。
                     try {

@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
+import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
@@ -26,6 +27,7 @@ import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UserRatingSnapshot
 import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
@@ -79,6 +81,7 @@ class DetailViewModelDoubanTest {
     private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
+    private lateinit var userRatingSnapshot: UserRatingSnapshot
     private lateinit var aiProfileBehaviorRecorder: com.tracktosearch.data.ai.AiProfileBehaviorRecorder
     private lateinit var viewModel: DetailViewModel
 
@@ -109,6 +112,7 @@ class DetailViewModelDoubanTest {
         traktConnected = MutableStateFlow(false)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
+        userRatingSnapshot = mockk(relaxed = true)
         aiProfileBehaviorRecorder = mockk(relaxed = true)
 
         every { tokenStorage.accessToken } returns flowOf(null)
@@ -131,6 +135,7 @@ class DetailViewModelDoubanTest {
         coEvery { mediaMetadataRepository.getSummaries(any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
+            SavedStateHandle(),
             tmdbRepository,
             mediaMetadataRepository,
             traktRepository,
@@ -147,7 +152,7 @@ class DetailViewModelDoubanTest {
             doubanSyncedItemDao,
             sessionModeManager,
             posterColorExtractor,
-            userReviewRepository, aiProfileBehaviorRecorder
+            userReviewRepository, userRatingSnapshot, aiProfileBehaviorRecorder
         )
     }
 

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -31,6 +32,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UserRatingSnapshot
 import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
@@ -95,6 +97,7 @@ class DetailViewModelSupplementTest {
     private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
+    private lateinit var userRatingSnapshot: UserRatingSnapshot
     private lateinit var aiProfileBehaviorRecorder: com.tracktosearch.data.ai.AiProfileBehaviorRecorder
 
     private lateinit var viewModel: DetailViewModel
@@ -127,6 +130,7 @@ class DetailViewModelSupplementTest {
         every { sessionModeManager.sessionMode } returns flowOf(SessionMode.TRAKT)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
+        userRatingSnapshot = mockk(relaxed = true)
         aiProfileBehaviorRecorder = mockk(relaxed = true)
 
         every { tokenStorage.accessToken } returns flowOf(null)
@@ -145,11 +149,12 @@ class DetailViewModelSupplementTest {
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
+            SavedStateHandle(),
             tmdbRepository, mediaMetadataRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
-            posterColorExtractor, userReviewRepository, aiProfileBehaviorRecorder
+            posterColorExtractor, userReviewRepository, userRatingSnapshot, aiProfileBehaviorRecorder
         )
     }
 

@@ -87,6 +87,7 @@ class DoubanSyncManagerTest {
     private val statusConsistencyChecker = mockk<DoubanTraktStatusConsistencyChecker>(relaxed = true)
     private val sessionModeManager = mockk<com.tracktosearch.data.session.SessionModeManager>(relaxed = true)
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
+    private val userRatingSnapshot = mockk<UserRatingSnapshot>(relaxed = true)
     private val appContext: Context = RuntimeEnvironment.getApplication()
 
     private lateinit var manager: DoubanSyncManager
@@ -133,6 +134,7 @@ class DoubanSyncManagerTest {
             statusConsistencyChecker,
             sessionModeManager,
             tmdbRepository,
+            userRatingSnapshot,
             Semaphore(3),
             appContext
         )

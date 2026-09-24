@@ -372,6 +372,8 @@ class DoubanSyncManager @Inject constructor(
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val sessionModeManager: SessionModeManager,
     private val tmdbRepository: TmdbRepository,
+    // 评分首帧镜像：同步批量改表后重建，避免详情页首帧读到过期评分
+    private val userRatingSnapshot: UserRatingSnapshot,
     /** 豆瓣全站爬取并发共享信号量：与批量移除共用，避免两者叠加超出反爬安全并发 */
     @DoubanCrawlConcurrency private val sharedCrawlSemaphore: Semaphore,
     @ApplicationContext private val appContext: Context
@@ -670,6 +672,9 @@ class DoubanSyncManager @Inject constructor(
                     }
                 } finally {
                     persistLastSyncSummary()
+                    // 同步会批量改写 douban_synced_items.rating（多条 insertAll 分散在流程里），
+                    // 逐点写穿容易漏；同步收尾时重建评分镜像，保证详情页首帧读到的评分与表一致
+                    runCatching { userRatingSnapshot.warmUp() }
                     cloudDetailsPoolManager.resetDownloadSuppression()
                     releaseWakeLock()
                 }

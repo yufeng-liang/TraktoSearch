@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.ai.AiProfileBehavior
 import com.tracktosearch.data.ai.AiProfileBehaviorRecorder
@@ -22,6 +23,7 @@ import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UserRatingSnapshot
 import com.tracktosearch.data.repository.UserReviewRepository
 import com.tracktosearch.data.session.SessionMode
 import com.tracktosearch.data.session.SessionModeManager
@@ -85,6 +87,7 @@ class DetailViewModelTest {
     private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
+    private lateinit var userRatingSnapshot: UserRatingSnapshot
     private lateinit var aiProfileBehaviorRecorder: AiProfileBehaviorRecorder
 
     private lateinit var viewModel: DetailViewModel
@@ -118,6 +121,7 @@ class DetailViewModelTest {
         every { sessionModeManager.sessionMode } returns flowOf(SessionMode.TRAKT)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
+        userRatingSnapshot = mockk(relaxed = true)
         aiProfileBehaviorRecorder = mockk(relaxed = true)
 
         // 3. init 块副作用 stub
@@ -141,11 +145,12 @@ class DetailViewModelTest {
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
 
         viewModel = DetailViewModel(
+            SavedStateHandle(),
             tmdbRepository, mediaMetadataRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
             sessionModeManager,
-            posterColorExtractor, userReviewRepository, aiProfileBehaviorRecorder
+            posterColorExtractor, userReviewRepository, userRatingSnapshot, aiProfileBehaviorRecorder
         )
     }
 
@@ -799,5 +804,69 @@ class DetailViewModelTest {
         assertThat(viewModel.uiState.value.userRating).isEqualTo(8)
         assertThat(viewModel.uiState.value.isMarkedWatched).isFalse()
         assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
+    }
+
+    // ==================== 首帧评分播种 ====================
+
+    /** 用带路由参数的 SavedStateHandle 新建 VM，模拟导航进详情页。 */
+    private fun buildViewModelWithRoute(
+        traktId: Int,
+        type: String,
+        doubanId: String? = null
+    ): DetailViewModel = DetailViewModel(
+        SavedStateHandle(
+            buildMap {
+                put("traktId", traktId)
+                put("type", type)
+                if (doubanId != null) put("doubanId", doubanId)
+            }
+        ),
+        tmdbRepository, mediaMetadataRepository, traktRepository, resourceRepository, ratingsRepository,
+        viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
+        languageStorage, doubanRepository, doubanRexxarRepository, doubanAuthStorage, doubanSyncedItemDao,
+        sessionModeManager,
+        posterColorExtractor, userReviewRepository, userRatingSnapshot, aiProfileBehaviorRecorder
+    )
+
+    @Test
+    fun initialUserRating_seededFromSnapshot_synchronously() = runTest {
+        // 镜像命中时，构造完成（首帧）就该是已评分，不需要任何异步等待
+        every { userRatingSnapshot.peekTrakt(100L, "movie") } returns 8
+
+        val vm = buildViewModelWithRoute(traktId = 100, type = "movie")
+
+        assertThat(vm.uiState.value.userRating).isEqualTo(8)
+    }
+
+    @Test
+    fun initialUserRating_emptySnapshot_staysNull() = runTest {
+        // 负向对照：镜像未命中时首帧仍是未评分，证明上一条不是恒真的断言
+        every { userRatingSnapshot.peekTrakt(any(), any()) } returns null
+        every { userRatingSnapshot.peekDouban(any()) } returns null
+
+        val vm = buildViewModelWithRoute(traktId = 100, type = "movie")
+
+        assertThat(vm.uiState.value.userRating).isNull()
+    }
+
+    @Test
+    fun initialUserRating_doubanTakesPrecedenceOverTrakt() = runTest {
+        // 与异步路径一致：豆瓣分优先于 Trakt 分
+        every { userRatingSnapshot.peekTrakt(100L, "movie") } returns 8
+        every { userRatingSnapshot.peekDouban("1234567") } returns 6
+
+        val vm = buildViewModelWithRoute(traktId = 100, type = "movie", doubanId = "1234567")
+
+        assertThat(vm.uiState.value.userRating).isEqualTo(6)
+    }
+
+    @Test
+    fun initialUserRating_showType_queriesShowKey() = runTest {
+        // 剧集必须按 "show" 查，否则会命中同号电影的评分
+        every { userRatingSnapshot.peekTrakt(100L, "show") } returns 10
+
+        val vm = buildViewModelWithRoute(traktId = 100, type = "show")
+
+        assertThat(vm.uiState.value.userRating).isEqualTo(10)
     }
 }

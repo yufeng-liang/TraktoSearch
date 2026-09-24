@@ -7,6 +7,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -21,7 +22,8 @@ import org.junit.Test
 class UserReviewRepositoryTest {
 
     private val dao = mockk<UserReviewDao>(relaxed = true)
-    private val repo = UserReviewRepository(dao)
+    private val ratingSnapshot = mockk<UserRatingSnapshot>(relaxed = true)
+    private val repo = UserReviewRepository(dao, ratingSnapshot)
 
     private fun sampleEntity(
         traktId: Long = 1L,
@@ -69,6 +71,24 @@ class UserReviewRepositoryTest {
         repo.saveReview(review)
 
         coVerify { dao.upsert(any()) }
+    }
+
+    @Test
+    fun saveReview_writesThroughRatingSnapshot() = runTest {
+        // 写盘同时写穿首帧镜像，否则下次进详情页仍会先闪「未评分」
+        val review = sampleEntity(traktId = 1L, mediaType = "show")
+
+        repo.saveReview(review)
+
+        verify { ratingSnapshot.putTrakt(1L, "show", 8) }
+    }
+
+    @Test
+    fun deleteReview_clearsRatingSnapshot() = runTest {
+        repo.deleteReview(1L, "movie")
+
+        coVerify { dao.deleteByKey(1L, "movie") }
+        verify { ratingSnapshot.removeTrakt(1L, "movie") }
     }
 
     @Test
