@@ -186,26 +186,30 @@ class SwiftieHapticScoreTest {
     }
 
     /**
-     * 「扎进去 + 余韵收干」合成一条单峰曲线。
+     * 「扎进去 + 收干」合成一条**短促**的单峰曲线。
      *
      * 单峰不是审美选择：RichTap 那层只收单峰（`richTapEnvelopeOf` 会拒掉多峰），
-     * 而厂商层可用时包络链会跳过 tier 1 —— 多峰就等于「这段包络本机播不了」，
-     * 420ms 的余韵会整段退成替身那一下。
+     * 而厂商层可用时包络链会跳过 tier 1 —— 多峰就等于「这段包络本机播不了」。
+     *
+     * 时长必须**短**，且与视觉那 420ms 心抖解耦：2026-09-24 真机上 315ms 的连续衰减
+     * 听感是一声嗡（`dumpsys vibrator_manager` 确认走的是 tier 3 的 DynamicEffect），
+     * 不是「一记撞击」。这条断言把那个教训钉住 —— 谁再把时长绑回视觉量，这里先红。
      */
     @Test
-    fun arrowHitIsASingleFastRiseThenADecayMatchingTheHeartRecoil() {
+    fun arrowHitIsAShortSingleHumpDecoupledFromTheVisualRecoil() {
         val hit = score.envelope(SwiftieHapticCueKind.LOVER_ARROW_HIT)
-        // 与心抖同长：手上收干净那一刻，眼里那颗心也正好停住
-        assertThat(hit.durationMs).isEqualTo(LOVER_RECOIL_MS.toLong())
-        assertThat(hit.timingsMs).containsExactly(105, 105, 105, 105).inOrder()
-        // 形状逐格钉死：105ms 从 0 爬到 0.75（箭扎进去那一下），其后三格落回 0（余韵收干）。
+        // 90ms：起手一格 30ms 冲上去、两格 60ms 收干。更长就开始读成嗡鸣
+        assertThat(hit.durationMs).isEqualTo(90L)
+        assertThat(hit.timingsMs).containsExactly(30, 30, 30).inOrder()
+        // 形状逐格钉死：30ms 从 0 爬到 0.8（箭扎进去那一下），其后两格落回 0。
         // **这里不能用 peakIndices** —— 它按约定把两端排除在外（「单调收尾不是一个摆幅」），
-        // 而这条包络的峰恰恰落在第一个控制点上（起手就是最重的那一下，与衰减摆同构）
-        assertThat(hit.amplitudes).containsExactly(0.75f, 0.5f, 0.25f, 0f).inOrder()
-        // 峰在首格、其后严格收干：单峰是 RichTap 那层收得下的前提，
-        // 多峰等于「这段包络本机播不了」，420ms 的余韵会整段退成替身那一下
+        // 而这条包络的峰恰恰落在第一个控制点上（起手就是最重的那一下）
+        assertThat(hit.amplitudes).containsExactly(0.8f, 0.4f, 0f).inOrder()
+        // 与视觉心抖解耦：手上只要 90ms，眼里那 420ms 的衰减摆与它无关
+        assertThat(hit.durationMs).isLessThan(LOVER_RECOIL_MS.toLong())
+        // 峰在首格、其后严格收干：单峰是 RichTap 那层收得下的前提
         assertThat(hit.amplitudes.first()).isEqualTo(hit.amplitudes.max())
-        // 收在 0，与心抖的衰减摆收尾对齐；硬切会读成被掐断
+        // 收在 0，硬切会读成被掐断
         assertThat(hit.amplitudes.last()).isEqualTo(0f)
         // 峰值比签名那支笔重、比 Lover 绽放轻：不抢全曲最重那一笔
         assertThat(hit.amplitudes.max())

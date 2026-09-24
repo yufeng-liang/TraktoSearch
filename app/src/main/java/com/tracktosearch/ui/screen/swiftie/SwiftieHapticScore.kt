@@ -387,12 +387,21 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
  * 时刻从 `SwiftieLoverArcher` 的 [LOVER_HIT_MS] 派生（卡内偏移），卡片起点从
  * [SwiftieTimeline.eraStartMs] 取 —— 视觉挪一个数，这一记跟着走。
  *
- * 形态是**一段单峰包络**而不是「一记 + 一记」：平台上后发的一记会掐掉正在播的波形，
- * 同毫秒上叠两笔只会活下来一笔。所以「扎进去」与「余韵收干」合成同一条曲线 ——
- * 首格 105ms 内从 0 冲到峰值（那一下），其余 315ms 落回 0（余韵）。
+ * 形态是**一段短促的单峰包络**而不是「一记 + 一记」：平台上后发的一记会掐掉正在播的
+ * 波形，同毫秒上叠两笔只会活下来一笔。所以「扎进去」与「收干」合成同一条曲线 ——
+ * 首格 30ms 从 0 冲到峰值（那一下），其后 60ms 落回 0。
  *
- * 时长取 [LOVER_RECOIL_MS]，与心抖的衰减摆同一长度：手上收干净的那一刻，
- * 眼里那颗心也正好停住。整条曲线是**单峰**，所以 RichTap 与 MiHaptic HE 两层都接得下。
+ * ### 时长为什么不跟心抖对齐
+ *
+ * 初版把时长取成 [LOVER_RECOIL_MS]（420ms），理由是「与心抖的衰减摆同长」——
+ * **2026-09-24 真机否掉了**：`dumpsys vibrator_manager` 显示它确实走 tier 3
+ * （`reason: DynamicEffect`），但 315ms 的连续衰减在线性马达上听感是**一声嗡**，
+ * 不是「一记撞击」。这正是 `AppHaptics.playEnvelope` 那段注释说的坑 ——
+ * 长而慢起手的波形在 LRA 上会退化成转子式的普通震动。
+ *
+ * 锐利来自**快起手 + 短时长**，与峰值大小关系不大。所以触感时长与视觉的 420ms
+ * 心抖**解耦**：视觉可以长，手上只要 90ms。整条曲线仍是**单峰**，RichTap 与
+ * MiHaptic HE 两层都接得下。
  */
 private fun loverArrowCues(): List<SwiftieHapticCue> {
     val atMs = SwiftieTimeline.eraStartMs(SwiftieErasData.LOVER_INDEX) + LOVER_HIT_MS
@@ -400,10 +409,10 @@ private fun loverArrowCues(): List<SwiftieHapticCue> {
         humpEnvelope(
             atMs = atMs,
             kind = SwiftieHapticCueKind.LOVER_ARROW_HIT,
-            durationMs = LOVER_RECOIL_MS.toLong(),
+            durationMs = LOVER_ARROW_MS,
             points = LOVER_ARROW_POINTS,
             peak = LOVER_ARROW_PEAK_AMPLITUDE,
-            riseFraction = LOVER_ARROW_RISE_FRACTION,
+            riseFraction = 1f / LOVER_ARROW_POINTS,
         ),
         SwiftieDiscreteCue(
             atMs = atMs,
@@ -680,29 +689,29 @@ private const val SIGNATURE_FLASH_ENVELOPE_MS = 200L
 private const val SIGNATURE_FLASH_POINTS = 5
 
 /**
- * 命中那一箭 420ms 切 4 格，每格 105ms。
+ * 命中那一箭的整段时长：90ms 切 3 格，每格 30ms。
  *
- * 4 格而不是更多：这条包络只有「冲上去、落下来」两件事，切成 7 格以上每一格都不到
- * 60ms，`rampStepDurationMs` 还没爬完就被下一格顶掉，末格落 0 也读不出来。
- * 4 格让首格（上升）与后三格（收干）各自有足够时长读出形状。
+ * **触感时长与视觉的 420ms 心抖解耦**（理由见 [loverArrowCues]）。90ms 是「一记撞击」
+ * 的量级：起手一格 30ms 冲上去，两格 60ms 收干 —— 比这更长就开始读成嗡鸣，
+ * 比这更短则只剩一记没有形状的点。
  */
-private const val LOVER_ARROW_POINTS = 4
+private const val LOVER_ARROW_MS = 90L
+
+/**
+ * 命中那一箭切 3 格。
+ *
+ * 3 格是最少的「有形状」档：1 格是纯上升、2 格是三角，都读不出「冲上去再收干」。
+ * 每格 30ms 远大于 `rampStepDurationMs`（目标机 5ms），HAL 爬得完每一格。
+ */
+private const val LOVER_ARROW_POINTS = 3
 
 /**
  * 命中那一箭的峰值。
  *
- * 0.75 夹在两笔之间：比签名书写的 0.25（一支笔在纸上走）重得多 —— 这一下是箭扎进心；
+ * 0.8 夹在两笔之间：比签名书写的 0.25（一支笔在纸上走）重得多 —— 这一下是箭扎进心；
  * 又比 Lover 绽放的 0.85（全曲最重一笔）轻，不让卡片段里的一记抢掉收尾那一笔。
  */
-private const val LOVER_ARROW_PEAK_AMPLITUDE = 0.75f
-
-/**
- * 命中包络里上升段占多少。
- *
- * 0.25 让升段只占 1 格（105ms）、落段占 3 格（315ms）—— 箭是**一下**扎进去的，
- * 余韵才是慢慢收的。与心抖那条 `(1-t)·sin` 的衰减摆同构：起手最猛，往后越来越小。
- */
-private const val LOVER_ARROW_RISE_FRACTION = 0.25f
+private const val LOVER_ARROW_PEAK_AMPLITUDE = 0.8f
 
 /** 绽放 3500ms 切 14 格，每格 250ms。 */
 private const val LOVER_BLOOM_POINTS = 14
