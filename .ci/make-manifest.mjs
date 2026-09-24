@@ -179,12 +179,21 @@ function runCli() {
     const sections = parseChangelog(fs.readFileSync(changelogFile, 'utf8'));
     if (!sections.length) fail(`${changelogFile} 里没有任何版本段，宁可不写也别把设置页刷成空白`);
 
-    const entries = sections.map((s) => ({
-      versionName: s.versionName,
-      tagName: s.tagName,
-      releaseDate: s.releaseDate,
-      changelog: { 'zh-CN': s.body }
-    }));
+    // 滤掉正文为空的段：history.json 不只被 App 消费（官网也在读），
+    // 不能只依赖 App 侧对空 changelog 的兜底——官网上那就是一条空白版本。
+    // 旧实现（读 gh release 列表）也有这一步，改读 CHANGELOG 时不能丢。
+    const entries = sections
+      .filter((s) => s.body.trim())
+      .map((s) => ({
+        versionName: s.versionName,
+        tagName: s.tagName,
+        releaseDate: s.releaseDate,
+        changelog: { 'zh-CN': s.body }
+      }));
+    // 过滤后可能一个不剩：那种情况宁可不写，也不能产出空数组让消费方刷成空白
+    if (!entries.length) {
+      fail(`${changelogFile} 里所有版本段的正文都为空，宁可不写也别把设置页刷成空白`);
+    }
 
     // 不再排序：文件顺序即新→旧，由发布方保证。显式排序会让「文件顺序写错」
     // 这类问题被静默掩盖，而不是在发版时暴露。
