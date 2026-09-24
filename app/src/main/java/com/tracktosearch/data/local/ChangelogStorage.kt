@@ -20,8 +20,10 @@ private val Context.changelogDataStore: DataStore<Preferences> by preferencesDat
 class ChangelogStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val key = stringPreferencesKey("full_changelog_v2")
-    private val fullChangelogCompleteKey = booleanPreferencesKey("full_changelog_complete")
+    // v3：更新日志真相源迁到仓库内 CHANGELOG.md 并全量重写。
+    // 旧 key 无 TTL、命中即返回且 clear() 无人调用，不换 key 老用户永远读旧日志。
+    private val key = stringPreferencesKey("full_changelog_v3")
+    private val fullChangelogCompleteKey = booleanPreferencesKey("full_changelog_complete_v3")
     private val lastCheckTsKey = longPreferencesKey("last_update_check_ts")
     private val cachedVersionKey = stringPreferencesKey("cached_latest_version")
     private val cachedChangelogKey = stringPreferencesKey("cached_update_changelog")
