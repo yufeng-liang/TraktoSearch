@@ -92,18 +92,29 @@ internal class RedLeafFall(
     val nodFreq: Float
 )
 
-/** 枝上的一片叶：静态姿态 + 配色，`fall` 为 null 就一直长着。 */
+/**
+ * 枝上的一片叶：长在枝上的哪一点、多大、什么朝向、配什么色，`fall` 为 null 就一直挂着。
+ *
+ * 位置只给一个 `boughT`（枝条贝塞尔的参数），锚点由 [knitBoughX] / [knitBoughY] 现算：
+ * 叶柄末端**就是枝上的那一点**。之前这里存的是绝对 fx / fy，而锚点又落在叶柄末端下方
+ * 0.85r 处，两个误差叠起来，五片就摆在枝条下方而不是长在枝上。
+ */
 internal class RedBranchLeaf(
-    /** 叶柄末端锚点（占屏宽 / 占屏高） */
-    val fx: Float,
-    val fy: Float,
+    /** 落枝点：0 = 画面左外的枝根，1 = 右侧梢头 */
+    val boughT: Float,
     /** 叶身半高（占 `minDimension`） */
     val half: Float,
-    /** 静态旋转（度） */
+    /** 悬垂方向（度）。180 = 垂直朝下，其余是往两侧偏出去 */
     val rot: Float,
     val hue: MapleHue,
     val fall: RedLeafFall?
 ) {
+    /** 叶柄末端落在屏宽的哪一分位。 */
+    fun anchorX(): Float = knitBoughX(boughT)
+
+    /** 叶柄末端落在屏高的哪一分位。 */
+    fun anchorY(): Float = knitBoughY(boughT)
+
     /** 这一帧归页面背景（L1）画。待机态一律算「还在枝上」，满枝那一格靠这个。 */
     fun attachedAt(eraMs: Long): Boolean =
         eraMs < 0L || fall == null || eraMs < fall.releaseAtMs
@@ -127,51 +138,48 @@ internal class RedBranchLeaf(
 /**
  * 枝上那五片。
  *
- * 位置口径是换图前一档一档对过的：旋转都落在 180° 上下（150–214）—— 位图那片叶是
- * 尖瓣朝上、叶柄在下的，转过来叶柄才朝着枝；五片各差二三十度，同一角度摆五片是贴图。
- * 尺寸拉开到 0.062–0.150（2.4 倍差），这是唯一能在一个平面上做出景深的手段。
- * 最大那片钉在 (0.30w, 0.105h)，正是枯枝下垂段（t≈0.41 处约 0.125h）的正下方，
- * 读起来就是从那儿挂下来的。
+ * `boughT` 是枝条贝塞尔上的参数，横向落点因此是 x ≈ 0.088 / 0.297 / 0.517 / 0.639 / 0.783 屏宽，
+ * 纵向跟着枝走（枝在 t≈0.5 处最低，约 0.130h）。朝向都落在 180° 上下（150–214）：
+ * 位图那片叶是尖瓣朝上、叶柄在下的，转 180° 才从落枝点往下垂，各差二三十度 ——
+ * 同一个角度摆五片是贴图。
  *
- * **留在枝上的那几片，叶身下缘必须落在卡片顶边以上。** 锚点钉的是叶柄末端，而旋转
- * 都在 188° 上下 —— 转过来之后叶身从锚点**朝下**长，所以真正要守的不是锚点而是
- * 「锚点 + 叶身下探」。下探量按位图实测（`swiftie_maple_bent_solid` 的不透明包围盒）
- * 依次是 0.086 / 0.054 / 0.056 / 0.036 / 0.030 倍屏高，所以最靠下的锚点只能到 0.17h。
- * 补齐 Taylor's Version 独有曲目后 Red 是 30 首、卡片顶边从 16 首时的 0.455h 抬到
- * 0.20h，原来挂在 0.272h / 0.318h 的两片被整块吞掉（2026-09-20 真机截图确认过），
- * 这一组纵向值因此收进 0.10–0.19h 那一条带。**松手之后不受这条约束**，它本来就要落过卡片。
+ * **尺寸的上限由「叶身下探不能越过卡片顶边」定死。** 锚点现在钉在叶柄末端，叶身整个
+ * 朝下长，下探量 = `MAPLE_SPAN × half` 折算到屏高是 `0.585 × half`（1440×3200 那台机上）。
+ * Red 有 30 首、卡片顶边在 0.20h，所以每片都要满足
+ * `knitBoughY(t) + 0.585 × half ≤ 0.195`。枝最低那几档（t≈0.5）只剩 0.11 的余量，
+ * 大叶只能放在枝抬得高的地方（t≈0.14 与 t≈0.96）—— 这也是尺寸拉开 2.2 倍后
+ * 唯一还能全部挂进枝里的排法。
  *
- * 松手的是中间、左端和枝下那三片，时刻差 650ms 以上（不会看着像同时剪断），
- * 留下最大那片和梢头那片：脱落的不全在两端、锚留着，读起来是「这棵树还在落叶子」
- * 而不是「叶子掉光了」。
+ * 松手的是中间那三片，时刻差 650ms 以上（不会看着像同时剪断），留下最左那片最大的
+ * 和梢头那片：脱落的不全在两端、锚留着，读起来是「这棵树还在落叶子」而不是「掉光了」。
  */
 internal val RedBranchLeaves = listOf(
-    RedBranchLeaf(0.300f, 0.105f, 0.150f, 188f, MapleHues[0], fall = null),
+    RedBranchLeaf(0.14f, 0.150f, 188f, MapleHues[0], fall = null),
     RedBranchLeaf(
-        0.630f, 0.100f, 0.105f, 205f, MapleHues[1],
+        0.40f, 0.105f, 205f, MapleHues[1],
         RedLeafFall(
             releaseAtMs = 950L, fallMs = 3900L,
             freqA = 0.9f, freqB = 2.4f, amp = 0.115f, drift = -0.10f,
             twist = -0.85f, tumble = 3f, nodDeg = 17f, nodFreq = 2f
         )
     ),
-    RedBranchLeaf(0.815f, 0.125f, 0.098f, 168f, MapleHues[5], fall = null),
     RedBranchLeaf(
-        0.125f, 0.105f, 0.070f, 150f, MapleHues[3],
+        0.66f, 0.068f, 150f, MapleHues[6],
+        RedLeafFall(
+            releaseAtMs = 1700L, fallMs = 4400L,
+            freqA = 0.7f, freqB = 1.9f, amp = 0.135f, drift = 0.06f,
+            twist = -1.35f, tumble = 2f, nodDeg = 13f, nodFreq = 1.5f
+        )
+    ),
+    RedBranchLeaf(
+        0.80f, 0.098f, 168f, MapleHues[3],
         RedLeafFall(
             releaseAtMs = 260L, fallMs = 3450L,
             freqA = 1.2f, freqB = 3.1f, amp = 0.095f, drift = 0.16f,
             twist = 1.15f, tumble = 4f, nodDeg = 22f, nodFreq = 3f
         )
     ),
-    RedBranchLeaf(
-        0.485f, 0.150f, 0.062f, 214f, MapleHues[6],
-        RedLeafFall(
-            releaseAtMs = 1700L, fallMs = 4400L,
-            freqA = 0.7f, freqB = 1.9f, amp = 0.135f, drift = 0.06f,
-            twist = -1.35f, tumble = 2f, nodDeg = 13f, nodFreq = 1.5f
-        )
-    )
+    RedBranchLeaf(0.96f, 0.072f, 214f, MapleHues[5], fall = null)
 )
 
 /** 从画面外飘进来的那些。与枝上那三片分开：它们没有「长在枝上」的前史，从头循环。 */
@@ -218,10 +226,13 @@ private fun buildRedDrifters(): List<RedDrifter> {
 
 private val RedDrifters = buildRedDrifters()
 
-/** 出画下缘：叶顶边也已经沉到屏幕以外，不需要淡出。 */
+/** 出画下缘：锚点是叶柄末端，叶身还要再往下垂一截，这一档整片都在屏幕以外。 */
 private const val FALL_BOTTOM = 1.16f
 
-/** 画外上缘起点。飘进来的叶最大约 0.04h 高，这一档整片都在上缘以外。 */
+/**
+ * 画外上缘起点。锚点是叶柄末端，最大的那片往下垂约 0.054 屏高（`MAPLE_SPAN × half`
+ * 折算到 1440×3200 那台机），所以这一档整片还在上缘以外。
+ */
 private const val FALL_TOP = -0.14f
 
 /**
@@ -259,10 +270,12 @@ private fun fallProgress(u: Float): Float {
 private fun swayRamp(u: Float): Float = (u * 4f).coerceAtMost(1f)
 
 /**
- * 把一片叶按给定的姿态画出来：平移到锚点、转 [rot]、按 [scaleX] 翻面，再实心 + 墨线两笔。
+ * 把一片叶画出来：**叶柄末端钉在 (fx, fy)**，绕这一点转 [rot]，再按 [scaleX] 翻面。
  *
- * 变换序不能反：先旋转再压扁，反了翻面轴会跟着叶的倾角一起歪。缩放走 canvas 变换
- * 而不是 `dstSize` —— 那条路只吃整数，一直在漂的叶会一格一格跳。
+ * 锚点必须是叶柄末端而不是「位图中心下方某处」—— 枝上那片叶要长在枝上，长在枝上的
+ * 意思就是叶柄末端落在那条枝的线上，叶身从这一点垂下去。变换序不能反：先旋转再压扁，
+ * 反了翻面轴会跟着叶的倾角一起歪。缩放走 canvas 变换而不是 `dstSize` —— 那条路只吃
+ * 整数，一直在漂的叶会一格一格跳。
  *
  * 枝上那五片不要直接调它，走 [drawRedBranchLeaf]（两层共用的那一个入口）。
  */
@@ -285,13 +298,11 @@ internal fun DrawScope.drawMapleAtPose(
         rotate(rot, Offset.Zero)
         scale(scaleX, 1f, Offset.Zero)
     }) {
-        val height = MAPLE_SPAN * r
-        val stemEnd = Offset(0f, MAPLE_STEM_END_R * r)
         drawMapleSolid(
-            maple.solid, height, stemEnd, if (faceUp) hue.fill else hue.back,
+            maple.solid, MAPLE_SPAN * r, Offset.Zero, if (faceUp) hue.fill else hue.back,
             a * FILL_ALPHA, maple.stemEndFrac
         )
-        drawMapleInk(maple.ink, height, stemEnd, hue.ink, a * INK_ALPHA, maple.stemEndFrac)
+        drawMapleInk(maple.ink, MAPLE_SPAN * r, Offset.Zero, hue.ink, a * INK_ALPHA, maple.stemEndFrac)
     }
 }
 
@@ -317,8 +328,8 @@ internal fun DrawScope.drawRedBranchLeaf(
     val scaleX: Float
     val faceUp: Boolean
     if (fall == null || eraMs < fall.releaseAtMs) {
-        fx = leaf.fx
-        fy = leaf.fy
+        fx = leaf.anchorX()
+        fy = leaf.anchorY()
         rot = leaf.rot
         scaleX = 1f
         faceUp = true
@@ -326,10 +337,10 @@ internal fun DrawScope.drawRedBranchLeaf(
         val u = (eraMs - fall.releaseAtMs).toFloat() / fall.fallMs
         val flip = cos(u * TAU * fall.tumble)
         val fold = abs(flip).coerceAtLeast(0.10f)
-        fx = leaf.fx +
+        fx = leaf.anchorX() +
             lissajous(u, fall.freqA, fall.freqB, leaf.rot / 360f) * fall.amp * swayRamp(u) +
             fall.drift * u * u
-        fy = leaf.fy + (FALL_BOTTOM - leaf.fy) * fallProgress(u)
+        fy = leaf.anchorY() + (FALL_BOTTOM - leaf.anchorY()) * fallProgress(u)
         rot = leaf.rot + u * fall.twist * 360f + sin(u * TAU * fall.nodFreq) * fall.nodDeg
         // 负号把叶镜像过去，配上背面那档色才读得出「翻了个面」；只压扁不镜像
         // 就只是鼓回去一下，正反同色更是完全看不出在翻

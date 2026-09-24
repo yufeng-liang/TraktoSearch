@@ -1945,11 +1945,16 @@ private fun knitEdge(fx: Float): Float =
 
 private const val KNIT_BOUGH_SEGMENTS = 12
 
-/** 枯枝的二次贝塞尔：P0 (-0.02, 0.068) → P1 (0.36, 0.175) → P2 (0.82, 0.100)，单位是屏宽 / 屏高。 */
-private fun knitBoughX(t: Float): Float =
+/**
+ * 枯枝的二次贝塞尔：P0 (-0.02, 0.068) → P1 (0.36, 0.175) → P2 (0.82, 0.100)，单位是屏宽 / 屏高。
+ *
+ * 这两个量也是 Red 那五片枫叶的**落枝点**：`SwiftieRedLeafFall` 按 `boughT` 取这一条线上的
+ * 点当叶柄末端，叶才是长在枝上而不是摆在枝附近。改这条曲线不用同步改别处，落叶会跟着走。
+ */
+internal fun knitBoughX(t: Float): Float =
     (1f - t) * (1f - t) * -0.02f + 2f * t * (1f - t) * 0.36f + t * t * 0.82f
 
-private fun knitBoughY(t: Float): Float =
+internal fun knitBoughY(t: Float): Float =
     (1f - t) * (1f - t) * 0.068f + 2f * t * (1f - t) * 0.175f + t * t * 0.100f
 
 /**

@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.compose.ui.graphics.Color
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import org.junit.Test
 import kotlin.math.roundToInt
@@ -96,6 +97,30 @@ class SwiftieRedLeafFallTest {
             .filter { it.red <= it.green }
             .map(::hex)
         assertThat(outOfRange).isEmpty()
+    }
+
+    @Test
+    fun branchLeavesHangOnTheBoughAndClearTheCardTop() {
+        // 五片沿枝一字排开，参数必须单调且都落在枝身上（0..1），有人滑到梢头外就悬空了
+        val ts = RedBranchLeaves.map { it.boughT }
+        ts.forEach {
+            assertThat(it).isAtLeast(0f)
+            assertThat(it).isAtMost(1f)
+        }
+        assertThat(ts.zipWithNext().all { (earlier, later) -> later > earlier }).isTrue()
+        // 叶柄末端钉在枝上，叶身就从那一点朝下垂，垂到 MAPLE_SPAN × half。
+        // 折算到屏高要按**参考机**的短边/长边比（1440×3200，与 benchmark 那台同一台）：
+        // 锚点纵向是屏高分位，而 half 是 minDimension（这里就是屏宽）分位，两个单位不换算
+        // 就会把「刚好挂在卡片顶上」读成「被卡片吞掉」—— 2026-09-20 那轮就是这么翻的车
+        RedBranchLeaves.forEach { leaf ->
+            val bottom = knitBoughY(leaf.boughT) + MAPLE_SPAN * leaf.half * REFERENCE_MIN_DIM_OVER_HEIGHT
+            assertWithMessage("t=${leaf.boughT} 那片叶下探到 $bottom").that(bottom).isAtMost(0.195f)
+        }
+    }
+
+    private companion object {
+        /** 参考机（1440×3200）的短边 ÷ 长边，把 minDimension 分位折算成屏高分位。 */
+        const val REFERENCE_MIN_DIM_OVER_HEIGHT = 1440f / 3200f
     }
 
     private fun hex(color: Color): String = "#%02X%02X%02X".format(

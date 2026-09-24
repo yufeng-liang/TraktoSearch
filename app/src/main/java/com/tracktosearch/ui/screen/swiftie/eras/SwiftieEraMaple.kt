@@ -78,21 +78,11 @@ internal const val STEM_END_FRAC_BENT = 0.4699f
 /**
  * 一片叶的**总高 ÷ 叶身半高**。
  *
- * 换图前程序化叶形的口径是「叶身 1 half + 叶柄 0.30 half」。位图版沿用它，
- * 三处的尺寸就与换图前一样，一处比例都不用重调。[drawMapleSolid] 等的 `height`
- * 一律按 `MAPLE_SPAN * half` 给；真要调大小，调调用点的 half。
+ * 换图前程序化叶形的口径是「叶身 1 half + 叶柄 0.30 half」。位图版沿用它，尺寸就与
+ * 换图前一样，一处比例都不用重调。[drawMapleSolid] 等的 `height` 一律按
+ * `MAPLE_SPAN * half` 给；真要调大小，调调用点的 half。
  */
 internal const val MAPLE_SPAN = 1.30f
-
-/**
- * 叶柄末端相对「局部原点」的下沉量（单位 half）。
- *
- * 程序化那版的原点在叶柄根上方 0.55 half 处（[MAPLE_SPAN] 里那截叶身的一半），
- * 叶柄末端就在原点下方 `0.55 + 0.30 = 0.85` half。位图版的锚点直接钉在**叶柄末端**，
- * 所以背景五片与飘落秋叶这两处要给 `Offset(0f, MAPLE_STEM_END_R * half)`，
- * 落点才与换图前逐像素一致（这两处原来是 `translate(...)` + 原点式叶形）。
- */
-internal const val MAPLE_STEM_END_R = 0.85f
 
 /**
  * Red 那一张的枫叶资产（**弯柄**那套：实心 + 墨线两张小 PNG，13.4KB + 5.2KB）。
