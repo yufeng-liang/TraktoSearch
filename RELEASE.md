@@ -32,19 +32,17 @@
 3. **更新日志**：在 `CHANGELOG.md` **顶部**（`# 更新日志` 之后、上一版本段之前）插入新段。
    段头格式 `## v<version> 更新内容（<yyyy-MM-dd>）`，日期填**今天的东八区日期**，它就是这个版本的 `releaseDate`。
    格式规范见 `CHANGELOG_STYLE.md`；生成时用 changelog-generator 技能，注意先过滤自动化噪音。
-   提交后，Release body 由 `section` 子命令从本文件切出：
 
-   ```bash
-   # 输出必须落在 .tmp/：changelog.md 与 CHANGELOG.md 在大小写不敏感的文件系统上是同一个文件，
-   # section 是覆盖写，写到仓库根的 changelog.md 会把全量日志截断成只剩当前一版。
-   node .ci/make-manifest.mjs section --version v<version> --out .tmp/changelog-body.md
-   gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
-   ```
+   **写完先给用户过目，确认无误再往下走。** 这是流程里唯一的人工关卡：日志随 Release 发出去之后，
+   要改它就得同时改 GitHub Release 正文与线上 `manifest/history.json`（App 设置页读的是后者）。
 4. **提交版本号改动并打 tag**：`git tag v<version>`。
 5. **推送**：`git push origin master && git push origin v<version>`；代码镜像 `git -c http.proxy="" push gitee master`（Gitee 只留代码镜像，不再发 APK）。
 6. **建 Release 即触发发布**：
 
    ```bash
+   # 输出必须落在 .tmp/：changelog.md 与 CHANGELOG.md 在大小写不敏感的文件系统上是同一个文件，
+   # section 是覆盖写，写到仓库根的 changelog.md 会把全量日志截断成只剩当前一版。
+   node .ci/make-manifest.mjs section --version v<version> --out .tmp/changelog-body.md
    gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
    ```
 
@@ -53,6 +51,21 @@
 
 7. **盯第一次**：`gh run watch <run-id>`（别接 `| tail` 之类管道，会看不到进度）。
    全绿即发布完成；任何一步红，线上仍是上一个版本，按下面「回滚与补救」处理。
+
+## 想先出包、日志晚点补：影子构建
+
+上面第 3 步（日志）与第 6 步（发布）之间有硬依赖——`latest` 子命令与 CI 段头断言都要求
+`CHANGELOG.md` 顶部段 == 本次版本号，所以**日志没写就不能发布**。若想先拿到包验证，用影子构建：
+
+```bash
+gh workflow run release-apk.yml -f tag=v<version> -f publish=false
+gh run watch            # 11–19 分钟
+```
+
+- `publish=false`（默认）只出 artifact，不碰任何线上对象，产物在 Actions 页面保留 30 天。
+- 走这条路要**先把版本号提交并打 tag 推上去**（它按 tag 检出代码）。
+- 它**不能**替代第 6 步：正式发布仍是 `gh release create`，会重新构建一次。
+  私有仓 Actions 有额度，构建跑两次要算进成本。
 
 ## 护栏（都在代码里，别绕）
 
