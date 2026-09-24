@@ -2,8 +2,12 @@ package com.tracktosearch.ui.screen.swiftie
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.ui.haptic.HapticSemantic
+import com.tracktosearch.ui.haptic.backend.hapticPlayerPatternOf
+import com.tracktosearch.ui.haptic.backend.richTapEnvelopeOf
 import com.tracktosearch.ui.screen.swiftie.eras.AXIS_TICK_FADE_IN_AT
 import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
+import com.tracktosearch.ui.screen.swiftie.eras.LOVER_HIT_MS
+import com.tracktosearch.ui.screen.swiftie.eras.LOVER_RECOIL_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SWIFTIE_ERA_EDGES
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieEraCenterFraction
@@ -42,17 +46,18 @@ class SwiftieHapticScoreTest {
         }
 
     // ------------------------------------------------------------------------
-    // 最重要的一条：卡片段只有 13 记
+    // 最重要的一条：卡片段里没有一记是逐曲目的
     // ------------------------------------------------------------------------
 
     @Test
-    fun cardSegmentHasExactlyThirteenCues() {
+    fun cardSegmentHasFifteenCuesNoneOfThemPerTrack() {
         val inCards = score.cues.filter {
             it.atMs >= SwiftieTimeline.ERAS_CARDS_START && it.atMs < SwiftieTimeline.ERAS_CARDS_END
         }
         // 12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾。其余 11 张曲目一次性显示，
-        // 没有逐行铺完这个屏幕事件，就不该再发一记描述它
-        assertThat(inCards).hasSize(13)
+        // 没有逐行铺完这个屏幕事件，就不该再发一记描述它。
+        // 余下两记是 Lover 段内那一箭（一段包络 + 同毫秒的替身），也不是逐曲目
+        assertThat(inCards).hasSize(15)
         assertThat(score.of(SwiftieHapticCueKind.CARD_LAND)).hasSize(10)
         assertThat(score.of(SwiftieHapticCueKind.CARD_LAND_ANCHOR)).hasSize(2)
         assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE)).hasSize(1)
@@ -153,16 +158,91 @@ class SwiftieHapticScoreTest {
     }
 
     // ------------------------------------------------------------------------
+    // Lover 段内那一箭
+    // ------------------------------------------------------------------------
+
+    /**
+     * 命中那一记必须压在**箭真的扎进心**那一刻，不是撒放那一刻。
+     *
+     * 时刻从 `SwiftieLoverArcher` 的 `LOVER_HIT_MS` 派生（拉弓 2400 + 620 + 飞行 900），
+     * 卡片起点从账本取。视觉挪任何一个数，这一记跟着走。
+     */
+    @Test
+    fun arrowHitLandsWhenTheArrowReachesTheHeart() {
+        val cardStart = SwiftieTimeline.eraStartMs(SwiftieErasData.LOVER_INDEX)
+        val expected = cardStart + LOVER_HIT_MS
+        // 命中在 Lover 段内、且在卡片走完之前 —— 否则这一记会掉到倒滑段里去
+        assertThat(LOVER_HIT_MS).isEqualTo(3_920L)
+        assertThat(expected).isGreaterThan(cardStart + CARD_GROW_MS)
+        assertThat(expected).isLessThan(SwiftieTimeline.eraStartMs(SwiftieErasData.LOVER_INDEX + 1))
+
+        val hit = score.envelope(SwiftieHapticCueKind.LOVER_ARROW_HIT)
+        assertThat(hit.atMs).isEqualTo(expected)
+        // 替身与包络同一毫秒：接不下包络的机器当场退这一记
+        assertThat(score.of(SwiftieHapticCueKind.LOVER_ARROW_HIT_TICK).single().atMs)
+            .isEqualTo(expected)
+        assertThat(score.semantics(SwiftieHapticCueKind.LOVER_ARROW_HIT_TICK))
+            .containsExactly(HapticSemantic.CONFIRM)
+    }
+
+    /**
+     * 「扎进去 + 余韵收干」合成一条单峰曲线。
+     *
+     * 单峰不是审美选择：RichTap 那层只收单峰（`richTapEnvelopeOf` 会拒掉多峰），
+     * 而厂商层可用时包络链会跳过 tier 1 —— 多峰就等于「这段包络本机播不了」，
+     * 420ms 的余韵会整段退成替身那一下。
+     */
+    @Test
+    fun arrowHitIsASingleFastRiseThenADecayMatchingTheHeartRecoil() {
+        val hit = score.envelope(SwiftieHapticCueKind.LOVER_ARROW_HIT)
+        // 与心抖同长：手上收干净那一刻，眼里那颗心也正好停住
+        assertThat(hit.durationMs).isEqualTo(LOVER_RECOIL_MS.toLong())
+        assertThat(hit.timingsMs).containsExactly(105, 105, 105, 105).inOrder()
+        // 形状逐格钉死：105ms 从 0 爬到 0.75（箭扎进去那一下），其后三格落回 0（余韵收干）。
+        // **这里不能用 peakIndices** —— 它按约定把两端排除在外（「单调收尾不是一个摆幅」），
+        // 而这条包络的峰恰恰落在第一个控制点上（起手就是最重的那一下，与衰减摆同构）
+        assertThat(hit.amplitudes).containsExactly(0.75f, 0.5f, 0.25f, 0f).inOrder()
+        // 峰在首格、其后严格收干：单峰是 RichTap 那层收得下的前提，
+        // 多峰等于「这段包络本机播不了」，420ms 的余韵会整段退成替身那一下
+        assertThat(hit.amplitudes.first()).isEqualTo(hit.amplitudes.max())
+        // 收在 0，与心抖的衰减摆收尾对齐；硬切会读成被掐断
+        assertThat(hit.amplitudes.last()).isEqualTo(0f)
+        // 峰值比签名那支笔重、比 Lover 绽放轻：不抢全曲最重那一笔
+        assertThat(hit.amplitudes.max())
+            .isGreaterThan(score.envelope(SwiftieHapticCueKind.SIGNATURE_WRITE).amplitudes.max())
+        assertThat(hit.amplitudes.max())
+            .isLessThan(score.envelope(SwiftieHapticCueKind.LOVER_BLOOM).amplitudes.max())
+    }
+
+    /**
+     * 这一条把「单峰」那个理由**变成证据**：谱子产出的真实曲线喂给两条包络通路各自的
+     * 转换器，两层都必须收下。
+     *
+     * 这不是重复测试转换器 —— 它钉的是**谱子与转换器之间的接口**。形状以后被改成多峰、
+     * 或峰值挪到末格、或某格时长变成 0，这两条会先红，而不是等到真机上「手上什么都没响」。
+     */
+    @Test
+    fun arrowHitEnvelopeIsAcceptedByBothWaveformConverters() {
+        val hit = score.envelope(SwiftieHapticCueKind.LOVER_ARROW_HIT)
+        val timings = hit.timingsMs.toIntArray()
+        val amplitudes = hit.amplitudes.toFloatArray()
+        // tier 3 的 RichTap：只收单峰，会重采样成 4 个控制点
+        assertThat(richTapEnvelopeOf(timings, amplitudes)).isNotNull()
+        // tier 3 的另一条通路（MiHaptic HE，目标机小米 14 Pro 上唯一能画连续包络的一层）
+        assertThat(hapticPlayerPatternOf(timings, amplitudes)).isNotNull()
+    }
+
+    // ------------------------------------------------------------------------
     // 总预算
     // ------------------------------------------------------------------------
 
     @Test
     fun wholeSequenceStaysInsideTheDiscreteBudget() {
-        // 36 记离散摊在 125.998 秒里，其中 13 记落在卡片段。轴线那一段只有一记 ——
+        // 37 记离散摊在 125.998 秒里，其中 15 记落在卡片段。轴线那一段只有一记 ——
         // 12 记拉链在屏幕上没有对应物。手链一整段没有触感（安静地滚进来）
-        assertThat(score.discrete()).hasSize(36)
+        assertThat(score.discrete()).hasSize(37)
         assertThat(score.discrete().size).isAtMost(65)
-        assertThat(score.envelopes()).hasSize(4)
+        assertThat(score.envelopes()).hasSize(5)
     }
 
     @Test
@@ -222,7 +302,7 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun reducedMotionKeepsEveryStructuralCue() {
-        // 结构性的那些：卡片落地、签名闪、Lover 绽放 —— 少了它们就不是同一段编排了
+        // 结构性的那些：卡片落地、命中那一箭、签名闪、Lover 绽放 —— 少了它们就不是同一段编排了
         listOf(
             SwiftieHapticCueKind.DIFFUSION_RISE,
             SwiftieHapticCueKind.DIFFUSION_FILL,
@@ -230,6 +310,7 @@ class SwiftieHapticScoreTest {
             SwiftieHapticCueKind.CARD_LAND_ANCHOR,
             SwiftieHapticCueKind.CARD_LAND,
             SwiftieHapticCueKind.TRACKLIST_DONE,
+            SwiftieHapticCueKind.LOVER_ARROW_HIT,
             SwiftieHapticCueKind.SIGNATURE_WRITE,
             SwiftieHapticCueKind.SIGNATURE_FLASH,
             SwiftieHapticCueKind.REWIND_TICK,
@@ -238,15 +319,15 @@ class SwiftieHapticScoreTest {
             assertThat(kind.dense).isFalse()
             assertThat(quiet.of(kind)).hasSize(score.of(kind).size)
         }
-        // 卡片段那 13 记一记不少
+        // 卡片段那 15 记一记不少
         assertThat(
             quiet.cues.count {
                 it.atMs >= SwiftieTimeline.ERAS_CARDS_START &&
                     it.atMs < SwiftieTimeline.ERAS_CARDS_END
             }
-        ).isEqualTo(13)
-        assertThat(quiet.discrete()).hasSize(36)
-        assertThat(quiet.envelopes()).hasSize(4)
+        ).isEqualTo(15)
+        assertThat(quiet.discrete()).hasSize(37)
+        assertThat(quiet.envelopes()).hasSize(5)
     }
 
     // ------------------------------------------------------------------------
@@ -289,7 +370,7 @@ class SwiftieHapticScoreTest {
             (SwiftieTimeline.ERAS_INTRO_MS * AXIS_TICK_FADE_IN_AT).roundToInt()
         assertThat(ticks.single().atMs).isEqualTo(fadeInAtMs)
         // 不许压在两端的段落边界上：撞 ERAS_INTRO_START 会和扩散铺满并成一记，
-        // 撞 ERAS_CARDS_START 会把「卡片段只有 13 记」算成 14
+        // 撞 ERAS_CARDS_START 会让「卡片段里没有一记是逐曲目的」那条计数多算一记
         assertThat(ticks.single().atMs).isGreaterThan(SwiftieTimeline.ERAS_INTRO_START)
         assertThat(ticks.single().atMs).isLessThan(SwiftieTimeline.ERAS_CARDS_START)
         assertThat(score.semantics(SwiftieHapticCueKind.AXIS_TICK))

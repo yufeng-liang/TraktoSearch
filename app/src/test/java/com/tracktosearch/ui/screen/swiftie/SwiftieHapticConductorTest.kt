@@ -251,12 +251,12 @@ class SwiftieHapticConductorTest {
         val recorder = Recorder(envelopeAccepted = false)
         val score = SwiftieHapticScore()
         val dispatched = recorder.conductor(score).runWholeSequence()
-        // 没人接包络，所以谱子上每一条都该露面：36 记离散 + 4 段包络。
+        // 没人接包络，所以谱子上每一条都该露面：37 记离散 + 5 段包络。
         // 离散那个数跟着 SwiftieSignaturePath 的笔数走（现在 12 笔，'i' 上那一点单独算
         // 一笔），重新子集化字形导致笔数变化时这三条用例的数字都要跟着改
         assertThat(dispatched).containsExactlyElementsIn(score.cues).inOrder()
-        assertThat(recorder.performed).hasSize(36)
-        assertThat(recorder.envelopes).hasSize(4)
+        assertThat(recorder.performed).hasSize(37)
+        assertThat(recorder.envelopes).hasSize(5)
     }
 
     @Test
@@ -265,11 +265,11 @@ class SwiftieHapticConductorTest {
         val score = SwiftieHapticScore()
         val dispatched = recorder.conductor(score).runWholeSequence()
         val standIns = score.cues.count { it.kind.standInFor != null }
-        // 1 扩散 + 12 笔画 + 1 闪光 + 2 绽放
-        assertThat(standIns).isEqualTo(16)
+        // 1 扩散 + 12 笔画 + 1 闪光 + 1 命中那一箭 + 2 绽放
+        assertThat(standIns).isEqualTo(17)
         assertThat(dispatched).hasSize(score.cues.size - standIns)
-        assertThat(recorder.performed).hasSize(36 - standIns)
-        assertThat(recorder.envelopes).hasSize(4)
+        assertThat(recorder.performed).hasSize(37 - standIns)
+        assertThat(recorder.envelopes).hasSize(5)
     }
 
     @Test
@@ -295,7 +295,7 @@ class SwiftieHapticConductorTest {
         assertThat(score.cues).containsExactlyElementsIn(SwiftieHapticScore().cues).inOrder()
         // 「标尺出现了」那一记留着 —— 它是结构性路标，不是密集事件
         assertThat(dispatched.map { it.kind }).contains(SwiftieHapticCueKind.AXIS_TICK)
-        assertThat(recorder.performed).hasSize(36)
-        assertThat(recorder.envelopes).hasSize(4)
+        assertThat(recorder.performed).hasSize(37)
+        assertThat(recorder.envelopes).hasSize(5)
     }
 }

@@ -3,6 +3,8 @@ package com.tracktosearch.ui.screen.swiftie
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.screen.swiftie.eras.AXIS_TICK_FADE_IN_AT
 import com.tracktosearch.ui.screen.swiftie.eras.CARD_GROW_MS
+import com.tracktosearch.ui.screen.swiftie.eras.LOVER_HIT_MS
+import com.tracktosearch.ui.screen.swiftie.eras.LOVER_RECOIL_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SWIFTIE_ERA_EDGES
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieEraCenterFraction
@@ -44,6 +46,17 @@ enum class SwiftieHapticCueKind {
 
     /** TTPD 曲目列打完的收尾一记，**不逐曲目**；其余 11 张已无曲目列触感 */
     TRACKLIST_DONE,
+
+    /**
+     * Lover 那一箭射中彩虹爱心：扎进去那一下 + 420ms 的余韵收干。
+     *
+     * 与 [LOVER_BLOOM] 是同一支序列的两端 —— 中间隔着 105 秒。这一段是 Lover 卡片
+     * **自己段内**的事件（卡内 3920ms），绽放则是倒滑回来之后的事，两者不重叠。
+     */
+    LOVER_ARROW_HIT,
+
+    /** [LOVER_ARROW_HIT] 的替身：一记 `confirm()`（表里的「最低层」） */
+    LOVER_ARROW_HIT_TICK,
 
     /** 签名 11 段笔画：落笔连续、抬笔静默的整段包络 */
     SIGNATURE_WRITE,
@@ -97,6 +110,7 @@ enum class SwiftieHapticCueKind {
             DIFFUSION_RISE_TICK -> DIFFUSION_RISE
             SIGNATURE_STROKE -> SIGNATURE_WRITE
             SIGNATURE_FLASH_TICK -> SIGNATURE_FLASH
+            LOVER_ARROW_HIT_TICK -> LOVER_ARROW_HIT
             LOVER_BLOOM_TICK -> LOVER_BLOOM
             else -> null
         }
@@ -163,10 +177,11 @@ data class SwiftieEnvelopeCue(
  *
  * ### 总量
  *
- * 默认档 36 记离散 + 4 段包络（终局签名段占 12 记离散与 1 段包络，手链一记都没有）。
- * 最重要的一条不变式：**卡片段总共只有 13 记** —— 12 张卡各一记落地，只有 TTPD
- * 保留一记曲目列收尾，**不逐曲目**。逐曲目就是 109 秒里 242 次震动，手会麻，
- * 也什么都表达不了。
+ * 默认档 37 记离散 + 5 段包络（终局签名段占 12 记离散与 1 段包络，手链一记都没有）。
+ * 最重要的一条不变式：**卡片段里没有一记是逐曲目的** —— 12 张卡各一记落地，只有 TTPD
+ * 保留一记曲目列收尾。逐曲目就是 109 秒里 242 次震动，手会麻，
+ * 也什么都表达不了。卡片段现在共 15 记：那 13 记之外，多的两记是 Lover 段内那一箭
+ * （一段包络 + 它的替身，同一毫秒），它同样不是逐曲目。
  *
  * ### 设计依据
  *
@@ -224,6 +239,7 @@ private fun buildScore(reducedMotion: Boolean): List<SwiftieHapticCue> =
         diffusionCues() +
             axisIntroCues() +
             erasCardCues() +
+            loverArrowCues() +
             signatureCues() +
             rewindCues() +
             loverBloomCues()
@@ -316,6 +332,10 @@ private fun axisIntroCues(): List<SwiftieHapticCue> = listOf(
 /**
  * 卡片段：**总共 13 记**，12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾。
  *
+ * 这一函数只管这 13 记。Lover 段内那一箭（命中 + 余韵）不在这里 —— 它是卡片段里的
+ * 第 14、15 记，但归 [loverArrowCues]，因为它的时刻由 `SwiftieLoverArcher` 的
+ * 拉弓/飞行三段决定，与「卡片何时长出」无关。
+ *
  * - 落地落在长出走完那一刻（`eraStartMs(i) + cardPrerollMs(i) + CARD_GROW_MS`），不是起手
  *   那一刻：`SwiftieEraCard` 的入场曲线在这里收住，手上那一记要和眼里那一下对齐。
  *   前摇那一段屏幕上根本没有卡片（TTPD 的打字机独奏、TS2/TS3/TS5 的背景先演），
@@ -360,6 +380,38 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
             }
         }
     }
+
+/**
+ * Lover 那一箭射中彩虹爱心。
+ *
+ * 时刻从 `SwiftieLoverArcher` 的 [LOVER_HIT_MS] 派生（卡内偏移），卡片起点从
+ * [SwiftieTimeline.eraStartMs] 取 —— 视觉挪一个数，这一记跟着走。
+ *
+ * 形态是**一段单峰包络**而不是「一记 + 一记」：平台上后发的一记会掐掉正在播的波形，
+ * 同毫秒上叠两笔只会活下来一笔。所以「扎进去」与「余韵收干」合成同一条曲线 ——
+ * 首格 105ms 内从 0 冲到峰值（那一下），其余 315ms 落回 0（余韵）。
+ *
+ * 时长取 [LOVER_RECOIL_MS]，与心抖的衰减摆同一长度：手上收干净的那一刻，
+ * 眼里那颗心也正好停住。整条曲线是**单峰**，所以 RichTap 与 MiHaptic HE 两层都接得下。
+ */
+private fun loverArrowCues(): List<SwiftieHapticCue> {
+    val atMs = SwiftieTimeline.eraStartMs(SwiftieErasData.LOVER_INDEX) + LOVER_HIT_MS
+    return listOf(
+        humpEnvelope(
+            atMs = atMs,
+            kind = SwiftieHapticCueKind.LOVER_ARROW_HIT,
+            durationMs = LOVER_RECOIL_MS.toLong(),
+            points = LOVER_ARROW_POINTS,
+            peak = LOVER_ARROW_PEAK_AMPLITUDE,
+            riseFraction = LOVER_ARROW_RISE_FRACTION,
+        ),
+        SwiftieDiscreteCue(
+            atMs = atMs,
+            kind = SwiftieHapticCueKind.LOVER_ARROW_HIT_TICK,
+            semantic = HapticSemantic.CONFIRM,
+        ),
+    )
+}
 
 /**
  * 触感用的笔画时间表，**与屏幕上那支笔用的是同一张表**。
@@ -626,6 +678,31 @@ private const val SIGNATURE_FLASH_ENVELOPE_MS = 200L
 
 /** 闪光 200ms 切 5 格，每格 40ms。 */
 private const val SIGNATURE_FLASH_POINTS = 5
+
+/**
+ * 命中那一箭 420ms 切 4 格，每格 105ms。
+ *
+ * 4 格而不是更多：这条包络只有「冲上去、落下来」两件事，切成 7 格以上每一格都不到
+ * 60ms，`rampStepDurationMs` 还没爬完就被下一格顶掉，末格落 0 也读不出来。
+ * 4 格让首格（上升）与后三格（收干）各自有足够时长读出形状。
+ */
+private const val LOVER_ARROW_POINTS = 4
+
+/**
+ * 命中那一箭的峰值。
+ *
+ * 0.75 夹在两笔之间：比签名书写的 0.25（一支笔在纸上走）重得多 —— 这一下是箭扎进心；
+ * 又比 Lover 绽放的 0.85（全曲最重一笔）轻，不让卡片段里的一记抢掉收尾那一笔。
+ */
+private const val LOVER_ARROW_PEAK_AMPLITUDE = 0.75f
+
+/**
+ * 命中包络里上升段占多少。
+ *
+ * 0.25 让升段只占 1 格（105ms）、落段占 3 格（315ms）—— 箭是**一下**扎进去的，
+ * 余韵才是慢慢收的。与心抖那条 `(1-t)·sin` 的衰减摆同构：起手最猛，往后越来越小。
+ */
+private const val LOVER_ARROW_RISE_FRACTION = 0.25f
 
 /** 绽放 3500ms 切 14 格，每格 250ms。 */
 private const val LOVER_BLOOM_POINTS = 14
