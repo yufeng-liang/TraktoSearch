@@ -35,15 +35,17 @@
    提交后，Release body 由 `section` 子命令从本文件切出：
 
    ```bash
-   node .ci/make-manifest.mjs section --version v<version> --out changelog.md
-   gh release create v<version> --title "v<version>" --notes-file changelog.md
+   # 输出必须落在 .tmp/：changelog.md 与 CHANGELOG.md 在大小写不敏感的文件系统上是同一个文件，
+   # section 是覆盖写，写到仓库根的 changelog.md 会把 61 个版本的全量日志截断成只剩当前一版。
+   node .ci/make-manifest.mjs section --version v<version> --out .tmp/changelog-body.md
+   gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
    ```
 4. **提交版本号改动并打 tag**：`git tag v<version>`。
 5. **推送**：`git push origin master && git push origin v<version>`；代码镜像 `git -c http.proxy="" push gitee master`（Gitee 只留代码镜像，不再发 APK）。
 6. **建 Release 即触发发布**：
 
    ```bash
-   gh release create v<version> --title "v<version>" --notes-file changelog.md
+   gh release create v<version> --title "v<version>" --notes-file .tmp/changelog-body.md
    ```
 
    `published` 事件触发 `.github/workflows/release-apk.yml`：构建签名 APK → 断言证书指纹 → 挂 GitHub 附件 →

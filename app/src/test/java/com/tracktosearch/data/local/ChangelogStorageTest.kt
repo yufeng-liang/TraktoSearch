@@ -47,7 +47,8 @@ class ChangelogStorageTest {
 
     @Test
     fun 缓存键名已升到v3() {
-        // 反射读私有 key，避免把键名复制到测试里造成「测试跟着实现一起改」
+        // 反射读运行时真实 key：字段被改名会直接 NoSuchField 报错，而不是静默漏测；
+        // 期望值故意钉死 v3，这样实现回退到 v2 时测试立刻变红。
         assertThat(prefName("key")).isEqualTo("full_changelog_v3")
     }
 
