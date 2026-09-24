@@ -234,10 +234,11 @@ private inline fun buildTriples(count: Int, seed: Int, item: (Random) -> FloatAr
  * 飘落物走的是另一份 12s 的相位，不在本文件里。
  *
  * @param eraElapsedMs 本段已过的毫秒，`-1` 或负数 = 待机态（本段还没开始）。
- *   **四张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）、reputation
+ *   **五张背景读它**：TTPD 那台打字机（敲字 / 滑架 / 出纸要与卡片对上拍）、reputation
  *   那条蛇（整段走完「进场 → 绕王座 → 立起头 → 出画」一趟）、Lover 彩虹上那颗心（命中
- *   之后才带箭），以及 Midnights 面钟上弦的两根指针（一次性动作，`phase` 那个 3.6s 锯齿
- *   问不出「走到第几拍」）。其余 8 张只看 [phase]
+ *   之后才带箭）、Midnights 面钟上弦的两根指针，以及 Red 枝上那五片叶（按剧本表决定
+ *   哪几片还留着，见 `SwiftieRedLeafFall.drawRedAttachedMaples`）。前三者都是一次性动作，
+ *   [phase] 那个 3.6s 锯齿问不出「走到第几拍」。其余 7 张只看 [phase]
  * @param cardBounds TTPD 卡片在根坐标里的边框（px），[Rect.Zero] = 还没量到。
  *   打字机按它把出纸口坐到纸的下缘、把滚筒对齐纸宽 —— 机器在屏幕底下，纸从滚筒
  *   后头升上来，先打的行升得最高
@@ -383,7 +384,8 @@ private fun DrawScope.drawStage(
         SwiftieEraBackdrop.FIREFLY_PORCH -> drawFireflyPorch(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.GOLDEN_CASTLE -> drawGoldenCastle(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, alpha)
-        SwiftieEraBackdrop.KNIT_AUTUMN -> drawKnitAutumn(top, mid, deep, phase, alpha, shapes.knit, maple)
+        SwiftieEraBackdrop.KNIT_AUTUMN ->
+            drawKnitAutumn(top, mid, deep, phase, alpha, shapes.knit, maple, eraMs)
         SwiftieEraBackdrop.SKYLINE_POLAROIDS ->
             drawSkylinePolaroids(path, top, mid, deep, phase, alpha, shapes, hangPhotos)
         SwiftieEraBackdrop.HALFTONE_THRONE ->
@@ -1872,7 +1874,8 @@ private fun DrawScope.drawKnitAutumn(
     phase: Float,
     alpha: Float,
     knit: KnitTexture,
-    maple: MapleArt
+    maple: MapleArt,
+    eraMs: Long
 ) {
     val w = size.width
     val h = size.height
@@ -1912,7 +1915,8 @@ private fun DrawScope.drawKnitAutumn(
         px = nx
         py = ny
     }
-    // 三根上翘的小枝。Red 是深秋，枝上不留叶 —— 叶子都在 L2 层飘着
+    // 三根上翘的小枝。它们只负责让枝有分叉，叶不在这里 —— 五片大叶的位置
+    // 由 `SwiftieRedLeafFall` 那张剧本表定，这一层只画还没松手的
     for (i in 0 until 3) {
         val t = 0.22f + i * 0.24f
         drawBranch(
@@ -1928,7 +1932,7 @@ private fun DrawScope.drawKnitAutumn(
         )
     }
 
-    drawKnitMaples(maple, mid, deep, alpha)
+    drawRedAttachedMaples(maple, eraMs, alpha)
 }
 
 /** 织纹淡入起点的基准高度。 */
@@ -1947,69 +1951,6 @@ private fun knitBoughX(t: Float): Float =
 
 private fun knitBoughY(t: Float): Float =
     (1f - t) * (1f - t) * 0.068f + 2f * t * (1f - t) * 0.175f + t * t * 0.100f
-
-/**
- * Red 的主体：搭在枯枝上的五片大红枫叶。
- *
- * x（占屏宽）, y（占屏高）, 半径（占最小边）, 旋转（度）四元组。
- *
- * 旋转都落在 180° 附近（150–214）：位图那片叶子是**尖瓣朝上、叶柄在下**的，
- * 转过来叶柄才朝着枝。五片的角度各差二三十度 —— 同一个角度摆五片是贴图。
- *
- * 尺寸拉开到 0.062–0.150（2.4 倍差）：这是唯一能在一层平面上做出景深的手段，
- * 等大的五片会平铺成一张壁纸。最大那片钉在 (0.30w, 0.105h)，
- * 正是枯枝下垂那一段的下方（枝在 t≈0.41 处约 0.125h），读起来就是从那儿挂下来的。
- *
- * **五片的叶身下缘都必须落在卡片顶边以上。** 锚点钉的是叶柄末端，而旋转都落在 188°
- * 上下 —— 转过来之后叶身从锚点**朝下**长，所以真正要守的不是锚点，是「锚点 + 叶身下探」。
- * 每片的下探量按位图实测（`swiftie_maple_bent_solid` 的不透明包围盒）：
- * 0.086 / 0.054 / 0.056 / 0.036 / 0.030（倍屏高），所以最靠下的锚点只能到 0.17h 上下。
- *
- * 补齐 Taylor's Version 独有曲目后 Red 是 30 首，卡片顶边从 16 首时的 0.455h 抬到 0.20h
- * （行高封顶 16dp，卡片贴插槽底往上长），原来挂在 0.272h / 0.318h 的两片会被整块吞掉
- * （2026-09-20 真机截图确认过）。这一组纵向值把五片收进 0.10–0.19h 那一条带里，
- * 横向位置、大小、角度、相互遮挡关系全部不变。
- */
-private val KNIT_MAPLES = floatArrayOf(
-    0.300f, 0.105f, 0.150f, 188f,
-    0.630f, 0.100f, 0.105f, 205f,
-    0.815f, 0.125f, 0.098f, 168f,
-    0.125f, 0.105f, 0.070f, 150f,
-    0.485f, 0.150f, 0.062f, 214f
-)
-
-/**
- * 五片大枫叶：实心填色 + 墨线（叶缘、叶脉、叶柄全在墨线里）。
- *
- * 叶形来自参考图取墨的两张位图（[MapleArt]）—— 与 L2 层飘落的秋叶、杯套上那片刻线
- * 是**同一片真叶**（同一份 PNG），这里只是换填色（[mid]）与墨线（[deep]）两个颜色，
- * 不再是为这一处另画一套叶子。换图前这里是「填色 + 描边 + 掌状脉」三笔，
- * 现在是「实心图 + 墨线图」两笔：轮廓与叶脉在一张图里，天然重合。
- *
- * 近乎不透明（0.92）：它们是这一张的主体，压在淡粉的上半屏上，
- * 半透明会稀释成几团粉影。墨线只给 0.45 —— 叶脉是压出来的暗痕，画实了像铁丝。
- */
-private fun DrawScope.drawKnitMaples(maple: MapleArt, mid: Color, deep: Color, alpha: Float) {
-    val w = size.width
-    val h = size.height
-    val u = size.minDimension
-    for (i in 0 until KNIT_MAPLES.size / 4) {
-        val half = KNIT_MAPLES[i * 4 + 2] * u
-        withTransform({
-            translate(KNIT_MAPLES[i * 4] * w, KNIT_MAPLES[i * 4 + 1] * h)
-            rotate(KNIT_MAPLES[i * 4 + 3], Offset.Zero)
-        }) {
-            // 叶柄末端钉在局部原点下方 `MAPLE_STEM_END_R` half（换图前的落点口径）、
-            // 总高 `MAPLE_SPAN` half —— 五片的落点、角度、大小一处都不用重调。
-            // stemEndFrac：这几片用的是**弯柄**那套（参考图的叶柄本来就往左弯），
-            // 锚点跟着叶柄末端走，五片才不会整体横移
-            val height = MAPLE_SPAN * half
-            val stemEnd = Offset(0f, MAPLE_STEM_END_R * half)
-            drawMapleSolid(maple.solid, height, stemEnd, mid, alpha * 0.92f, maple.stemEndFrac)
-            drawMapleInk(maple.ink, height, stemEnd, deep, alpha * 0.45f, maple.stemEndFrac)
-        }
-    }
-}
 
 /**
  * 纽约天际线 + 海岸线 + 挂着的宝丽来。

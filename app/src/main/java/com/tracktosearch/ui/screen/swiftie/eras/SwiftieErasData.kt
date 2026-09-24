@@ -79,14 +79,16 @@ enum class SwiftieEraBackdrop {
 }
 
 /**
- * 前景飘落物。绘制实现在 `SwiftieEraParticles.kt`（L2 层）。
+ * 前景飘落物。绘制实现在 `SwiftieEraParticles.kt`（L2 层，**卡片之下**）。
  *
- * **只有 10 种，Speak Now 与 reputation 故意没有** —— 那两张的背景本体
- * （三层紫纱正弦波、满屏半调网点 + 大幅蛇形）自己就在动，再叠一层碎屑是同语义重复。
+ * **只有 9 种，三张故意没有** —— Speak Now 与 reputation 的背景本体（三层紫纱正弦波、
+ * 满屏半调网点 + 大幅蛇形）自己就在动，再叠一层碎屑是同语义重复；Red 的秋叶则整批
+ * 搬到了卡片**之上**那一层（见 `SwiftieRedLeafFall`），留在 L2 会被半透明白卡片盖住，
+ * 而「落叶飘过曲目表」正是这一张要演的东西。
  *
  * 六组运动模式刻意不共用一个 mover，否则 12 张看下来就是同一个屏保：
  * 上浮（[FIREFLY] / [HEART_BUTTERFLY] 的心）、斜落带三轴翻转（[GOLD_FLAKE] /
- * [AUTUMN_LEAF] / [DRY_LEAF] / [PAPER_SCRAP]）、打旋慢落（[FEATHER]）、
+ * [DRY_LEAF] / [PAPER_SCRAP]）、打旋慢落（[FEATHER]）、
  * 横向滑翔（[SEAGULL] / [HEART_BUTTERFLY] 的蝴蝶）、极慢下沉（[PURPLE_GLITTER]）、
  * 竖直缓落（[PINE_NEEDLE]）。
  *
@@ -97,8 +99,6 @@ enum class SwiftieEraParticle {
     FIREFLY,
     /** 2 · 金箔：极小 + 高频翻转 + 镜面高光 */
     GOLD_FLAKE,
-    /** 4 · 秋叶：大 + 低频翻转 + 叶脉可见 + 正反两面异色 */
-    AUTUMN_LEAF,
     /** 5 · 海鸥：远处横向滑翔，翼展随透视变化 */
     SEAGULL,
     /** 7 · 上浮的亮粉心 + 横穿扑翼的蝴蝶 */
@@ -182,6 +182,9 @@ object SwiftieErasData {
 
     /** 归宿那一张：序列末尾播放头会倒滑回这里。 */
     const val LOVER_INDEX: Int = 6
+
+    /** 第四张 Red。它的枫叶剧本（`SwiftieRedLeafFall`）与落叶层的挂载门控都认这个号。 */
+    const val RED_INDEX: Int = 3
 
     private val TAYLOR_SWIFT = SwiftieEra(
         name = "Taylor Swift",
@@ -620,15 +623,18 @@ object SwiftieErasData {
             darkStatusBarIcons = true,
             darkBottomInk = false
         ),
-        // 4 · Red — 红。秋叶大幅翻转，正反异色
+        // 4 · Red — 红。秋叶不在这一层飘，见下面那条 2026-09-24 的说明
         //
         // 2026-09-19 提亮：中档曾是 #C81E30，需求方「主题红有点暗，要 Red 重录专辑那口
         // 亮红」，提到 #EB3440（三档候选里最亮的猩红）；末档跟着同调 #6E0F1A → #981A28。
         // 轴墨靠 `readableOnDark` 提亮，守着 `SwiftieEraContrastTest.axisInkMeetsAaOnEveryBackdropBottom`。
+        //
+        // 2026-09-24 飘落物改到卡片之上：这一张的叶要「长在枝上 → 松手 → 落过曲目表」，
+        // L2 在卡片背后，那条弧线演不出来。剧本与图层见 `SwiftieRedLeafFall`。
         SwiftieEraStage(
             backdrop = SwiftieEraBackdrop.KNIT_AUTUMN,
             backdropColors = listOf(Color(0xFFFBE3E3), Color(0xFFEB3440), Color(0xFF981A28)),
-            particle = SwiftieEraParticle.AUTUMN_LEAF,
+            particle = null,
             darkStatusBarIcons = true,
             darkBottomInk = false
         ),

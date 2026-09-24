@@ -128,15 +128,16 @@ class SwiftieErasDataTest {
     }
 
     @Test
-    fun onlyTwoErasGoWithoutParticles() {
-        // Speak Now 的舞台与 reputation 的黑白报纸刻意不给飘落物：
+    fun onlyThreeErasGoWithoutL2Particles() {
+        // Speak Now 与 reputation 的舞台自己在动，刻意不给飘落物；Red 的秋叶则搬到
+        // 卡片**之上**那一层（`SwiftieRedLeafFall`），留在 L2 会被半透明白卡片盖住。
         // 12 张全有反而变成同一套「东西在飘」，那正是廉价感的来源
         val without = SwiftieErasData.STAGE.withIndex()
             .filter { it.value.particle == null }
             .map { it.index }
-        assertThat(without).containsExactly(2, 5)
-        // 剩下 10 张各用一种，没有两张共用
-        assertThat(SwiftieErasData.STAGE.mapNotNull { it.particle }.toSet()).hasSize(10)
-        assertThat(SwiftieEraParticle.entries).hasSize(10)
+        assertThat(without).containsExactly(2, 3, 5)
+        // 剩下 9 张各用一种，没有两张共用
+        assertThat(SwiftieErasData.STAGE.mapNotNull { it.particle }.toSet()).hasSize(9)
+        assertThat(SwiftieEraParticle.entries).hasSize(9)
     }
 }

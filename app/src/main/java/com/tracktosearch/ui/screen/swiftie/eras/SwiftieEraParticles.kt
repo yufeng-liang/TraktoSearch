@@ -38,9 +38,6 @@ private val FIREFLY_BODY = Color(0xFF2E3A22)
  */
 private val FIREFLY_CORE = Color(0xFFFFFBD6)
 
-/** 枫叶背面。Red 那三档里没有橙黄，而正反同色的叶子翻面时根本看不出在翻。 */
-private val LEAF_BACK = Color(0xFFE8912A)
-
 /** 松针的苔痕档。folklore 整套全灰，纯灰的细长条读作一根头发。 */
 private val NEEDLE_MOSS = Color(0xFF67705C)
 
@@ -71,8 +68,11 @@ private fun triangle(t: Float): Float = 4f * abs(t - floor(t + 0.5f)) - 1f
  *
  * 单条 sin 一趟就闭合一次，几个个体一起看就是同一条摆线；两条叠起来在一趟里
  * 不重复自己，也不会和邻居对齐。
+ *
+ * Red 的落叶层（`SwiftieRedLeafFall`）共用这一条 —— 同一张图里两套摆动方程会飘出
+ * 两种质感。
  */
-private fun lissajous(t: Float, freqA: Float, freqB: Float, shift: Float): Float =
+internal fun lissajous(t: Float, freqA: Float, freqB: Float, shift: Float): Float =
     sin((t * freqA + shift) * TAU) * 0.66f + sin((t * freqB + shift * 1.7f) * TAU) * 0.34f
 
 /** 进出画面各留一段淡入淡出，不在边缘硬切。 */
@@ -171,9 +171,9 @@ private class Swarms(
 )
 
 /**
- * 10 群一次全建好，不按当前索引懒建。
+ * 所有群一次全建好，不按当前索引懒建。
  *
- * 总共 50 上下个 [Mote]，一次性的开销；懒建反而要在换张那 500ms 的交叉淡变里
+ * 总共四十来个 [Mote]，一次性的开销；懒建反而要在换张那 500ms 的交叉淡变里
  * 掏出新表，正好撞在最忙的那一帧上。
  *
  * `rounds` 的档位就是六组 mover 的速度差：金箔 4..6 最快，枯叶 / 紫闪粉 / 羽毛
@@ -187,9 +187,6 @@ private fun buildSwarms(lowRam: Boolean): Swarms = Swarms(
         ),
         SwiftieEraParticle.GOLD_FLAKE to buildSwarm(
             2008, swarmSize(8, lowRam), 4..6, 0.018f..0.030f, 0.06f, 6..10
-        ),
-        SwiftieEraParticle.AUTUMN_LEAF to buildSwarm(
-            2012, swarmSize(5, lowRam), 2..3, 0.055f..0.085f, 0.09f, 2..3
         ),
         SwiftieEraParticle.HEART_BUTTERFLY to buildSwarm(
             2019, swarmSize(4, lowRam), 3..4, 0.030f..0.048f, 0.05f, 2..4
@@ -216,10 +213,12 @@ private fun buildSwarms(lowRam: Boolean): Swarms = Swarms(
 )
 
 /**
- * 页面背景的 L2 前景飘落物。按 `SwiftieErasData.STAGE[index].particle` 分发。
+ * 页面背景的 L2 前景飘落物（**卡片之下**）。按 `SwiftieErasData.STAGE[index].particle` 分发。
  *
- * `particle == null` 的两张（Speak Now 与 reputation）什么都不画 —— 那两张的背景
- * 本体（三层紫纱正弦波、满屏半调网点 + 大幅蛇形）自己就在动。
+ * `particle == null` 的三张什么都不画：Speak Now 与 reputation 的背景本体（三层紫纱
+ * 正弦波、满屏半调网点 + 大幅蛇形）自己就在动；Red 的秋叶则整批搬到卡片**之上**那一层
+ * （`SwiftieRedLeafFall`），留在这一层会被半透明白卡片盖住，而「落叶飘过曲目表」
+ * 正是那一张要演的东西。
  *
  * 六组 mover 刻意不共用：上浮、斜落带三轴翻转、打旋慢落、横向滑翔、极慢下沉、
  * 竖直缓落。同一个「小东西从上往下飘」重复 12 次就是屏保。
@@ -249,9 +248,6 @@ fun SwiftieEraParticleLayer(
     val swarms = remember(lowRam) { buildSwarms(lowRam) }
     // 循环里反复 rewind 的那一个 Path。每次迭代 new 一个的话，一帧就是几十个
     val scratch = remember { Path() }
-    // 参考图取墨的枫叶（只有 Red 那十几片飘落秋叶用得上）。两张小 PNG 无条件解码：
-    // 这一层拿到的号是每帧变的时钟派生 lambda，在组合阶段读它们 = 整层逐帧重组
-    val maple = rememberMapleBentArt()
     // 心形只有这一条轮廓（见 SwiftieHeartPath），单位方框内，调用方自己 scale
     val heart = remember { unitHeartPath() }
     // 单位空间的光晕：调用方 scale 到目标半径，于是整层每帧一个 Brush 都不 new。
@@ -274,19 +270,19 @@ fun SwiftieEraParticleLayer(
                 val tp = travelPhase()
                 if (from == to) {
                     // 不在换张中：只画一层。同一群画两遍会叠出半透明重影
-                    drawEraParticles(to, 1f, t, tp, swarms, scratch, heart, glow, maple)
+                    drawEraParticles(to, 1f, t, tp, swarms, scratch, heart, glow)
                     return@drawBehind
                 }
-                if (fade < 1f) drawEraParticles(from, 1f - fade, t, tp, swarms, scratch, heart, glow, maple)
-                if (fade > 0f) drawEraParticles(to, fade, t, tp, swarms, scratch, heart, glow, maple)
+                if (fade < 1f) drawEraParticles(from, 1f - fade, t, tp, swarms, scratch, heart, glow)
+                if (fade > 0f) drawEraParticles(to, fade, t, tp, swarms, scratch, heart, glow)
             }
     )
 }
 
 /**
- * 分发到 10 个画法。取色一律走 `STAGE[index].backdropColors`、`ALL[index]` 与
- * `SwiftiePalette`；只有三处必须偏离的写成文件顶部的常量（[FIREFLY_BODY]、
- * [LEAF_BACK]、[NEEDLE_MOSS]）。
+ * 分发到 9 个画法。取色一律走 `STAGE[index].backdropColors`、`ALL[index]` 与
+ * `SwiftiePalette`；只有两处必须偏离的写成文件顶部的常量（[FIREFLY_BODY]、
+ * [NEEDLE_MOSS]）。
  *
  * 每一档 alpha 的差是按**面积**定的：整屏铺开的纸片按金箔那个浓度画就压过曲目名了。
  */
@@ -298,8 +294,7 @@ private fun DrawScope.drawEraParticles(
     swarms: Swarms,
     scratch: Path,
     heart: Path,
-    glow: Brush,
-    maple: MapleArt
+    glow: Brush
 ) {
     val stage = SwiftieErasData.STAGE.getOrNull(index) ?: return
     val particle = stage.particle ?: return
@@ -314,9 +309,6 @@ private fun DrawScope.drawEraParticles(
 
         SwiftieEraParticle.GOLD_FLAKE ->
             drawGoldFlakes(motes, phase, travelPhase, layerAlpha * 0.78f, scratch, main, lit, deep)
-
-        SwiftieEraParticle.AUTUMN_LEAF ->
-            drawAutumnLeaves(motes, phase, travelPhase, layerAlpha * 0.58f, maple, main, LEAF_BACK, deep)
 
         SwiftieEraParticle.SEAGULL ->
             drawSeagulls(swarms.seagulls, phase, travelPhase, layerAlpha * 0.94f, scratch)
@@ -396,7 +388,7 @@ private fun DrawScope.drawFireflies(
 }
 
 /**
- * 2 · 金箔 —— mover：**斜落带三轴翻转**（与秋叶 / 枯叶 / 纸片同一组）。
+ * 2 · 金箔 —— mover：**斜落带三轴翻转**（与枯叶 / 纸片同一组）。
  *
  * 极小的不规则四边形，四个角每一趟重掷 —— 12 张里最小的粒子，形状一样就成了
  * 一堆碎点。`scaleX` 随 [Mote.beat] 过零模拟翻面，翻到侧面时压成一条亮线做镜面高光。
@@ -459,58 +451,6 @@ private fun DrawScope.drawGoldFlakes(
     }
 }
 
-/**
- * 3 · 枫叶 —— mover：**边落边翻**（与金箔 / 枯叶 / 纸片同一组）。
- *
- * 叶形、叶脉、叶柄全部来自参考图取墨的两张位图（见 [MapleArt]）：五瓣的角距、
- * 每一瓣的圆齿数目与深浅不再由式子生成，逐像素就是参考片 `cup-sleeve-leaf.jpg` 里那片真叶。
- * 叶柄末端钉在局部原点下方 [MAPLE_STEM_END_R] half 处、总高 [MAPLE_SPAN] half ——
- * 与换图前程序化叶形的落点口径一致，所以这十几片的尺寸、轨迹一处都没动。
- *
- * 翻面走 `scaleX` 过零（每片快慢由 [Mote.beat] 拉开）。**负号就是背面** ——
- * 旧版没有负号，翻过去只是压扁又鼓回来、正反同色；现在翻到背面整片是镜像 + 橙黄
- * （[back]），才读得出「翻了个面」。正反两面共用同一张图，不额外存一份背面图。
- */
-private fun DrawScope.drawAutumnLeaves(
-    motes: List<Mote>,
-    phase: Float,
-    travelPhase: Float,
-    alpha: Float,
-    maple: MapleArt,
-    front: Color,
-    back: Color,
-    vein: Color
-) {
-    motes.forEach { mote ->
-        val travel = travelOf(mote, travelPhase)
-        val round = roundOf(mote, travel)
-        val t = travel - floor(travel)
-        val a = alpha * edgeFade(t, 0.12f)
-        if (a <= 0.01f) return@forEach
-        val cy = (-0.18f + t * 1.34f) * size.height
-        val cx = (
-            -0.08f + hash01(mote.seed, round, 1) * 1.02f + mote.bend * 0.26f * t +
-                lissajous(t, mote.freqA, mote.freqB, hash01(mote.seed, round, 2)) * mote.amp
-            ) * size.width
-        val half = mote.size * (0.78f + hash01(mote.seed, round, 3) * 0.44f) * size.minDimension
-        val flip = cos((phase * mote.beat + mote.beatOffset) * TAU)
-        val faceUp = flip >= 0f
-        val fold = abs(flip).coerceAtLeast(0.08f)
-        withTransform({
-            translate(cx, cy)
-            rotate((phase * mote.twist + mote.bend) * 360f, Offset.Zero)
-            scale(if (faceUp) fold else -fold, 1f, Offset.Zero)
-        }) {
-            val height = MAPLE_SPAN * half
-            val stemEnd = Offset(0f, MAPLE_STEM_END_R * half)
-            drawMapleSolid(maple.solid, height, stemEnd, if (faceUp) front else back, a, maple.stemEndFrac)
-            // 背面的叶脉压一档而不是不画（真叶背面受光弱、脉反而更鼓）——
-            // 就是旧版那个 0.55 / 0.34 的关系
-            drawMapleInk(maple.ink, height, stemEnd, vein, a * (if (faceUp) 0.55f else 0.34f), maple.stemEndFrac)
-        }
-    }
-}
-
 /** 海鸥按远到近画在卡片后方；扑翼、滑翔与行程分别计时。 */
 private fun DrawScope.drawSeagulls(
     birds: List<SeagullFlight>,
@@ -553,7 +493,7 @@ private fun wingPairInto(path: Path, halfSpan: Float, halfBody: Float, up: Boole
 }
 
 /**
- * 5 · 上浮的亮粉心 + 横穿的蝴蝶 —— **两个 mover 混在一张里**。
+ * 4 · 上浮的亮粉心 + 横穿的蝴蝶 —— **两个 mover 混在一张里**。
  *
  * 心走上浮组（升到顶淡出），蝴蝶走横向滑翔组。蝴蝶是两对翼瓣（上翼大、下翼小）
  * + 细身体 + 触角，扑翼靠上下翼的 `scaleX` **反相**收放：一对张开时另一对正收，
@@ -657,7 +597,7 @@ private fun DrawScope.drawButterflies(
 }
 
 /**
- * 6 · 松针 —— mover：**竖直缓落**，独占一组。
+ * 5 · 松针 —— mover：**竖直缓落**，独占一组。
  *
  * 一根两端收尖的细纺锤 + 中脊高光。摆幅压到 0.012 量级（别的粒子是 0.06–0.11）：
  * 松针是有重量的直落物，横着飘就成了羽毛。
@@ -726,8 +666,8 @@ private fun dryLeafInto(path: Path, half: Float, curl: Float) {
 }
 
 /**
- * 7 · 枯叶 —— mover：**斜落带三轴翻转**，但 [Mote.beat] 恒为 1，比枫叶慢一半，
- * `rounds` 也钉在 2（枫叶是 2..3），落得更沉。
+ * 6 · 枯叶 —— mover：**斜落带三轴翻转**，但 [Mote.beat] 恒为 1，比其余斜落组慢一半，
+ * `rounds` 也钉在 2，落得更沉。
  *
  * 深棕叶身 + 卷边高光 + 一条弓形主脉。三笔缺一笔就读成一块棕色色块。
  */
@@ -794,7 +734,7 @@ private fun DrawScope.drawDryLeaves(
 }
 
 /**
- * 8 · 紫色闪粉 —— mover：**极慢下沉**，独占一组（`rounds` 钉在 2，全场最慢档）。
+ * 7 · 紫色闪粉 —— mover：**极慢下沉**，独占一组（`rounds` 钉在 2，全场最慢档）。
  *
  * 小四芒星片：两条主轴 + 两条短斜轴 + 一点亮核，整片缓慢自转 —— 全部轴对齐屏幕
  * 就成了一片十字。闪烁按各自的 [Mote.beat]，不同步。
@@ -856,7 +796,7 @@ private fun paperInto(path: Path, halfW: Float, halfH: Float, bow: Float) {
 }
 
 /**
- * 9 · 纸片 —— mover：**斜落带三轴翻转**。
+ * 8 · 纸片 —— mover：**斜落带三轴翻转**。
  *
  * 大而薄、带弧度的纸片。纸面留 2–3 条长短不一的短横线当字迹，画在同一个变换里，
  * 翻面时和纸一起压扁；翻到侧面再补一道薄边，纸才有厚度。
@@ -954,7 +894,7 @@ private fun barbsInto(path: Path, len: Float, count: Int, sweep: Float) {
 }
 
 /**
- * 10 · 羽毛 —— mover：**打旋慢落**，独占一组。
+ * 9 · 羽毛 —— mover：**打旋慢落**，独占一组。
  *
  * 摆动是**三角波**不是正弦：羽毛落下来是一顿一顿的，摆到端点顿一下再换向，
  * 正弦太顺。羽毛整体倒向自己的摆动方向＝打旋；`scaleX` 过零＝绕羽轴缓慢自转。

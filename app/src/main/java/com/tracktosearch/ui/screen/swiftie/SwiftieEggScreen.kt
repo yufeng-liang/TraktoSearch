@@ -72,6 +72,8 @@ import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraStage
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasStage
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieLoverArrowFlight
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieRedLeafFallLayer
+import com.tracktosearch.ui.screen.swiftie.eras.redLeafFallActiveAt
 import com.tracktosearch.ui.screen.swiftie.eras.swiftieLoverAim
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -650,6 +652,15 @@ private fun SwiftieEggContent(
                 LOVER_SHOT_MS..LOVER_HIT_MS
         }
     }
+    /**
+     * Red 的落叶层是否挂着。
+     *
+     * 与 [loverArrowFlying] 同一个理由：全屏节点常挂着，每帧都要为它重录一次
+     * display list，而它 12 张里只在 Red 那 9.4s 有东西要画。
+     */
+    val redLeafFallOn by remember {
+        derivedStateOf { redLeafFallActiveAt(clock.elapsedMs) }
+    }
     val particlePhase: () -> Float = {
         clock.elapsedMs.mod(PARTICLE_CYCLE_MS).toFloat() / PARTICLE_CYCLE_MS
     }
@@ -895,7 +906,9 @@ private fun SwiftieEggContent(
                 phase = finaleRingPhase,
                 modifier = Modifier.fillMaxSize()
             )
-            // L2 飘落物压在大主体之上、卡片之下。Speak Now 与 reputation 两张刻意没有粒子。
+            // L2 飘落物压在大主体之上、卡片之下。Speak Now、reputation 与 Red 三张
+            // 在这层什么都不画 —— 前两张的背景自己在动，Red 的秋叶挂在卡片之上
+            // （见下方 `SwiftieRedLeafFallLayer`）。
             // 节拍走 12s（PARTICLE_CYCLE_MS），行程走 30s（PARTICLE_TRAVEL_CYCLE_MS，
             // 即慢 2.5 倍），都不跟 L1 的呼吸同拍
             SwiftieEraParticleLayer(
@@ -939,6 +952,18 @@ private fun SwiftieEggContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer { alpha = erasAlpha() }
+                )
+            }
+            // Red 的落叶同样**挂在卡片之上**（与 L2 那层飘落物唯一的区别就在这儿）：
+            // 这一张要演「枝上的叶松手 → 落过曲目表」，压在卡片背后就只剩半程。
+            // 淡出那 500ms 跟着换张权重收，不然后一张已经全亮了这里还满屏叶
+            if (redLeafFallOn) {
+                SwiftieRedLeafFallLayer(
+                    eraElapsedMs = backdropEraElapsed,
+                    lowRam = lowRam,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = erasAlpha() * (1f - backdropCrossfade()) }
                 )
             }
         }
