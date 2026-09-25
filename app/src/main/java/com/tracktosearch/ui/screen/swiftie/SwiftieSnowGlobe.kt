@@ -312,7 +312,8 @@ private val ROOF_BOTTOM = Color(0xFFC95A83)
 private val ROOF_EDGE = Color(0xFF9E3F68)
 private val FLOWER_PINK = Color(0xFFF29AB6)
 private val FLOWER_DEEP = Color(0xFFC84C78)
-private val SNOW_WHITE = Color(0xFFFFFBFC)
+/** 房上的积雪（地面、雪堆、窗台）。与球内飘雪的 [SNOW_WHITE] 不是一种白，别合并。 */
+private val HOUSE_SNOW_WHITE = Color(0xFFFFFBFC)
 private val SNOW_SHADE = Color(0xFFE9D8E2)
 private val WINDOW_WARM = Color(0xFFFFD98D)
 private val WINDOW_MULLION = Color(0xFFB87863)
@@ -1009,7 +1010,7 @@ private class LoverHouseParts(size: Size) {
         close()
     }
     val groundBrush = Brush.verticalGradient(
-        0f to SNOW_WHITE,
+        0f to HOUSE_SNOW_WHITE,
         1f to SNOW_SHADE,
         startY = y(0.42f),
         endY = y(1.0f)
@@ -1080,7 +1081,7 @@ private fun DrawScope.drawLoverHouse(parts: LoverHouseParts) {
             cap = StrokeCap.Round
         )
         drawOval(
-            color = SNOW_WHITE,
+            color = HOUSE_SNOW_WHITE,
             topLeft = Offset(parts.x(-0.92f), parts.y(0.58f)),
             size = Size(1.84f * r, 0.30f * r),
             alpha = 0.96f
@@ -1154,7 +1155,7 @@ private fun DrawScope.drawLitWindow(
     )
     // 窗台雪：一条压在下沿的白边
     drawRect(
-        color = SNOW_WHITE,
+        color = HOUSE_SNOW_WHITE,
         topLeft = Offset(left - width * 0.08f, top + height),
         size = Size(width * 1.16f, height * 0.16f)
     )
