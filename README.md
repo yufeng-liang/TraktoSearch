@@ -4,7 +4,7 @@
 
 一款 Android 影视搜索与管理工具：基于 Trakt 观影清单，也可独立使用豆瓣账号，快速查找网盘资源、管理想看/已看清单。
 
-`Android 8.0+ · Kotlin · Jetpack Compose · Material 3 · v3.6.0 · 中/英/日/韩`
+`Android 8.0+ · Kotlin · Jetpack Compose · Material 3 · v4.0.0 · 中/英/日/韩`
 
 ## ✨ 特色功能
 
