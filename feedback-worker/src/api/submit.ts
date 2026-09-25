@@ -1,13 +1,16 @@
 // POST /feedback-api/submit — 提交反馈
 
-import { AppError, successResponse, now, readJson } from '../util/errors';
-import { generateId } from '../util/crypto';
-import { checkRateLimit } from '../util/rate-limit';
-import { generateDisplayId } from '../util/display-id';
+import { AppError, successResponse, now, readJson } from '../util/errors.ts';
+import { generateId } from '../util/crypto.ts';
+import { checkRateLimit } from '../util/rate-limit.ts';
+import { generateDisplayId } from '../util/display-id.ts';
+import { buildNotifyPayload, notifyNewFeedback } from '../notify/feedback-notify.ts';
 
 interface Env {
     DB: D1Database;
     KV: KVNamespace;
+    AUTH_WORKER?: Fetcher;
+    JWT_SIGNING_KEY: string;
 }
 
 interface JWTPayload {
@@ -35,7 +38,8 @@ export async function handleSubmit(
     request: Request,
     env: Env,
     requestId: string,
-    payload: JWTPayload
+    payload: JWTPayload,
+    ctx?: ExecutionContext
 ): Promise<Response> {
     // 限流：每分钟 1 条
     const minuteKey = `feedback:submit:${payload.sub}:minute`;
@@ -121,6 +125,25 @@ export async function handleSubmit(
         body.appVersion, body.osVersion, body.deviceModel,
         currentTime, currentTime
     ).run();
+
+    // 邮件提醒是旁路：落库已成功，发信失败不能影响提交结果，也不让响应等它
+    if (ctx) {
+        ctx.waitUntil(notifyNewFeedback(env, buildNotifyPayload({
+            id,
+            displayId,
+            type: body.type,
+            content,
+            friendNickname,
+            contact,
+            traktUsername: body.traktUsername || null,
+            doubanUsername: body.doubanUsername || null,
+            appVersion: body.appVersion,
+            osVersion: body.osVersion,
+            deviceModel: body.deviceModel,
+            screenshotCount: screenshots.length,
+            createdAt: currentTime,
+        })));
+    }
 
     return successResponse({ id, displayId, createdAt: currentTime }, requestId);
 }

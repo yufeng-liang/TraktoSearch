@@ -27,6 +27,7 @@ import {
     updateFriend,
 } from './admin/admin';
 import { handleTmdbProxy } from './proxy/tmdb';
+import { handleFeedbackNotify } from './feedback-notify';
 import { handleMediaDetail, handleMediaSummaries } from './proxy/media-cache';
 import { handleTraktProxy, handleTraktOAuth, handleTraktPublicProxy } from './proxy/trakt';
 import { isTraktPublicPath } from './proxy/trakt-token';
@@ -117,6 +118,10 @@ export default {
             // App API（需 JWT）
             if (path.startsWith('/api/')) {
                 response = await handleAuthApi(request, env, requestId, path, ctx);
+            }
+            // 内部端点（需内部 scope 的 JWT，仅供 Worker 间 Service Binding 调用）
+            else if (path.startsWith('/internal/')) {
+                response = await handleInternalApi(request, env, requestId, path);
             }
             // Admin API（需 Access JWT）
             else if (path.startsWith('/admin/')) {
@@ -367,6 +372,19 @@ async function handleAuthApi(
         return handleConfigProxy(request, env, requestId);
     }
 
+    throw new AppError('NOT_FOUND', 'Not found', 404);
+}
+
+// 内部 API 路由（Worker 间 Service Binding 专用，需内部 scope 的 JWT）
+async function handleInternalApi(
+    request: Request,
+    env: Env,
+    requestId: string,
+    path: string,
+): Promise<Response> {
+    if (path === '/internal/feedback-notify' && request.method === 'POST') {
+        return handleFeedbackNotify(request, env, requestId);
+    }
     throw new AppError('NOT_FOUND', 'Not found', 404);
 }
 

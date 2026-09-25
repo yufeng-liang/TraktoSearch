@@ -29,6 +29,8 @@ export interface Env {
     ACCESS_AUDIENCE: string;
     ADMIN_EMAIL: string;
     ENVIRONMENT: string;
+    // 邮件提醒走 auth-worker（发信能力与模板集中在那里）
+    AUTH_WORKER?: Fetcher;
 }
 
 export default {
@@ -56,7 +58,7 @@ export default {
             }
             // App API（需 App JWT）
             else if (path.startsWith('/feedback-api/')) {
-                response = await handleAppApi(request, env, requestId, path);
+                response = await handleAppApi(request, env, requestId, path, ctx);
             }
             // Admin API（需 Access JWT）
             else if (path.startsWith('/admin/')) {
@@ -150,7 +152,8 @@ async function handleAppApi(
     request: Request,
     env: Env,
     requestId: string,
-    path: string
+    path: string,
+    ctx: ExecutionContext
 ): Promise<Response> {
     // 验证 App JWT
     const authHeader = request.headers.get('Authorization');
@@ -164,7 +167,7 @@ async function handleAppApi(
     }
 
     if (path === '/feedback-api/submit' && request.method === 'POST') {
-        return handleSubmit(request, env, requestId, payload);
+        return handleSubmit(request, env, requestId, payload, ctx);
     }
     if (path === '/feedback-api/upload-screenshot' && request.method === 'POST') {
         return handleUploadScreenshot(request, env, requestId, payload);

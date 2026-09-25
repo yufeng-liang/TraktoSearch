@@ -19,6 +19,11 @@ bucket_name = "feedback-screenshots"
 binding = "KV"
 id = "e4cd152919a24339a807cff410962043"
 
+# Worker 间调用：新反馈落库后触发开发者邮件提醒（发信能力集中在 auth-worker）
+[[services]]
+binding = "AUTH_WORKER"
+service = "auth-worker"
+
 # Secrets（通过 wrangler secret put 注入）
 # JWT_SIGNING_KEY（与 auth-worker 共享）
 # ACCESS_TEAM_DOMAIN

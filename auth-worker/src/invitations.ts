@@ -616,7 +616,7 @@ function parseEmailAddress(value: string): { email: string; name?: string } {
     return { email: value.trim() };
 }
 
-function emailLayout(content: string, showBrand = true, preheader = ''): string {
+export function emailLayout(content: string, showBrand = true, preheader = ''): string {
     const shellStyle = showBrand ? 'border-top:4px solid #D95532;padding:26px 20px 0;' : 'padding:0 20px;';
     const brand = showBrand
         ? `<div style="color:#D95532;font:600 12px/1.2 'Courier New',monospace;letter-spacing:.2em;text-transform:uppercase;">TraktoSearch</div><div style="height:1px;background:#D8D0C1;margin:20px 0 28px;"></div>`
@@ -629,7 +629,7 @@ function emailLayout(content: string, showBrand = true, preheader = ''): string 
     return `<!doctype html><html lang="zh-CN" style="color-scheme:light only;supported-color-schemes:light only"><head><meta charset="utf-8"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>:root{color-scheme:light only;supported-color-schemes:light only}</style></head><body style="color-scheme:light only;supported-color-schemes:light only;margin:0;padding:0;background:#F6F2E9;color:#1D1C19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;">${hiddenPreheader}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#F6F2E9;"><tr><td align="center" style="padding:24px 16px;"><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background:#F6F2E9;"><tr><td style="${shellStyle}">${brand}${content}<div style="height:1px;background:#D8D0C1;margin:30px 0 16px;"></div><p style="margin:16px 0 0;color:#9B9588;font-size:12px;line-height:1.6;">TraktoSearch · 从想看到找到，再到看过</p></td></tr></table></td></tr></table></body></html>`;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
     return value.replace(/[&<>'"]/g, character => ({
         '&': '&amp;',
         '<': '&lt;',
