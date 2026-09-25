@@ -51,7 +51,6 @@ import com.tracktosearch.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.floor
@@ -69,7 +68,7 @@ private const val TAU = 2f * PI.toFloat()
 /** 玻璃球成型 + 小卡转体。与 `SwiftieErasStage.GLOBE_FORM_MS` 必须同长（轴按它让位）。 */
 private const val FORM_MS: Long = 900L
 
-/** 金箔雪开洒 + Lover House 后景淡入。 */
+/** 雪开洒 + Lover House 后景淡入。 */
 private const val SNOW_MS: Long = 900L
 
 /** 心升起 → 灌满 → 呼吸一次。 */
@@ -192,12 +191,12 @@ private const val GLASS_DISPERSION = 0.009f
 /** 菲涅尔增亮上限。再高球缘就发白，玻璃变成塑料。 */
 private const val GLASS_RIM = 0.40f
 
-// ─────────────────────── 金箔雪 ───────────────────────
+// ─────────────────────── 雪 ───────────────────────
 
-/** 箔片数量。压到 16 是因为"能认出是箔片"比"多"重要；低端机再砍半。 */
+/** 雪片数。压到 16 是因为"每一片都认得出是六角雪"比"多"重要；低端机再砍半。 */
 private const val FLAKE_COUNT = 16
 
-/** 内壁判定半径：箔片飘到这里就改沿弧线滑。 */
+/** 内壁判定半径：雪片飘到这里就改沿弧线滑。 */
 private const val FLAKE_WALL_RATIO = 0.90f
 
 /** 越壁多少就沿弧转多少（弧度增益）与上限。 */
@@ -209,8 +208,14 @@ private const val FLAKE_BOTTOM = 1.12f
 private const val FLAKE_FADE_IN = 0.06f
 private const val FLAKE_FADE_OUT = 0.14f
 
-/** 平面内翻滚的圈数系数：比"翻面"慢，两个周期错开才不像风车。 */
-private const val FLAKE_TUMBLE_RATE = 0.35f
+/**
+ * 面内自转一圈要多久（逐片在这个区间里取）。
+ *
+ * 10–18 秒一圈是「缓慢」的下限：再快就是搅拌，整只球读成洗衣机。旧箔片那 0.9–2.3s
+ * 一圈加一个压扁「翻面」，正是它被读成金属碎屑而不是雪的原因。
+ */
+private const val FLAKE_SPIN_MIN_MS = 10_000f
+private const val FLAKE_SPIN_MAX_MS = 18_000f
 
 // ─────────────────────── 那颗心 ───────────────────────
 
@@ -254,10 +259,15 @@ private val GLASS_BODY: Brush = Brush.radialGradient(
     radius = 0.5f
 )
 
-/** 箔片是玫红与金两种，不是白雪 —— 白点堆在球里只会读成噪点。 */
-private val FOIL_ROSE = SwiftiePalette.Glitter
-private val FOIL_GOLD = Color(0xFFE8C46A)
-private val FOIL_GLINT = Color(0xFFFFF6E0)
+/**
+ * 雪白与淡冰蓝两种。
+ *
+ * 这一版**推翻**了旧注释那句"白点堆在球里只会读成噪点"—— 那句对实心圆点成立，
+ * 对带六条臂的描边雪花不成立：形状本身就够认出是雪，不需要靠金属色来救。
+ * 需求方 2026-09-25 定案要真雪，金与玫红那两片料一并撤掉。
+ */
+private val SNOW_WHITE = Color(0xFFF2F7FF)
+private val SNOW_ICE = Color(0xFFBFE0F5)
 
 private val HEART_OUTLINE = Color(0xFFFFF0F6)
 
@@ -383,16 +393,17 @@ half4 main(float2 coord) {
  * 这只球。所以它不是硬安上去的隐喻 —— 它天生就是"把 126 秒的 12 个时代收进一件
  * 能捧在手里的纪念品"。旧的"绽放"（把卡片放大 1.5 倍）被否掉，就是因为放大只是放大。
  *
- * ## 六拍
+ * ## 六拍 + 一拍定格
  *
  * | 起点 | 长度 | 内容 |
  * |---|---|---|
  * | [SwiftieTimeline.REWIND_START] | 1500 | 卷收期：只有 [content] 在自己变矮；末 200ms 浮出引子光弧 |
  * | [FORM_START] | [FORM_MS] | 小卡转体 0→−12°→0；玻璃自球心成型；底座自下升起 |
- * | [SNOW_START] | [SNOW_MS] | 金箔雪开洒；Lover House 后景淡入；小卡缩到 0.56 沉进球下半 |
+ * | [SNOW_START] | [SNOW_MS] | 雪开洒；Lover House 后景淡入；小卡缩到 0.56 沉进球下半 |
  * | [HEART_START] | [HEART_MS] | 心自球心升起：描边 → 自下灌满 → 呼吸一次 + 光晕 |
  * | [SEAL_START] | [SEAL_MS] | `7·3` 描金小印落在底座上；球起 ±6° 极慢自转 |
- * | [SwiftieTimeline.FADE_OUT_START] | 2998 | 整只球淡出并缓慢上浮，金箔雪落到最后一帧 |
+ * | [SwiftieTimeline.LOVER_BLOOM_END] | 2998 | **满亮定格**：六拍演完，结构不再动，雪片照旧缓慢旋着落、±6° 自转照旧摆。配乐这 2998ms 还在放，淡出不在这儿起手 |
+ * | [SwiftieTimeline.FADE_OUT_START] | [SwiftieTimeline.TAIL_FADE_MS] | 整只球淡出并缓慢上浮，雪落到最后一帧。起点就是配乐的最后一帧（[SwiftieTimeline.TOTAL_MS]），所以这 1.2 秒**完全跑在配乐之外**，收在 [SwiftieTimeline.END_MS] |
  *
  * 底座上那枚 `7·3`：婚礼在 7 月 3 日，而 Lover 是第 7 张专辑、`Lover` 是其中第 3 首。
  * **不写年份、不写任何解释文字** —— 讲出来就不是彩蛋了。
@@ -414,7 +425,7 @@ fun SwiftieLoverSnowGlobe(
     // 折射是"这是玻璃"的唯一硬证据，砍掉就只剩一个圆；门禁只看 API 版本
     val lowRam = rememberIsLowRamDevice()
     val flakes = remember(lowRam) {
-        buildGoldFlakes(if (lowRam) FLAKE_COUNT / 2 else FLAKE_COUNT)
+        buildSnowFlakes(if (lowRam) FLAKE_COUNT / 2 else FLAKE_COUNT)
     }
 
     BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -447,15 +458,16 @@ fun SwiftieLoverSnowGlobe(
                     innerWidth = diameter * INNER_WIDTH_RATIO,
                     content = content
                 )
-                // 玻璃壳 + 金箔雪 + 那颗心：画在球内容之上
+                // 玻璃壳 + 雪 + 那颗心：画在球内容之上
                 Spacer(
                     modifier = Modifier.fillMaxSize().drawWithCache {
-                        // 循环里的 Path 建一条反复 rewind（与 SwiftieEraMotifs 同一条铁律）；
-                        // 心的轮廓直接用项目里那条唯一的 unitHeartPath()，不再手写第二份
-                        val flakePath = Path()
+                        // 每条轮廓在缓存里建一次、逐帧只变换，绝不 rewind（与
+                        // SwiftieEraMotifs 同一条铁律）；心的轮廓直接用项目里那条唯一的
+                        // unitHeartPath()，不再手写第二份
+                        val snowflakePath = unitSnowflakePath()
                         val heartPath = unitHeartPath()
                         onDrawBehind {
-                            drawGlassShell(elapsedMs(), flakePath, heartPath, flakes)
+                            drawGlassShell(elapsedMs(), snowflakePath, heartPath, flakes)
                         }
                     }
                 )
@@ -623,9 +635,9 @@ private fun swingDeg(elapsed: Long, lowRam: Boolean): Float {
  */
 private fun DrawScope.drawGlassShell(
     elapsed: Long,
-    flakePath: Path,
+    snowflakePath: Path,
     heartPath: Path,
-    flakes: List<GoldFlake>
+    flakes: List<SnowFlake>
 ) {
     val fade = fadeProgress(elapsed)
     val dim = 1f - fade
@@ -652,9 +664,9 @@ private fun DrawScope.drawGlassShell(
         drawCircle(brush = GLASS_BODY, radius = 0.5f, center = UNIT_CENTER, alpha = dim)
     }
 
-    // 雪比玻璃亮度掉得慢（1 − fade²）：淡出末尾玻璃已经没了，箔片还在星云前飘着，
-    // 这是"金箔雪继续落到最后一帧"最好看的读法
-    drawGoldFoilSnow(elapsed, center, radius, flakePath, flakes, 1f - fade * fade)
+    // 雪比玻璃亮度掉得慢（1 − fade²）：淡出末尾玻璃已经没了，雪片还在星云前飘着，
+    // 这是"雪继续落到最后一帧"最好看的读法
+    drawSnowfall(elapsed, center, radius, snowflakePath, flakes, 1f - fade * fade)
     drawRisingHeart(elapsed, center, radius, heartPath, dim)
 
     // 内壁细环：没有这一圈，球内的东西看着像贴在球面上，而不是装在里面
@@ -716,8 +728,8 @@ private fun DrawScope.arcStroke(
     )
 }
 
-/** 一片金箔。全部量都是"占半径的比例"，所以换直径不用重算。 */
-private class GoldFlake(
+/** 一片雪。全部量都是"占半径的比例"，所以换直径不用重算。 */
+private class SnowFlake(
     val startX: Float,
     val periodMs: Float,
     val release: Float,
@@ -725,44 +737,46 @@ private class GoldFlake(
     val swayAmp: Float,
     val phase: Float,
     val spinMs: Float,
-    val gold: Boolean
+    val ice: Boolean
 )
 
 /**
  * 固定种子（2019 = Lover 的年份，与 `SwiftieEraMotifs` 里 Lover 母题同一颗），
  * 重组不跳位。
  */
-private fun buildGoldFlakes(count: Int): List<GoldFlake> {
+private fun buildSnowFlakes(count: Int): List<SnowFlake> {
     val random = Random(2019)
     return List(count) { index ->
-        GoldFlake(
-            // 起点铺开到 ±0.82R：更靠边的箔片会直接贴上内壁，滑落那一段才有得看
+        SnowFlake(
+            // 起点铺开到 ±0.82R：更靠边的雪片会直接贴上内壁，滑落那一段才有得看
             startX = -0.82f + random.nextFloat() * 1.64f,
-            // 落速差三倍以上，才不会整批同步下落像一张帘子
-            periodMs = 2_400f + random.nextFloat() * 2_600f,
+            // 落速差接近两倍，才不会整批同步下落像一张帘子。整批比旧箔片慢一档：
+            // 雪该飘着下来，不该掉渣
+            periodMs = 4_200f + random.nextFloat() * 3_200f,
             release = index / count.toFloat(),
-            side = 0.055f + random.nextFloat() * 0.045f,
+            // 描边的六角比亚面填色的四边形要大一圈才认得出是雪（臂长 = side / 2）
+            side = 0.085f + random.nextFloat() * 0.05f,
             swayAmp = 0.03f + random.nextFloat() * 0.06f,
             phase = random.nextFloat(),
-            spinMs = 900f + random.nextFloat() * 1_400f,
-            // 六成玫红四成金：全金会读成"碎屑"，玫红才是 Lover
-            gold = random.nextFloat() > 0.6f
+            spinMs = FLAKE_SPIN_MIN_MS + random.nextFloat() * (FLAKE_SPIN_MAX_MS - FLAKE_SPIN_MIN_MS),
+            // 六成雪白四成冰蓝：同一色铺满会糊成一片，有一冷一白才分得出前后层次
+            ice = random.nextFloat() > 0.6f
         )
     }
 }
 
 /**
- * 金箔雪：自球顶落下，触到球内壁后**沿弧线滑落**。
+ * 雪：自球顶落下，触到球内壁后**沿弧线滑落**，一路面内缓慢自转。
  *
  * 位置由绝对 elapsed 驱动而不是这一拍的进度，所以淡出段里它照旧在落 ——
  * 分镜要求"落到最后一帧"，那就不能让它跟着某一拍的 0..1 走完就停。
  */
-private fun DrawScope.drawGoldFoilSnow(
+private fun DrawScope.drawSnowfall(
     elapsed: Long,
     center: Offset,
     radius: Float,
-    path: Path,
-    flakes: List<GoldFlake>,
+    unit: Path,
+    flakes: List<SnowFlake>,
     dim: Float
 ) {
     val gate = span(elapsed, SNOW_START, SNOW_MS)
@@ -778,7 +792,7 @@ private fun DrawScope.drawGoldFoilSnow(
         var y = (FLAKE_TOP + (FLAKE_BOTTOM - FLAKE_TOP) * travel) * radius
         val dist = hypot(x, y)
         if (dist > wall) {
-            // 触壁不能直接把位置钳在弧上 —— 那会看成箔片贴着壁不动。改成按"越壁多少"
+            // 触壁不能直接把位置钳在弧上 —— 那会看成雪片贴着壁不动。改成按"越壁多少"
             // 沿弧转过一个角度：屏幕坐标 y 向下，右半侧角度增大即朝下滑，左半侧减小同理，
             // 绕过 ±π 由 cos/sin 自己接上，不用额外判边界
             val over = ((dist - wall) / wall * FLAKE_SLIDE_GAIN).coerceAtMost(FLAKE_SLIDE_MAX)
@@ -788,51 +802,79 @@ private fun DrawScope.drawGoldFoilSnow(
         }
         val fadeIn = (travel / FLAKE_FADE_IN).coerceAtMost(1f)
         val fadeOut = ((1f - travel) / FLAKE_FADE_OUT).coerceAtMost(1f)
-        // 越靠球缘越暗：那圈玻璃最厚，箔片本该被压掉一点亮度
+        // 越靠球缘越暗：那圈玻璃最厚，里面的东西本该被压掉一点亮度
         val depth = 1f - 0.28f * (hypot(x, y) / radius)
         val alpha = gate * dim * fadeIn * fadeOut * depth
         if (alpha <= 0.02f) return@forEach
-        drawFoilFlake(flake, Offset(center.x + x, center.y + y), radius, elapsed, path, alpha)
+        drawSnowFlake(flake, Offset(center.x + x, center.y + y), radius, elapsed, unit, alpha)
     }
 }
 
-/** 一片箔：不规则四边形 + 翻面高光。两个转动周期错开，才不像风车。 */
-private fun DrawScope.drawFoilFlake(
-    flake: GoldFlake,
+/**
+ * 六角雪的单位轮廓：中心在原点、臂尖半径 0.5，六条主臂各带一对侧枝。
+ *
+ * 只在 `drawWithCache` 里建一次，逐片靠旋转与缩放复用同一条 Path —— 每帧给 16 片
+ * 各拼 18 段线既浪费又违反「循环里不重建对象」这条铁律（与 `unitHeartPath()` 同套路）。
+ */
+private fun unitSnowflakePath(): Path {
+    val path = Path()
+    val arm = 0.5f
+    // 侧枝长在臂的 62% 处、张角 ±52°、长 0.24 臂：更靠尖会挤成星号，更靠根读成十字
+    val baseAt = 0.62f
+    val branchLen = 0.24f * arm
+    val cos52 = cos(52f / 180f * PI.toFloat())
+    val sin52 = sin(52f / 180f * PI.toFloat())
+    for (index in 0 until 6) {
+        val rad = index * 60f / 180f * PI.toFloat()
+        val ux = cos(rad)
+        val uy = sin(rad)
+        path.moveTo(0f, 0f)
+        path.lineTo(ux * arm, uy * arm)
+        val bx = ux * arm * baseAt
+        val by = uy * arm * baseAt
+        // 把臂方向分别旋 +52° 与 −52° 得到两条侧枝的方向（关于臂轴对称）
+        val d1x = ux * cos52 - uy * sin52
+        val d1y = ux * sin52 + uy * cos52
+        val d2x = ux * cos52 + uy * sin52
+        val d2y = uy * cos52 - ux * sin52
+        path.moveTo(bx, by)
+        path.lineTo(bx + d1x * branchLen, by + d1y * branchLen)
+        path.moveTo(bx, by)
+        path.lineTo(bx + d2x * branchLen, by + d2y * branchLen)
+    }
+    return path
+}
+
+/**
+ * 一片雪：单位六角轮廓按 `side` 缩放、按 `spinMs` 缓慢自转。
+ *
+ * 旧箔片那套「压扁模拟翻面 + 折面高光」整个删了 —— 正是那两样把它读成金属碎屑。
+ * 真雪在玻璃球里就是这么慢悠悠地转，不做透视。
+ *
+ * 笔宽给在单位空间里（0.13）：画布缩放会连带放大笔尖，所以片越大线越粗，
+ * 那正是大雪花该有的样子，不用逐片补一个笔画宽度。
+ */
+private fun DrawScope.drawSnowFlake(
+    flake: SnowFlake,
     pos: Offset,
     radius: Float,
     elapsed: Long,
-    path: Path,
+    unit: Path,
     alpha: Float
 ) {
-    // 薄片转到侧面就该窄成一条，转过去背面又亮起来。0.22 是不让它彻底消失的下限 ——
-    // 归零会读成一闪一闪的坏点
-    val flip = cos(TAU * (elapsed / flake.spinMs + flake.phase))
-    val squash = max(abs(flip), 0.22f)
-    val glint = 1f - abs(flip)
     val side = flake.side * radius
-    val tumble = 360f * (elapsed / flake.spinMs * FLAKE_TUMBLE_RATE + flake.phase)
-    rotate(degrees = tumble, pivot = pos) {
+    val spin = 360f * (elapsed / flake.spinMs + flake.phase)
+    rotate(degrees = spin, pivot = pos) {
         withTransform({
-            translate(pos.x - side * squash / 2f, pos.y - side / 2f)
-            scale(side * squash, side, pivot = Offset.Zero)
+            translate(pos.x, pos.y)
+            scale(side, side, pivot = Offset.Zero)
         }) {
-            // 撕开的箔片没有对称边，正方形会读成马赛克色块
-            path.rewind()
-            path.moveTo(0f, 0.18f)
-            path.lineTo(0.62f, 0f)
-            path.lineTo(1f, 0.72f)
-            path.lineTo(0.28f, 1f)
-            path.close()
-            drawPath(path = path, color = if (flake.gold) FOIL_GOLD else FOIL_ROSE, alpha = alpha)
-            // 折面高光只覆上半片：有"折了一下"的厚度，才不是一块平色片
-            path.rewind()
-            path.moveTo(0f, 0.18f)
-            path.lineTo(0.62f, 0f)
-            path.lineTo(0.72f, 0.42f)
-            path.lineTo(0.16f, 0.52f)
-            path.close()
-            drawPath(path = path, color = FOIL_GLINT, alpha = alpha * (0.30f + 0.55f * glint))
+            drawPath(
+                path = unit,
+                color = if (flake.ice) SNOW_ICE else SNOW_WHITE,
+                alpha = alpha,
+                style = Stroke(width = 0.13f, cap = StrokeCap.Round)
+            )
         }
     }
 }
