@@ -4,16 +4,17 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class SwiftieMidnightMoonTest {
-    private val windEnd = MIDNIGHT_WIND_START_MS + MIDNIGHT_WIND_MS.toLong()
+    // 月牙的主程比走针短一档，账本只认 MIDNIGHT_MOON_WIND_MS
+    private val windEnd = MIDNIGHT_WIND_START_MS + MIDNIGHT_MOON_WIND_MS.toLong()
     private val settled = windEnd + MIDNIGHT_SETTLE_MS.toLong()
 
     /**
-     * 主程内的**比例**时刻。
+     * 月牙主程内的**比例**时刻。
      *
      * 阶段边界都写成主程的分数（抱枕 0.15..0.64、抱起 0.48..1.0、闭眼 0.62..0.92），
-     * 取点若钉死绝对毫秒，主程一放慢这些点就全落到上一阶段里 —— 测试会红得毫无信息量。
+     * 取点若钉死绝对毫秒，主程一变这些点就全落到上一阶段里 —— 测试会红得毫无信息量。
      */
-    private fun at(frac: Float) = MIDNIGHT_WIND_START_MS + (MIDNIGHT_WIND_MS * frac).toLong()
+    private fun at(frac: Float) = MIDNIGHT_WIND_START_MS + (MIDNIGHT_MOON_WIND_MS * frac).toLong()
 
     @Test
     fun 换张和起转前保持睁眼且没有枕头() {
@@ -43,7 +44,7 @@ class SwiftieMidnightMoonTest {
     }
 
     @Test
-    fun 三点落位时已经抱好枕头入睡() {
+    fun 月牙收束时已经抱好枕头入睡() {
         val pose = midnightMoonPose(settled)
         assertThat(pose.pillowReveal).isEqualTo(1f)
         assertThat(pose.pillowLift).isEqualTo(1f)

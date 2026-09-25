@@ -23,10 +23,20 @@ internal data class MidnightMoonPose(
     val breath: Float
 )
 
-// 与走针共用段内时间；预览定格、回拨和换张待机不能留下上一次的睡姿。
+/**
+ * 月牙的主程时长：比走针快两成（4500 ÷ 1.2 = 3750ms）。
+ *
+ * 起算点仍与走针同一条 [MIDNIGHT_WIND_START_MS]，只是行程短一档 ——
+ * 走针放慢到 4500ms 后，抱枕与闭眼跟着拉长到 2.5 倍，读着拖沓。
+ * 因此月牙在 `MIDNIGHT_MOON_WIND_MS + MIDNIGHT_SETTLE_MS` 处就入睡完毕，
+ * 比钟的回吸早 750ms：屏幕上是月亮先睡下，钟再补上整点那一下顿挫。
+ */
+internal const val MIDNIGHT_MOON_WIND_MS: Float = MIDNIGHT_WIND_MS / 1.2f
+
+// 预览定格、回拨和换张待机不能留下上一次的睡姿。
 internal fun midnightMoonPose(eraMs: Long): MidnightMoonPose {
     val since = (eraMs - MIDNIGHT_WIND_START_MS).coerceAtLeast(0L).toFloat()
-    val wind = MIDNIGHT_WIND_MS
+    val wind = MIDNIGHT_MOON_WIND_MS
     fun progress(start: Float, end: Float): Float {
         val t = ((since - start) / (end - start)).coerceIn(0f, 1f)
         return t * t * (3f - 2f * t)
