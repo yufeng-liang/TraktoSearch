@@ -139,12 +139,46 @@ internal fun rememberGlitterBrush(poster: Size): Brush {
 }
 
 /**
+ * Showgirl 标题闪粉的**颗粒缩放**：贴板按这个比例缩小后再平铺。
+ *
+ * 1f = 原样 1:1 平铺。0.45f 意味着贴板占的物理尺寸只剩四成半，**单位面积内的颗粒数
+ * 涨约五倍** —— 颗粒看起来细到近一半。
+ *
+ * 需求方 2026-09-25 在真机上连着过了三档：先嫌 1:1 粗（320px 的贴板放进 63px 高的
+ * 字形里只够铺几块，每块都大得读成「亮斑」而不是「闪粉」），看过 0.5 之后在
+ * 0.5 与 0.35 之间定了 **0.45**。
+ *
+ * **下限**：别再往下压太多 —— `rememberGlitterPatchBrush` 记着那个坑：把整板压进
+ * 一个字形会把 1–3px 的亮粒糊成平粉。0.45 之后贴板仍有约 144px 的有效采样尺寸，
+ * 远高于那个坑的位置。
+ *
+ * 两段标题（橙红与金）**共用这一个值**：同一行上并排，颗粒一大一小会立刻读成
+ * 两种材质。
+ */
+private const val SHOWGIRL_GRAIN_SCALE = 0.45f
+
+/**
+ * 一张闪粉贴板按 [SHOWGIRL_GRAIN_SCALE] 缩小后平铺的 Brush。
+ *
+ * `Matrix.setScale` 在 `ImageShader` 上是**缩小采样窗口**：贴板被当成更小的图，
+ * 平铺密度因此上升，颗粒变细。
+ */
+private fun glitterTiledBrush(plate: ImageBitmap): Brush {
+    val matrix = Matrix().apply { setScale(SHOWGIRL_GRAIN_SCALE, SHOWGIRL_GRAIN_SCALE) }
+    return object : ShaderBrush() {
+        override fun createShader(size: Size): Shader =
+            ImageShader(plate, TileMode.Mirror, TileMode.Mirror).apply {
+                setLocalMatrix(matrix)
+            }
+    }
+}
+
+/**
  * Showgirl 标题的闪粉：官方封面上那圈橙红闪粉，按**原分辨率**挖出来的贴板
  * （`scripts/build-swiftie-showgirl-glitter.py`，源图在 `docs/previews/swiftie-showgirl/`）。
  *
- * 1:1 贴、Mirror 平铺，不按字形缩放：贴板是 320px 的真颗粒，把整板压进 80px 高的字形
- * 会让 1–3px 的亮粒糊成平粉（[rememberGlitterPatchBrush] 记着同一个坑）。平铺也不缩放
- * 就意味着字形越大取到的颗粒越多，正是闪粉该有的行为。
+ * Mirror 平铺、按 [SHOWGIRL_GRAIN_SCALE] 缩细。平铺不缩放字形本身，所以字形越大
+ * 取到的颗粒越多，正是闪粉该有的行为。
  *
  * 贴板本身已经是「笔画内部最实心的一块」（脚本按局部方差挑的 —— 皮肤按颜色能骗过橙色
  * 掩膜，按颗粒度骗不过），所以这里不需要再补背景。
@@ -152,12 +186,24 @@ internal fun rememberGlitterBrush(poster: Size): Brush {
 @Composable
 internal fun rememberShowgirlGlitterBrush(): Brush {
     val plate = ImageBitmap.imageResource(R.drawable.swiftie_showgirl_glitter)
-    return remember(plate) {
-        object : ShaderBrush() {
-            override fun createShader(size: Size): Shader =
-                ImageShader(plate, TileMode.Mirror, TileMode.Mirror)
-        }
-    }
+    return remember(plate) { glitterTiledBrush(plate) }
+}
+
+/**
+ * 续章那句 `: THE ENCORE` 的**金**闪粉。
+ *
+ * 与 [rememberShowgirlGlitterBrush] 是同一份颗粒：`scripts/build-swiftie-encore-glitter.py`
+ * 把橙红贴板的色相旋到 42°（金），**饱和度与明度通道原样不动** —— 于是颗粒结构逐字节相同，
+ * 变的只有颜色。这一点是这套做法成立的全部理由：闪粉之所以读作闪粉靠的是明暗颗粒，
+ * 不是色相；换色若动了亮度通道，颗粒就糊了。
+ *
+ * 平铺与缩放策略与橙红那份**共用**（[glitterTiledBrush]），两张贴板的颗粒尺度因此
+ * 逐像素一致。
+ */
+@Composable
+internal fun rememberEncoreGlitterBrush(): Brush {
+    val plate = ImageBitmap.imageResource(R.drawable.swiftie_encore_glitter)
+    return remember(plate) { glitterTiledBrush(plate) }
 }
 
 /**

@@ -38,6 +38,15 @@ import kotlinx.coroutines.delay
 private const val AUTO_RESUME_MS: Long = 3_000L
 
 /**
+ * 卡片宽度的上限（dp）。
+ *
+ * 平板/折叠屏展开态上不让卡片铺满整屏 —— 一行 22dp 的标题横跨 700dp 会散掉。
+ * 这个值同时是续章标题选字号的判据来源：`slotWidth` 取 `maxWidth` 与它的较小值，
+ * 否则在宽屏平板上会按屏宽选中 22dp，而卡片其实只有 480dp 宽。
+ */
+private val CARD_MAX_WIDTH = 480.dp
+
+/**
  * 玻璃球成型的时长。轴在这一段里让位 —— 球一旦成型它就是画面唯一的主体。
  *
  * 与 `SwiftieSnowGlobe` 里那一拍必须同长；两边都从 [SwiftieTimeline] 起算，
@@ -232,6 +241,10 @@ fun SwiftieErasStage(
                 // 行高按抬高后的剩余空间折算，别让 31 行把机器顶出屏
                 val machineReserve = if (isTtpd) TTPD_MACHINE_RESERVE else 0.dp
                 val slotHeight = maxHeight - machineReserve
+                // 卡片可用的**宽度**：续章标题的字号按它选档（22dp 在窄屏上会折行，
+                // 而折行会吃掉 CARD_CHROME_HEIGHT 的预算把曲目列挤扁）。
+                // 卡片在平板上还有 widthIn(max = 480.dp) 的上限，所以按屏宽判会选错档
+                val slotWidth = maxWidth.coerceAtMost(CARD_MAX_WIDTH)
                 // key 换值就重挂：新卡片的 elapsedInCard 从 0 起算，
                 // 上一张此时 scaleY 已经收到 0，看不到硬切
                 val card: @Composable (Modifier) -> Unit = { cardModifier ->
@@ -251,6 +264,7 @@ fun SwiftieErasStage(
                             durationMs = cardDurationMs,
                             originFractionX = swiftieEraCenterFraction(activeIndex),
                             slotHeight = slotHeight,
+                            slotWidth = slotWidth,
                             collapseProgress = collapseProgress,
                             // 出纸只在 TTPD：前摇里 elapsedInCard 是负的，进度钳到 0f，
                             // 这张卡片连投影都不画
@@ -277,13 +291,13 @@ fun SwiftieErasStage(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         // 球内的小卡已经卷收完毕，恒为 1f
-                        card(Modifier.fillMaxWidth().widthIn(max = 480.dp))
+                        card(Modifier.fillMaxWidth().widthIn(max = CARD_MAX_WIDTH))
                     }
                 } else {
                     card(
                         Modifier
                             .fillMaxWidth()
-                            .widthIn(max = 480.dp)
+                            .widthIn(max = CARD_MAX_WIDTH)
                             // TTPD：卡片从插槽底抬高一台机器，纸的下缘坐在出纸口上；
                             // 其余 11 张仍贴插槽底（轴上长出）
                             .padding(bottom = machineReserve)

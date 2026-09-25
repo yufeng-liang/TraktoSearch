@@ -13,10 +13,11 @@
 #     ./gradlew :app:assembleEggpreview && \
 #       adb install -r app/build/outputs/apk/eggpreview/app-eggpreview.apk
 #
-# 用法: scripts/egg-shot.sh <ms|eraN|globeN> [输出文件]
+# 用法: scripts/egg-shot.sh <ms|eraN|globeN|encoreN> [输出文件]
 #   ms      直接给毫秒                scripts/egg-shot.sh 120400
 #   eraN    第 N 张专辑卡片（1..12）  scripts/egg-shot.sh era7
 #   globeN  雪景球的第 N 拍（1..6）   scripts/egg-shot.sh globe3
+#   encoreN Showgirl 加曲续章第 N 拍（1..4）  scripts/egg-shot.sh encore2
 #
 # eraN 不在这里换算成毫秒，只把 0 起的索引传给 app，由 SwiftieTimeline.eraStartMs()
 # 现算：卡片时长按曲目数派生，抄一份常量表进 shell 迟早与账本对不上。
@@ -45,11 +46,12 @@ die() { echo "egg-shot: $*" >&2; exit 1; }
 
 usage() {
   cat >&2 <<'EOF'
-用法: scripts/egg-shot.sh <ms|eraN|globeN> [输出文件]
+用法: scripts/egg-shot.sh <ms|eraN|globeN|encoreN> [输出文件]
 
   ms      直接给毫秒                scripts/egg-shot.sh 120400
   eraN    第 N 张专辑卡片（1..12）  scripts/egg-shot.sh era7
   globeN  雪景球的第 N 拍（1..6）   scripts/egg-shot.sh globe3
+  encoreN Showgirl 加曲续章第 N 拍（1..4）  scripts/egg-shot.sh encore2
 
 装包: ./gradlew installEggpreview   （只支持 arm64 真机）
 EOF
@@ -66,6 +68,21 @@ globe_ms() {
     5) echo 122600 ;;
     6) echo 124000 ;;
     *) die "globeN 的 N 只能是 1..6：globe$1" ;;
+  esac
+}
+
+# Showgirl 加曲续章四拍 → 毫秒。**改账本要同步改这里**。
+#
+# 起点 = eraStartMs(11) 103613 + SHOWGIRL_ENCORE_AT 1900 = 105513。eraStartMs(11)
+# 依赖它前面 11 张的时长（含 TTPD 的 4700 前摇与四张卡的时间挪移），
+# 所以这些数不能靠猜 —— 账本一动就要按 `SwiftieTimelineTest` 的断言重算一遍。
+encore_ms() {
+  case "$1" in
+    1) echo 105963 ;;   # 尘埃聚字中
+    2) echo 106413 ;;   # 尘埃聚成、真字开始淡入
+    3) echo 106813 ;;   # 日期已翻成 2026-09-25
+    4) echo 107913 ;;   # 四首加曲全部落墨
+    *) die "encoreN 的 N 只能是 1..4：encore$1" ;;
   esac
 }
 
@@ -110,8 +127,11 @@ case "$TARGET" in
   globe[1-6])
     EXTRAS=(--el ms "$(globe_ms "${TARGET#globe}")")
     ;;
+  encore[1-4])
+    EXTRAS=(--el ms "$(encore_ms "${TARGET#encore}")")
+    ;;
   *[!0-9]*|'')
-    die "看不懂的参数「$TARGET」：要么是纯毫秒，要么是 era1..era12 / globe1..globe6"
+    die "看不懂的参数「$TARGET」：要么是纯毫秒，要么是 era1..era12 / globe1..globe6 / encore1..encore4"
     ;;
   *)
     EXTRAS=(--el ms "$TARGET")

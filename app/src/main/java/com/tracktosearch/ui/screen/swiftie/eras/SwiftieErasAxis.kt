@@ -197,13 +197,18 @@ fun SwiftieErasAxis(
         List(SwiftieErasData.ALL.size) { index -> measurer.measure("TS${index + 1}", style) }
     }
 
-    // 两端的年份：左端是 TS1 的、右端是 TS12 的，取 releaseDate 前 4 位。
+    // 两端的年份：左端是 TS1 的、右端是 TS12 的。
+    //
+    // 右端取的是**加曲版**发行日（The Encore）而不是 [SwiftieEra.releaseDate]：
+    // 轴右端标的是这条时间线的终点，而 TS12 那张卡演完续章之后显示的就是 2026。
+    // `releaseDate` 字段保持原版（2025-10-03）不变 —— 它是「专辑的事实」，续章日期是
+    // 显示态，见 `swiftieEncoreDateLabel`。
     // 与 TS 标签同一个字号 —— 它们同属「轴的刻度说明」，两种字号会读作两套信息
     val yearLabels = remember(measurer, density) {
         val style = TextStyle(fontSize = with(density) { AXIS_LABEL_FONT_SIZE.toSp() })
         listOf(
             measurer.measure(SwiftieErasData.ALL.first().releaseDate.take(4), style),
-            measurer.measure(SwiftieErasData.ALL.last().releaseDate.take(4), style)
+            measurer.measure(SwiftieErasData.ENCORE_RELEASE_DATE.take(4), style)
         )
     }
 

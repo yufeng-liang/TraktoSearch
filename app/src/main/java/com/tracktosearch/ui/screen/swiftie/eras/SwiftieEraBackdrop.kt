@@ -255,12 +255,18 @@ fun SwiftieEraBackdropLayer(
     cardBounds: () -> Rect,
     lowRam: Boolean,
     loverHouseFade: () -> Float = { 1f },
+    encoreTint: () -> Float = { 0f },
     modifier: Modifier = Modifier
 ) {
     val shapes = remember(lowRam) { BackdropShapes(lowRam) }
     // 12 条底色渐变一次建完。Brush 内部按尺寸缓存原生 Shader，每帧新建就是每帧一个
     val skies = remember {
         SwiftieErasData.STAGE.map { stage -> Brush.verticalGradient(stage.backdropColors) }
+    }
+    // 续章的洋红底色，同样一次建完。与 `skies` 一一对应（下标同 STAGE），
+    // 其余各格没人读（`drawStage` 按 index 判人），内容与 Showgirl 那格相同
+    val encoreSkies = remember {
+        SwiftieErasData.STAGE.map { Brush.verticalGradient(ENCORE_SKY_COLORS) }
     }
     // 循环里反复 rewind 的那一条 Path，与 SwiftieEraMotifs / SwiftieEraParticles 同一条铁律
     val scratch = remember { Path() }
@@ -293,21 +299,25 @@ fun SwiftieEraBackdropLayer(
             val eraMs = eraElapsedMs()
             val card = cardBounds()
             val houseFade = loverHouseFade()
+            // 段内变色：Showgirl 的续章把整页底色朝洋红推。只作用在**那一段自己的舞台**上
+            // （`drawStage` 内按 index 判人），不参与换张交叉淡变 —— 末张本来就被
+            // `backdropCrossfadeAt` 排除在外，它后面接的是终局那一环而不是第 13 张专辑。
+            val tint = encoreTint().coerceIn(0f, 1f)
             if (mix <= 0f || from == to) {
                 drawStage(
-                    from, 1f, t, eraMs, card, skies, scratch, shapes, numerals, lowRam,
-                    maple, typewriter, stubLines, hangPhotos, houseFade
+                    from, 1f, t, eraMs, card, skies, encoreSkies, scratch, shapes, numerals,
+                    lowRam, maple, typewriter, stubLines, hangPhotos, houseFade, tint
                 )
             } else {
                 drawStage(
-                    from, 1f - mix, t, eraMs, card, skies, scratch, shapes, numerals, lowRam,
-                    maple, typewriter, stubLines, hangPhotos, houseFade
+                    from, 1f - mix, t, eraMs, card, skies, encoreSkies, scratch, shapes,
+                    numerals, lowRam, maple, typewriter, stubLines, hangPhotos, houseFade, 0f
                 )
                 // 换张那 500ms 里 incoming 的段还没开始：给它 -1 走待机态，否则 TTPD 的纸
                 // 会在上一张还没收完时就开始往外吐，reputation 的蛇也会提前从左缘钻出来
                 drawStage(
-                    to, mix, t, -1L, card, skies, scratch, shapes, numerals, lowRam,
-                    maple, typewriter, stubLines, hangPhotos, houseFade
+                    to, mix, t, -1L, card, skies, encoreSkies, scratch, shapes, numerals,
+                    lowRam, maple, typewriter, stubLines, hangPhotos, houseFade, 0f
                 )
             }
         }
@@ -363,6 +373,7 @@ private fun DrawScope.drawStage(
     eraMs: Long,
     card: Rect,
     skies: List<Brush>,
+    encoreSkies: List<Brush>,
     path: Path,
     shapes: BackdropShapes,
     numerals: List<TextLayoutResult>,
@@ -371,12 +382,28 @@ private fun DrawScope.drawStage(
     typewriter: ImageBitmap?,
     stubLines: List<TextLayoutResult>,
     hangPhotos: List<ImageBitmap>,
-    houseFade: Float
+    houseFade: Float,
+    encoreTint: Float
 ) {
     if (alpha <= 0.01f) return
     val stage = SwiftieErasData.STAGE[index]
-    drawRect(brush = skies[index], alpha = alpha)
-    val colors = stage.backdropColors
+    // 续章那段把三档底色朝洋红推。tint 只可能在 Showgirl 上非零（调用方按段判人），
+    // 但这里再认一次 index：这个函数的入参是「哪张舞台」，不该依赖调用方只在对的时候给值
+    val tint = if (index == SwiftieTimeline.SHOWGIRL_INDEX) encoreTint else 0f
+    // 底色用**两张预建的 Brush 交叉淡变**，不是每帧新建一条渐变。
+    // draw lambda 里 new 一个 Brush 就是每帧一个原生 Shader，而这是全屏面积的一层
+    // （本文件开头那条铁律）。两张 Brush 都在组合阶段建好，这里只叠两个 rect ——
+    // 与换张时 `drawStage` 各画一遍同一套路。
+    if (tint <= 0f) {
+        drawRect(brush = skies[index], alpha = alpha)
+    } else {
+        drawRect(brush = skies[index], alpha = alpha * (1f - tint))
+        drawRect(brush = encoreSkies[index], alpha = alpha * tint)
+    }
+    // 舞台主体（帷幕、桁架、聚光灯）的三档取色也跟着走：换色要连帷幕一起变，
+    // 只洗背景的话画面会读成「橙色帷幕前面挂了一层洋红纱」。这里只是数值 lerp，
+    // 不建 Shader，逐帧代价可以忽略
+    val colors = if (tint <= 0f) stage.backdropColors else tintedColors(index, tint)
     val top = colors[0]
     val mid = colors[1]
     val deep = colors[2]
@@ -404,8 +431,67 @@ private fun DrawScope.drawStage(
     }
 }
 
-// ─────────────────────── 共用笔法 ───────────────────────
-// 渐变一律建在单位方框里（0,0..1,1），画的时候 withTransform 缩放到实际尺寸。
+// ─────────────────────── 续章变色（The Encore）───────────────────────
+
+/**
+ * 续章的洋红三档，与 Showgirl 那三档一一对应（顶 → 中 → 底）。
+ *
+ * 取自 The Encore 版封面**两侧帷幕带的纵向实测**（避开中央人物与金闪粉字）：
+ *
+ * ```
+ *   顶部 2%   #0B0103   近黑（暗角）
+ *   中部 22%  #5E0823   ← 本色最亮处
+ *   中部 52%  #56011E
+ *   下段 62%  #1C0108   近黑（舞台暗区）
+ *   底部 92%  #5B021F   地面反光，回亮
+ * ```
+ *
+ * ## 明度定档的过程（改了四轮，别只看参考图的数字）
+ *
+ * 参考图是**摄影**，四周是暗角；这一层是**插画舞台**，整屏铺三档渐变。
+ * 照搬参考图的暗角会让整页发黑 —— 需求方在真机上的四轮反馈正是这条曲线的两端：
+ *
+ * | 版本 | 顶 / 中 / 底 | 反馈 |
+ * |---|---|---|
+ * | 一 | `#FFE8F0` / `#E8186E` / `#6E0A2E` | 「不像参考图」（顶档近乎白、中档亮粉） |
+ * | 二 | `#C04070` / `#8E0434` / `#2A000D` | 「中上部还是太浅」 |
+ * | 三 | `#5A0A22` / `#8E0434` / `#1C0009` | 「稍微太暗，可以回退一点」 |
+ * | 四 | `#750D2C` / `#96063C` / `#24000C` | 三版基础上提亮约三成 |
+ * | **五（当前）** | `#870F33` / `#AC0745` / `#29000E` | 四版基础上再 ×1.15 |
+ *
+ * 第四版的做法是在第三版上乘约 1.3（顶档提得最多，它是「太暗」的主要来源），
+ * 而不是退回第二版 —— 第二版的顶档 `#C04070` 是粉的，那才是「太浅」的根因。
+ * 第五版再整体 ×1.15。参考图的**方向**（顶部暗、中部亮）始终保留，
+ * 变的只是整体明度档位。底档已近黑，乘系数几乎不动 —— 那是暗部，本来就不该亮。
+ */
+private val ENCORE_SKY_COLORS: List<Color> = listOf(
+    Color(0xFF870F33),
+    Color(0xFFAC0745),
+    Color(0xFF29000E)
+)
+
+/**
+ * 按 [mix] 把某张舞台的三档底色朝洋红推。
+ *
+ * 只做数值 lerp，不建 Shader —— 逐帧调用的地方（`drawStage`）必须能承受。
+ */
+private fun tintedColors(index: Int, mix: Float): List<Color> {
+    val base = SwiftieErasData.STAGE[index].backdropColors
+    return List(base.size) { slot ->
+        val target = ENCORE_SKY_COLORS[slot.coerceAtMost(ENCORE_SKY_COLORS.lastIndex)]
+        base[slot].lerp(target, mix.coerceIn(0f, 1f))
+    }
+}
+
+/** 通道线性插值。Compose 的 `Color.lerp` 走的是 Oklab，这里要的是**通道级**的直插。 */
+private fun Color.lerp(other: Color, t: Float): Color = Color(
+    red = red + (other.red - red) * t,
+    green = green + (other.green - green) * t,
+    blue = blue + (other.blue - blue) * t,
+    alpha = alpha + (other.alpha - alpha) * t
+)
+
+// ─────────────────────── 共用笔法 ───────────────────────// 渐变一律建在单位方框里（0,0..1,1），画的时候 withTransform 缩放到实际尺寸。
 // 按 px 建的话，凡是尺寸每帧在变的地方（呼吸的光晕、成长的光锥）就是每帧一个原生 Shader。
 
 private val UNIT_SIZE = Size(1f, 1f)
@@ -456,6 +542,12 @@ private fun DrawScope.drawUnitGlow(brush: Brush, center: Offset, diameter: Float
  * 雾的颜色随专辑变，每帧新建一条渐变就是每帧一个原生 Shader。14 条实色矩形在
  * GPU 上便宜得多，而雾本来就没有需要被看清的边界。
  *
+ * 每条的高度**取整到像素**（`roundToInt` 出上下边界再相减），不是 `sliceH + 1f`。
+ * 原来的 +1 是为了抹掉相邻两条之间那道亚像素缝，但半透明色块**重叠 1px 就是叠两次**：
+ * 每 `sliceH` 一道比两侧都深的 1px 横线。在深色天空上看不出来，压在 Showgirl 那只
+ * 纯白搪瓷缸上就是一排等距暗纹（Showgirl 第八轮截图里量到的周期 32px = 448/14）。
+ * 取整之后边界首尾严格相接：既不叠、也不留缝。
+ *
  * @param overscanX 左右各外扩多少屏宽。**在 `rotate {}` 里调用时必须给** ——
  *   带子只铺 `0..w`，绕屏心转十几度之后两个端头就转进画面里，
  *   屏幕上是一块斜着贴上去的半透明矩形（Midnights 第四轮截图里那块）
@@ -476,11 +568,12 @@ private fun DrawScope.drawFogBand(
     for (i in 0 until FOG_SLICES) {
         // 首尾两条本来就该是 0，用 (i + 0.5) 取每条的中点避免整条雾都偏淡
         val profile = sin(PI.toFloat() * (i + 0.5f) / FOG_SLICES)
+        val y0 = (top + i * sliceH).roundToInt()
+        val y1 = (top + (i + 1) * sliceH).roundToInt()
         drawRect(
             color = color,
-            topLeft = Offset(left, top + i * sliceH),
-            // +1 抹掉相邻两条之间那道亚像素缝
-            size = Size(bandW, sliceH + 1f),
+            topLeft = Offset(left, y0.toFloat()),
+            size = Size(bandW, (y1 - y0).toFloat()),
             alpha = alpha * profile
         )
     }
@@ -5600,6 +5693,15 @@ private fun DrawScope.drawTheatreStage(
         }
     }
 
+    // 舞台地板：一条横向暗带 + 追光落地的椭圆光斑，再压一层暖雾表现空气中的尘。
+    //
+    // 这三笔必须落在浴缸**之前**（原来它们排在函数末尾）。地板暗带铺 0.31–0.45h，
+    // 缸占 0.25–0.38h —— 画在缸后面等于把白色搪瓷缸的下半截整片刷灰。
+    // 地板是**缸底下的**地面，不是蒙在缸上的一层纱。
+    drawFogBand(HERO_BOTTOM, 0.14f, deep, alpha * DISTANT_ALPHA * 2f)
+    drawUnitGlow(GLOW_WHITE, Offset(w * 0.52f, h * 0.375f), w * 0.66f, alpha * 0.20f)
+    drawFogBand(0.14f, 0.24f, top, alpha * DISTANT_ALPHA * 0.7f)
+
     // 空浴缸：外沿一圈厚唇 + 缸体 + 四只爪脚 + 水面与泡沫。**缸里没有人**。
     // 抬进 HERO_BOTTOM：原来在 0.62–0.84h，整只缸压在卡片背后，
     // 只剩一团发白的圆角矩形透上来，把卡片左三分之二洗成一片脏白。
@@ -5827,11 +5929,6 @@ private fun DrawScope.drawTheatreStage(
             alpha = alpha * 0.85f
         )
     }
-
-    // 舞台地板：一条横向暗带 + 追光落地的椭圆光斑，再压一层暖雾表现空气中的尘。
-    drawFogBand(HERO_BOTTOM, 0.14f, deep, alpha * DISTANT_ALPHA * 2f)
-    drawUnitGlow(GLOW_WHITE, Offset(w * 0.52f, h * 0.375f), w * 0.66f, alpha * 0.20f)
-    drawFogBand(0.14f, 0.24f, top, alpha * DISTANT_ALPHA * 0.7f)
 }
 
 /**

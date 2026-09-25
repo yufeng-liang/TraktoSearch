@@ -67,6 +67,7 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.screen.swiftie.eras.LOVER_HIT_MS
 import com.tracktosearch.ui.screen.swiftie.eras.LOVER_SHOT_MS
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraBackdropLayer
+import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraFeatherFallLayer
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraParticleLayer
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieEraStage
 import com.tracktosearch.ui.screen.swiftie.eras.SwiftieErasData
@@ -600,6 +601,24 @@ private fun SwiftieEggContent(
     }
 
     /**
+     * 续章的洋红渗透 0f..1f。
+     *
+     * 只可能作用在 Showgirl 上（`drawStage` 按 index 判人），所以这里**先认段**再读时钟：
+     * 段外恒 0f，背景那三层一帧都不失效。整段序列 126 秒里只有最后一张卡的那 1.5 秒
+     * 会真的读到非零值（变色从续章第一毫秒开始，见 `SHOWGIRL_TINT_AT`）。
+     */
+    val backdropEncoreTint: () -> Float = {
+        val elapsed = clock.elapsedMs
+        if (SwiftieTimeline.eraIndexAt(elapsed) == SwiftieErasData.SHOWGIRL_INDEX) {
+            SwiftieTimeline.encoreTintProgress(
+                elapsed - SwiftieTimeline.eraStartMs(SwiftieErasData.SHOWGIRL_INDEX)
+            )
+        } else {
+            0f
+        }
+    }
+
+    /**
      * 本段已过多少毫秒。**四处读它**：TTPD 那台打字机（敲字 / 滑架步进 / 出纸要与卡片
      * 对上拍）、reputation 那条蛇、Lover 彩虹上那颗心（命中之后才带箭），以及 Midnights
      * 面钟上弦的两根指针。
@@ -660,6 +679,17 @@ private fun SwiftieEggContent(
      */
     val redLeafFallOn by remember {
         derivedStateOf { redLeafFallActiveAt(clock.elapsedMs) }
+    }
+    /**
+     * Showgirl 的羽毛层是否挂着。
+     *
+     * 与 [redLeafFallOn] 同一个理由：全屏节点常挂着，每帧都要为它重录一次
+     * display list，而它只在 Showgirl 那一段有东西要画。
+     */
+    val featherFallOn by remember {
+        derivedStateOf {
+            SwiftieTimeline.eraIndexAt(clock.elapsedMs) == SwiftieErasData.SHOWGIRL_INDEX
+        }
     }
     val particlePhase: () -> Float = {
         clock.elapsedMs.mod(PARTICLE_CYCLE_MS).toFloat() / PARTICLE_CYCLE_MS
@@ -900,6 +930,7 @@ private fun SwiftieEggContent(
                 cardBounds = { heroCardBounds },
                 lowRam = lowRam,
                 loverHouseFade = loverHouseFade,
+                encoreTint = backdropEncoreTint,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = albumBackdropAlpha() }
@@ -964,6 +995,18 @@ private fun SwiftieEggContent(
             if (redLeafFallOn) {
                 SwiftieRedLeafFallLayer(
                     eraElapsedMs = backdropEraElapsed,
+                    lowRam = lowRam,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = erasAlpha() * (1f - backdropCrossfade()) }
+                )
+            }
+            // Showgirl 的羽毛同理，**层级最高、压在卡片之上**（需求方点名要它能挡住卡片）。
+            // 与 Red 那层一样跟着换张权重收 —— 它落在末段，换张只可能发生在收尾那 500ms
+            if (featherFallOn) {
+                SwiftieEraFeatherFallLayer(
+                    phase = particlePhase,
+                    travelPhase = particleTravelPhase,
                     lowRam = lowRam,
                     modifier = Modifier
                         .fillMaxSize()

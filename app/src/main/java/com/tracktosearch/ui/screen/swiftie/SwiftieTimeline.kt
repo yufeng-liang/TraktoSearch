@@ -96,9 +96,98 @@ object SwiftieTimeline {
     /** 真正获得额外停留的只有 Lover。 */
     val CARD_ANCHOR_BONUS_INDICES: Set<Int> = setOf(6)
 
+    /**
+     * 逐张的时长**挪移**（毫秒），键是专辑索引，没列到的按 0 算。
+     *
+     * 与 [CARD_ANCHOR_BONUS_INDICES] 那类「往账本上加钱」的加时不同，这一张表只在
+     * 账本内部左右搬：**各值必须加总为零**，否则 [ERAS_CARDS_MS] 会动，配乐钉死的
+     * 那两个点跟着错开（`SwiftieTimelineTest` 守着这条与逐项时长）。
+     *
+     * 2026-09-24：Fearless 那 26 首一行 117ms 早读得完，挪 1000ms 给 1989 ——
+     * 那一张天际线 + 海浪 + 四张挂着的拍立得 + 卡里那张相纸，八千多毫秒读不完也看不完。
+     */
+    val CARD_TIME_SHIFT_MS: Map<Int, Long> = mapOf(1 to -1_000L, 4 to 1_000L)
 
     /** TTPD 在 [ERA_TRACK_COUNTS] 里的位置。打字机那一拍要按索引认人。 */
     const val TTPD_INDEX: Int = 10
+
+    // ---- Showgirl 加曲续章（The Encore）----
+
+    /**
+     * 加曲那张：`The Life of a Showgirl: The Encore`（2026-09-25 发行）。
+     *
+     * 续章**不新增一段账本** —— 那 4904ms 全部从这张卡自己的停留里挤，
+     * 所以 [ERAS_CARDS_MS] 与它下游的终局、定格、以及配乐钉死的两个点一毫秒不动。
+     */
+    const val SHOWGIRL_INDEX: Int = 11
+
+    /**
+     * Showgirl 卡片除停留与续章以外的固定开销：长出 400 + 回落 400 + 段间停顿 100。
+     *
+     * 与 `SwiftieEraCard` 的 `CARD_GROW_MS` / `CARD_RECEDE_MS` / `CARD_GAP_MS` 同源。
+     * 写成字面量而不去引用它们，是为了让 `scripts/egg-shot.sh` 一类按
+     * `const val X: Long = 数字` 正则抠值的脚本抠得动（与 [TTPD_PREROLL_MS] 同一个理由）。
+     */
+    const val SHOWGIRL_CHROME_MS: Long = 900L
+
+    /**
+     * 原版 12 首的**首次**阅读窗口。
+     *
+     * 从 5000 压到 1500：曲目随卡片一次性出现，1.5s 够扫一眼；而续章那 4904ms 里
+     * 16 首全在屏幕上可以接着读，整张卡的总停留（1500 + 4904）反而比原来的 5000 更长。
+     */
+    const val SHOWGIRL_HOLD_MS: Long = 1_500L
+
+    /** 加曲续章整段：尘埃聚字 → 日期翻新 → 四首落墨 → 洋红渗透 → 满亮静止。 */
+    const val SHOWGIRL_ENCORE_MS: Long = 4_904L
+
+    /**
+     * 这张卡的总长。
+     *
+     * 必须**恰好**等于 [SHOWGIRL_CHROME_MS] + [SHOWGIRL_HOLD_MS] + [SHOWGIRL_ENCORE_MS]
+     * （`SwiftieTimelineTest` 守着）。少一毫秒都会让卡片段总长变化，终局与定格跟着挪，
+     * 最后撞上配乐钉死的 [REWIND_START]。
+     *
+     * 之所以要一条专属分支：加曲后曲目数 12 → 16，通用公式会算出
+     * `5900 + 117×16 = 7772`，比原值多 468ms。
+     */
+    const val SHOWGIRL_CARD_MS: Long = 7_304L
+
+    /**
+     * 续章在**卡片内部时钟**上的起点 = 长出（400）+ 原版停留（[SHOWGIRL_HOLD_MS]）。
+     *
+     * 消费方（标题 / 日期 / 曲目列 / 洋红 tint / 触感谱）一律用
+     * `elapsedInCard - SHOWGIRL_ENCORE_AT` 取续章内的相对时刻，别各自再算一遍 ——
+     * 这条账错一次，尘埃聚字就会落在卡片还没长完的时候。
+     */
+    const val SHOWGIRL_ENCORE_AT: Long = 1_900L
+
+    /**
+     * 续章六拍，毫秒**相对 [SHOWGIRL_ENCORE_AT]**。
+     *
+     * 相邻两拍刻意留了重叠（交接还没完日期就开始翻、落墨还没完洋红就开始渗），
+     * 顺次排队会让整段读成幻灯片；重叠之后是「一件事没做完下一件就起来了」。
+     *
+     * 洋红**从续章第一毫秒就开始渗**（2026-09-25 需求方定案），因此它不再是「某一拍」，
+     * 而是整段续章的底调：尘埃聚字、日期翻新、四首落墨全部发生在一个正在变色的舞台上。
+     * 所以 [SHOWGIRL_TINT_AT] 是 0 —— 这是唯一一个起点不在 0 之后的拍。
+     */
+    const val SHOWGIRL_DUST_MS: Long = 900L        // 0–900 尘埃聚成字
+    const val SHOWGIRL_FADE_MS: Long = 300L        // 900–1200 尘埃退、真字进
+    const val SHOWGIRL_DATE_AT: Long = 1_100L      // 1100–1500 日期翻新
+    const val SHOWGIRL_DATE_MS: Long = 400L
+    const val SHOWGIRL_TRACK_AT: Long = 1_300L     // 1300 起每 250ms 一首，收在 2300
+    const val SHOWGIRL_TRACK_STEP_MS: Long = 250L
+    const val SHOWGIRL_TINT_AT: Long = 0L          // 0–1500 洋红渗透
+    const val SHOWGIRL_TINT_MS: Long = 1_500L
+    /**
+     * 满亮静止的起点：4404–4904 什么都不再变，留给四首新歌读。
+     *
+     * 它**不再**等于 `TINT_AT + TINT_MS`（那个和现在是 1500）：变色收得比落墨还早，
+     * 之后画面就定在满洋红上。这个常量仍取 4404 —— 它守的是「续章末尾有一段静止」，
+     * 而不是「最后一拍收完」，两者从 2026-09-25 起已经不是同一个时刻了。
+     */
+    const val SHOWGIRL_REST_AT: Long = 4_404L
 
     /**
      * 打字机把两行**敲完**占用的时长。前摇里除了这一段，剩下的是 [TTPD_DONE_HOLD_MS]。
@@ -177,18 +266,31 @@ object SwiftieTimeline {
      * Phase D 的 `SwiftieErasData` 必须与此逐项吻合，那边有交叉断言。
      */
     val ERA_TRACK_COUNTS: List<Int> =
-        listOf(11, 26, 22, 30, 21, 15, 18, 17, 17, 22, 31, 12)
+        listOf(11, 26, 22, 30, 21, 15, 18, 17, 17, 22, 31, 16)
 
     /** TTPD 整列打印的窗口长度：31 行普通时间表再加 [TTPD_TRACK_REVEAL_BONUS_MS]。 */
     val TTPD_TRACK_REVEAL_MS: Long =
         TTPD_CARD_PER_TRACK_MS * ERA_TRACK_COUNTS[TTPD_INDEX] + TTPD_TRACK_REVEAL_BONUS_MS
 
+    /**
+     * 一张卡片的时长。
+     *
+     * Showgirl 走**专属分支**：它的 16 首里有 4 首是后来加的加曲，卡片要在原版展示完之后
+     * 再演一段续章，两段各有自己的预算，逐曲公式表达不了。返回 [SHOWGIRL_CARD_MS]，
+     * **不看 [trackCount]** —— 于是加曲前（12）后（16）这个值都一样，
+     * 卡片段总长与配乐钉死的两个点都不受影响。
+     */
     fun cardDurationMs(index: Int, trackCount: Int): Long =
-        CARD_BASE_MS +
-            (if (index == TTPD_INDEX) TTPD_CARD_PER_TRACK_MS else CARD_PER_TRACK_MS) * trackCount +
-            (if (index in CARD_ANCHOR_BONUS_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
-            (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
-            (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L) 
+        if (index == SHOWGIRL_INDEX) {
+            SHOWGIRL_CARD_MS
+        } else {
+            CARD_BASE_MS +
+                (if (index == TTPD_INDEX) TTPD_CARD_PER_TRACK_MS else CARD_PER_TRACK_MS) * trackCount +
+                (if (index in CARD_ANCHOR_BONUS_INDICES) CARD_ANCHOR_BONUS_MS else 0L) +
+                (if (index == TTPD_INDEX) TTPD_TRACK_REVEAL_BONUS_MS else 0L) +
+                (if (index == TTPD_INDEX) TTPD_PREROLL_MS else 0L) +
+                (CARD_TIME_SHIFT_MS[index] ?: 0L)
+        }
 
     /**
      * 第 [index] 张卡片的内部时钟相对本段起点要**后移**多少毫秒。
@@ -340,4 +442,51 @@ object SwiftieTimeline {
         }
         return ERA_TRACK_COUNTS.lastIndex
     }
+
+    /**
+     * 续章内的相对毫秒：Showgirl 卡片自己的已用时间减去 [SHOWGIRL_ENCORE_AT]。
+     *
+     * 负值 = 续章还没开始（原版展示期），此时卡片按原样画。钳在
+     * `[SHOWGIRL_CARD_MS]` 上 —— 段末回落与倒滑期间调用方可能拿到超过卡片总长的值，
+     * 不钳的话末帧会取到一个「未来的」进度。
+     */
+    fun encoreElapsedMs(elapsedInCard: Long): Long =
+        (elapsedInCard - SHOWGIRL_ENCORE_AT).coerceIn(-SHOWGIRL_ENCORE_AT, SHOWGIRL_CARD_MS)
+
+    /** 续章进度 0f..1f（[SHOWGIRL_ENCORE_MS] 归一化）。原版展示期恒 0f。 */
+    fun encoreProgress(elapsedInCard: Long): Float =
+        (encoreElapsedMs(elapsedInCard).toFloat() / SHOWGIRL_ENCORE_MS).coerceIn(0f, 1f)
+
+    /**
+     * 续章某一段的进度：`[atMs, atMs + spanMs]` 归一化，区间外钳到 0f / 1f。
+     *
+     * 六拍全部走这一个函数，别在各处再写一遍
+     * `((encoreElapsedMs - X) / Y).coerceIn(0f, 1f)` —— 写六份就会有一份把
+     * 除零或负区间写错，而那种错在屏幕上是「这一拍永远不动」，很难看出是哪一处。
+     */
+    fun encoreStageProgress(elapsedInCard: Long, atMs: Long, spanMs: Long): Float =
+        ((encoreElapsedMs(elapsedInCard) - atMs).toFloat() / spanMs).coerceIn(0f, 1f)
+
+    /** 尘埃聚字 0f..1f。 */
+    fun encoreDustProgress(elapsedInCard: Long): Float =
+        encoreStageProgress(elapsedInCard, 0L, SHOWGIRL_DUST_MS)
+
+    /** 真字淡入 0f..1f（尘埃退、闪粉字进）。 */
+    fun encoreInkProgress(elapsedInCard: Long): Float =
+        encoreStageProgress(elapsedInCard, SHOWGIRL_DUST_MS, SHOWGIRL_FADE_MS)
+
+    /** 日期翻新 0f..1f。 */
+    fun encoreDateProgress(elapsedInCard: Long): Float =
+        encoreStageProgress(elapsedInCard, SHOWGIRL_DATE_AT, SHOWGIRL_DATE_MS)
+
+    /** 洋红渗透 0f..1f。 */
+    fun encoreTintProgress(elapsedInCard: Long): Float =
+        encoreStageProgress(elapsedInCard, SHOWGIRL_TINT_AT, SHOWGIRL_TINT_MS)
+
+    /**
+     * 第 [trackIndex] 首加曲（0 起，对应曲目列第 13 首）的落墨时刻，
+     * 相对 [SHOWGIRL_ENCORE_AT]。曲目列与触感谱共用，不各算一份。
+     */
+    fun encoreTrackRevealMs(trackIndex: Int): Long =
+        SHOWGIRL_TRACK_AT + SHOWGIRL_TRACK_STEP_MS * trackIndex
 }

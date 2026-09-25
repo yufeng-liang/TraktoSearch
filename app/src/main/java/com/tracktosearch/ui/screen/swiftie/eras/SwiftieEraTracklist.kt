@@ -141,6 +141,55 @@ internal const val TRACK_TITLE_FONT_RATIO: Float = 0.75f
 private val NO_COLLAPSE: () -> Float = { 0f }
 
 /**
+ * 单首加曲落墨用的时长：从 0 到全不透明。
+ *
+ * 比 [TRACK_STAGGER_MS]（117ms，原版 12 首的账本口径）长得多 —— 那 12 首是
+ * **随卡片一次性出现**的，这个数只用来算「曲目列结束」，屏幕上没有逐行动画。
+ * 加曲这四首是真的逐首落墨，117ms 太快读成同时闪出来。
+ */
+private const val ENCORE_ROW_INK_MS: Long = 200L
+
+/**
+ * 一行加曲的墨量 0f..1f。
+ *
+ * 只有 Showgirl 的**加曲**（下标 >= [SwiftieErasData.ENCORE_FIRST_TRACK]）参与：
+ * 原版那 12 首在续章开始前就已经全在屏上，它们在整段续章里恒 1f。
+ *
+ * 落墨时刻走 `SwiftieTimeline.encoreTrackRevealMs`，与触感谱共用同一份账 ——
+ * 触感那一记如果与眼睛看到的落墨差着百来毫秒，读起来就是「手感和画面对不上」。
+ */
+internal fun encoreRowInkAt(trackIndex: Int, elapsedInCard: Long): Float {
+    val ordinal = trackIndex - SwiftieErasData.ENCORE_FIRST_TRACK
+    if (ordinal < 0) return 1f
+    val at = SwiftieTimeline.encoreTrackRevealMs(ordinal)
+    return SwiftieTimeline.encoreStageProgress(elapsedInCard, at, ENCORE_ROW_INK_MS)
+}
+
+/**
+ * 为某一行挑一个墨量 lambda。
+ *
+ * **判据在这里、不在 [encoreRowInkAt] 里**：那个函数收的是已经求值过的
+ * `elapsedInCard`，若把 `eraIndex` / 行号的判断放进去，调用方就得先读一次时钟
+ * 才能把参数传进去 —— 于是 11 张卡的两百多行每帧都要读时钟、每帧失效一次绘制。
+ * 在这里判完，非加曲的行拿到的是一个恒返回 1f 的常量 lambda，一帧都不失效。
+ */
+private fun encoreRowInkLambda(
+    eraIndex: Int,
+    trackIndex: Int,
+    elapsedInCard: () -> Long
+): () -> Float =
+    if (eraIndex == SwiftieErasData.SHOWGIRL_INDEX &&
+        trackIndex >= SwiftieErasData.ENCORE_FIRST_TRACK
+    ) {
+        { encoreRowInkAt(trackIndex, elapsedInCard()) }
+    } else {
+        NO_INK
+    }
+
+/** 不参与落墨的行用它，省得每行都新建一个返回 1f 的 lambda。 */
+private val NO_INK: () -> Float = { 1f }
+
+/**
  * 一张专辑的完整曲目列：非 TTPD 随卡片一次性出现，TTPD 逐行打字，序列末尾自下而上卷收。
  *
  * 曲目名**不借时代字体** —— 那 12 个字库是按专辑名逐个子集化的，只含那几个字，
@@ -153,6 +202,10 @@ private val NO_COLLAPSE: () -> Float = { 0f }
  * @param textColors 压暗到 AA 的一组文字色，由卡片算好传进来（见 `SwiftieEraContrast`）
  * @param rowHeight 单行行高，由卡片按可用高度与曲目数算好（见 `trackRowHeight`）。
  *   字号跟着它等比缩放，所以 31 首的 TTPD Anthology 在小屏上也排得下
+ * @param range 这一支画哪几首。**默认全列**；拆两栏时由卡片各传一段
+ *   （见 `SwiftieEra.leftColumnRows`）。拆栏放在卡片那一侧而不是在这一支里套
+ *   `Row { Column { … } }`，是为了不把那 130 多行的行体整体缩进一次 ——
+ *   纯空白的 churn 会把真正的改动淹没掉
  * @param collapseProgress 0f = 全部行都在；1f = 只剩描金那一行。**在布局阶段读**
  */
 @Composable
@@ -163,6 +216,7 @@ internal fun SwiftieEraTracklist(
     rowHeight: Dp,
     elapsedInCard: () -> Long,
     collapseProgress: () -> Float,
+    range: IntRange = era.tracks.indices,
     modifier: Modifier = Modifier
 ) {
     val lowRam = rememberIsLowRamDevice()
@@ -208,12 +262,24 @@ internal fun SwiftieEraTracklist(
         derivedStateOf { collapseProgress() > 0.0001f }
     }
 
+    /**
+     * 某一行的墨量 lambda。**只有 Showgirl 的加曲那四行会读时钟**。
+     *
+     * 其余 11 张、以及这张的原版 12 行拿到的是恒返回 1f 的常量 lambda：`graphicsLayer`
+     * 里只要读了 `elapsedInCard()`，这一行的绘制就每帧失效；11 张卡加起来两百多行
+     * 每帧重绘一遍，是白扔的。判据在 [encoreRowInkLambda] 里，两者都是常量。
+     */
+    val encoreRowInk: (Int) -> () -> Float = { index ->
+        encoreRowInkLambda(eraIndex, index, elapsedInCard)
+    }
+
     Column(
         // 242 首念不完，也会把动画期间的焦点全占住。整块对 TalkBack 隐身，
         // 卡片自己有一条 contentDescription
         modifier = modifier.clearAndSetSemantics { }
     ) {
-        // 卷收节拍按曲目数派生：行数越多，每行错开越短，保证最后一行也能在
+        // 卷收节拍按**曲目总数**派生而不是按这一支的行数：拆成两栏时两栏必须同拍，
+        // 各算各的会让左右两栏一先一后收完。行数越多，每行错开越短，保证最后一行也能在
         // REWIND_MS 的窗口内收完。短专辑仍用 70ms 的上限，观感与原来一致。
         val collapseStaggerMs = if (era.tracks.size <= 1) {
             COLLAPSE_ROW_STAGGER_MAX_MS
@@ -222,7 +288,8 @@ internal fun SwiftieEraTracklist(
                 (COLLAPSE_WINDOW_MS - COLLAPSE_ROW_MS) / (era.tracks.size - 1)
                 ).coerceAtMost(COLLAPSE_ROW_STAGGER_MAX_MS)
         }
-        era.tracks.forEachIndexed { index, title ->
+        range.forEach { index ->
+            val title = era.tracks[index]
             val appearAt = if (typed) {
                 trackRowRevealAtMs(eraIndex, index, lowRam)
             } else {
@@ -271,10 +338,15 @@ internal fun SwiftieEraTracklist(
             val tvIndex = if (typed) -1 else title.lastIndexOf(TV_SUFFIX)
             val baseTitle = if (tvIndex >= 0) title.substring(0, tvIndex) else title
             val hasTvBadge = tvIndex >= 0
+            // 这一行的墨量。组合阶段建一次（不是每帧在 draw 里新建），
+            // 非加曲的行拿到的是常量 lambda（见 [encoreRowInkLambda]）
+            val rowInk: () -> Float = encoreRowInk(index)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .collapsingRow(rowHeight, collapsing, rowCollapse)
+                    // ink 同时驱动高度与 alpha：加曲那几行是「随着墨落下来展开」，
+                    // 不是「先占好位置再淡入」（见 [collapsingRow]）
+                    .collapsingRow(rowHeight, collapsing, rowCollapse, rowInk)
                     .then(
                         if (typed) {
                             // 打字那一张：**没有淡入也没有位移**，整行靠打字头揭示 ——
@@ -301,9 +373,14 @@ internal fun SwiftieEraTracklist(
                         } else {
                             // 非 TTPD：曲目随卡片长出一次性全部出现，没有单独揭示/淡入/位移。
                             // graphicsLayer 只保留卷收的 alpha，别再读时钟做逐行动画。
+                            //
+                            // **Showgirl 的加曲那四行是例外**：它们是续章里逐首落墨的
+                            // （见 `encoreRowInk`）。门控写在 `eraIndex` 上而不是「每一行
+                            // 都去读时钟」，所以其余 11 张、以及这张的原版 12 行，
+                            // 一帧都不失效。
                             Modifier.graphicsLayer {
                                 val shrink = (rowCollapse() / 0.7f).coerceIn(0f, 1f)
-                                alpha = 1f - shrink
+                                alpha = (1f - shrink) * rowInk()
                             }
                         }
                     )
@@ -434,10 +511,11 @@ private fun TvBadge(
 }
 
 /**
- * 卷收一行：把行高收到 0。
+ * 卷收一行：把行高收到 0。**也负责加曲那四行的「长出来」**。
  *
- * 必须走**布局**而不只是 `graphicsLayer` —— 卡片整体高度要跟着缩，
- * 留一片空白就不是「卷起来」而是「擦掉了」。
+ * 必须走**布局**而不只是 `graphicsLayer` —— 卡片整体高度要跟着缩/长，
+ * 留一片空白就不是「卷起来」而是「擦掉了」；反过来加曲不占位的话，
+ * 卡片高度不会随续章增长，落墨的四行会压在日期底下。
  *
  * 子内容仍按**原始行高**测量，只把报出去的高度收窄：多出来的部分会被下面
  * 那些已经收完的行位置吃掉，看不见；反过来按矮高度重排的话，Ellipsis 的曲目名
@@ -445,18 +523,22 @@ private fun TvBadge(
  *
  * [collapsing] 是个 `derivedStateOf`：卷收开始前它一直是 false，
  * 所以整段 109 秒里这一层一帧都不失效，真在卷的那 1.5 秒才逐帧重测。
+ *
+ * [ink] 是加曲那几行的墨量 0f..1f（其余行恒 1f）。它同时驱动高度与 alpha：
+ * **高度取 ink、alpha 也取 ink**，两处用同一个数，行才是「随着墨落下来展开」
+ * 而不是「先占好位置再淡入」。
  */
 private fun Modifier.collapsingRow(
     rowHeight: Dp,
     collapsing: State<Boolean>,
-    rowCollapse: () -> Float
+    rowCollapse: () -> Float,
+    ink: () -> Float = NO_INK
 ): Modifier = layout { measurable, constraints ->
     val full = rowHeight.roundToPx()
     val placeable = measurable.measure(constraints.copy(minHeight = full, maxHeight = full))
-    val height = if (collapsing.value) {
-        (full * (1f - rowCollapse())).roundToInt().coerceIn(0, full)
-    } else {
-        full
+    val height = when {
+        collapsing.value -> (full * (1f - rowCollapse())).roundToInt().coerceIn(0, full)
+        else -> (full * ink()).roundToInt().coerceIn(0, full)
     }
     layout(placeable.width, height) { placeable.place(0, 0) }
 }

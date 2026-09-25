@@ -17,6 +17,11 @@ gf apache/permanentmarker/PermanentMarker-Regular.ttf marker.ttf
 gf ofl/unifrakturmaguntia/UnifrakturMaguntia-Book.ttf unifraktur.ttf
 gf ofl/parisienne/Parisienne-Regular.ttf parisienne.ttf
 gf ofl/librecaslondisplay/LibreCaslonDisplay-Regular.ttf caslon.ttf
+# Showgirl 的标题字：2026-09-25 参考 The Encore 版封面重选。那一版封面上
+# 「THE LIFE OF A SHOWGIRL」与「THE ENCORE」都是**斜体压缩粗无衬线**（笔画相对竖直
+# 右倾约 6°），与原封面的正体不是一套。Barlow Condensed Bold Italic 的 italicAngle
+# 是 -7.0°，是几个候选里唯一同时对上斜度与笔重的（Anton / Bebas 都是正体，斜度就不对）。
+gf "ofl/barlowcondensed/BarlowCondensed-BoldItalic.ttf" barlow-cond-bi.ttf
 # TTPD 那张曲目单是打字机打出来的（见 era_typewriter）：Special Elite 是老式打字机
 # 打出来的活字，正是这一张的语义；Apache-2.0，许可证在 apache/ 下
 gf apache/specialelite/SpecialElite-Regular.ttf specialelite.ttf
@@ -68,7 +73,11 @@ sub parisienne  era_lover           'Lover'
 sub imfell      era_imfell          'folklore evermore'
 sub inter       era_midnights       'Midnights'
 sub caslon      era_ttpd            'The Tortured Poets Department'
-sub playfair    era_showgirl        'The Life of a Showgirl'
+# Showgirl 的标题走**全大写**（参考图上就是全大写），且续章要在后面接上「: THE ENCORE」，
+# 所以字符集要把大写 26 字母与冒号一起收进来 —— 少一个字符那一格就是豆腐块，
+# 而子集字体缺字是静默的（`SwiftieErasDataTest` 的字体断言不查 cmap，查不出来）。
+# 保留小写：日期那一行不走这套字，但标题在真机上万一有降级路径回落到小写也不该缺字。
+sub barlow-cond-bi era_showgirl     'THE LIFE OF A SHOWGIRL: ENCORE'
 # TTPD 那张纸上的字：31 首曲目名 + 前摇打在露头纸上的两行 + 序号列的数字。
 # 曲目名里的撇号是直引号（源码里就是 U+0027），所以字符集里直接写它、不另开 --unicodes
 sub specialelite era_typewriter " !'(),-0123456789?ABCDEFGHIKLMNOPRSTWabcdefghiklmnoprstuvwxy"

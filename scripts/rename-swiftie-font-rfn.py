@@ -22,10 +22,14 @@ from fontTools.ttLib import TTFont
 RENAMES = {
     "era_fearless": ("Swiftie Fearless", "SwiftieFearless-Regular"),
     "era_lover": ("Swiftie Lover", "SwiftieLover-Regular"),
-    "era_showgirl": ("Swiftie Showgirl", "SwiftieShowgirl-Italic"),
     "era_reputation": ("Swiftie Reputation", "SwiftieReputation-Regular"),
     # folklore 与 evermore 共用这一个字体，所以家族名不跟单个专辑
     "era_imfell": ("Swiftie Fell", "SwiftieFell-Italic"),
+    # era_showgirl 2026-09-25 起不在表里：标题字体从 Playfair Display 换成了
+    # Barlow Condensed Bold Italic（参考 The Encore 版封面重选），而 Barlow 的
+    # name ID 0 只有版权行、没有 "With Reserved Font Name" 条款，按本文件的判据
+    # 不需要改名。曾经那条 ("Swiftie Showgirl", "SwiftieShowgirl-Italic") 是对
+    # Playfair 那一份的，留着会让下次全量跑把一个无 RFN 的字体改名。
 }
 
 only = set(sys.argv[1:])

@@ -48,6 +48,25 @@ enum class SwiftieHapticCueKind {
     TRACKLIST_DONE,
 
     /**
+     * Showgirl 续章：尘埃聚成 `: THE ENCORE` 那一刻的一记。
+     *
+     * **不复用 [CARD_LAND_ANCHOR]**：那一类的语义是「这张卡是整段的锚点」
+     * （`ANCHOR_INDICES` = Taylor Swift 与 Lover），而这里响的是「续章里多出一行字」——
+     * 是同一张卡内部的第二次事件。混用会让 `anchorCardsLandHeavierThanTheRest`
+     * 那条断言多出一记，而它想守的是「只有首尾两张是锚点」。
+     */
+    ENCORE_DUST_SETTLE,
+
+    /**
+     * Showgirl 续章：第一首加曲落墨。
+     *
+     * **只有这一记，不逐首。** 四首落墨间隔 250ms，连发四记在手上是一段嗡鸣
+     * （见 `project-haptic-envelope-must-be-short`）。落墨本身是屏幕事件，
+     * 手上给一记「开始了」就够，后面三首靠眼睛看。
+     */
+    ENCORE_TRACK_FIRST,
+
+    /**
      * Lover 那一箭射中彩虹爱心：扎进去那一下 + 420ms 的余韵收干。
      *
      * 与 [LOVER_BLOOM] 是同一支序列的两端 —— 中间隔着 105 秒。这一段是 Lover 卡片
@@ -375,6 +394,30 @@ private fun erasCardCues(): List<SwiftieHapticCue> =
                         ),
                         kind = SwiftieHapticCueKind.TRACKLIST_DONE,
                         semantic = HapticSemantic.FREQUENT_TICK,
+                    )
+                )
+            }
+            // Showgirl 的加曲续章两记。时刻全部从 `SwiftieTimeline` 的续章 helper 派生 ——
+            // 与卡片、背景共用同一份账，视觉挪一个数这里跟着走。
+            //
+            // 只有两记，不是「每首加曲一记」：四首落墨间隔 250ms，连发四记在手上是
+            // 一段嗡鸣（`project-haptic-envelope-must-be-short` 记着这条）。
+            // 所以只认「尘埃聚成字」的收束与「第一首加曲落墨」两个真事件。
+            if (index == SwiftieTimeline.SHOWGIRL_INDEX) {
+                add(
+                    SwiftieDiscreteCue(
+                        atMs = cardStart + SwiftieTimeline.SHOWGIRL_ENCORE_AT +
+                            SwiftieTimeline.SHOWGIRL_DUST_MS,
+                        kind = SwiftieHapticCueKind.ENCORE_DUST_SETTLE,
+                        semantic = HapticSemantic.CONFIRM,
+                    )
+                )
+                add(
+                    SwiftieDiscreteCue(
+                        atMs = cardStart + SwiftieTimeline.SHOWGIRL_ENCORE_AT +
+                            SwiftieTimeline.encoreTrackRevealMs(0),
+                        kind = SwiftieHapticCueKind.ENCORE_TRACK_FIRST,
+                        semantic = HapticSemantic.GESTURE_END,
                     )
                 )
             }

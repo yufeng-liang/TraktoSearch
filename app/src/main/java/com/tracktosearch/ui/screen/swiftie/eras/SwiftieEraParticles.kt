@@ -329,10 +329,59 @@ private fun DrawScope.drawEraParticles(
         SwiftieEraParticle.PAPER_SCRAP ->
             drawPaperScraps(motes, phase, travelPhase, layerAlpha * 0.54f, scratch, lit, deep, era.textColor)
 
-        // 橙金 + 金高光：主色 #E8620F 打底，PeachYellow 当羽轴上那一道反光
-        SwiftieEraParticle.FEATHER ->
-            drawFeathers(motes, phase, travelPhase, layerAlpha * 0.64f, scratch, main, deep, SwiftiePalette.PeachYellow)
+        // 羽毛**不在这里画**：它搬到卡片之上那一层了（`SwiftieEraFeatherFallLayer`），
+        // 与 Red 的秋叶同一条理由 —— 需求方要「落下的羽毛层级最高，可以挡住卡片」。
+        // 枚举与 [Swarms] 里那一群仍留着，上面那层取的是同一群、同一套参数
+        SwiftieEraParticle.FEATHER -> Unit
     }
+}
+
+/**
+ * Showgirl 的羽毛层 —— **挂在卡片之上**。
+ *
+ * 与 L2 那层飘落物唯一的区别就是 z 序（与 `SwiftieRedLeafFall` 同一条理由）：
+ * 需求方要「落下的羽毛层级最高，可以挡住下面的卡片」。留在 L2 会被半透明白卡片
+ * 洗成一层淡影，而羽毛是这一张的主体母题。
+ *
+ * 相位仍走 L2 那两个循环（[PARTICLE_CYCLE_MS] 节拍 / [PARTICLE_TRAVEL_CYCLE_MS] 行程），
+ * **不**像 Red 那样收段内时间：Red 枝上那三片是一次性的（「从这根枝上脱落」只演一遍），
+ * 而羽毛是一趟接一趟的循环落物，与卡片内演到第几拍无关。
+ *
+ * 颜色取自本段舞台（`mainColor` / 末档底色 / `PeachYellow` 高光），与 L2 分发里
+ * 那行原本给 FEATHER 的三个入参**逐字相同** —— 换层不该换配色。
+ */
+@Composable
+fun SwiftieEraFeatherFallLayer(
+    phase: () -> Float,
+    travelPhase: () -> Float,
+    lowRam: Boolean,
+    modifier: Modifier = Modifier
+) {
+    // 与 L2 层各建一份（同一套参数、同一种子）：这一层是独立挂载的，拿不到 L2 那份。
+    // 八只 [Mote] 的构造开销，一次性
+    val feathers = remember(lowRam) {
+        buildSwarms(lowRam).motes[SwiftieEraParticle.FEATHER].orEmpty()
+    }
+    val scratch = remember { Path() }
+    val stage = SwiftieErasData.STAGE[SwiftieErasData.SHOWGIRL_INDEX]
+    val era = SwiftieErasData.ALL[SwiftieErasData.SHOWGIRL_INDEX]
+    Spacer(
+        modifier = modifier
+            .fillMaxSize()
+            .drawBehind {
+                if (feathers.isEmpty()) return@drawBehind
+                drawFeathers(
+                    motes = feathers,
+                    phase = phase(),
+                    travelPhase = travelPhase(),
+                    alpha = 0.64f,
+                    path = scratch,
+                    barb = era.mainColor,
+                    shaft = stage.backdropColors.last(),
+                    sheen = SwiftiePalette.PeachYellow
+                )
+            }
+    )
 }
 
 /**

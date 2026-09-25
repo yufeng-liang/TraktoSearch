@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -152,14 +153,22 @@ internal fun DrawScope.drawEraMotif(
      * 为 null 时（没传或还没解码完）只跳过这片叶，杯与字照画。
      */
     propMapleInk: ImageBitmap? = null,
+    /**
+     * 花束的领地矩形，**卡片坐标的 px** —— 右栏顶部那 [SwiftieEra.propRowBand] 行，
+     * 宽就是右栏的宽。由卡片那侧算出来，与右栏顶部那个 Spacer 同源。
+     *
+     * 只有 Speak Now 读它；其余各张传 `Rect.Zero`，那些函数根本不收这个参数。
+     */
+    propBand: Rect = Rect.Zero,
 ) {
     val alpha = PROP_ALPHA * columnFade.coerceIn(0f, 1f)
     when (motif) {
         SwiftieEraMotif.PORCH_GUITAR -> drawPorchGuitar(color, phase, alpha)
         SwiftieEraMotif.CASTLE_BALCONY -> drawCastleBalcony(color, phase, alpha)
-        SwiftieEraMotif.SPEAK_NOW_BOUQUET -> drawSpeakNowBouquetMotif(color, phase, propPhoto)
+        SwiftieEraMotif.SPEAK_NOW_BOUQUET ->
+            drawSpeakNowBouquetMotif(color, phase, propPhoto, propBand)
         SwiftieEraMotif.RED_SCARF -> drawRedScarf(color, phase, alpha, propPhoto, textMeasurer, propMapleInk)
-        SwiftieEraMotif.POLAROID -> drawPolaroidGull(color, phase, alpha, propPhoto)
+        SwiftieEraMotif.POLAROID -> drawPolaroid(color, phase, alpha, propPhoto)
         SwiftieEraMotif.COILED_SNAKE -> drawCoiledSnake(color, phase, lowRam, alpha)
         SwiftieEraMotif.LOVER_ARCHER ->
             drawLoverArcher(color, phase, alpha, eraElapsedMs, loverAimAngle)
@@ -253,7 +262,15 @@ private fun DrawScope.diagonalHatchTexture(color: Color, spacing: Float, downhil
     }
 }
 
-/** 3 · 紫色薄纱正弦波。三层不同振幅叠出纱的层次（原样保留，本来就是 0.10）。 */
+/**
+ * 3 · 紫色薄纱正弦波。三层不同振幅叠出纱的层次（原样保留，本来就是 0.10）。
+ *
+ * **通铺整张卡**。拆栏之后这里曾经只铺右半边（`clipRect(left = 0.5w)`），当时的理由是
+ * 三条波浪向下填满的正是左栏那 15 行字底下、横切一道边界读作「卡片中间漏了一条」。
+ * 真机上那反而成了更明显的问题：左半张干净、右半张有波纹，卡片像被竖着切成了两半
+ * （2026-09-25 需求方指出）。0.10 的底纹压在字下本来就只该读作「这张纸有纹理」，
+ * 不该按栏分区。
+ */
 private fun DrawScope.veilWaveTexture(color: Color, phase: Float) {
     val path = Path()
     repeat(3) { layer ->
@@ -832,41 +849,51 @@ private fun DrawScope.drawGoldTassels(
 private fun DrawScope.drawSpeakNowBouquetMotif(
     color: Color,
     phase: Float,
-    bouquet: ImageBitmap?
+    bouquet: ImageBitmap?,
+    propBand: Rect
 ) {
     veilWaveTexture(color, phase)
-    if (bouquet != null) drawSpeakNowBouquet(bouquet, phase)
+    if (bouquet != null) drawSpeakNowBouquet(bouquet, phase, propBand)
 }
 
 /**
- * 花束在道具框内的基础适配宽度。
- *
- * 0.94 对宽高同时生效：常见比例下先吃满框宽，极矮的卡片上则改为吃满框高，
- * 不论哪种比例都留出余量，避免花枝/缎带被卡片圆角或曲目列视觉切边。
+ * 花束在带内的适配余量。留出这一点边，花枝与缎带才不会被卡片圆角或右栏那几行字切边。
  */
 private const val SPEAK_NOW_BOUQUET_FIT = 0.94f
 
-/** 需求方在当前落位基础上要求的额外放大比例。 */
-private const val SPEAK_NOW_BOUQUET_GROWTH = 1.33f
-
 /**
- * 把花束贴到右侧道具列：先按道具框等比例适配，再额外放大
- * [SPEAK_NOW_BOUQUET_GROWTH]；右缘贴住道具框，纵向居中。
+ * 把花束放进 [propBand] —— 右栏那一栏的宽度 × 从专辑名那一行到右栏第 8 行的**领地**：
+ * 等比例适配到领地内，**横向在领地里居中、纵向贴着领地上缘**。
  *
- * 放大后右侧仍留原有的安全边距，新增面积向左向上展开；呼吸只做极小幅度，
- * 素材本身不是挂饰，幅度大了会像整束花在漂。花束按原图不透明绘制，不吃
- * `columnFade`，避免长歌名那一行经过时花束跟着发淡。
+ * 三个落位理由各自独立：
+ * - 横向居中：领地就是右栏，歌名 16–22 在这一栏里左右铺开，花束却贴到栏的右缘之外
+ *   （原来是贴道具列右缘，那比文字列右缘还靠外 35px）会读成一列漂在外面的东西。
+ * - 领地往上借：标题与日期只吃卡片左半边，右半边这一整条是空的。花束把它借来长高，
+ *   就不必靠多留几行来换尺寸 —— 那一格管的是两栏底边齐不齐，与花束多大脱钩了。
+ * - 纵向贴顶：适配余量带来的那点空档该留在花束**下面**（它和下面那 7 行之间要喘气），
+ *   留在上面就成了标题区与花束之间的一道白缝。
+ *
+ * 原来是「按道具框适配 × 1.33 放大 × 0.62 缩小，再贴着道具框下缘」。那两个系数一涨一缩，
+ * 其实都在绕同一件事：花束和右栏那 7 行抢的是同一列的上下两截。现在花束搬到行的**上方**，
+ * 领地由卡片自己算出来（见 `SwiftieEraCard` 的 drawBehind），两个系数一起退役 ——
+ * 领地是尺寸的唯一来源，不需要把绘制结果回灌给布局。
+ *
+ * 呼吸只做极小幅度，素材本身不是挂饰，幅度大了会像整束花在漂。花束按原图不透明绘制，
+ * 不吃 `columnFade`，避免长歌名那一行经过时花束跟着发淡。
  */
-private fun DrawScope.drawSpeakNowBouquet(photo: ImageBitmap, phase: Float) {
-    val box = propBox()
+private fun DrawScope.drawSpeakNowBouquet(
+    photo: ImageBitmap,
+    phase: Float,
+    band: Rect
+) {
     val scale = min(
-        box.width * SPEAK_NOW_BOUQUET_FIT / photo.width,
-        box.height * SPEAK_NOW_BOUQUET_FIT / photo.height
-    ) * SPEAK_NOW_BOUQUET_GROWTH
+        band.width * SPEAK_NOW_BOUQUET_FIT / photo.width,
+        band.height * SPEAK_NOW_BOUQUET_FIT / photo.height
+    )
     val dstW = photo.width * scale
     val dstH = photo.height * scale
-    val left = box.right - dstW
-    val top = box.top + (box.height - dstH) * 0.5f
+    val left = band.left + (band.width - dstW) / 2f
+    val top = band.top
     val sway = sin(phase * TAU) * dstW * 0.008f
     drawImage(
         image = photo,
@@ -1401,8 +1428,8 @@ private val PROP_ENGRAVE = Color(0xFF5C3A21)
  */
 private const val POLAROID_PHOTO_GAIN = 2.2f
 
-/** 5 · 1989：宝丽来白框（照面是真实照片）+ 一只海鸥。轻微倾斜，像随手摆上去的。 */
-private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float, photo: ImageBitmap?) {
+/** 5 · 1989：宝丽来白框（照面是真实照片）。轻微倾斜，像随手摆上去的。 */
+private fun DrawScope.drawPolaroid(color: Color, phase: Float, alpha: Float, photo: ImageBitmap?) {
     skyBandTexture(color)
     val box = propBox()
     val w = box.width
@@ -1479,32 +1506,7 @@ private fun DrawScope.drawPolaroidGull(color: Color, phase: Float, alpha: Float,
                 )
             }
         }
-        drawSeagull(color, phase, alpha, w, h, u)
     }
-}
-
-/**
- * 一只海鸥：两段弧线的翼展，翼尖随相位扑动。
- *
- * 只画翼展不画身子 —— 远处的海鸥本来就只剩这两笔，加了身子反而像蝙蝠。
- */
-private fun DrawScope.drawSeagull(color: Color, phase: Float, alpha: Float, w: Float, h: Float, u: Float) {
-    val cx = w * 0.24f
-    val cy = h * 0.13f
-    val span = w * 0.36f
-    // 扑翼：翼尖上下 + 前缘弧度一起变，只动翼尖会像在摇尾巴
-    val flap = sin(phase * TAU * 2f)
-    val tipRise = span * 0.10f * flap
-    val bend = span * 0.17f * (1f + 0.35f * flap)
-    val gull = Path()
-    gull.moveTo(cx - span * 0.5f, cy - tipRise)
-    gull.quadraticTo(cx - span * 0.26f, cy - bend, cx, cy)
-    gull.quadraticTo(cx + span * 0.26f, cy - bend, cx + span * 0.5f, cy - tipRise)
-    drawPath(
-        gull, color,
-        alpha = alpha * 1.5f,
-        style = Stroke(width = u * 0.014f, cap = StrokeCap.Round)
-    )
 }
 
 /** 6 · reputation：盘起来的蛇（昂头做攻击姿态）+ 一枚蛇戒（在卡片右上角）。 */
@@ -2890,6 +2892,25 @@ private const val QUILL_FILL_WEIGHT = 1f / PROP_ALPHA
  */
 private const val QUILL_SHAFT_WIDTH = 0.012f
 
+/**
+ * 桌板向左加宽的比例（相对道具列宽）。
+ *
+ * 右缘本来就贴着卡片边（`0.98` 只留 3% 白边），**只能往左长**。
+ * 桌子现在比镜台宽出一截，读作一张带台面的梳妆台，而不是刚好托住镜子的底座。
+ */
+private const val VANITY_TABLE_WIDEN = 0.30f
+
+/**
+ * 镜台那一组（镜框 + 灯泡 + 口红 + 粉扑）整体左移的比例。
+ *
+ * **由 [VANITY_TABLE_WIDEN] 派生，不另抄一个数**：桌板加宽后中线从 `0.50` 落到
+ * `(0.02 - WIDEN + 0.98) / 2`，镜台跟着挪 `WIDEN / 2` 才仍然立在桌面正中。
+ * 手工写一个常量的话，下次再调桌宽就会忘掉这里 —— 桌宽一改镜子当场偏到右边去。
+ *
+ * 只挪镜台、**不挪桌子**：加宽量本来就全给了左半边，再把桌子一起挪就等于加宽白做。
+ */
+private const val VANITY_SHIFT = -VANITY_TABLE_WIDEN / 2f
+
 /** 12 · Showgirl：更衣室化妆镜台（环绕灯泡轮转）+ 台面上的口红与粉扑。 */
 private fun DrawScope.drawVanityMirror(color: Color, phase: Float, alpha: Float) {
     diagonalHatchTexture(color, spacing = 0.095f, downhill = true)
@@ -2898,30 +2919,34 @@ private fun DrawScope.drawVanityMirror(color: Color, phase: Float, alpha: Float)
     val h = box.height
     val u = min(w, h)
     translate(left = box.left, top = box.top) {
-        val frame = Rect(w * 0.10f, h * 0.04f, w * 0.90f, h * 0.52f)
-        val corner = CornerRadius(u * 0.06f)
-        drawRoundRect(color, frame.topLeft, frame.size, corner, alpha = alpha * 0.30f)
-        // 镜面高光：两道斜向平行四边形。白色压在有色玻璃上才读得出「这是镜子」
-        val inset = u * 0.03f
-        val glare = Path()
-        repeat(2) { index ->
-            val shift = frame.width * (0.16f + index * 0.34f)
-            val band = frame.width * (0.13f - index * 0.05f)
-            glare.moveTo(frame.left + shift, frame.bottom - inset)
-            glare.lineTo(frame.left + shift + frame.width * 0.26f, frame.top + inset)
-            glare.lineTo(frame.left + shift + frame.width * 0.26f + band, frame.top + inset)
-            glare.lineTo(frame.left + shift + band, frame.bottom - inset)
-            glare.close()
+        // 镜台一组整体左移，落在加宽后桌面的中线上（见 [VANITY_SHIFT]）。
+        // 桌面自己**不在**这个 translate 里 —— 它是加宽的那一件，位置由左缘决定
+        translate(left = w * VANITY_SHIFT) {
+            val frame = Rect(w * 0.10f, h * 0.04f, w * 0.90f, h * 0.52f)
+            val corner = CornerRadius(u * 0.06f)
+            drawRoundRect(color, frame.topLeft, frame.size, corner, alpha = alpha * 0.30f)
+            // 镜面高光：两道斜向平行四边形。白色压在有色玻璃上才读得出「这是镜子」
+            val inset = u * 0.03f
+            val glare = Path()
+            repeat(2) { index ->
+                val shift = frame.width * (0.16f + index * 0.34f)
+                val band = frame.width * (0.13f - index * 0.05f)
+                glare.moveTo(frame.left + shift, frame.bottom - inset)
+                glare.lineTo(frame.left + shift + frame.width * 0.26f, frame.top + inset)
+                glare.lineTo(frame.left + shift + frame.width * 0.26f + band, frame.top + inset)
+                glare.lineTo(frame.left + shift + band, frame.bottom - inset)
+                glare.close()
+            }
+            drawPath(glare, Color.White, alpha = 0.55f)
+            drawRoundRect(
+                color, frame.topLeft, frame.size, corner,
+                alpha = alpha * 1.3f, style = Stroke(width = u * 0.030f)
+            )
+            drawVanityBulbs(color, phase, alpha, frame, u)
+            drawLipstick(color, alpha, w, h, u)
+            drawPowderPuff(color, alpha, w, h, u)
         }
-        drawPath(glare, Color.White, alpha = 0.55f)
-        drawRoundRect(
-            color, frame.topLeft, frame.size, corner,
-            alpha = alpha * 1.3f, style = Stroke(width = u * 0.030f)
-        )
-        drawVanityBulbs(color, phase, alpha, frame, u)
         drawVanityTable(color, alpha, w, h, u)
-        drawLipstick(color, alpha, w, h, u)
-        drawPowderPuff(color, alpha, w, h, u)
     }
 }
 
@@ -2963,26 +2988,61 @@ private fun DrawScope.drawVanityBulbs(
     }
 }
 
-/** 台面：桌板 + 抽屉面 + 拉手 + 两条桌腿。台面是口红和粉扑「站得住」的前提。 */
+/**
+ * 台面：桌板 + 抽屉面 + 拉手 + 两条桌腿。台面是口红和粉扑「站得住」的前提。
+ *
+ * 需求方先要「桌子大一些」、再要「桌子横向加宽」。放大的都是**桌体**：
+ * - 台面顶沿钉在 `0.58h` 不动 —— 那是口红与粉扑的落脚线，而它们在各自的函数里
+ *   独立取值（`drawLipstick` 的 `baseY`、`drawPowderPuff` 的圆心），这里一挪
+ *   两件道具就得跟着重算
+ * - 宽度只往**左**长（见 [VANITY_TABLE_WIDEN]）：右缘本来就贴着卡片边
+ *
+ * 抽屉面、拉手、桌腿一律从桌板的 `left`/`right` **派生**，不另写比例 ——
+ * 桌宽改一次，这三件跟着走；抄死的数字会在下一次调宽时留在原地，
+ * 屏幕上就是一块宽板子下面挂着一条窄抽屉。
+ */
 private fun DrawScope.drawVanityTable(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
     val topY = h * 0.58f
-    val slab = u * 0.055f
-    drawRect(Color.White, Offset(w * 0.02f, topY), Size(w * 0.96f, slab), alpha = alpha * PROP_MASK)
-    drawRect(color, Offset(w * 0.02f, topY), Size(w * 0.96f, slab), alpha = alpha * 1.2f)
-    drawRect(color, Offset(w * 0.10f, topY + slab), Size(w * 0.80f, h * 0.10f), alpha = alpha * 0.5f)
+    // 0.055u → 0.080u：桌板从一片薄边变成有厚度的一块板
+    val slab = u * 0.080f
+    val left = w * (0.02f - VANITY_TABLE_WIDEN)
+    val right = w * 0.98f
+    val slabW = right - left
+    drawRect(Color.White, Offset(left, topY), Size(slabW, slab), alpha = alpha * PROP_MASK)
+    drawRect(color, Offset(left, topY), Size(slabW, slab), alpha = alpha * 1.2f)
+    // 抽屉面：左右各从桌板内缩 0.06w（与加宽前的内缩量同一个数），高 0.10h → 0.15h
+    val drawerLeft = left + w * 0.06f
+    val drawerW = slabW - w * 0.12f
+    drawRect(color, Offset(drawerLeft, topY + slab), Size(drawerW, h * 0.15f), alpha = alpha * 0.5f)
     drawRect(
-        color, Offset(w * 0.10f, topY + slab), Size(w * 0.80f, h * 0.10f),
+        color, Offset(drawerLeft, topY + slab), Size(drawerW, h * 0.15f),
         alpha = alpha * 0.9f, style = Stroke(width = u * 0.007f)
     )
-    drawCircle(color, u * 0.018f, Offset(w * 0.50f, topY + slab + h * 0.05f), alpha = alpha * 1.7f)
-    drawRect(color, Offset(w * 0.12f, topY + slab + h * 0.10f), Size(u * 0.038f, h * 0.24f), alpha = alpha * 0.9f)
-    drawRect(color, Offset(w * 0.84f, topY + slab + h * 0.10f), Size(u * 0.038f, h * 0.24f), alpha = alpha * 0.9f)
+    // 拉手落在**桌板**的中线上（不是道具列的中线 —— 桌子左移之后两者不再重合）
+    drawCircle(
+        color, u * 0.024f, Offset((left + right) / 2f, topY + slab + h * 0.075f),
+        alpha = alpha * 1.7f
+    )
+    // 桌腿从抽屉面两端内缩 0.03w。0.038u → 0.055u 粗、高 0.24h → 0.20h：
+    // 桌体整体只长高不到 3%，但粗一圈之后读作一张实木台子，而不是四根细棍撑一块板
+    val legW = u * 0.055f
+    drawRect(
+        color, Offset(drawerLeft + w * 0.03f, topY + slab + h * 0.15f),
+        Size(legW, h * 0.20f), alpha = alpha * 0.9f
+    )
+    drawRect(
+        color, Offset(drawerLeft + drawerW - w * 0.03f - legW, topY + slab + h * 0.15f),
+        Size(legW, h * 0.20f), alpha = alpha * 0.9f
+    )
 }
 
 /** 一支口红：管身 + 管口金属环 + 斜切的膏体。斜切是口红与蜡笔的区别。 */
 private fun DrawScope.drawLipstick(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
-    val left = w * 0.20f
-    val right = w * 0.30f
+    // 0.215..0.295（管宽 0.08w，原来 0.20..0.30 是 0.10w）：需求方要「口红小一些」。
+    // 只收管宽、不动位置与高度 —— 斜切膏体的顶点、金属环、竖高光全部按 left/right 派生，
+    // 跟着一起收，不用逐处改
+    val left = w * 0.215f
+    val right = w * 0.295f
     val mouthY = h * 0.44f
     val baseY = mouthY + h * 0.14f
     // 接触影：管底压在台面上那一小片，往右下偏（光在左上）。
@@ -3014,8 +3074,10 @@ private fun DrawScope.drawLipstick(color: Color, alpha: Float, w: Float, h: Floa
 
 /** 一个粉扑：圆饼 + 一圈绒边（22 段外凸小弧）+ 缎带提手。绒边全部合进一条 Path。 */
 private fun DrawScope.drawPowderPuff(color: Color, alpha: Float, w: Float, h: Float, u: Float) {
-    val center = Offset(w * 0.70f, h * 0.51f)
-    val rx = w * 0.105f
+    // 圆心从 0.70 挪到 0.72、半径 0.105 → 0.125：需求方要「口红右边的圆形物大一点」。
+    // 口红的管宽同时收了（见 `drawLipstick`），两件道具一收一放，台面的疏密才不偏
+    val center = Offset(w * 0.72f, h * 0.51f)
+    val rx = w * 0.125f
     // 压扁 12%：粉扑是躺在台面上的一块圆饼，视线略高于桌板，看下去就是个椭圆。
     // 正圆读作正对着镜头立起来的一个球
     val ry = rx * 0.88f

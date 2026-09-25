@@ -91,14 +91,97 @@ class SwiftieTimelineTest {
     }
 
     @Test
-    fun cardDurationsFollowTrackCountWithAnchorBonus() {
+    fun cardDurationsFollowTrackCountWithAnchorBonusAndTransfers() {
         // 5900 + 117n；只有 Lover 多停 600ms，TTPD 仍按 130n
         assertThat(SwiftieTimeline.cardDurationMs(index = 0, trackCount = 11)).isEqualTo(7_187L)
-        assertThat(SwiftieTimeline.cardDurationMs(index = 1, trackCount = 26)).isEqualTo(8_942L)
+        // Fearless 让出 1000ms（8942 → 7942），1989 收下（8357 → 9357）
+        assertThat(SwiftieTimeline.cardDurationMs(index = 1, trackCount = 26)).isEqualTo(7_942L)
+        assertThat(SwiftieTimeline.cardDurationMs(index = 4, trackCount = 21)).isEqualTo(9_357L)
         assertThat(SwiftieTimeline.cardDurationMs(index = 6, trackCount = 18)).isEqualTo(8_606L)
         // TTPD 用 Anthology 版 31 首，另有 4700ms 打字机前摇 + 3000ms 逐行放慢
         assertThat(SwiftieTimeline.cardDurationMs(index = 10, trackCount = 31)).isEqualTo(17_630L)
+        // Showgirl 走专属分支：**不看 trackCount**，加曲前后都是 7304
         assertThat(SwiftieTimeline.cardDurationMs(index = 11, trackCount = 12)).isEqualTo(7_304L)
+        assertThat(SwiftieTimeline.cardDurationMs(index = 11, trackCount = 16)).isEqualTo(7_304L)
+    }
+
+    /**
+     * Showgirl 的三段预算必须正好拼成卡片总长，且**不加到账本上**。
+     *
+     * 加曲把曲目数推到 16，若走通用公式会是 `5900 + 117×16 = 7772` —— 多出的 468ms
+     * 会顺着 [SwiftieTimeline.ERAS_CARDS_MS] 推走终局与定格，最后撞上配乐钉死的
+     * `REWIND_START`。这条与 `ERAS_CARDS_MS` 那道总账互为表里：总账只证明「没变」，
+     * 这条证明「为什么没变」。
+     */
+    @Test
+    fun showgirlSplitsItsOwnBudgetIntoHoldAndEncoreWithoutTouchingTheLedger() {
+        assertThat(
+            SwiftieTimeline.SHOWGIRL_CHROME_MS +
+                SwiftieTimeline.SHOWGIRL_HOLD_MS +
+                SwiftieTimeline.SHOWGIRL_ENCORE_MS
+        ).isEqualTo(SwiftieTimeline.SHOWGIRL_CARD_MS)
+        // 续章起点 = 长出（400）+ 原版停留，与 SHOWGIRL_CHROME_MS 里那 400 同源
+        assertThat(SwiftieTimeline.SHOWGIRL_ENCORE_AT)
+            .isEqualTo(400L + SwiftieTimeline.SHOWGIRL_HOLD_MS)
+        // 续章六拍必须落在续章窗口内，最后一拍（满亮静止）不许超出
+        assertThat(SwiftieTimeline.SHOWGIRL_REST_AT)
+            .isLessThan(SwiftieTimeline.SHOWGIRL_ENCORE_MS)
+        // 四首加曲的落墨收在续章静止之前
+        val lastReveal = SwiftieTimeline.encoreTrackRevealMs(3)
+        assertThat(lastReveal).isLessThan(SwiftieTimeline.SHOWGIRL_REST_AT)
+        // 洋红**从续章第一毫秒就开始渗**（2026-09-25 需求方定案）：起点为 0，
+        // 尘埃聚字、日期翻新、四首落墨全部发生在一个正在变色的舞台上。
+        // 早先这里断言「变色必须晚于落墨开始」，那条已被需求推翻 —— 不再复现
+        assertThat(SwiftieTimeline.SHOWGIRL_TINT_AT).isEqualTo(0L)
+        // 变色全程 1.5s，收在尘埃聚字走完（900）之后、日期翻完（1500）那一刻
+        assertThat(SwiftieTimeline.SHOWGIRL_TINT_MS).isEqualTo(1_500L)
+        assertThat(SwiftieTimeline.SHOWGIRL_TINT_AT + SwiftieTimeline.SHOWGIRL_TINT_MS)
+            .isAtMost(SwiftieTimeline.SHOWGIRL_REST_AT)
+    }
+
+    /**
+     * 续章时钟的钳位：原版展示期恒负 / 0，段末不许取到「未来」的进度。
+     *
+     * 段末回落与倒滑期间调用方会拿到超过卡片总长的 `elapsedInCard`，不钳的话
+     * 尘埃聚字会算出一个 1.0 以外的进度。
+     */
+    @Test
+    fun encoreClockIsClampedAtBothEnds() {
+        // 卡片刚长出：续章还没开始
+        assertThat(SwiftieTimeline.encoreElapsedMs(0L)).isEqualTo(-1_900L)
+        assertThat(SwiftieTimeline.encoreProgress(0L)).isEqualTo(0f)
+        // 原版停留的最后 1ms 仍属原版
+        assertThat(SwiftieTimeline.encoreProgress(SwiftieTimeline.SHOWGIRL_ENCORE_AT - 1L))
+            .isEqualTo(0f)
+        // 续章起点那一毫秒进度为 0，走完为 1
+        assertThat(SwiftieTimeline.encoreProgress(SwiftieTimeline.SHOWGIRL_ENCORE_AT))
+            .isEqualTo(0f)
+        assertThat(
+            SwiftieTimeline.encoreProgress(
+                SwiftieTimeline.SHOWGIRL_ENCORE_AT + SwiftieTimeline.SHOWGIRL_ENCORE_MS
+            )
+        ).isEqualTo(1f)
+        // 段末之后（回落 / 倒滑）钳在 1f，不越界
+        assertThat(SwiftieTimeline.encoreProgress(SwiftieTimeline.SHOWGIRL_CARD_MS * 4L))
+            .isEqualTo(1f)
+    }
+
+    /**
+     * 挪移表只在账本内部搬钱。
+     *
+     * 加总不为零就是往账本上加/减了时间，配乐 1:58–2:02 那两句 Lover 会当场错开，
+     * 而卡片看起来一切正常 —— 所以这条必须单独红，不能靠 ERAS_CARDS_MS 那道总账兜。
+     */
+    @Test
+    fun timeTransfersNeverChangeTheLedgerTotal() {
+        assertThat(SwiftieTimeline.CARD_TIME_SHIFT_MS.values.sum()).isEqualTo(0L)
+        // 挪出去的那一张不能挪到连「长出 + 停留 + 回落 + 段间停顿」都盖不住
+        SwiftieTimeline.CARD_TIME_SHIFT_MS.forEach { (index, shift) ->
+            if (shift < 0) {
+                assertThat(SwiftieTimeline.cardDurationMs(index, SwiftieTimeline.ERA_TRACK_COUNTS[index]))
+                    .isGreaterThan(SwiftieTimeline.CARD_BASE_MS + SwiftieTimeline.BACKDROP_SOLO_MS)
+            }
+        }
     }
 
     /**
@@ -146,8 +229,11 @@ class SwiftieTimelineTest {
     fun twelveCardsFillTheErasSegment() {
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS).hasSize(12)
         assertThat(SwiftieTimeline.ERA_TRACK_COUNTS[10]).isEqualTo(31)
-        // 四张 TV 补 40 首独有曲目后总数 244；Midnights 再删两条重复版本，总计 242
-        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(242)
+        // 四张 TV 补 40 首独有曲目后总数 244；Midnights 再删两条重复版本，总计 242；
+        // 2026-09-25 Showgirl 补 The Encore 四首加曲，242 → 246
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(246)
+        // 加曲那四首进了账本，但**卡片时长没跟着变**（专属分支，见 cardDurations 那条）
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS[SwiftieTimeline.SHOWGIRL_INDEX]).isEqualTo(16)
         assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(107_817L)
         assertThat(SwiftieTimeline.ERAS_CARDS_START + SwiftieTimeline.ERAS_CARDS_MS)
             .isEqualTo(SwiftieTimeline.ERAS_CARDS_END)

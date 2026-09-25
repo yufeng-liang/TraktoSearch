@@ -2,6 +2,8 @@ package com.tracktosearch.ui.screen.swiftie.eras
 
 import androidx.annotation.FontRes
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 
 /**
@@ -19,7 +21,7 @@ enum class SwiftieEraMotif {
     SPEAK_NOW_BOUQUET,
     /** 4 · Red：垂下的红围巾 + 一杯枫糖拿铁（杯套上刻着一片枫叶） */
     RED_SCARF,
-    /** 5 · 1989：宝丽来白框 + 一只海鸥 */
+    /** 5 · 1989：宝丽来白框（照面是真实照片） */
     POLAROID,
     /** 6 · reputation：盘绕的黑鳞蛇 + 蛇戒 */
     COILED_SNAKE,
@@ -146,6 +148,18 @@ data class SwiftieEra(
      */
     val titleStrokeEm: Float = 0f,
     /**
+     * 专辑名字号的覆写值。null = 按名字长度走 `SwiftieEraCard.titleFontSizeFor` 的通用档位。
+     *
+     * 只有 reputation 填：它是 10 个字母的**全小写**词，而通用档位按**字符数**分档
+     * （≤14 走 27dp）。小写字母的 x-height 比大写矮一截，同样 27dp 排出来就是比同档的
+     * "Speak Now"、"Midnights" 小一号。需求方要「reputation 字号大一点」，这里按
+     * **视觉大小**而不是字符数补上那 2dp。
+     *
+     * 与 [titleStrokeEm] 同一条规矩：逐张填、不动通用档位 —— 那三档的其余成员
+     * 是逐张定过的，整体抬一档会顺带改到它们。
+     */
+    val titleSizeOverride: Dp? = null,
+    /**
      * 专辑名填真闪粉（[com.tracktosearch.ui.screen.swiftie.rememberShowgirlGlitterBrush]）。
      *
      * 只有 Showgirl 用：官方封面那十二个字母本来就是橙红闪粉贴出来的，这是全场唯一一处
@@ -160,8 +174,53 @@ data class SwiftieEra(
      * 纸头上的一行，同一支机器打出来的东西不该有两种字面。
      * 那套子集是按曲名与数字做的，`2024-04-19` 用得上的字符（0-9 与连字符）本来就在里面。
      */
-    @FontRes val dateFontResId: Int? = null
-)
+    @FontRes val dateFontResId: Int? = null,
+    /**
+     * 曲目列拆两栏时左栏占几行；0 = 不拆，整列单栏（其余 11 张都是）。
+     *
+     * 只有 Speak Now 填。这一张的背景主体是教堂内景：尖拱窗收在 0.40h、第一排长椅收在
+     * 0.483h，而 22 首单栏把卡片顶边压到它们上面去了，整个教堂下半截全被盖住。
+     * 卡片高度 = 标题与日期那一截 + **较长那一栏**的行数 × 行高，所以要让它矮到
+     * 0.483h 以下，只能减少较长那一栏的行数 —— 拆栏是唯一不买账本的那条路
+     * （压行高会挤字，压标题预算省不出 100dp）。
+     *
+     * 代价由右栏承担：它只有半张卡宽，所以拆点右边的几行必须是短名字。具体填几行
+     * 是**真机量出来的**，不是算出来的 —— 卡片实高取决于标题那一截真正占多少 dp，
+     * 而 `CARD_CHROME_HEIGHT` 是预留预算、不等于渲染高度。改这个数要重抓截图核对
+     * 长椅下缘，别只看数字。
+     */
+    val leftColumnRows: Int = 0,
+    /**
+     * 花束在**右栏顶部**占掉几行（0 = 不占）。
+     *
+     * 只管排布，不管花束多大：它决定右栏那 7 行从第几行开始，也就是两栏底边齐不齐。
+     * Speak Now 填 8 正好让两栏都是 15 行（8 + 7 = 15 = 左栏），于是 15 与 22 齐底，
+     * 卡片也不必为花束长高（见 [columnRowCount]）。填 9 会把右栏整栏压低一行。
+     *
+     * 花束的**尺寸**另有来源：它的绘制领地横向是右栏那一栏，纵向从专辑名那一行的上缘
+     * 一直铺到「Row 上缘 + 这几行」。标题与日期只吃卡片左半边，右半边那条空档借给了
+     * 花束 —— 所以想让花束更大不必动这一格，两件事各自成立。
+     * （原来是 `propScale = 0.62f` 一个缩放系数同时管排布和大小，于是要么花束小要么
+     * 两栏不齐，两头抢同一格。）
+     *
+     * 改这个数要重抓截图核对两栏底边。
+     */
+    val propRowBand: Int = 0
+) {
+    /**
+     * 卡片高度按**较长那一栏**折算，不是按曲目总数。
+     *
+     * 没拆栏时就是曲目总数，与拆栏前逐像素一致。拆栏的那一张还要把道具占的那几行
+     * 算进它那一栏（[propRowBand]）—— 花束坐在右栏顶上，它和右栏的字是同栏的上下两截，
+     * 不是各占一栏。
+     */
+    val columnRowCount: Int
+        get() = if (leftColumnRows <= 0) {
+            tracks.size
+        } else {
+            maxOf(leftColumnRows, tracks.size - leftColumnRows + propRowBand)
+        }
+}
 
 /**
  * 一个时代的**舞台参数** —— 页面背景怎么铺、飘什么、系统栏与轴用深墨还是浅墨。
@@ -194,6 +253,21 @@ object SwiftieErasData {
     /** 第四张 Red。它的枫叶剧本（`SwiftieRedLeafFall`）与落叶层的挂载门控都认这个号。 */
     const val RED_INDEX: Int = 3
 
+    /** 加曲那张 Showgirl。续章（The Encore）挂在它上面。 */
+    const val SHOWGIRL_INDEX: Int = 11
+
+    /**
+     * Showgirl 曲目列里**第一首加曲**的下标（12 起）。
+     *
+     * 这一条是「原版 / 加曲」的分界：曲目列靠它决定第 13 首起要逐行落墨，
+     * 日期靠它决定何时翻新，触感谱靠它认「第一首加曲落墨」那一记。
+     * 写成常量而不是各处写 12，是因为加曲再有增减时只该改这一处。
+     */
+    const val ENCORE_FIRST_TRACK: Int = 12
+
+    /** 加曲那张的发行日（The Encore）。原版是 `2025-10-03`，见 [SHOWGIRL]。 */
+    const val ENCORE_RELEASE_DATE: String = "2026-09-25"
+
     private val TAYLOR_SWIFT = SwiftieEra(
         name = "Taylor Swift",
         releaseDate = "2006-10-24",
@@ -201,6 +275,11 @@ object SwiftieErasData {
         textColor = Color(0xFF58B09C),
         fontResId = R.font.era_taylor_swift,
         motif = SwiftieEraMotif.PORCH_GUITAR,
+        // Great Vibes 是细笔画的手写体，34dp 上压在米白卡片上读着偏轻
+        // （与 Lover 的 Parisienne 同一个问题）。需求方要「再粗一些」，
+        // 取 0.03em —— 与 TTPD / Showgirl 同一档，是这套合成加粗里最重的一档。
+        // 手写体的游丝比 Parisienne 疏，0.03 不会糊在一起（Lover 那 0.02 是给更密的连笔留的余量）
+        titleStrokeEm = 0.03f,
         tracks = listOf(
             "Tim McGraw",
             "Picture to Burn",
@@ -285,7 +364,16 @@ object SwiftieErasData {
             "Castles Crumbling (TV)",
             "Foolish One (TV)",
             "Timeless (TV)"
-        )
+        ),
+        // 拆点定在 15 而不是更好讲的「14 = 原专 14 首 / TV 8 首」那条界线上：
+        // 左栏多一行，卡片就矮一行 —— 拆栏的全部目的是让这张卡矮到露出背景教堂的第一排长椅。
+        // 代价是 "Ours (TV)" 落在左栏末行，TV 那一块跨了两栏。这个数是真机量出来的，
+        // 动它要重抓图核对长椅下缘
+        leftColumnRows = 15,
+        // 花束坐在右栏顶上（与那 7 行上下对调），占 8 行 —— 右栏共 15 行，与左栏齐平，
+        // 15 与 22 的底边因此对齐，卡片也不必为花束长高。花束比原来小约一成，
+        // 这是需求方在「两栏底边对齐」与「花束保持原尺寸」之间选前者的代价（见 [propRowBand]）
+        propRowBand = 8
     )
 
     private val RED = SwiftieEra(
@@ -373,6 +461,9 @@ object SwiftieErasData {
         textColor = Color(0xFF111111),
         fontResId = R.font.era_reputation,
         motif = SwiftieEraMotif.COILED_SNAKE,
+        // 全小写词，x-height 比同档的大写标题矮，27dp 看着偏小。需求方要「大一点」，
+        // 覆写到 29dp（见 [SwiftieEra.titleSizeOverride]）
+        titleSizeOverride = 29.dp,
         tracks = listOf(
             "...Ready for It?",
             "End Game",
@@ -399,6 +490,10 @@ object SwiftieErasData {
         textColor = Color(0xFFF7A8C4),
         fontResId = R.font.era_lover,
         motif = SwiftieEraMotif.LOVER_ARCHER,
+        // Parisienne 只有 400 一档字重，没有粗体可换；34dp 上手写体的细笔画压在半透明白卡上
+        // 读着偏轻。合成加粗半档（0.02em ≈ 0.68dp，每侧只胀 0.34dp）—— 再大一档就会把
+        // 手写体那些相连的游丝糊成一坨，这一档是「更实」而不是「更粗」
+        titleStrokeEm = 0.02f,
         tracks = listOf(
             "I Forgot That You Existed",
             "Cruel Summer",
@@ -592,7 +687,15 @@ object SwiftieErasData {
             "Wood",
             "Cancelled!",
             "Honey",
-            "The Life of a Showgirl"
+            "The Life of a Showgirl",
+            // ---- The Encore 加曲 13–16（2026-09-25 发行）----
+            // 这四首与上面 12 首**不是同一批**：原版发行时明确说过没有加曲，它们是
+            // 一年后为庆祝首周成绩在瑞典写出来的。卡片要在原版展示完之后才把它们落墨，
+            // 所以这条边界在别处也要认人（见 `SwiftieErasData.ENCORE_FIRST_TRACK`）。
+            "Patient Zero",
+            "Cleveland!",
+            "Pink Clouding",
+            "Babylon"
         )
     )
 
@@ -628,9 +731,13 @@ object SwiftieErasData {
             darkBottomInk = false
         ),
         // 3 · Speak Now — 紫。三层纱波自己在动，**故意无粒子**
+        //
+        // 2026-09-25 饱和度 +10%（需求方）：三档整体走一遍 HSL 提饱和（口径同
+        // `SwiftieEraContrast.toHsl`，L 与 H 不动）。底色是 L0 天空渐变**和** L1 大主体
+        // （石柱、檐口、尖拱窗、三排长椅）的共同色源，所以改这三档就等于整页一起提
         SwiftieEraStage(
             backdrop = SwiftieEraBackdrop.VEIL_SPOTLIGHT,
-            backdropColors = listOf(Color(0xFFF0E4FA), Color(0xFF7B4BA8), Color(0xFF3E2159)),
+            backdropColors = listOf(Color(0xFFF0E3FB), Color(0xFF7B46AD), Color(0xFF3E1E5C)),
             particle = null,
             darkStatusBarIcons = true,
             darkBottomInk = false
@@ -675,9 +782,12 @@ object SwiftieErasData {
             darkBottomInk = false
         ),
         // 7 · Lover — 粉蓝。上浮的心 + 横穿的蝴蝶。底部是天蓝，是唯一底部仍用深墨的两张之一
+        //
+        // 2026-09-25 饱和度 +10%（需求方）：同 Speak Now，三档走一遍 HSL 提饱和。
+        // 底色同样是 L0 天空与 L1 彩虹小屋的共同色源
         SwiftieEraStage(
             backdrop = SwiftieEraBackdrop.PASTEL_RAINBOW_HOUSE,
-            backdropColors = listOf(Color(0xFFFDEFF5), Color(0xFFF7A8C4), Color(0xFF9BC4E8)),
+            backdropColors = listOf(Color(0xFFFEEEF5), Color(0xFFFBA4C3), Color(0xFF97C4EC)),
             particle = SwiftieEraParticle.HEART_BUTTERFLY,
             darkStatusBarIcons = true,
             darkBottomInk = true
@@ -699,9 +809,13 @@ object SwiftieErasData {
             darkBottomInk = false
         ),
         // 10 · Midnights — 深蓝。紫闪粉极慢下沉。顶底皆深，两处图标都要浅色
+        //
+        // 2026-09-25 饱和度 +10%（需求方）：同 Speak Now，三档走一遍 HSL 提饱和。
+        // 这一张的 L1 主体（表盘、星野、斜雾）也吃这三档，只有那圈薰衣草刻度是
+        // `SwiftiePalette.Lavender`（共享调色板，被海报/键盘/雪景球共用，不能动它）
         SwiftieEraStage(
             backdrop = SwiftieEraBackdrop.MIDNIGHT_CLOCK,
-            backdropColors = listOf(Color(0xFF2A3A6B), Color(0xFF1B2A5B), Color(0xFF0A1130)),
+            backdropColors = listOf(Color(0xFF27386E), Color(0xFF18285E), Color(0xFF081032)),
             particle = SwiftieEraParticle.PURPLE_GLITTER,
             darkStatusBarIcons = false,
             darkBottomInk = false

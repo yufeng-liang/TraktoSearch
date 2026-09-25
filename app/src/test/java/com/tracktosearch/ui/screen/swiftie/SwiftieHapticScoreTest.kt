@@ -54,19 +54,23 @@ class SwiftieHapticScoreTest {
         val inCards = score.cues.filter {
             it.atMs >= SwiftieTimeline.ERAS_CARDS_START && it.atMs < SwiftieTimeline.ERAS_CARDS_END
         }
-        // 12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾。其余 11 张曲目一次性显示，
-        // 没有逐行铺完这个屏幕事件，就不该再发一记描述它。
-        // 余下两记是 Lover 段内那一箭（一段包络 + 同毫秒的替身），也不是逐曲目
-        assertThat(inCards).hasSize(15)
+        // 12 张卡各一记落地 + 仅 TTPD 一记曲目列收尾 + Showgirl 续章两记
+        //（尘埃聚成、首首加曲落墨）+ Lover 段内那一箭（一段包络 + 同毫秒的替身）。
+        // 其余 11 张曲目一次性显示，没有逐行铺完这个屏幕事件，就不该再发一记描述它。
+        assertThat(inCards).hasSize(17)
         assertThat(score.of(SwiftieHapticCueKind.CARD_LAND)).hasSize(10)
         assertThat(score.of(SwiftieHapticCueKind.CARD_LAND_ANCHOR)).hasSize(2)
         assertThat(score.of(SwiftieHapticCueKind.TRACKLIST_DONE)).hasSize(1)
+        // 续章两记各自只有一条：加曲不逐首发声（四记 250ms 连发在手上是嗡鸣）
+        assertThat(score.of(SwiftieHapticCueKind.ENCORE_DUST_SETTLE)).hasSize(1)
+        assertThat(score.of(SwiftieHapticCueKind.ENCORE_TRACK_FIRST)).hasSize(1)
     }
 
     @Test
     fun tracklistDoneOnlyRemainsForTheTypewriterCard() {
-        // 242 首曲目，逐曲目就是 109 秒里 242 次震动 —— 手会麻，也什么都表达不了
-        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(242)
+        // 242 首原版曲目 + Showgirl 的 The Encore 四首加曲 = 246。
+        // 逐曲目就是 109 秒里 246 次震动 —— 手会麻，也什么都表达不了
+        assertThat(SwiftieTimeline.ERA_TRACK_COUNTS.sum()).isEqualTo(246)
         val done = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
         assertThat(done.atMs).isGreaterThan(cardStartMs(SwiftieTimeline.TTPD_INDEX))
         assertThat(done.atMs).isLessThan(
@@ -248,9 +252,10 @@ class SwiftieHapticScoreTest {
 
     @Test
     fun wholeSequenceStaysInsideTheDiscreteBudget() {
-        // 37 记离散摊在 125.998 秒里，其中 15 记落在卡片段。轴线那一段只有一记 ——
-        // 12 记拉链在屏幕上没有对应物。手链一整段没有触感（安静地滚进来）
-        assertThat(score.discrete()).hasSize(37)
+        // 39 记离散摊在 125.998 秒里，其中 17 记落在卡片段（含 Showgirl 续章两记）。
+        // 轴线那一段只有一记 —— 12 记拉链在屏幕上没有对应物。
+        // 手链一整段没有触感（安静地滚进来）
+        assertThat(score.discrete()).hasSize(39)
         assertThat(score.discrete().size).isAtMost(65)
         assertThat(score.envelopes()).hasSize(5)
     }
@@ -329,14 +334,14 @@ class SwiftieHapticScoreTest {
             assertThat(kind.dense).isFalse()
             assertThat(quiet.of(kind)).hasSize(score.of(kind).size)
         }
-        // 卡片段那 15 记一记不少
+        // 卡片段那 17 记一记不少（12 落地 + TTPD 收尾 + 续章两记 + Lover 一箭两条）
         assertThat(
             quiet.cues.count {
                 it.atMs >= SwiftieTimeline.ERAS_CARDS_START &&
                     it.atMs < SwiftieTimeline.ERAS_CARDS_END
             }
-        ).isEqualTo(15)
-        assertThat(quiet.discrete()).hasSize(37)
+        ).isEqualTo(17)
+        assertThat(quiet.discrete()).hasSize(39)
         assertThat(quiet.envelopes()).hasSize(5)
     }
 
