@@ -88,4 +88,42 @@ class SwiftieEggStorageTest {
         val prefs = context.swiftieDataStore.data.first()
         assertThat(prefs[SwiftieEggStorage.KEY_MIGRATED]).isTrue()
     }
+
+    @Test
+    fun cloudNudgeShown_defaultsToZero() = runTest {
+        clearPrefs()
+        val storage = SwiftieEggStorage(context)
+        storage.awaitReady()
+
+        assertThat(storage.cloudNudgeShown.value).isEqualTo(0)
+    }
+
+    @Test
+    fun cloudNudgeShown_incrementsAndSurvivesReopen() = runTest {
+        clearPrefs()
+        val storage = SwiftieEggStorage(context)
+        storage.awaitReady()
+
+        assertThat(storage.incrementCloudNudgeShown()).isEqualTo(1)
+        assertThat(storage.incrementCloudNudgeShown()).isEqualTo(2)
+        assertThat(storage.cloudNudgeShown.value).isEqualTo(2)
+
+        // 预算是跨进程的：冷启动就重置的话「累计 3 次」永远到不了 3
+        val reopened = SwiftieEggStorage(context)
+        reopened.awaitReady()
+        assertThat(reopened.cloudNudgeShown.value).isEqualTo(2)
+    }
+
+    @Test
+    fun cloudNudgeShown_isIndependentOfCloudClickCount() = runTest {
+        clearPrefs()
+        val storage = SwiftieEggStorage(context)
+        storage.awaitReady()
+
+        storage.incrementCloudClick()
+        storage.incrementCloudClick()
+
+        assertThat(storage.cloudClickCount.value).isEqualTo(2)
+        assertThat(storage.cloudNudgeShown.value).isEqualTo(0)
+    }
 }
