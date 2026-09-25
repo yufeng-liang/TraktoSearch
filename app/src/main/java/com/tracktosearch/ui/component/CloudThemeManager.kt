@@ -112,6 +112,25 @@ class CloudThemeManager @Inject constructor(
     // 解题机会是否已消耗：搜索关键词拦截只在未解题时生效
     val swiftieQuizSolved: StateFlow<Boolean> = swiftieEggStorage.quizSolved
 
+    private val _swiftieEggOpenedFromCloud = MutableStateFlow(false)
+
+    /**
+     * 这一次题面是不是从白云点开的。
+     *
+     * 和「揭示原点在哪里」刻意分成两件事：原点是几何，来源是「要不要用揭示」。
+     * 混成一个可空值之后，将来每加一个入口都得解释「我传 null 是因为我没有云，
+     * 还是因为我不是从云来的」——两种语义挤进一个字段一定出错。
+     */
+    val swiftieEggOpenedFromCloud: StateFlow<Boolean> = _swiftieEggOpenedFromCloud
+
+    /**
+     * 本进程是否已经起过一轮暗示。普通字段，不落盘。
+     *
+     * 用 `remember` 存在组合里等于没有：`beyondViewportPageCount = 0` 下每次切回
+     * Tab 都是全新组合。跨进程那一层由 `cloudNudgeShown` 的预算管。
+     */
+    private var cloudNudgeStartedThisProcess = false
+
     init {
         scope.launch {
             swiftieEggStorage.migrateLegacyNebulaUser(themeStorage.readMeshPresetSnapshot())
@@ -192,10 +211,46 @@ class CloudThemeManager @Inject constructor(
 
         when (action) {
             CloudAction.IGNORED -> Unit
-            CloudAction.SWIFTIE_EGG -> _swiftieEggVisible.value = true
+            CloudAction.SWIFTIE_EGG -> {
+                _swiftieEggOpenedFromCloud.value = true
+                _swiftieEggVisible.value = true
+            }
             CloudAction.LOCATION_PERMISSION -> _showPermissionDialog.value = true
             CloudAction.RANDOM_LOTTIE -> showRandomEasterEgg()
         }
+    }
+
+    /**
+     * 起一轮暗示之前占位。返回 true 才允许真的抖。
+     *
+     * 先置位再交给调用方判资格：两个组合先后脚问一遍的话，不先占位就会各拿到一次
+     * true，屏幕上同一时刻可能挂两条抖动。
+     */
+    fun beginCloudNudgeRound(): Boolean {
+        if (cloudNudgeStartedThisProcess) return false
+        cloudNudgeStartedThisProcess = true
+        return true
+    }
+
+    /**
+     * 资格判定。
+     *
+     * `awaitReady()` 是必需的，不是保险：三个字段用 `MutableStateFlow(false/…/0)`
+     * 起底，真值靠 init 里一次异步 `first()` 回填。SearchScreen 挂载时 DataStore
+     * 很可能还没读完，直读就会给存量迁移用户（真值 unlocked=true）白抖一次并烧掉配额。
+     */
+    suspend fun requestCloudNudgeEligible(): Boolean {
+        swiftieEggStorage.awaitReady()
+        return SwiftieEggController.shouldShowCloudNudge(
+            unlocked = swiftieEggStorage.unlocked.value,
+            quizSolved = swiftieEggStorage.quizSolved.value,
+            nudgeShown = swiftieEggStorage.cloudNudgeShown.value
+        )
+    }
+
+    /** 一整轮两下抖完才记账：中途点中云说明暗示得手，不该占配额。 */
+    suspend fun completeCloudNudgeRound() {
+        swiftieEggStorage.incrementCloudNudgeShown()
     }
 
     /** 供搜索关键词命中、关于页连点等其他入口直接拉起题面。 */
@@ -205,6 +260,7 @@ class CloudThemeManager @Inject constructor(
 
     fun onSwiftieEggDismissed(solved: Boolean) {
         _swiftieEggVisible.value = false
+        _swiftieEggOpenedFromCloud.value = false
         // 正常路径在 T1100 已经写过了。这里兜住提前退出的情况（「减少动效」直接给终态、
         // 序列中途被杀等）。
         //
