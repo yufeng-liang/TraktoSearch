@@ -75,8 +75,13 @@ object SwiftieEggController {
     /** 停留多久起一轮暗示。 */
     const val NUDGE_DWELL_MS: Long = 1_800L
 
-    /** 一记抖动时长。 */
-    const val NUDGE_SHAKE_MS: Long = 200L
+    /**
+     * 一记抖动时长。
+     *
+     * 200ms 时一整记 there-and-back 读起来是「抽一下」而不是「示意一下」，慢到 360ms
+     * 才看得出是一次有意的摆动。两记之间那 1s 静默是停顿、不是速度，没跟着改。
+     */
+    const val NUDGE_SHAKE_MS: Long = 360L
 
     /** 两记之间的静默。 */
     const val NUDGE_GAP_MS: Long = 1_000L
@@ -90,7 +95,7 @@ object SwiftieEggController {
      * `sin(2πp)·sin(πp)` 自身的极大值约 0.7698（在 tan(πp)=√2 处），除回去才让
      * 这个常量就是真机上的实际峰值 —— 不除的话它是个说谎的名字。
      */
-    const val NUDGE_MAX_DEGREES: Float = 4f
+    const val NUDGE_MAX_DEGREES: Float = 7f
 
     /**
      * 该不该给这个用户抖一轮暗示。两个未解锁位缺一不可，理由见函数体上方注释。
