@@ -570,7 +570,7 @@ fun SearchScreen(
         initialValue = false
     )
     // 日签层压在搜索页之上，主界面在它背后照样组合（见 SplashStartup.quoteOverlayGone）。
-    // 不等它让位，1.8s 停留 + 两下抖动会整段在日签背后跑完并记上配额。
+    // 不等它让位，1.8s 停留 + 三记抖动会整段在日签背后跑完并记上配额。
     val splashQuoteGone by SplashStartup.quoteOverlayGone.collectAsStateWithLifecycle()
     LaunchedEffect(isActive, isCurrentTab, nudgeOnboardingDone, splashQuoteGone) {
         // 云被 AnimatedVisibility 收掉时不抖：抖一个看不见的东西等于白烧配额
@@ -583,20 +583,23 @@ fun SearchScreen(
         if (!cloudThemeManager.beginCloudNudgeRound()) return@LaunchedEffect
         if (!cloudThemeManager.requestCloudNudgeEligible()) return@LaunchedEffect
         delay(SwiftieEggController.NUDGE_DWELL_MS)
-        // 静默期里用户可能已经把搜索框激活了，抖之前再确认一次
-        if (!isActive) {
-            repeat(SwiftieEggController.NUDGE_SHAKES) { index ->
-                // 静默夹在两记之间：第一记之前没有静默（那段由 NUDGE_DWELL_MS 负责）
-                if (index > 0) delay(SwiftieEggController.NUDGE_GAP_MS)
-                cloudNudge.snapTo(0f)
-                cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
-            }
-            // 中途点了云 = 暗示已经得手，这一轮不该再占配额（spec §4）。题面是覆盖在搜索页
-            // 之上的 overlay，不会改 isCurrentTab/isActive，所以效应会照常跑到这一行，
-            // 只能在这里回头看一眼它是不是已经被点开。
-            if (!cloudThemeManager.swiftieEggVisible.value) {
-                cloudThemeManager.completeCloudNudgeRound()
-            }
+        // 这里不再复检 isActive：它是本效应的 key，一变就会重启效应并被首行拦下，
+        // 一次运行里这个局部 val 恒定是 false。原先那句「静默期里可能已被激活」
+        // 描述的是一个到不了的状态。
+        repeat(SwiftieEggController.NUDGE_SHAKES) { index ->
+            // 静默夹在两记之间：第一记之前没有静默（那段由 NUDGE_DWELL_MS 负责）
+            if (index > 0) delay(SwiftieEggController.NUDGE_GAP_MS)
+            cloudNudge.snapTo(0f)
+            cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
+        }
+        // 中途点了云 = 暗示已经得手，这一轮不该再占配额（spec §4）。题面是覆盖在搜索页
+        // 之上的 overlay，不会改 isCurrentTab/isActive，所以效应会照常跑到这一行，
+        // 只能在这里回头看一眼它是不是已经被点开。
+        // 已知边角：点了又在最后一记抖完之前关掉题面，这里会看到 false 从而照常记账 ——
+        // 得手的一轮被记走一次。预算只有 3 次，为一个「一秒内点开又关掉」的路径去挂一个
+        // 飞行中标记不值得，认了。
+        if (!cloudThemeManager.swiftieEggVisible.value) {
+            cloudThemeManager.completeCloudNudgeRound()
         }
     }
 
