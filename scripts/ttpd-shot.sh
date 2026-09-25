@@ -104,23 +104,24 @@ era_start() {
 
 # ── 打字机的四个瞬间，全部现算 ────────────────────────────────────
 #
-# 前两拍落在 TTPD 段头那 TTPD_PREROLL_MS 独奏里（era_start 就是独奏起点，还没有卡片）。
+# 前两拍落在敲字那一拍里（`TTPD_TYPE_MS`，era_start 就是独奏起点，还没有卡片）。
 # 节拍按**字符**均分（见 SwiftieEraBackdrop 的 drawTypewriterStub / stubUnits）：
 # 打的是 Fortnight 那句，第一行 `I love you,`（11 字）、第二行 `it's ruining my life`（20 字），
 # 中间的回车占两个字符单位，共 33 个 —— 回车跨 11 到 13，正中是 12/33 ≈ 36%。
-# 所以前两拍写成**前摇的百分比**：前摇一改，两拍跟着走（字符数不变时）。
-# 后两拍是出纸：起点 + 前摇 + 出纸时长的一半 / 走完再停半秒。
+# 所以前两拍写成**敲字时长的百分比**：`TTPD_TYPE_MS` 一改，两拍跟着走（字符数不变时）。
+# 敲完之后另有 `TTPD_DONE_HOLD_MS` 的静置才出纸，因此后两拍按**整个前摇**算。
 type_ms() {
-  local start feed preroll
+  local start feed preroll type
   start="$(era_start "$(num "$TIMELINE" 'const val TTPD_INDEX')")"
   feed="$(num "$CARD" 'const val CARD_FEED_MS')"
   preroll="$(num "$TIMELINE" 'const val TTPD_PREROLL_MS')"
+  type="$(num "$TIMELINE" 'const val TTPD_TYPE_MS')"
   case "$1" in
     # 第一行打到中间：打字头停在字当中（11 字的第一行走到 5~6 个），
     # 一半的字符已经落上去
-    1) echo $(( start + preroll * 16 / 100 )) ;;
+    1) echo $(( start + type * 16 / 100 )) ;;
     # 回车：第一行刚打完，纸正往上走一行（两行都在，第二行还没开始）
-    2) echo $(( start + preroll * 36 / 100 )) ;;
+    2) echo $(( start + type * 36 / 100 )) ;;
     # 出纸半程：卡片升到一半、滚筒暗影压在纸上（feedProgress ≈ 0.5）
     3) echo $(( start + preroll + feed / 2 )) ;;
     # 出纸落位：整张纸坐定、机器在屏幕底下（与 era11 的时刻不同：

@@ -12,19 +12,24 @@ class SwiftieSequenceClockTest {
         assertThat(swiftiePhaseAt(400L)).isEqualTo(SwiftieSequencePhase.DIFFUSION)
         assertThat(swiftiePhaseAt(1_100L)).isEqualTo(SwiftieSequencePhase.ERAS_INTRO)
         assertThat(swiftiePhaseAt(3_100L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
-        assertThat(swiftiePhaseAt(109_416L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
-        // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放（新账本卡片段到 109417）
-        assertThat(swiftiePhaseAt(109_417L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(110_916L)).isEqualTo(SwiftieSequencePhase.ERAS_CARDS)
+        // 终局排在倒滑之前：配乐末尾那句 Lover 留给绽放（TTPD 前摇 4700ms 后卡片段到 110917）
+        assertThat(swiftiePhaseAt(110_917L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
         // 手链在签名写到 800ms 时进场，但那不是一段 —— 相位还是 SIGNATURE
-        assertThat(swiftiePhaseAt(109_417L + SwiftieTimeline.BRACELET_ENTRY_MS))
+        assertThat(swiftiePhaseAt(110_917L + SwiftieTimeline.BRACELET_ENTRY_MS))
             .isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(114_816L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
-        assertThat(swiftiePhaseAt(114_817L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
+        assertThat(swiftiePhaseAt(115_583L)).isEqualTo(SwiftieSequencePhase.SIGNATURE)
+        assertThat(swiftiePhaseAt(115_584L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
         assertThat(swiftiePhaseAt(117_999L)).isEqualTo(SwiftieSequencePhase.FINAL_HOLD)
         assertThat(swiftiePhaseAt(118_000L)).isEqualTo(SwiftieSequencePhase.REWIND)
         assertThat(swiftiePhaseAt(119_500L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
-        assertThat(swiftiePhaseAt(123_000L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
-        assertThat(swiftiePhaseAt(125_998L)).isEqualTo(SwiftieSequencePhase.DONE)
+        // 绽放收束（123000）之后球还满亮站着，一路站到配乐最后一帧：淡出没开始跑，
+        // 相位就还是 LOVER_BLOOM —— 尾巴的定格没有自己的相位
+        assertThat(swiftiePhaseAt(125_997L)).isEqualTo(SwiftieSequencePhase.LOVER_BLOOM)
+        assertThat(swiftiePhaseAt(125_998L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
+        // 淡出完全跑在配乐之外：音乐已经停了，球还在化，再 1.2 秒才收场
+        assertThat(swiftiePhaseAt(127_197L)).isEqualTo(SwiftieSequencePhase.FADE_OUT)
+        assertThat(swiftiePhaseAt(127_198L)).isEqualTo(SwiftieSequencePhase.DONE)
     }
 
     @Test
@@ -40,10 +45,11 @@ class SwiftieSequenceClockTest {
             SwiftieTimeline.REWIND_START,
             SwiftieTimeline.LOVER_BLOOM_START,
             SwiftieTimeline.FADE_OUT_START,
-            SwiftieTimeline.TOTAL_MS
+            SwiftieTimeline.END_MS
         )
         assertThat(starts).isInOrder()
-        // 十个段落对十个起点：手链没有自己的相位，它和签名同场（见 SwiftieSequencePhase 的注释）
+        // 十个段落对十个起点：手链没有自己的相位（它和签名同场），球的那 1.2 秒定格也没有
+        // （它只是淡出的起点往后挪了），两者都住在前一段里
         assertThat(SwiftieSequencePhase.values()).hasLength(starts.size)
         assertThat(starts.map { swiftiePhaseAt(it) })
             .isEqualTo(SwiftieSequencePhase.values().toList())
@@ -64,14 +70,15 @@ class SwiftieSequenceClockTest {
     }
 
     @Test
-    fun advanceClampsHitchesAndStopsAtTotal() {
+    fun advanceClampsHitchesAndStopsAtSequenceEnd() {
         val clock = SwiftieSequenceClock()
         // 单帧卡了 3s 也只推进 100ms，否则一次掉帧就把时间轴瞬移出去
         clock.advance(3_000L)
         assertThat(clock.elapsedMs).isEqualTo(SwiftieSequenceClock.MAX_FRAME_DELTA_MS)
-        clock.seekTo(SwiftieTimeline.TOTAL_MS - 10L)
+        // 终点是 END_MS 而不是配乐长度：尾巴那 1200ms 球还要站着
+        clock.seekTo(SwiftieTimeline.END_MS - 10L)
         clock.advance(100L)
-        assertThat(clock.elapsedMs).isEqualTo(SwiftieTimeline.TOTAL_MS)
+        assertThat(clock.elapsedMs).isEqualTo(SwiftieTimeline.END_MS)
         assertThat(clock.finished).isTrue()
     }
 
@@ -91,7 +98,7 @@ class SwiftieSequenceClockTest {
         clock.seekTo(-5_000L)
         assertThat(clock.elapsedMs).isEqualTo(0L)
         clock.seekTo(999_999L)
-        assertThat(clock.elapsedMs).isEqualTo(SwiftieTimeline.TOTAL_MS)
+        assertThat(clock.elapsedMs).isEqualTo(SwiftieTimeline.END_MS)
         // 「跳过」不是直接关掉，而是跳到定格合影，仍然看得到签名与手链
         clock.skipToFinalHold()
         assertThat(clock.elapsedMs).isEqualTo(SwiftieTimeline.FINAL_HOLD_START)

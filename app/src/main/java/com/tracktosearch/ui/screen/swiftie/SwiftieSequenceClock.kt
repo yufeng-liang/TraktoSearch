@@ -17,7 +17,7 @@ import androidx.compose.runtime.withFrameMillis
  * **声明顺序 = 时间顺序**，`compareTo` 的段落门控靠它。倒滑与绽放排在终局之后
  * （见 [SwiftieTimeline] 的类注释：配乐末尾唱 Lover）。
  *
- * **没有 BRACELET**：手链与签名同场 —— 手链在签名写到一半时从两侧滚进来
+ * **没有 BRACELET**：手链与签名同场 —— 手链在签名写到两成时从两侧滚进来
  * （见 [SwiftieTimeline.BRACELET_ENTRY_MS]），不是独立的一段，账本上也没有它的边界。
  */
 enum class SwiftieSequencePhase {
@@ -33,8 +33,10 @@ fun swiftiePhaseAt(elapsedMs: Long): SwiftieSequencePhase = when {
     elapsedMs < SwiftieTimeline.FINAL_HOLD_START -> SwiftieSequencePhase.SIGNATURE
     elapsedMs < SwiftieTimeline.REWIND_START -> SwiftieSequencePhase.FINAL_HOLD
     elapsedMs < SwiftieTimeline.LOVER_BLOOM_START -> SwiftieSequencePhase.REWIND
+    // 绽放这一路管到配乐最后一帧为止：中间那 2998ms 球满亮站着、淡出还没起手，
+    // 不另立相位 —— 它没有自己的内容，只是淡出的起点被推到了配乐之外
     elapsedMs < SwiftieTimeline.FADE_OUT_START -> SwiftieSequencePhase.LOVER_BLOOM
-    elapsedMs < SwiftieTimeline.TOTAL_MS -> SwiftieSequencePhase.FADE_OUT
+    elapsedMs < SwiftieTimeline.END_MS -> SwiftieSequencePhase.FADE_OUT
     else -> SwiftieSequencePhase.DONE
 }
 
@@ -43,6 +45,9 @@ fun swiftiePhaseAt(elapsedMs: Long): SwiftieSequencePhase = when {
  *
  * 不用 `MediaPlayer.currentPosition` 当时钟：那个值在低端机上跳变，
  * 会让播放头一顿一顿（Spec §5 约束 4）。
+ *
+ * 时钟跑到 [SwiftieTimeline.END_MS]，比配乐自己长 [SwiftieTimeline.TAIL_FADE_MS] ——
+ * 最后那一下化开是球的时间，配乐不参与（对位一律钳在 [SwiftieTimeline.TOTAL_MS]）。
  */
 @Stable
 class SwiftieSequenceClock {
@@ -67,16 +72,16 @@ class SwiftieSequenceClock {
     var seekEpoch: Int by mutableIntStateOf(0)
         private set
 
-    val finished: Boolean get() = elapsedMs >= SwiftieTimeline.TOTAL_MS
+    val finished: Boolean get() = elapsedMs >= SwiftieTimeline.END_MS
 
     fun advance(deltaMs: Long) {
         if (paused) return
         val step = deltaMs.coerceIn(0L, MAX_FRAME_DELTA_MS)
-        elapsedMs = (elapsedMs + step).coerceAtMost(SwiftieTimeline.TOTAL_MS)
+        elapsedMs = (elapsedMs + step).coerceAtMost(SwiftieTimeline.END_MS)
     }
 
     fun seekTo(ms: Long) {
-        elapsedMs = ms.coerceIn(0L, SwiftieTimeline.TOTAL_MS)
+        elapsedMs = ms.coerceIn(0L, SwiftieTimeline.END_MS)
         seekEpoch++
     }
 

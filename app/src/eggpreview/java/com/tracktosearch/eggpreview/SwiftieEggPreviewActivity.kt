@@ -103,8 +103,9 @@ class SwiftieEggPreviewActivity : ComponentActivity() {
      * 它后面所有卡片的起点全都要挪。
      */
     private fun resolveStartMs(intent: Intent): Long? {
+        // 钳到序列终点 END_MS 而不是配乐长度：尾巴那 1.2 秒球还在化开，落点截不到就拍不到
         intent.longExtraOrNull(EXTRA_MS)?.let { ms ->
-            return ms.coerceIn(0L, SwiftieTimeline.TOTAL_MS)
+            return ms.coerceIn(0L, SwiftieTimeline.END_MS)
         }
         val era = intent.longExtraOrNull(EXTRA_ERA)?.toInt() ?: return null
         val index = era.coerceIn(0, SwiftieTimeline.ERA_TRACK_COUNTS.lastIndex)
@@ -113,7 +114,7 @@ class SwiftieEggPreviewActivity : ComponentActivity() {
         // 和其余卡片不是同一个时刻
         val preroll = SwiftieTimeline.cardPrerollMs(index)
         return (SwiftieTimeline.eraStartMs(index) + preroll + ERA_SETTLE_MS)
-            .coerceAtMost(SwiftieTimeline.TOTAL_MS)
+            .coerceAtMost(SwiftieTimeline.END_MS)
     }
 
     private companion object {
@@ -179,9 +180,9 @@ private fun PreviewHud(startMs: Long, paused: Boolean, modifier: Modifier = Modi
         elapsedMs = startMs
         if (paused) return@LaunchedEffect
         var last = withFrameMillis { it }
-        while (elapsedMs < SwiftieTimeline.TOTAL_MS) {
+        while (elapsedMs < SwiftieTimeline.END_MS) {
             withFrameMillis { now ->
-                elapsedMs = (elapsedMs + (now - last)).coerceAtMost(SwiftieTimeline.TOTAL_MS)
+                elapsedMs = (elapsedMs + (now - last)).coerceAtMost(SwiftieTimeline.END_MS)
                 last = now
             }
         }

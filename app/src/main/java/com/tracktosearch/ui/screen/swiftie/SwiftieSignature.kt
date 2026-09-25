@@ -41,8 +41,13 @@ import kotlin.math.sin
  * 写得和背景那台打字机一样快（它 86ms 打一个字符、这里 93ms 写一个字符，两个家族长的
  * 名字不会一处像快进、一处像慢放），现在笔是 60ms 一个字符、打字机还是 86ms。
  * 要恢复对齐就得同时改 `TTPD_PREROLL_MS`（打字机那两行的总时长），那是另一件事。
+ *
+ * 2026-09-25 再提速 20%（4400 ÷ 1.2 = 3667，笔速是原来的 1.2 倍）：省下的 733ms 由弹性段
+ * [SwiftieTimeline.FINAL_HOLD_MS] 吸收。同一轮里打字机那两行被**放慢**了（`TTPD_TYPE_MS`
+ * 3200 → 4100，一个字符单位约 97ms → 124ms，共 33 个单位），两边的手速差进一步拉开 ——
+ * 要恢复对齐是另一件事，得同时动 `TTPD_TYPE_MS`。
  */
-const val SIGNATURE_WRITE_MS: Long = 4_400L
+const val SIGNATURE_WRITE_MS: Long = 3_667L
 
 /**
  * 抬笔停顿合计占用，按 [SwiftieSignaturePath.PAUSE_WEIGHT] 分给 11 个间隙。

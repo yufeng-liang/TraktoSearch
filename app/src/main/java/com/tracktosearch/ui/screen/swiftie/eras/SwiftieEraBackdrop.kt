@@ -5060,8 +5060,9 @@ private fun DrawScope.drawMidnightClock(
  *
  * ## 卡片就是这台机器吐上来的那张纸
  *
- * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 3200ms 里屏幕上没有卡片：机器把专辑名
- * 那两行**一个字一个字**打在露头的那截纸上（见 [drawTypewriterStub]），然后纸开始往上走
+ * TTPD 段开头 `SwiftieTimeline.TTPD_PREROLL_MS` = 4700ms 里屏幕上没有卡片：机器先用
+ * `TTPD_TYPE_MS` 把专辑名那两行**一个字一个字**打在露头的那截纸上（见 [drawTypewriterStub]），
+ * 停 `TTPD_DONE_HOLD_MS` 让那页字读完，然后纸才往上走
  * —— 那张纸就是曲目卡片（揭示由 `SwiftieEraCard` 的 `feedProgress` 做，下缘钉死在压纸杆
  * 上、上缘上移）。真机正是这个方向：印字点在压纸辊上不动、纸往上卷，越早打的行越靠上
  * —— 第 1 首在纸的最顶上，歌名从上到下读下去就是打字的顺序。
@@ -5124,7 +5125,9 @@ private fun DrawScope.drawTypewriterDesk(
  *
  * [eraMs] 为负 = 待机（换张淡变期，本段还没开始）：两行字已经打完，灯下是一页静纸，
  * 不敲也不抖。从前摇到 31 行打完，机器一直在打，打的就是屏幕上正在逐行点亮的那 31 首 ——
- * 节拍按 [TTPD_PREROLL_MS] 里的字符数均分，于是**前摇正好打完两行**，不多不少。
+ * 节拍按 [SwiftieTimeline.TTPD_TYPE_MS] 里的字符数均分，于是**敲字那一拍正好打完两行**，
+ * 不多不少；打完之后到前摇结束还剩 [SwiftieTimeline.TTPD_DONE_HOLD_MS]，那一段字锤停着、
+ * 机身不抖，纸才从滚筒出来。
  */
 private fun DrawScope.drawTypewriter(
     image: ImageBitmap,
@@ -5153,10 +5156,13 @@ private fun DrawScope.drawTypewriter(
     val rollerL = machineL + TTPD_ROLLER_L * scale
     val rollerR = machineL + TTPD_ROLLER_R * scale
 
-    // ── 节拍：一个字符一拍 ──
+    // ── 节拍：一个字符一拍，敲满 [SwiftieTimeline.TTPD_TYPE_MS] 就收手 ──
+    // 钳在 units 是因为前摇比敲字长出一段 [SwiftieTimeline.TTPD_DONE_HOLD_MS]：那一段
+    // eraMs 还在往前走，字不能越打越多，光标得停在第二行末尾等纸
     val idle = eraMs < 0L
     val units = stubUnits(stubLines)
-    val typedUnits = if (idle) units else (eraMs / (SwiftieTimeline.TTPD_PREROLL_MS / units))
+    val typedUnits = if (idle) units
+        else (eraMs / (SwiftieTimeline.TTPD_TYPE_MS / units)).coerceAtMost(units)
     val mutter = stubCursor(typedUnits, stubLines)
     val line = mutter.line
     val chars = mutter.chars
@@ -5360,10 +5366,11 @@ private fun stubCursor(typedUnits: Float, lines: List<TextLayoutResult>): StubCu
 }
 
 /**
- * 一整轮前摇要打多少个「字符单位」。行与行之间那两个字符的空当是回车。
+ * 一整轮敲字要打多少个「字符单位」。行与行之间那两个字符的空当是回车。
  *
- * 节拍由它均分 [SwiftieTimeline.TTPD_PREROLL_MS]：字符多的名字打得快一点，
- * 但**总是在前摇结束的那一刻正好打完**，纸紧接着出来。
+ * 节拍由它均分 [SwiftieTimeline.TTPD_TYPE_MS]：字符多的名字打得快一点，
+ * 但总是在**敲字那一拍结束**的那一刻正好打完，之后停 [SwiftieTimeline.TTPD_DONE_HOLD_MS]
+ * 再出纸。
  */
 private fun stubUnits(lines: List<TextLayoutResult>): Float {
     if (lines.isEmpty()) return 1f

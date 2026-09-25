@@ -109,8 +109,9 @@ class SwiftieHapticScoreTest {
     fun landingFollowsEveryCardThatHasAPreroll() {
         assertThat(SwiftieTimeline.BACKDROP_SOLO_INDICES).containsExactly(1, 2, 4).inOrder()
         assertThat(SwiftieTimeline.BACKDROP_SOLO_MS).isEqualTo(600L)
-        // 三张的账本总长一毫秒不动：独走的时间从自己的完整停留里扣
-        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(106_317L)
+        // 三张的账本总长一毫秒不动：独走的时间从自己的完整停留里扣。
+        // 这个值会动的唯一合法来源是 TTPD 那 4700ms 独奏前摇（2026-09-25：3200 → 4700）
+        assertThat(SwiftieTimeline.ERAS_CARDS_MS).isEqualTo(107_817L)
         (SwiftieTimeline.BACKDROP_SOLO_INDICES + SwiftieTimeline.TTPD_INDEX).forEach { index ->
             assertThat(score.cues.filter {
                 it.kind == SwiftieHapticCueKind.CARD_LAND &&
@@ -125,7 +126,7 @@ class SwiftieHapticScoreTest {
         val finalTrack = SwiftieTimeline.ERA_TRACK_COUNTS[index]
         val cue = score.of(SwiftieHapticCueKind.TRACKLIST_DONE).single()
         // TTPD 的时间窗是 130 × 31 + 3000；从卡内 400ms 的逐行起点算起，
-        // 最后一记落在 400 + 7030ms，再往后是它自己那 3200ms 前摇
+        // 最后一记落在 400 + 7030ms，再往后是它自己那 4700ms 前摇
         assertThat(SwiftieTimeline.TTPD_TRACK_REVEAL_MS).isEqualTo(7_030L)
         assertThat(trackRowRevealAtMs(index, finalTrack, lowRam = false))
             .isEqualTo(400L + SwiftieTimeline.TTPD_TRACK_REVEAL_MS)
