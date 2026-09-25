@@ -980,7 +980,11 @@ function render() {
                 else renderCrashLogs(main, renderToken);
                 break;
             case 'audit': renderAudit(main, renderToken); break;
-            case 'feedback': renderFeedback(main, renderToken); break;
+            case 'feedback':
+                // 支持 #/feedback/{id} 直达详情：邮件提醒里的深链依赖它
+                if (state.params.id) showFeedbackDetail(state.params.id, main, renderToken);
+                else renderFeedback(main, renderToken);
+                break;
             case 'ai-health': renderAiHealth(main, renderToken); break;
             default: renderDashboard(main, renderToken);
         }

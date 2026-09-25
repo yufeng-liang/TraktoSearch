@@ -35,7 +35,10 @@ test('后台表单和仪表盘关键错误不会静默失败', () => {
     assert.match(appSource, /showFormError\(form, '请输入昵称。'/);
     assert.match(appSource, /bindSubmitButton\(form, submitBtn\)/);
     assert.match(appSource, /s\.totalFriends/);
-    assert.match(appSource, /Promise\.allSettled\(\[API\.getStats\(\), API\.getAuditLogs\(\{ limit: 50, offset: 0 \}\)\]\)/);
+    // 仪表盘已扩到五路独立降级，钉住解构形状与两个原始调用
+    assert.match(appSource, /const \[statsRes, auditRes, aiRes, crashRes, feedbackRes\] = await Promise\.allSettled\(\[/);
+    assert.match(appSource, /API\.getStats\(\),/);
+    assert.match(appSource, /API\.getAuditLogs\(\{ limit: 50, offset: 0 \}\),/);
     assert.match(appSource, /auditRetry/);
 });
 
@@ -289,7 +292,7 @@ test('invite copy falls back when Clipboard API is unavailable', () => {
 });
 
 test('dashboard retry preserves render context for partial failures', () => {
-    assert.match(appSource, /dashboardErrorCard\('失败记录加载失败', auditResult\.reason, container, renderToken\)/);
+    assert.match(appSource, /dashboardErrorCard\('失败记录加载失败', auditRes\.reason, container, renderToken\)/);
 });
 
 test('friend detail uses the targeted aggregate endpoint', () => {
@@ -333,4 +336,32 @@ test('admin visual system favors stable density over glass and motion cost', () 
     assert.match(stylesSource, /\.ambient-blob\s*\{[\s\S]*?animation: none;/);
     assert.match(stylesSource, /backdrop-filter: blur\(16px\) saturate\(120%\)/);
     assert.match(stylesSource, /\.glass::before,\s*\.stat-card::after,\s*\.card::after/);
+});
+
+test('feedback detail is reachable by hash deep link from the notification email', () => {
+    // 邮件里的深链是 admin/#/feedback/{id}，必须真能进详情页；
+    // 此前 render() 的 feedback 分支忽略 params.id，链接只会落到列表页。
+    assert.match(
+        appSource,
+        /case 'feedback':[\s\S]*?if \(state\.params\.id\) showFeedbackDetail\(state\.params\.id, main, renderToken\);[\s\S]*?else renderFeedback\(main, renderToken\);/,
+    );
+
+    // 真执行 parseHash，证明 id 确实落进 state.params（而不是只匹配源码文本）
+    const fnSource = appSource.match(/function parseHash\(\) \{[\s\S]*?\n\}/);
+    assert.ok(fnSource, 'parseHash should exist');
+    const run = hash => {
+        const state = {};
+        const window = { location: { hash } };
+        new Function('window', 'state', `${fnSource[0]}\nparseHash();`)(window, state);
+        return state;
+    };
+
+    const deepLink = run('#/feedback/550e8400-e29b-41d4-a716-446655440000');
+    assert.equal(deepLink.route, 'feedback');
+    assert.equal(deepLink.params.id, '550e8400-e29b-41d4-a716-446655440000');
+
+    // 负控制：列表页没有 id，不能被当成详情
+    const listLink = run('#/feedback');
+    assert.equal(listLink.route, 'feedback');
+    assert.deepEqual(listLink.params, {});
 });

@@ -143,10 +143,12 @@ test('POST recentActions 超长返回 413', async () => {
 
 // ===== GET list =====
 test('GET 列表分页返回 entries/total/hasMore/stats', async () => {
+    // 时间戳相对当前时刻：写死绝对日期会在 7 天窗口滑走后变成时间炸弹
+    const daysAgo = days => new Date(Date.now() - days * 86400000).toISOString();
     const kv = kvMock({
-        crash_1: entry('crash_1', { timestamp: '2026-08-27T10:00:00.000Z' }),
-        crash_2: entry('crash_2', { timestamp: '2026-08-26T10:00:00.000Z', status: 'fixed' }),
-        crash_3: entry('crash_3', { timestamp: '2026-07-01T10:00:00.000Z', device: '' }),
+        crash_1: entry('crash_1', { timestamp: daysAgo(1) }),
+        crash_2: entry('crash_2', { timestamp: daysAgo(2), status: 'fixed' }),
+        crash_3: entry('crash_3', { timestamp: daysAgo(60), device: '' }),
     });
     const response = await listGet(contextFor('/api/crash-logs?limit=2&offset=0', {}, { CRASH_LOGS: kv }));
 
