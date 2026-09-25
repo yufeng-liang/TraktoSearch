@@ -109,6 +109,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -160,6 +161,7 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
@@ -188,6 +190,7 @@ import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
 import com.tracktosearch.ui.screen.swiftie.SwiftieEggController
+import com.tracktosearch.ui.screen.swiftie.rememberReducedMotion
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.GlassBorderDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -255,7 +258,10 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
     spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel(),
     externallyControlledAiSpriteCenterVisible: Boolean? = null,
-    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
+    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {},
+    // 彩蛋揭示：把云的 LayoutCoordinates 交给 MainScreen 那份覆盖层。传引用而不是
+    // 像素，覆盖层每帧现问，云随搜索框上滑时原点跟着走。
+    onCloudCoordinatesChanged: (LayoutCoordinates) -> Unit = {}
 ) {
     val isDark = isAppDarkTheme()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -545,6 +551,33 @@ fun SearchScreen(
         }
     }
 
+    // ---- 白云的暗示抖动 ----
+    // 用 Animatable 而不是 animateFloatAsState：一轮是「抖—静默 1s—再抖」三段序列，
+    // 状态驱动的单目标动画表达不了中间那段静默。0f 表示不抖。
+    // 整块放在 isActive 之后而不是 rememberCoroutineScope 之后：Kotlin 局部 val 不能
+    // 前向引用，而这里的 key 要读更晚声明的 isActive 与更早已声明的 onboardingCompleted。
+    val cloudNudge = remember { Animatable(0f) }
+    val isCurrentTab = LocalIsCurrentTab.current
+    val reducedMotion = rememberReducedMotion()
+    LaunchedEffect(isActive, isCurrentTab, onboardingCompleted) {
+        // 云被 AnimatedVisibility 收掉时不抖：抖一个看不见的东西等于白烧配额
+        if (isActive || !isCurrentTab || !onboardingCompleted) return@LaunchedEffect
+        // 减少动效：整轮跳过，且不占预算也不占进程闸门 —— 用户根本没看到
+        if (reducedMotion) return@LaunchedEffect
+        if (!cloudThemeManager.beginCloudNudgeRound()) return@LaunchedEffect
+        if (!cloudThemeManager.requestCloudNudgeEligible()) return@LaunchedEffect
+        delay(SwiftieEggController.NUDGE_DWELL_MS)
+        // 静默期里用户可能已经把搜索框激活了，抖之前再确认一次
+        if (!isActive) {
+            cloudNudge.snapTo(0f)
+            cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
+            delay(SwiftieEggController.NUDGE_GAP_MS)
+            cloudNudge.snapTo(0f)
+            cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
+            cloudThemeManager.completeCloudNudgeRound()
+        }
+    }
+
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
         interruptAiSprite(AiSpriteInterruptReason.FOCUS)
@@ -634,6 +667,8 @@ fun SearchScreen(
             } else {
                 null
             },
+            nudgeDegrees = { cloudNudge.value },
+            onGloballyPositioned = onCloudCoordinatesChanged,
             modifier = Modifier
                 .size(cloudIconSize)
                 // release 关掉 AI 后描述为 null，云朵不再挂「精灵入口」这条无障碍提示
@@ -2041,6 +2076,9 @@ private fun CloudIconWithAnimation(
     cloudThemeManager: CloudThemeManager,
     isActive: Boolean,
     onboardingCompleted: Boolean,
+    // 只在绘制阶段读，所以是 () -> Float：每帧只失效那一个 layer，不重组整朵云
+    nudgeDegrees: () -> Float = { 0f },
+    onGloballyPositioned: (LayoutCoordinates) -> Unit = {},
     // 可空：release 关掉 AI 后没有精灵中心可开，云朵只剩短按彩蛋一条路
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -2051,6 +2089,13 @@ private fun CloudIconWithAnimation(
         enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
         exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200)),
         modifier = modifier
+            // 旋转与坐标上报都挂在 AnimatedVisibility 这一个节点上。挂外层而不是
+            // 分头挂进两个分支，是为了让 Lottie 与静态 PNG 两条渲染路径一视同仁：
+            // 云走不走 Lottie 取决于用户授没授定位权限，暗示不该为此分叉。
+            .graphicsLayer {
+                rotationZ = SwiftieEggController.cloudNudgeDegrees(nudgeDegrees())
+            }
+            .onGloballyPositioned(onGloballyPositioned)
     ) {
         if (hasPermission) {
             CloudEasterEgg(
