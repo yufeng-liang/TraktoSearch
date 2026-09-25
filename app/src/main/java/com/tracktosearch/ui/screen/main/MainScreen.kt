@@ -78,6 +78,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -90,6 +91,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
@@ -235,6 +237,9 @@ fun MainScreen(
     var traktSearchType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
     var showTraktSearch by rememberSaveable { mutableStateOf(false) }
     var aiSpriteCenterVisible by remember { mutableStateOf(false) }
+    // 彩蛋揭示的原点。刻意留在组合里而不是 CloudThemeManager：那是个 @Singleton，
+    // 存 LayoutCoordinates 等于把已卸载界面的引用挂在进程寿命的对象上。
+    var cloudCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val pagerState = rememberPagerState(initialPage = initialTab) { 4 }
     val aiSpriteCenterVisibleOnCurrentPage = pagerState.currentPage == 0 && aiSpriteCenterVisible
     val scope = rememberCoroutineScope()
@@ -265,6 +270,9 @@ fun MainScreen(
     }
     val swiftieEggVisible by cloudThemeManager.swiftieEggVisible.collectAsState()
     val swiftieUnlocked by cloudThemeManager.swiftieUnlocked.collectAsState()
+    // 只决定「要不要用揭示」，原点另说：见 cloudCoordinates 的注释。
+    val swiftieEggOpenedFromCloud by cloudThemeManager.swiftieEggOpenedFromCloud
+        .collectAsStateWithLifecycle()
     var showOnboarding by remember { mutableStateOf(false) }
     // Tab 位置的普通暂存（非 state）：布局回调每次都覆盖写入不触发重组。
     // 引导打开时才一次性读进 tabRects。历史上无条件写 tabRects state，
@@ -686,7 +694,8 @@ fun MainScreen(
                                 externallyControlledAiSpriteCenterVisible = aiSpriteCenterVisibleOnCurrentPage,
                                 onAiSpriteCenterVisibilityChanged = { visible ->
                                     aiSpriteCenterVisible = visible
-                                }
+                                },
+                                onCloudCoordinatesChanged = { cloudCoordinates = it }
                             )
                         }
                     }
@@ -1044,6 +1053,8 @@ fun MainScreen(
                 onDismiss = { solved -> cloudThemeManager.onSwiftieEggDismissed(solved) },
                 onCommitUnlock = { cloudThemeManager.commitSwiftieUnlock() },
                 replay = swiftieUnlocked,
+                cloudCoordinates = cloudCoordinates,
+                openedFromCloud = swiftieEggOpenedFromCloud,
                 modifier = Modifier.zIndex(5f)
             )
 

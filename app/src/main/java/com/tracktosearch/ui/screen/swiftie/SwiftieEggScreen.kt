@@ -8,6 +8,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -51,6 +52,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -165,6 +169,10 @@ private const val FINALE_HANDOFF_MS = 500f
  * @param onDismiss solved = true 表示答对通关；false 表示用户主动关闭（不消耗解题机会）
  * @param onCommitUnlock 主题接管回调，由内容体在扩散铺满全屏那一帧调用
  * @param replay 已解锁后重看纪念页：「跳过」立即可用，不再等 3s 淡入（Spec §3.3）
+ * @param cloudCoordinates 云在 pager 里的坐标，由调用方从搜索页收上来。配合
+ *   [openedFromCloud] 决定要不要以云心做揭示；单独给也没意义
+ * @param openedFromCloud 这次题面是不是点云开的。关键词、关于页、预览包都是 false，
+ *   它们继续走原来的淡入
  * @param previewStartMs 仅 `eggpreview` 变体用：非 null 就跳过题面直接进序列，
  *   并把时钟拨到这一刻。截图迭代要能直接看第 9 张卡片或雪景球的第 4 拍，
  *   而不是每次从头等 60 秒
@@ -177,18 +185,77 @@ fun SwiftieEggScreen(
     onDismiss: (solved: Boolean) -> Unit,
     onCommitUnlock: () -> Unit,
     replay: Boolean = false,
+    // 云在 pager 里的坐标。null 表示这次打开与云无关（关键词、关于页、预览包）
+    cloudCoordinates: LayoutCoordinates? = null,
+    openedFromCloud: Boolean = false,
     previewStartMs: Long? = null,
     previewPaused: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val reducedMotion = rememberReducedMotion()
+    val lowRam = rememberIsLowRamDevice()
+    val eggRootCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val revealProgress = remember { Animatable(0f) }
+    // 来源是云、拿得到坐标、没开减少动效 —— 三条齐了才揭示。判据本身是纯函数，
+    // 由 SwiftieEggControllerTest 覆盖，这里只负责把三个现成的量喂进去。
+    // 低版本照样揭示，只是软边换成硬裁（在 swiftieCloudReveal 里按 SDK_INT 分岔）；
+    // 低端机也走硬边，省掉那一次全屏离屏合成，形状与时长都不变。
+    val revealing = SwiftieEggController.shouldRevealFromCloud(
+        openedFromCloud = openedFromCloud,
+        hasCloudCoordinates = cloudCoordinates != null,
+        reducedMotion = reducedMotion
+    )
+    LaunchedEffect(visible, revealing) {
+        if (!visible) {
+            // 关闭时**无条件**回到 0f，不要按 revealing 分叉：`visible` 与
+            // `swiftieEggOpenedFromCloud` 是同帧到达的两个 StateFlow，若上一次打开是关键词入口
+            // （revealing=false）把这里留在 1f，下一次从云上点开时遮罩已经 enabled、
+            // 而 effect 的 snapTo(0f) 要到下一帧才跑 —— 起手就是一帧「已经铺满」。
+            // 非揭示路径读不到这个值（`enabled=false` 时遮罩整个 short-circuit），置 0 无代价。
+            revealProgress.snapTo(0f)
+            return@LaunchedEffect
+        }
+        if (!revealing) {
+            revealProgress.snapTo(1f)      // 淡入路径完全不受遮罩影响
+            return@LaunchedEffect
+        }
+        revealProgress.snapTo(0f)
+        revealProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                SwiftieEggController.REVEAL_MS.toInt(),
+                easing = FastOutSlowInEasing
+            )
+        )
+    }
+
     BackHandler(enabled = visible) { onDismiss(false) }
     LockPortraitWhile(visible)
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(200)),
+        // 有遮罩时把淡入关掉：两者叠着会让揭示前 200ms 既在半透明又在被裁，
+        // 边缘发灰糊成一片。谁也不服谁的时候让遮罩说话。
+        enter = if (revealing) EnterTransition.None else fadeIn(animationSpec = tween(200)),
         exit = fadeOut(animationSpec = tween(200)),
-        modifier = modifier
+        modifier = modifier.swiftieCloudReveal(
+            originInLayer = {
+                val cloud = cloudCoordinates
+                val root = eggRootCoordinates.value
+                if (cloud != null && root != null && cloud.isAttached && root.isAttached) {
+                    // 两端各自取 root 矩形再相减。不能用 localBoundingBoxOf /
+                    // localPositionOf：那两个 API 的前提是参数节点为接收者的后代，
+                    // 而云在 pager 的页里、覆盖层是 pager 的兄弟，两者是堂兄弟关系。
+                    cloud.boundsInRoot().center - root.boundsInRoot().topLeft
+                } else {
+                    Offset.Unspecified     // 交给遮罩退回画面中心
+                }
+            },
+            progress = { revealProgress.value },
+            enabled = revealing,
+            featherDp = CloudRevealFeatherDefault,
+            useShader = !lowRam
+        )
     ) {
         // 内容随 AnimatedVisibility 一起挂载/销毁，所以每次打开都是新的一道题
         SwiftieEggContent(
@@ -196,7 +263,8 @@ fun SwiftieEggScreen(
             onCommitUnlock = onCommitUnlock,
             replay = replay,
             previewStartMs = previewStartMs,
-            previewPaused = previewPaused
+            previewPaused = previewPaused,
+            onRootCoordinatesChanged = { eggRootCoordinates.value = it }
         )
     }
 }
@@ -389,7 +457,8 @@ private fun SwiftieEggContent(
     onCommitUnlock: () -> Unit,
     replay: Boolean,
     previewStartMs: Long?,
-    previewPaused: Boolean
+    previewPaused: Boolean,
+    onRootCoordinatesChanged: (LayoutCoordinates) -> Unit = {}
 ) {
     // 只为了纪念页手链上的昵称珠。在彩蛋内部读取，调用方不必为了纪念页扩散用户状态。
     val nicknameViewModel: SwiftieNicknameViewModel = hiltViewModel()
@@ -830,6 +899,10 @@ private fun SwiftieEggContent(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { rootSize = Size(it.width.toFloat(), it.height.toFloat()) }
+            // 揭示原点用的是这一层的 root 矩形：外层 AnimatedVisibility 带着调用方给的
+            // zIndex，它的 root 原点与真正铺满的内容根之间可能差着 padding，所以坐标
+            // 从这里取而不是挂到外层那一圈上
+            .onGloballyPositioned(onRootCoordinatesChanged)
             // T123000–125998：整层淡出，露出已经在运动的星云背景（Spec §5）。
             // 必须插在 background 之前 —— 写在之后只淡出子内容、底色仍然挡着星云
             .graphicsLayer {
