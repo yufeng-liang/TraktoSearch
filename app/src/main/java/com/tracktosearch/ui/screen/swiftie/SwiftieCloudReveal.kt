@@ -35,8 +35,10 @@ import kotlin.math.sin
  * 形状系数在这里是**第三份抄本**（前两份是 `SwiftieEggController` 的三角形式与倍角
  * 多项式形式）。着色器字符串里写不进 Kotlin 常量，所以 `0.34`/`0.22`/`0.14`、
  * `cosφ`/`sinφ` 四个数与外沿带占比 `0.35` 都是字面量：改常量表必须同步改这里。
- * 漏改不会让算术测变红，只有 `SwiftieCloudRevealTest` 的字符串断言会 ——
- * 那条测的期望子串一半是从 `SwiftieEggController` 的常量拼出来的，就是为这个而留。
+ * 漏改不会让算术测变红，只有 `SwiftieCloudRevealTest` 的字符串断言会 —— 而它只有
+ * `0.35` 那一条是从 `SwiftieEggController.REVEAL_OUTER_BAND_RATIO` 抠出来对比的，
+ * 其余全是字面量对字面量。这份抄本已经出过一次事故（见 `revealLobe` 里的幂次注释），
+ * 所以那条测钉的是**整行表达式**而不是系数子串：只比数值抓不到变量接错。
  */
 internal const val REVEAL_AGSL = """
 uniform shader content;
@@ -47,14 +49,21 @@ uniform float uFeather;
 
 // c = dx/r 即 cosθ、s = dy/r 即 sinθ，倍角全是多项式；
 // sin(kθ+φ) = cosφ·sin(kθ) + sinφ·cos(kθ)，两个 φ 的 cos/sin 烤成常量。
+// 幂次（s2/s3）与倍角值（sin3/cos3）必须是两组不同的变量：sin5θ = 16s⁵-20s³+5s
+// 要的是 s³，拿 sin3θ = 3s-4s³ 去顶会让 lobe 值域从 [-0.43,0.69] 炸到 [-4.80,5.03]，
+// 起手帧半径系数直接变负 —— 遮罩自交成一圈带尖内凹的海星。这份抄本出过这个事故。
 float revealLobe(float c, float s) {
+    float s2 = s * s;
+    float s3 = s2 * s;
+    float c2 = c * c;
+    float c3 = c2 * c;
     float l2 = 2.0 * c * s;
-    float s3 = 3.0 * s - 4.0 * s * s * s;
-    float c3 = 4.0 * c * c * c - 3.0 * c;
-    float l3 = -0.32329 * s3 + 0.94630 * c3;
-    float s5 = 16.0 * s * s * s * s * s - 20.0 * s3 + 5.0 * s;
-    float c5 = 16.0 * c * c * c * c * c - 20.0 * c3 + 5.0 * c;
-    float l5 = 0.764842 * s5 + 0.644218 * c5;
+    float sin3 = 3.0 * s - 4.0 * s3;
+    float cos3 = 4.0 * c3 - 3.0 * c;
+    float l3 = -0.32329 * sin3 + 0.94630 * cos3;
+    float sin5 = 16.0 * s3 * s2 - 20.0 * s3 + 5.0 * s;
+    float cos5 = 16.0 * c3 * c2 - 20.0 * c3 + 5.0 * c;
+    float l5 = 0.764842 * sin5 + 0.644218 * cos5;
     return 0.34 * l2 + 0.22 * l3 + 0.14 * l5;
 }
 
@@ -62,7 +71,7 @@ half4 main(float2 coord) {
     float2 d = coord - uCenter;
     float r = length(d);
     // 起点主半径不足一像素：整层透明。铺满了就不会走到这里（Kotlin 侧已摘掉 effect）
-    if (uRadius < 0.5) { return float4(0.0, 0.0, 0.0, 0.0); }
+    if (uRadius < 0.5) { return half4(0.0, 0.0, 0.0, 0.0); }
     float edge = uRadius;
     if (uWiggle > 0.0 && r > 0.5) {
         edge = uRadius * (1.0 + uWiggle * revealLobe(d.x / r, d.y / r));
@@ -74,9 +83,12 @@ half4 main(float2 coord) {
     float span = max(hi - lo, 0.0001);
     float t = min(max((r - lo) / span, 0.0), 1.0);
     float a = 1.0 - t * t * (3.0 - 2.0 * t);
-    // 层内是预乘 alpha，乘 a 等价于 DstIn 一个白色 alpha=a 的遮罩。
-    // 写成 float4(rgb, a*a) 会把已预乘的 rgb 再除回去又乘一次，边缘出一圈暗边。
-    return content.eval(coord) * a;
+    // 一律 float 运算、最后一步才收 half：content.eval() 返回 half，half 与 float
+    // 混算各家厂商编译器宽严不一（见 SwiftieSnowGlobe 的同款处理）。
+    // 层内是预乘 alpha，整个颜色乘 a 等价于 DstIn 一个白色 alpha=a 的遮罩。
+    // 写成 half4(rgb, a*a) 会把已预乘的 rgb 再除回去又乘一次，边缘出一圈暗边。
+    float4 src = float4(content.eval(coord));
+    return half4(src * a);
 }
 """
 
