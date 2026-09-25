@@ -125,5 +125,18 @@ class SwiftieEggStorageTest {
 
         assertThat(storage.cloudClickCount.value).isEqualTo(2)
         assertThat(storage.cloudNudgeShown.value).isEqualTo(0)
+
+        // 必须 reopen 再断一次，否则这条测只钉住了「内存里两个 StateFlow 各是各的」，
+        // 钉不住「磁盘键各是各的」。若把 KEY_CLOUD_NUDGE_SHOWN 误写成
+        // intPreferencesKey("cloud_click_count")，上面两行照样全绿：
+        // 两个 StateFlow 是独立字段，而 incrementCloudNudgeShown 单独跑在共享键上
+        // 算出来的也正好是 1、2 —— 全计划只有这条测同时动两个计数器，
+        // 所以它是唯一能抓住键名碰撞的地方。
+        storage.incrementCloudNudgeShown()
+
+        val reopened = SwiftieEggStorage(context)
+        reopened.awaitReady()
+        assertThat(reopened.cloudClickCount.value).isEqualTo(2)
+        assertThat(reopened.cloudNudgeShown.value).isEqualTo(1)
     }
 }
