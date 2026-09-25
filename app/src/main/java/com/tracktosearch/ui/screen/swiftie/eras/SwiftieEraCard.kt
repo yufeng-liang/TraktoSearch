@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import com.tracktosearch.ui.screen.swiftie.rememberIsLowRamDevice
+import com.tracktosearch.ui.screen.swiftie.rememberShowgirlGlitterBrush
 
 /** 卡片自轴上长出。 */
 const val CARD_GROW_MS: Long = 400L
@@ -407,26 +408,48 @@ fun SwiftieEraCard(
                 // 字号用 toSp() 除掉 fontScale：CARD_CHROME_HEIGHT 是 dp 预算，
                 // 标题跟着系统字号长就会把曲目列挤出卡片
                 val titleSize = titleFontSizeFor(era.name)
-                val titleStyle = TextStyle(
-                    fontFamily = titleFont,
-                    fontSize = with(density) { titleSize.toSp() },
-                    color = textColors.body
-                )
+                val titleSp = with(density) { titleSize.toSp() }
+                // 闪粉只铺在上面那一层。底下那圈实色描边一手管加粗、一手把字缘钉在
+                // textColors.body 上 —— 标题读不读得清不该去赌闪粉颗粒的疏密分布
+                val titleBrush = if (era.titleGlitter) rememberShowgirlGlitterBrush() else null
+                // brush 与 color 是 TextStyle 两个**互斥**的构造重载，不能同时传（传了就
+                // 两个候选都不匹配，编译直接失败）：有贴板时颜色归贴板，没有才走实色
+                val titleStyle = if (titleBrush == null) {
+                    TextStyle(
+                        fontFamily = titleFont,
+                        fontSize = titleSp,
+                        color = textColors.body
+                    )
+                } else {
+                    TextStyle(
+                        brush = titleBrush,
+                        fontFamily = titleFont,
+                        fontSize = titleSp
+                    )
+                }
                 if (era.titleStrokeEm > 0f) {
                     // 合成加粗：同一段文字画两遍，底下那一层只描边、上面那一层实心。
                     // 描边加在**细笔画上的比例比粗笔画大**，所以出来是「更实」而不是整体放大
                     // —— 这是没有粗体字重时唯一不动字形轮廓的加法（12 套字库多数只有 Regular）。
                     // 两层同字号、同换行规则、同宽约束，量出来的行盒一致，Box 只是把它们叠起来
+                    //
+                    // 描边那一层另建一个实色 style，不从 titleStyle 上 copy：这个版本的
+                    // copy() 没有 brush 参数，而 copy 过来的 brush 会让垫在下面的也变成闪粉，
+                    // 字缘就没有实色撑着
+                    val boldStyle = TextStyle(
+                        fontFamily = titleFont,
+                        fontSize = titleSp,
+                        color = textColors.body,
+                        drawStyle = Stroke(
+                            width = with(density) { (titleSize * era.titleStrokeEm).toPx() },
+                            join = StrokeJoin.Round,
+                            cap = StrokeCap.Round
+                        )
+                    )
                     Box(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = era.name,
-                            style = titleStyle.copy(
-                                drawStyle = Stroke(
-                                    width = with(density) { (titleSize * era.titleStrokeEm).toPx() },
-                                    join = StrokeJoin.Round,
-                                    cap = StrokeCap.Round
-                                )
-                            ),
+                            style = boldStyle,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth()

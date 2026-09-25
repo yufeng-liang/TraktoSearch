@@ -139,6 +139,28 @@ internal fun rememberGlitterBrush(poster: Size): Brush {
 }
 
 /**
+ * Showgirl 标题的闪粉：官方封面上那圈橙红闪粉，按**原分辨率**挖出来的贴板
+ * （`scripts/build-swiftie-showgirl-glitter.py`，源图在 `docs/previews/swiftie-showgirl/`）。
+ *
+ * 1:1 贴、Mirror 平铺，不按字形缩放：贴板是 320px 的真颗粒，把整板压进 80px 高的字形
+ * 会让 1–3px 的亮粒糊成平粉（[rememberGlitterPatchBrush] 记着同一个坑）。平铺也不缩放
+ * 就意味着字形越大取到的颗粒越多，正是闪粉该有的行为。
+ *
+ * 贴板本身已经是「笔画内部最实心的一块」（脚本按局部方差挑的 —— 皮肤按颜色能骗过橙色
+ * 掩膜，按颗粒度骗不过），所以这里不需要再补背景。
+ */
+@Composable
+internal fun rememberShowgirlGlitterBrush(): Brush {
+    val plate = ImageBitmap.imageResource(R.drawable.swiftie_showgirl_glitter)
+    return remember(plate) {
+        object : ShaderBrush() {
+            override fun createShader(size: Size): Shader =
+                ImageShader(plate, TileMode.Mirror, TileMode.Mirror)
+        }
+    }
+}
+
+/**
  * 原尺寸取贴板上一小块的画刷：不做任何缩放，只把采样窗口平移到 (offsetX, offsetY)。
  *
  * 给水晶球底座的 `7·3` 用 —— 出题页那条算式走 [rememberGlitterBrush] 是因为字形位置

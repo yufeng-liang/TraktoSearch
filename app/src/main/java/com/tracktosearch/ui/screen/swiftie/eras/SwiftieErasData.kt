@@ -146,6 +146,14 @@ data class SwiftieEra(
      */
     val titleStrokeEm: Float = 0f,
     /**
+     * 专辑名填真闪粉（[com.tracktosearch.ui.screen.swiftie.rememberShowgirlGlitterBrush]）。
+     *
+     * 只有 Showgirl 用：官方封面那十二个字母本来就是橙红闪粉贴出来的，这是全场唯一一处
+     * 「材质本身就是封面的一部分」的标题。填 true 时标题**上层走贴板、下层走
+     * [titleStrokeEm] 的实色描边**，所以字缘仍有一圈实色撑着，读不读得清不靠闪粉赌运气。
+     */
+    val titleGlitter: Boolean = false,
+    /**
      * 发行日期用哪套字库。null = 系统默认（多数时代）。
      *
      * TTPD 那一张填打字机字体：卡片的曲目列与前摇都是这台机器打的，日期是印在
@@ -567,6 +575,10 @@ object SwiftieErasData {
         textColor = Color(0xFFE8620F),
         fontResId = R.font.era_showgirl,
         motif = SwiftieEraMotif.VANITY_MIRROR,
+        // 官方封面那行字是又重又厚的闪粉贴字，`era_showgirl` 只有 Regular 一个字重，
+        // 所以描边垫一层加粗（与 TTPD 同一档），再填真闪粉贴板
+        titleStrokeEm = 0.03f,
+        titleGlitter = true,
         tracks = listOf(
             "The Fate of Ophelia",
             "Elizabeth Taylor",
