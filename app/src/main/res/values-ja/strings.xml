@@ -156,7 +156,7 @@
     <string name="login_what_is_trakt">Traktとは</string>
     <string name="login_what_is_trakt_title">Traktとは？</string>
     <string name="login_what_is_trakt_desc">Traktは海外の映画・ドラマ追跡プラットフォームで、豆瓣のマーク機能に似ています。見たい映画や見た映画を記録し、視聴進度を追跡し、パーソナライズされたおすすめを取得できます。\n\nこのアプリでTraktにログインすると：\n• ウォッチリスト/視聴済みリストの同期と管理\n• 豆瓣からTraktへマークを一括インポート\n• デバイス間で視聴記録を同期\n• 視聴統計とおすすめを表示\n\nTraktアカウントをお持ちでない場合は、下のボタンから登録できます。</string>
-    <string name="login_what_is_trakt_register">Traktアカウントを登録</string>
+    <string name="login_what_is_trakt_register">Traktを登録</string>
     <string name="login_what_is_trakt_close">閉じる</string>
 
     <!-- Douban Sync -->
