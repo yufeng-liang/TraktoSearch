@@ -1915,22 +1915,10 @@ private fun DrawScope.drawKnitAutumn(
         px = nx
         py = ny
     }
-    // 三根上翘的小枝。它们只负责让枝有分叉，叶不在这里 —— 五片大叶的位置
-    // 由 `SwiftieRedLeafFall` 那张剧本表定，这一层只画还没松手的
-    for (i in 0 until 3) {
-        val t = 0.22f + i * 0.24f
-        drawBranch(
-            x = knitBoughX(t) * w,
-            y = knitBoughY(t) * h,
-            length = h * 0.045f,
-            angleDeg = -74f + i * 16f,
-            width = w * 0.006f,
-            depth = 3,
-            bend = 0.3f - i * 0.2f,
-            color = deep,
-            alpha = alpha * SILHOUETTE_ALPHA
-        )
-    }
+    // 三根上翘的子枝。画法与「叶能钉在子枝的哪一点」同源，整段搬进
+    // `SwiftieRedLeafFall.drawRedTwigs` —— 原来这里是只落笔不报坐标的递归枝，
+    // 叶问不到子枝上的位置，五片就只能全挂在主枝下缘。
+    drawRedTwigs(color = deep, alpha = alpha * SILHOUETTE_ALPHA)
 
     drawRedAttachedMaples(maple, eraMs, alpha)
 }
@@ -4469,49 +4457,6 @@ private val FOLK_NEAR_PINES = floatArrayOf(
 
 // ─────────────────────── 9 · evermore ───────────────────────
 
-/**
- * 一段递归分叉的枯枝。
- *
- * [depth] 每降一级，长度 ×0.72、线宽 ×0.66、左右各偏 [SPREAD_DEG] 度。三级以上才读得出
- * 「枝」；两级只是一个 Y。分叉角度用 [bend] 做非对称扰动 —— 完全对称的二叉树是数学图形，
- * 不是树。
- */
-private fun DrawScope.drawBranch(
-    x: Float,
-    y: Float,
-    length: Float,
-    angleDeg: Float,
-    width: Float,
-    depth: Int,
-    bend: Float,
-    color: Color,
-    alpha: Float
-) {
-    if (depth <= 0 || length < 2f) return
-    val rad = angleDeg / 180f * PI.toFloat()
-    val ex = x + cos(rad) * length
-    val ey = y + sin(rad) * length
-    drawLine(
-        color = color,
-        start = Offset(x, y),
-        end = Offset(ex, ey),
-        strokeWidth = width.coerceAtLeast(1f),
-        alpha = alpha,
-        cap = StrokeCap.Round
-    )
-    val next = length * 0.72f
-    val nextW = width * 0.66f
-    // bend 让两侧的偏角不等，且随深度变号，长出来才不像剪纸
-    drawBranch(ex, ey, next, angleDeg - SPREAD_DEG * (1f + bend), nextW, depth - 1, -bend * 0.8f, color, alpha)
-    drawBranch(ex, ey, next, angleDeg + SPREAD_DEG * (1f - bend), nextW, depth - 1, -bend * 0.6f, color, alpha)
-    // 每隔一级多抽一根短枝：只有二叉的树太规整
-    if (depth >= 3) {
-        drawBranch(ex, ey, next * 0.6f, angleDeg + SPREAD_DEG * bend * 2.4f, nextW * 0.7f, depth - 2, bend, color, alpha)
-    }
-}
-
-private const val SPREAD_DEG = 26f
-
 /** 上缘那根主枝分几段画。段数决定粗细过渡的平滑度，14 段在 1440px 宽上看不出折角。 */
 private const val BOUGH_SEGMENTS = 14
 
@@ -4586,7 +4531,8 @@ private fun DrawScope.drawBranchLanterns(
 
     // 垂下来的柳条：六条，各自的横向漂移与摆动相位都不同。
     //
-    // 上一版这里是三丛 [drawBranch] 的递归枯枝，从主枝**朝下**长。递归枝的形状是
+    // 上一版这里是三丛递归枯枝（那棵 `drawBranch` 后来为 Red 的子枝而生，已随之下线），
+    // 从主枝**朝下**长。递归枝的形状是
     // 「根部粗、越分越细、末端散开成一把」，倒过来朝下长满上半屏之后，第七轮截图整屏
     // 读作一团**倒吊的根系**，而不是树。柳条的形状恰好相反：通身都细、一根单线不分叉、
     // 只在末梢卷出去 —— 没有分叉就不会被读成根。willow 又正是 evermore 的第一首，

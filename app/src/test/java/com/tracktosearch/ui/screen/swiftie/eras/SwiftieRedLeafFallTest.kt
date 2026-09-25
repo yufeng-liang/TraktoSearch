@@ -5,6 +5,8 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.tracktosearch.ui.screen.swiftie.SwiftieTimeline
 import org.junit.Test
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
 
 /**
@@ -100,27 +102,44 @@ class SwiftieRedLeafFallTest {
     }
 
     @Test
-    fun branchLeavesHangOnTheBoughAndClearTheCardTop() {
-        // 五片沿枝一字排开，参数必须单调且都落在枝身上（0..1），有人滑到梢头外就悬空了
-        val ts = RedBranchLeaves.map { it.boughT }
-        ts.forEach {
-            assertThat(it).isAtLeast(0f)
-            assertThat(it).isAtMost(1f)
+    fun branchLeavesSpreadOntoTheTwigsAndStayInsideTheFrame() {
+        // 需求方点名的问题：五片全挂在主枝下缘，读作一串吊饰而不是在长的枝。
+        // 所以往上伸的子枝上必须有叶，而且不能人人都朝下
+        assertThat(RedBranchLeaves.count { it.twig >= 0 }).isAtLeast(3)
+        assertThat(RedBranchLeaves.count { it.twig < 0 }).isAtLeast(1)
+        assertThat(RedBranchLeaves.count { it.rot in 120f..240f }).isAtMost(2)
+        // 横向要铺开，不能挤成一坨
+        val xs = RedBranchLeaves.map { it.anchor(REFERENCE_H_OVER_W).x }.sorted()
+        assertThat(xs.last() - xs.first()).isAtLeast(0.5f)
+        // 落枝点编号合法：主枝要 t 落在 0..1，子枝只有三根
+        RedBranchLeaves.forEach {
+            if (it.twig >= 0) assertThat(it.twig).isAtMost(2)
+            else {
+                assertThat(it.mainT).isAtLeast(0f)
+                assertThat(it.mainT).isAtMost(1f)
+            }
         }
-        assertThat(ts.zipWithNext().all { (earlier, later) -> later > earlier }).isTrue()
-        // 叶柄末端钉在枝上，叶身就从那一点朝下垂，垂到 MAPLE_SPAN × half。
-        // 折算到屏高要按**参考机**的短边/长边比（1440×3200，与 benchmark 那台同一台）：
-        // 锚点纵向是屏高分位，而 half 是 minDimension（这里就是屏宽）分位，两个单位不换算
-        // 就会把「刚好挂在卡片顶上」读成「被卡片吞掉」—— 2026-09-20 那轮就是这么翻的车
+        // 叶尖既不能顶进状态栏那一条（时钟与电量在 y≲0.035h），也不能被卡片顶边
+        // （0.20h）吞掉。单位必须换算：锚点纵向是屏高分位，而 half 是 minDimension
+        // （参考机上就是屏宽）分位 —— 不换算就会把「刚好挂在卡片顶上」读成「没事」，
+        // 2026-09-20 那轮这么翻的车；上界 0.02 也真放过一次，子枝上直立的叶尖到了 0.024h
+        // 正压在时钟上（2026-09-24 真机截图）
         RedBranchLeaves.forEach { leaf ->
-            val bottom = knitBoughY(leaf.boughT) + MAPLE_SPAN * leaf.half * REFERENCE_MIN_DIM_OVER_HEIGHT
-            assertWithMessage("t=${leaf.boughT} 那片叶下探到 $bottom").that(bottom).isAtMost(0.195f)
+            val tipY = leaf.anchor(REFERENCE_H_OVER_W).y -
+                MAPLE_SPAN * leaf.half * REFERENCE_W_OVER_H * cos(leaf.rot / 180f * PI.toFloat())
+            assertWithMessage("枝=${leaf.twig} t=${leaf.mainT} 那片叶的叶尖在 y=$tipY").that(tipY)
+                .isAtLeast(0.035f)
+            assertWithMessage("枝=${leaf.twig} t=${leaf.mainT} 那片叶的叶尖在 y=$tipY").that(tipY)
+                .isAtMost(0.195f)
         }
     }
 
     private companion object {
-        /** 参考机（1440×3200）的短边 ÷ 长边，把 minDimension 分位折算成屏高分位。 */
-        const val REFERENCE_MIN_DIM_OVER_HEIGHT = 1440f / 3200f
+        /** 参考机（1440×3200，与 benchmark 那台同一台）的屏宽 ÷ 屏高。 */
+        const val REFERENCE_W_OVER_H = 1440f / 3200f
+
+        /** 反过来：子枝出枝角是在屏幕空间里量的，取分叉点要用屏高 ÷ 屏宽。 */
+        const val REFERENCE_H_OVER_W = 3200f / 1440f
     }
 
     private fun hex(color: Color): String = "#%02X%02X%02X".format(
