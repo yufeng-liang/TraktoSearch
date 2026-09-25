@@ -83,8 +83,16 @@ object SwiftieEggController {
      */
     const val NUDGE_SHAKE_MS: Long = 360L
 
-    /** 两记之间的静默。 */
+    /** 一记与下一记之间的静默。 */
     const val NUDGE_GAP_MS: Long = 1_000L
+
+    /**
+     * 一轮抖几记。整轮时长 = 360×3 + 1000×2 ≈ 3.1s，落在「看一眼就懂」还没到「烦」的区间。
+     *
+     * 记数放在常量里而不是写死在 SearchScreen 的循环里，是为了让「配额只在整轮抖完时才 +1」
+     * 这条判据有唯一的出处：改这里就是一轮，改那里就是两处。
+     */
+    const val NUDGE_SHAKES: Int = 3
 
     /** 跨进程累计预算：抖满这么多轮之后永久不再抖。 */
     const val NUDGE_BUDGET: Int = 3

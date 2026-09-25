@@ -70,6 +70,18 @@ class CloudNudgeGateOrderingTest {
     }
 
     @Test
+    fun shakeCount_isDrivenByTheConstantNotByRepetition() {
+        val block = nudgeBlock()
+        // 有人图省事在 repeat 外面再手搓一记，`NUDGE_SHAKES` 就开始说谎，
+        // 而「整轮抖完才记账」的判据也跟着错位。只留一处 animateTo 就改不坏。
+        assertThat(Regex("animateTo\\(").findAll(block).count()).isEqualTo(1)
+        assertThat(Regex("snapTo\\(").findAll(block).count()).isEqualTo(1)
+        assertThat(Regex("NUDGE_SHAKES").findAll(block).count()).isEqualTo(1)
+        // 静默只夹在记与记之间：整段里 delay 恰好两处 —— 停留一次、记间一次
+        assertThat(Regex("delay\\(").findAll(block).count()).isEqualTo(2)
+    }
+
+    @Test
     fun splashGate_startsClosedAndOpensOnlyAfterTheStampDecides() {
         val src = source("app/src/main/java/com/tracktosearch/MainActivity.kt")
         // 起底 false 是这条闸门唯一不「看不见地抖」的写法：stampJob 要读语言、读盘、解海报

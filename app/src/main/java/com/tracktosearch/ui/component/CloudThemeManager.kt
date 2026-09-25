@@ -248,7 +248,7 @@ class CloudThemeManager @Inject constructor(
         )
     }
 
-    /** 一整轮两下抖完才记账：中途点中云说明暗示得手，不该占配额。 */
+    /** 一整轮三记抖完才记账：中途点中云说明暗示得手，不该占配额。 */
     suspend fun completeCloudNudgeRound() {
         swiftieEggStorage.incrementCloudNudgeShown()
     }

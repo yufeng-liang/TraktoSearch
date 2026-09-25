@@ -553,8 +553,8 @@ fun SearchScreen(
     }
 
     // ---- 白云的暗示抖动 ----
-    // 用 Animatable 而不是 animateFloatAsState：一轮是「抖—静默 1s—再抖」三段序列，
-    // 状态驱动的单目标动画表达不了中间那段静默。0f 表示不抖。
+    // 用 Animatable 而不是 animateFloatAsState：一轮是「抖—静默 1s—抖—静默 1s—抖」这种
+    // 交替序列，状态驱动的单目标动画表达不了中间那些静默。0f 表示不抖。
     // 整块放在 isActive 之后而不是 rememberCoroutineScope 之后：Kotlin 局部 val 不能
     // 前向引用，而这里的 key 要读更晚声明的 isActive 与更早已声明的 onboardingCompleted。
     val cloudNudge = remember { Animatable(0f) }
@@ -585,11 +585,12 @@ fun SearchScreen(
         delay(SwiftieEggController.NUDGE_DWELL_MS)
         // 静默期里用户可能已经把搜索框激活了，抖之前再确认一次
         if (!isActive) {
-            cloudNudge.snapTo(0f)
-            cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
-            delay(SwiftieEggController.NUDGE_GAP_MS)
-            cloudNudge.snapTo(0f)
-            cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
+            repeat(SwiftieEggController.NUDGE_SHAKES) { index ->
+                // 静默夹在两记之间：第一记之前没有静默（那段由 NUDGE_DWELL_MS 负责）
+                if (index > 0) delay(SwiftieEggController.NUDGE_GAP_MS)
+                cloudNudge.snapTo(0f)
+                cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
+            }
             cloudThemeManager.completeCloudNudgeRound()
         }
     }
