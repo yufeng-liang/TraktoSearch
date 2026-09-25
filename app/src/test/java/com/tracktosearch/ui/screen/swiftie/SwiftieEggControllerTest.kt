@@ -261,4 +261,46 @@ class SwiftieEggControllerTest {
         assertThat(SwiftieEggController.revealBaseRadius(1400f, 28f, -0.2f))
             .isWithin(1e-6f).of(0f)
     }
+
+    @Test
+    fun nudgeAndReveal_agreeThatFirstCloudClickOpensQuiz() {
+        // 第一下点云必须同时是「该抖」与「该出题」的。若 shouldShowCloudNudge
+        // 判该抖而 resolveCloudAction 不发题面，抖就成了指向死路的假提示。
+        assertThat(
+            SwiftieEggController.resolveCloudAction(
+                clickCountBefore = 0,
+                quizSolved = false,
+                onboardingCompleted = true,
+                hasLocationPermission = false
+            )
+        ).isEqualTo(CloudAction.SWIFTIE_EGG)
+        assertThat(SwiftieEggController.shouldShowCloudNudge(false, false, 0)).isTrue()
+    }
+
+    @Test
+    fun solvedState_stopsBothNudgeAndQuizTogether() {
+        assertThat(SwiftieEggController.shouldShowCloudNudge(true, true, 0)).isFalse()
+        assertThat(
+            SwiftieEggController.resolveCloudAction(
+                clickCountBefore = 0,
+                quizSolved = true,
+                onboardingCompleted = true,
+                hasLocationPermission = true
+            )
+        ).isEqualTo(CloudAction.RANDOM_LOTTIE)
+    }
+
+    @Test
+    fun onboardingGate_blocksBothClickAndNudge() {
+        // 引导未完成时点击被完全忽略，此时抖一个点了没反应的图标是骗人
+        assertThat(SwiftieEggController.shouldCountCloudClick(false)).isFalse()
+        assertThat(
+            SwiftieEggController.resolveCloudAction(
+                clickCountBefore = 0,
+                quizSolved = false,
+                onboardingCompleted = false,
+                hasLocationPermission = true
+            )
+        ).isEqualTo(CloudAction.IGNORED)
+    }
 }
