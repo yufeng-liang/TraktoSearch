@@ -4739,7 +4739,6 @@ internal const val MIDNIGHT_WIND_START_MS: Long = 800L
  * 2026-09-25 按需求把走针速度降到四成（1800 → 4500），让整点那一下慢下来被看见。
  * 月牙的抱枕与闭眼**不再吃这一条**：跟着放慢到 2.5 倍后读着拖沓，另立一档
  * [MIDNIGHT_MOON_WIND_MS]。末尾回吸同样**不随本值缩放**，见 [MIDNIGHT_SETTLE_MS]。
- * 末尾回吸**不随本值缩放**，见 [MIDNIGHT_SETTLE_MS]。
  */
 internal const val MIDNIGHT_WIND_MS: Float = 4_500f
 
