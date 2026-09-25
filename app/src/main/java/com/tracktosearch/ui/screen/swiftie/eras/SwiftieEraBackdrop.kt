@@ -4733,8 +4733,15 @@ internal const val MIDNIGHT_CLOCK_ANGLE_BASE_DEG: Float = 0f
 /** 卡出现后多久起转。卡片前 400ms 在长出来，眼神还在入场动画上。 */
 internal const val MIDNIGHT_WIND_START_MS: Long = 800L
 
-/** 主程时长：分针走一整圈、时针从 2 点推到 3 点。 */
-internal const val MIDNIGHT_WIND_MS: Float = 1_800f
+/**
+ * 主程时长：分针走一整圈、时针从 2 点推到 3 点。
+ *
+ * 2026-09-25 按需求把走针速度降到四成（1800 → 4500），让整点那一下慢下来被看见。
+ * 月牙的抱枕与闭眼吃同一个时间基（见 `SwiftieMidnightMoon.midnightMoonPose`），
+ * 因此跟着一起慢 —— 这是要的：两者仍在回吸那一刻同步收束。
+ * 末尾回吸**不随本值缩放**，见 [MIDNIGHT_SETTLE_MS]。
+ */
+internal const val MIDNIGHT_WIND_MS: Float = 4_500f
 
 /**
  * 落位后的回吸时长。
@@ -4742,6 +4749,9 @@ internal const val MIDNIGHT_WIND_MS: Float = 1_800f
  * 和主程分开画两段：主程是一次**单调**的走针，过冲只是末尾那一小下。
  * 揉进同一条曲线里（比如 `easeOutBack`）会让分针在最后小半圈里明显倒着走 ——
  * 钟的指针没有倒转的道理，读出来是素材卡帧。
+ *
+ * 主程放慢时这一拍**保持原速**：回吸读作真钟走到整点的那一下顿挫，是机械属性，
+ * 跟着行程一起拉长就变成软塌塌的回弹。
  */
 internal const val MIDNIGHT_SETTLE_MS: Float = 260f
 

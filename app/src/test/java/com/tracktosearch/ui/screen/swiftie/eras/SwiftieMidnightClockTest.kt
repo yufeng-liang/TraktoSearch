@@ -52,7 +52,7 @@ class SwiftieMidnightClockTest {
 
     @Test
     fun 落位之后不再动() {
-        // 卡片还要静止四秒多，这期间两根针一丝都不许漂
+        // 卡片在这之后还要静止近三秒（主程放慢到 4500ms 后余量变薄），这期间两根针一丝都不许漂
         val late = midnightHandAngles(settled + 4_000L)
 
         assertThat(late.first).isEqualTo(midnightHandAngles(settled).first)

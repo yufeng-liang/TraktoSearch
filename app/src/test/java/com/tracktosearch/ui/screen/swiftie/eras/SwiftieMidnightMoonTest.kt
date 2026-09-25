@@ -7,6 +7,14 @@ class SwiftieMidnightMoonTest {
     private val windEnd = MIDNIGHT_WIND_START_MS + MIDNIGHT_WIND_MS.toLong()
     private val settled = windEnd + MIDNIGHT_SETTLE_MS.toLong()
 
+    /**
+     * 主程内的**比例**时刻。
+     *
+     * 阶段边界都写成主程的分数（抱枕 0.15..0.64、抱起 0.48..1.0、闭眼 0.62..0.92），
+     * 取点若钉死绝对毫秒，主程一放慢这些点就全落到上一阶段里 —— 测试会红得毫无信息量。
+     */
+    private fun at(frac: Float) = MIDNIGHT_WIND_START_MS + (MIDNIGHT_WIND_MS * frac).toLong()
+
     @Test
     fun 换张和起转前保持睁眼且没有枕头() {
         for (time in longArrayOf(-1L, 0L, MIDNIGHT_WIND_START_MS)) {
@@ -16,19 +24,19 @@ class SwiftieMidnightMoonTest {
 
     @Test
     fun 先拿枕头再抱住最后闭眼() {
-        val taking = midnightMoonPose(MIDNIGHT_WIND_START_MS + 400L)
+        val taking = midnightMoonPose(at(0.22f))
         assertThat(taking.pillowReveal).isGreaterThan(0f)
         assertThat(taking.pillowLift).isGreaterThan(0f)
         assertThat(taking.cuddle).isEqualTo(0f)
         assertThat(taking.eyeClose).isEqualTo(0f)
 
-        val holding = midnightMoonPose(MIDNIGHT_WIND_START_MS + 1_050L)
+        val holding = midnightMoonPose(at(0.58f))
         assertThat(holding.pillowReveal).isEqualTo(1f)
         assertThat(holding.pillowLift).isGreaterThan(0.9f)
         assertThat(holding.cuddle).isGreaterThan(0f)
         assertThat(holding.eyeClose).isEqualTo(0f)
 
-        val closing = midnightMoonPose(MIDNIGHT_WIND_START_MS + 1_400L)
+        val closing = midnightMoonPose(at(0.78f))
         assertThat(closing.pillowLift).isEqualTo(1f)
         assertThat(closing.cuddle).isGreaterThan(0.5f)
         assertThat(closing.eyeClose).isGreaterThan(0f)
@@ -48,7 +56,8 @@ class SwiftieMidnightMoonTest {
     @Test
     fun 一次性动作不倒退也不越界() {
         var last = midnightMoonPose(-1L)
-        for (time in 0L..5_000L step 13L) {
+        // 扫过整个主程再往入睡后延伸一段：入睡后那几项必须钉死在 1，不能跟着呼吸漂
+        for (time in 0L..(settled + 4_000L) step 13L) {
             val pose = midnightMoonPose(time)
             val values = listOf(pose.pillowReveal, pose.pillowLift, pose.cuddle, pose.eyeClose, pose.sleep)
             val previous = listOf(last.pillowReveal, last.pillowLift, last.cuddle, last.eyeClose, last.sleep)
