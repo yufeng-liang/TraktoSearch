@@ -148,7 +148,9 @@ object SwiftieEggController {
      * 外沿羽化带占羽化带宽 `W` 的比例。
      *
      * 「铺满」的判据只落在这一条带上，所以 `revealBaseRadius` 的注释与 Task 4 的
-     * AGSL 着色器读的都是这一个数 —— 单一真值，别在着色器里另抄一遍字面量。
+     * AGSL 着色器都以它为准。着色器字符串里写不进 Kotlin 常量，那边只能抄字面量
+     * `0.35`——这条常量存在的意义就是给 `SwiftieCloudRevealTest` 有个可比对的真值，
+     * 不是说着色器真的引用了它。
      */
     const val REVEAL_OUTER_BAND_RATIO: Float = 0.35f
 
@@ -221,15 +223,20 @@ object SwiftieEggController {
      * 两个形式的等价由 `revealLobeSum_polynomialFormMatchesTrigonometricForm` 钉住。
      *
      * 别把它读成「三角形式那份是死代码」：`revealLobeSum` 是这条等价测的**参照物**，
-     * 也是 Kotlin 侧按 0..2π 等分采样角建 Path 时的推荐写法；遮罩几何逐像素求值走本函数。
+     * 也是 Kotlin 侧按 0..2π 等分采样角建 Path 时的推荐写法。但要认清逐像素求值的
+     * 那份**不是**这里——真机上画遮罩的是 `REVEAL_AGSL` 字符串里的第三份抄本，
+     * 编译器与 Kotlin 测都看不见它的算术，所以它只能靠字符串钉（见 SwiftieCloudRevealTest）。
      */
     fun revealLobeSumFromCosSin(cosTheta: Float, sinTheta: Float): Float {
         val c = cosTheta
         val s = sinTheta
         // 幂次要单独算：sin5θ = 16s⁵-20s³+5s 里的 s³ 是 s 的三次幂，不是 sin3θ。
-        // 拿下面的 sin3 变量去顶 s³ 是错的，而且偏差是 O(1) 不是 O(ε)：
-        // 该变体的最大偏差 4.2831 = 0.14 · cos0.7 · max|100s³ − 60s|（s=±1 处取到 40），
-        // 相对等价测 2e-5 的容差差五个数量级，一错就红，不会变成真机上难查的形状偏差。
+        // 拿下面的 sin3 变量去顶 s³ 是错的，偏差是 O(1) 不是 O(ε)：单看 sin5 那一项
+        // 就有 0.14 · cos0.7 · max|100s³ − 60s| = 4.2831，两项合起来实测最大偏差 4.8167，
+        // lobe 值域从 [-0.43, 0.69] 炸到 [-4.80, 5.03]。
+        // 教训：这份 Kotlin 当时改对了，AGSL 那份没跟着改，而下面那条等价测**照样全绿**
+        // —— 它比的是两份 Kotlin，碰不到字符串里的第三份。所以别指望这里红，只能靠
+        // SwiftieCloudRevealTest 逐行钉 AGSL 的表达式。
         val s2 = s * s
         val s3 = s2 * s
         val s5 = s3 * s2
