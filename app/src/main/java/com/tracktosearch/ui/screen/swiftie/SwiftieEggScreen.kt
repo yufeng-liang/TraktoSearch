@@ -777,8 +777,10 @@ private fun SwiftieEggContent(
     SwiftieMusic(
         enabled = sequenceRunning && !audioGivenUp,
         paused = framePaused,
-        // 时钟是唯一时间来源：重建播放器与响应「跳过」/ 拖播放头都按它对位
-        positionMs = { clock.elapsedMs },
+        // 时钟是唯一时间来源：重建播放器与响应「跳过」/ 拖播放头都按它对位。
+        // 钳在配乐自己那一毫秒上：尾巴那 `TAIL_FADE_MS` 是球化开的时间不是配乐的时间，
+        // 不钳的话那一段里息屏再回前台会 seek 过音频末尾
+        positionMs = { clock.elapsedMs.coerceAtMost(SwiftieTimeline.TOTAL_MS) },
         seekEpoch = clock.seekEpoch,
         onFocusChange = { focus ->
             when (focus) {
@@ -830,8 +832,10 @@ private fun SwiftieEggContent(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { rootSize = Size(it.width.toFloat(), it.height.toFloat()) }
-            // T123000–125998：整层淡出，露出已经在运动的星云背景（Spec §5）。
-            // 必须插在 background 之前 —— 写在之后只淡出子内容、底色仍然挡着星云
+            // T125998–127198：整层淡出，露出已经在运动的星云背景（Spec §5）。
+            // 起点就是配乐的最后一帧，于是球是「音乐停了才化开」，化 1.2 秒收场；
+            // 绽放收束到这里之间那 2998ms 它满亮站着。必须插在 background 之前 ——
+            // 写在之后只淡出子内容、底色仍然挡着星云
             .graphicsLayer {
                 alpha = 1f - ((clock.elapsedMs - SwiftieTimeline.FADE_OUT_START).toFloat() /
                     SwiftieTimeline.FADE_OUT_MS).coerceIn(0f, 1f)
