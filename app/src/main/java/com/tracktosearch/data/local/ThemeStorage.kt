@@ -49,7 +49,7 @@ class ThemeStorage private constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val initializationComplete = CompletableDeferred<Unit>()
 
-    private val _themeMode = MutableStateFlow(MODE_SYSTEM)
+    private val _themeMode = MutableStateFlow(MODE_LIGHT)
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
     /** null = 用户主动选择动态壁纸取色；未配置时使用复古票根主题。*/
@@ -86,7 +86,7 @@ class ThemeStorage private constructor(
         // 预加载 DataStore 首值到 StateFlow，避免 stateIn 默认值抖动。
         scope.launch {
             val prefs = dataStore.data.first()
-            _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
+            _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_LIGHT
             _accentColor.value = decodeAccentName(prefs[KEY_ACCENT_COLOR])
             _visualEffectMode.value = VisualEffectMode.fromStorageValue(prefs[KEY_VISUAL_EFFECT_MODE])
             _glassVariant.value = GlassVariant.fromStorageValue(prefs[KEY_GLASS_VARIANT])

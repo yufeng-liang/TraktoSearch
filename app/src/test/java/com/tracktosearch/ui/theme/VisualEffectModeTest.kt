@@ -178,6 +178,33 @@ class ThemeStorageCompatibilityTest {
             .isEqualTo(GlassVariant.CLEAR.storageValue)
     }
 
+    @Test
+    fun `theme mode is light before and after the cold start snapshot loads`() =
+        kotlinx.coroutines.test.runTest {
+            clearThemePrefs()
+            val initialSnapshot = context.themeDataStore.data.first()
+            val delayedDataStore = DelayedInitialSnapshotDataStore(context.themeDataStore, initialSnapshot)
+
+            val storage = ThemeStorage(context, delayedDataStore)
+            // 首帧就断言：DataStore 还没读出值，这里必须已是浅色，否则会闪一下系统深色
+            assertThat(storage.themeMode.value).isEqualTo(ThemeStorage.MODE_LIGHT)
+
+            delayedDataStore.releaseInitialSnapshot()
+            assertThat(storage.readThemeModeSnapshot()).isEqualTo(ThemeStorage.MODE_LIGHT)
+        }
+
+    @Test
+    fun `explicit follow-system choice survives the light default`() =
+        kotlinx.coroutines.test.runTest {
+            clearThemePrefs()
+            context.themeDataStore.edit { prefs ->
+                prefs[stringPreferencesKey("theme_mode")] = ThemeStorage.MODE_SYSTEM
+            }
+
+            val storage = ThemeStorage(context)
+            assertThat(storage.readThemeModeSnapshot()).isEqualTo(ThemeStorage.MODE_SYSTEM)
+        }
+
     private suspend fun clearThemePrefs() {
         context.themeDataStore.edit { it.clear() }
     }
