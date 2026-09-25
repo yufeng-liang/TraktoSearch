@@ -86,6 +86,23 @@ object OAuthCallback {
 object SplashStartup {
     @Volatile
     var quoteEnabled: Boolean = true
+
+    /**
+     * 日签那一层是否已经让位。**初值 false（当成「还压着」），失败方向是不抖。**
+     *
+     * 日签是压在 AppNavigation **之上**的 Compose 层（见 setContent 里的 SplashQuoteOverlay），
+     * 不是另一个窗口，所以主界面在它背后照样从第一帧开始组合。任何「进搜索页后停留 N 秒」
+     * 这类从组合起算的计时都会整段在它背后跑完——白云暗示实测就是这样把配额烧光的。
+     *
+     * 初值不能是 true：stampJob 要读语言、读 DataStore、解海报才定得下日签上不上屏，那中间
+     * SearchScreen 早就组合完了。起底 true 会让搜索页抢先把 beginCloudNudgeRound() 的进程闸门
+     * 占掉，等这里改成 false 时效应重启、闸门已耗尽——「看不见地抖」变成「永远不抖」，一样废。
+     * 起底 false 最坏只是白等，两条放行路径都在：
+     *   日签压根不上屏（开关关着、海报没就绪）→ stampJob 里 `= !stampReady` 当场放行；
+     *   日签上屏后自己散场 → onFinished 放行。
+     * 每次 onCreate 都会重跑 stampJob，所以 Activity 被重建也不会把它永久锁死。
+     */
+    val quoteOverlayGone = kotlinx.coroutines.flow.MutableStateFlow(false)
 }
 
 /** 负责在 MainActivity 与 AppNavigation 之间传递深链路 */
@@ -311,6 +328,10 @@ class MainActivity : AppCompatActivity() {
             // 这一层整层跳过，这面旗子就一直是 false——系统 splash 于是改成等主界面摆好
             // （见 setKeepOnScreenCondition），那段等待才不会落到一块暖纸空窗上。
             stampReady = splashQuote != null
+            // 这是「已让位」第一次有资格为 true 的时刻：日签不上屏就当场放行，上屏则维持
+            // false 等它自己 onFinished。与上一行同一个同步帧、中间不让出主线程，搜索页
+            // 不可能先看到放行再被收回（见 SplashStartup.quoteOverlayGone 为何起底 false）。
+            SplashStartup.quoteOverlayGone.value = !stampReady
             StartupTrace.mark("startup.stamp_ready", "quote=${splashQuote != null}")
         }
 
@@ -595,6 +616,7 @@ class MainActivity : AppCompatActivity() {
                         // 一次查询，两条路重复调没有代价。
                         onFinished = {
                             splashQuoteDone = true
+                            SplashStartup.quoteOverlayGone.value = true
                             this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
                                 splashQuoteRepository.warmPosterColor(quote.quoteId)
                             }

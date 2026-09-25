@@ -140,6 +140,7 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
+import com.tracktosearch.SplashStartup
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
@@ -559,9 +560,24 @@ fun SearchScreen(
     val cloudNudge = remember { Animatable(0f) }
     val isCurrentTab = LocalIsCurrentTab.current
     val reducedMotion = rememberReducedMotion()
-    LaunchedEffect(isActive, isCurrentTab, onboardingCompleted) {
+    // 抖动专用的引导态，初值 false，和上面那份 `onboardingCompleted`（初值 true）分开读。
+    // 那一份的初值是为云点击服务的：没读到盘上真值时宁可当成「引导已完成」，否则会把用户
+    // 的正常点击吞掉。抖动要的恰好相反——没读到就不该抖。共用一份的话，冷启动那一帧它是 true，
+    // 效应会直接跑到 beginCloudNudgeRound() 把进程闸门占死，等真值 false 令效应重启时闸门已耗尽，
+    // 于是**首次启动的用户永远看不到暗示**，而这功能就是给他做的（实测：跳过引导后不记账，
+    // 干净重启才记账）。
+    val nudgeOnboardingDone by onboardingStorage.isCompleted.collectAsStateWithLifecycle(
+        initialValue = false
+    )
+    // 日签层压在搜索页之上，主界面在它背后照样组合（见 SplashStartup.quoteOverlayGone）。
+    // 不等它让位，1.8s 停留 + 两下抖动会整段在日签背后跑完并记上配额。
+    val splashQuoteGone by SplashStartup.quoteOverlayGone.collectAsStateWithLifecycle()
+    LaunchedEffect(isActive, isCurrentTab, nudgeOnboardingDone, splashQuoteGone) {
         // 云被 AnimatedVisibility 收掉时不抖：抖一个看不见的东西等于白烧配额
-        if (isActive || !isCurrentTab || !onboardingCompleted) return@LaunchedEffect
+        if (isActive || !isCurrentTab) return@LaunchedEffect
+        // 这两条必须在 beginCloudNudgeRound() **之前**：它们只是「现在还轮不到抖」，
+        // 不是「这一轮抖过了」。放在占位之后就会把进程闸门白白吃掉，重启前再也不会抖。
+        if (!splashQuoteGone || !nudgeOnboardingDone) return@LaunchedEffect
         // 减少动效：整轮跳过，且不占预算也不占进程闸门 —— 用户根本没看到
         if (reducedMotion) return@LaunchedEffect
         if (!cloudThemeManager.beginCloudNudgeRound()) return@LaunchedEffect
