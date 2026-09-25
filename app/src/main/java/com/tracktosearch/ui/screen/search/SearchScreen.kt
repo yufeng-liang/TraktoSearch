@@ -591,7 +591,12 @@ fun SearchScreen(
                 cloudNudge.snapTo(0f)
                 cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
             }
-            cloudThemeManager.completeCloudNudgeRound()
+            // 中途点了云 = 暗示已经得手，这一轮不该再占配额（spec §4）。题面是覆盖在搜索页
+            // 之上的 overlay，不会改 isCurrentTab/isActive，所以效应会照常跑到这一行，
+            // 只能在这里回头看一眼它是不是已经被点开。
+            if (!cloudThemeManager.swiftieEggVisible.value) {
+                cloudThemeManager.completeCloudNudgeRound()
+            }
         }
     }
 
