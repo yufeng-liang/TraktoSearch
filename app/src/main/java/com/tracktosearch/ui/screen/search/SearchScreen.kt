@@ -109,6 +109,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -139,6 +140,7 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
+import com.tracktosearch.SplashStartup
 import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
@@ -160,6 +162,7 @@ import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
@@ -188,6 +191,7 @@ import com.tracktosearch.ui.screen.ai.sceneEventForSearch
 import com.tracktosearch.ui.screen.ai.searchAnchorFor
 import com.tracktosearch.ui.screen.ai.shouldStartSpriteOverlay
 import com.tracktosearch.ui.screen.swiftie.SwiftieEggController
+import com.tracktosearch.ui.screen.swiftie.rememberReducedMotion
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.GlassBorderDark
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
@@ -255,7 +259,10 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
     spriteViewModel: AiSpriteViewModel = rememberSharedAiSpriteViewModel(),
     externallyControlledAiSpriteCenterVisible: Boolean? = null,
-    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {}
+    onAiSpriteCenterVisibilityChanged: (Boolean) -> Unit = {},
+    // 彩蛋揭示：把云的 LayoutCoordinates 交给 MainScreen 那份覆盖层。传引用而不是
+    // 像素，覆盖层每帧现问，云随搜索框上滑时原点跟着走。
+    onCloudCoordinatesChanged: (LayoutCoordinates) -> Unit = {}
 ) {
     val isDark = isAppDarkTheme()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -545,6 +552,57 @@ fun SearchScreen(
         }
     }
 
+    // ---- 白云的暗示抖动 ----
+    // 用 Animatable 而不是 animateFloatAsState：一轮是「抖—静默 1s—抖—静默 1s—抖」这种
+    // 交替序列，状态驱动的单目标动画表达不了中间那些静默。0f 表示不抖。
+    // 整块放在 isActive 之后而不是 rememberCoroutineScope 之后：Kotlin 局部 val 不能
+    // 前向引用，而这里的 key 要读更晚声明的 isActive 与更早已声明的 onboardingCompleted。
+    val cloudNudge = remember { Animatable(0f) }
+    val isCurrentTab = LocalIsCurrentTab.current
+    val reducedMotion = rememberReducedMotion()
+    // 抖动专用的引导态，初值 false，和上面那份 `onboardingCompleted`（初值 true）分开读。
+    // 那一份的初值是为云点击服务的：没读到盘上真值时宁可当成「引导已完成」，否则会把用户
+    // 的正常点击吞掉。抖动要的恰好相反——没读到就不该抖。共用一份的话，冷启动那一帧它是 true，
+    // 效应会直接跑到 beginCloudNudgeRound() 把进程闸门占死，等真值 false 令效应重启时闸门已耗尽，
+    // 于是**首次启动的用户永远看不到暗示**，而这功能就是给他做的（实测：跳过引导后不记账，
+    // 干净重启才记账）。
+    val nudgeOnboardingDone by onboardingStorage.isCompleted.collectAsStateWithLifecycle(
+        initialValue = false
+    )
+    // 日签层压在搜索页之上，主界面在它背后照样组合（见 SplashStartup.quoteOverlayGone）。
+    // 不等它让位，1.8s 停留 + 三记抖动会整段在日签背后跑完并记上配额。
+    val splashQuoteGone by SplashStartup.quoteOverlayGone.collectAsStateWithLifecycle()
+    LaunchedEffect(isActive, isCurrentTab, nudgeOnboardingDone, splashQuoteGone) {
+        // 云被 AnimatedVisibility 收掉时不抖：抖一个看不见的东西等于白烧配额
+        if (isActive || !isCurrentTab) return@LaunchedEffect
+        // 这两条必须在 beginCloudNudgeRound() **之前**：它们只是「现在还轮不到抖」，
+        // 不是「这一轮抖过了」。放在占位之后就会把进程闸门白白吃掉，重启前再也不会抖。
+        if (!splashQuoteGone || !nudgeOnboardingDone) return@LaunchedEffect
+        // 减少动效：整轮跳过，且不占预算也不占进程闸门 —— 用户根本没看到
+        if (reducedMotion) return@LaunchedEffect
+        if (!cloudThemeManager.beginCloudNudgeRound()) return@LaunchedEffect
+        if (!cloudThemeManager.requestCloudNudgeEligible()) return@LaunchedEffect
+        delay(SwiftieEggController.NUDGE_DWELL_MS)
+        // 这里不再复检 isActive：它是本效应的 key，一变就会重启效应并被首行拦下，
+        // 一次运行里这个局部 val 恒定是 false。原先那句「静默期里可能已被激活」
+        // 描述的是一个到不了的状态。
+        repeat(SwiftieEggController.NUDGE_SHAKES) { index ->
+            // 静默夹在两记之间：第一记之前没有静默（那段由 NUDGE_DWELL_MS 负责）
+            if (index > 0) delay(SwiftieEggController.NUDGE_GAP_MS)
+            cloudNudge.snapTo(0f)
+            cloudNudge.animateTo(1f, tween(SwiftieEggController.NUDGE_SHAKE_MS.toInt()))
+        }
+        // 中途点了云 = 暗示已经得手，这一轮不该再占配额（spec §4）。题面是覆盖在搜索页
+        // 之上的 overlay，不会改 isCurrentTab/isActive，所以效应会照常跑到这一行，
+        // 只能在这里回头看一眼它是不是已经被点开。
+        // 已知边角：点了又在最后一记抖完之前关掉题面，这里会看到 false 从而照常记账 ——
+        // 得手的一轮被记走一次。预算只有 3 次，为一个「一秒内点开又关掉」的路径去挂一个
+        // 飞行中标记不值得，认了。
+        if (!cloudThemeManager.swiftieEggVisible.value) {
+            cloudThemeManager.completeCloudNudgeRound()
+        }
+    }
+
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
         interruptAiSprite(AiSpriteInterruptReason.FOCUS)
@@ -634,6 +692,8 @@ fun SearchScreen(
             } else {
                 null
             },
+            nudgeDegrees = { cloudNudge.value },
+            onGloballyPositioned = onCloudCoordinatesChanged,
             modifier = Modifier
                 .size(cloudIconSize)
                 // release 关掉 AI 后描述为 null，云朵不再挂「精灵入口」这条无障碍提示
@@ -2041,6 +2101,9 @@ private fun CloudIconWithAnimation(
     cloudThemeManager: CloudThemeManager,
     isActive: Boolean,
     onboardingCompleted: Boolean,
+    // 只在绘制阶段读，所以是 () -> Float：每帧只失效那一个 layer，不重组整朵云
+    nudgeDegrees: () -> Float = { 0f },
+    onGloballyPositioned: (LayoutCoordinates) -> Unit = {},
     // 可空：release 关掉 AI 后没有精灵中心可开，云朵只剩短按彩蛋一条路
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -2051,6 +2114,13 @@ private fun CloudIconWithAnimation(
         enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
         exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200)),
         modifier = modifier
+            // 旋转与坐标上报都挂在 AnimatedVisibility 这一个节点上。挂外层而不是
+            // 分头挂进两个分支，是为了让 Lottie 与静态 PNG 两条渲染路径一视同仁：
+            // 云走不走 Lottie 取决于用户授没授定位权限，暗示不该为此分叉。
+            .graphicsLayer {
+                rotationZ = SwiftieEggController.cloudNudgeDegrees(nudgeDegrees())
+            }
+            .onGloballyPositioned(onGloballyPositioned)
     ) {
         if (hasPermission) {
             CloudEasterEgg(

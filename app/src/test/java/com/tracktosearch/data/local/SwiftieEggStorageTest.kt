@@ -11,7 +11,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class SwiftieEggStorageTest {
 
     private val context = RuntimeEnvironment.getApplication()
@@ -87,5 +87,56 @@ class SwiftieEggStorageTest {
 
         val prefs = context.swiftieDataStore.data.first()
         assertThat(prefs[SwiftieEggStorage.KEY_MIGRATED]).isTrue()
+    }
+
+    @Test
+    fun cloudNudgeShown_defaultsToZero() = runTest {
+        clearPrefs()
+        val storage = SwiftieEggStorage(context)
+        storage.awaitReady()
+
+        assertThat(storage.cloudNudgeShown.value).isEqualTo(0)
+    }
+
+    @Test
+    fun cloudNudgeShown_incrementsAndSurvivesReopen() = runTest {
+        clearPrefs()
+        val storage = SwiftieEggStorage(context)
+        storage.awaitReady()
+
+        assertThat(storage.incrementCloudNudgeShown()).isEqualTo(1)
+        assertThat(storage.incrementCloudNudgeShown()).isEqualTo(2)
+        assertThat(storage.cloudNudgeShown.value).isEqualTo(2)
+
+        // 预算是跨进程的：冷启动就重置的话「累计 3 次」永远到不了 3
+        val reopened = SwiftieEggStorage(context)
+        reopened.awaitReady()
+        assertThat(reopened.cloudNudgeShown.value).isEqualTo(2)
+    }
+
+    @Test
+    fun cloudNudgeShown_isIndependentOfCloudClickCount() = runTest {
+        clearPrefs()
+        val storage = SwiftieEggStorage(context)
+        storage.awaitReady()
+
+        storage.incrementCloudClick()
+        storage.incrementCloudClick()
+
+        assertThat(storage.cloudClickCount.value).isEqualTo(2)
+        assertThat(storage.cloudNudgeShown.value).isEqualTo(0)
+
+        // 必须 reopen 再断一次，否则这条测只钉住了「内存里两个 StateFlow 各是各的」，
+        // 钉不住「磁盘键各是各的」。若把 KEY_CLOUD_NUDGE_SHOWN 误写成
+        // intPreferencesKey("cloud_click_count")，上面两行照样全绿：
+        // 两个 StateFlow 是独立字段，而 incrementCloudNudgeShown 单独跑在共享键上
+        // 算出来的也正好是 1、2 —— 全计划只有这条测同时动两个计数器，
+        // 所以它是唯一能抓住键名碰撞的地方。
+        storage.incrementCloudNudgeShown()
+
+        val reopened = SwiftieEggStorage(context)
+        reopened.awaitReady()
+        assertThat(reopened.cloudClickCount.value).isEqualTo(2)
+        assertThat(reopened.cloudNudgeShown.value).isEqualTo(1)
     }
 }
