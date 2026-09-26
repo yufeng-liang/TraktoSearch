@@ -22,6 +22,7 @@ import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieAnimatable
 import com.airbnb.lottie.compose.rememberLottieComposition
+import com.tracktosearch.SplashStartup
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.screen.swiftie.rememberReducedMotion
@@ -36,6 +37,13 @@ import com.tracktosearch.ui.screen.swiftie.rememberReducedMotion
  * Tab 都是全新组合，搜索框激活时外层 AnimatedVisibility 淡出完会把子树整个卸载，
  * 所以两种「重新看见」都会重新走到这里。重播的节流位不在组合里，见
  * [CloudThemeManager.claimWeatherPlay]。
+ *
+ * **日签开屏层让位之前不起播。** 那一层是压在 AppNavigation 之上的 Compose 层，
+ * 主界面在它背后照样从第一帧组合，而导航树本身又是等日签数据就绪才组合的
+ * （MainActivity 的 navComposed 等 stampJob.join()）—— 所以搜索页一组合、composition
+ * 一到位，起播条件就全满足了，整轮会在日签背后跑完。当天首看日签停留 8 秒，长过最长的
+ * 天气动画（rainy/thunder 7.01s），用户一次都看不见。白云暗示抖动踩过同一个坑，
+ * 这里读的是同一根线（[SplashStartup.quoteOverlayGone]）。
  *
  * 非当前 Tab 时定格第一帧：切换过程中 pager 会短暂同时组合两页，那时既不该起播
  * （会把 8 秒窗口白占掉）也不该跟着画。
@@ -57,6 +65,9 @@ fun CloudEasterEgg(
     // 当前 Tab 才起播，非当前 Tab 定格第一帧
     val isCurrentTab = LocalIsCurrentTab.current
     val reducedMotion = rememberReducedMotion()
+    // 日签开屏层让位了没有。起底 false（当成「还压着」），失败方向是不播：
+    // 早播一轮就是整轮在日签背后跑完，用户一次都看不见。
+    val splashQuoteGone by SplashStartup.quoteOverlayGone.collectAsStateWithLifecycle()
 
     // 按下缩放反馈
     val scale by animateFloatAsState(
@@ -89,8 +100,11 @@ fun CloudEasterEgg(
         // 不能预先了结，否则起手就是定格帧、动画整轮在背后跑完。
         var settled by remember { mutableStateOf(false) }
 
-        LaunchedEffect(isCurrentTab, composition) {
+        LaunchedEffect(isCurrentTab, composition, splashQuoteGone) {
             if (settled || !isCurrentTab || composition == null) return@LaunchedEffect
+            // 日签还压在上面就先不起播：这一条只是「现在还轮不到播」，不是「这一轮播过了」，
+            // 所以必须排在盖章之前，也不能顺手置 settled。等它让位时效应因 key 变化重启。
+            if (!splashQuoteGone) return@LaunchedEffect
             // 盖章排在 animate 之前：这一句会挂到播完才返回，先播后盖就等于
             // 整轮播放期间闸门还开着。
             if (themeManager.claimWeatherPlay(SystemClock.uptimeMillis(), reducedMotion)) {
