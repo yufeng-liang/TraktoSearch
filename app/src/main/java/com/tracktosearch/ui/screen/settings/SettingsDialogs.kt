@@ -444,6 +444,8 @@ internal fun AccentColorDialog(
         content = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
+                // 整块内容必须落进 AppAlertDialog 的 DialogContentMaxHeight，
+                // 超出即被裁成可滚动、末行色盘看不全：这里所有垂直间距都按这个预算给。
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 材质区：标题在左，当前值 + 下拉箭头在右；点击弹出 DropdownAnchorMenu
@@ -455,7 +457,7 @@ internal fun AccentColorDialog(
                         .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                             materialMenuExpanded = true
                         }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -523,7 +525,6 @@ internal fun AccentColorDialog(
                     }
                 }
                 // 背景光晕区：关闭 / Paper Shaders 固定配色 / 主题色驱动动效
-                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -531,7 +532,7 @@ internal fun AccentColorDialog(
                     .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                         meshMenuExpanded = true
                     }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -632,7 +633,6 @@ internal fun AccentColorDialog(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 // 色调区：壁纸取色 → 印象派预设 → 已收藏自定义纯色盘 → 彩虹＋盘
                 val addMarker = Any()
                 val addDisabled = customAccentColors.size >= ThemeStorage.MAX_CUSTOM_ACCENTS
@@ -676,7 +676,7 @@ internal fun AccentColorDialog(
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(vertical = 4.dp),
+                                    .padding(vertical = 2.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Box(
@@ -765,7 +765,7 @@ internal fun AccentColorDialog(
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Box(
                                     modifier = Modifier.width(72.dp),
                                     contentAlignment = Alignment.Center
