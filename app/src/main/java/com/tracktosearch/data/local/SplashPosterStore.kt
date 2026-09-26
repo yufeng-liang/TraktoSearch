@@ -176,15 +176,46 @@ class SplashPosterStore @Inject constructor(
     /**
      * Coil 能直接吃的海报来源：内置的给 assets URI，其余给 [File]。
      *
-     * 给日签日历用。那一屏最多 31 张缩略图，走 [readBytes] 就是 31 次全量读盘 + 手动解码；
-     * 交给 Coil 才能按控件尺寸降采样并复用它的内存缓存。
      * 返回 null 表示还没就绪，调用方按「没有这张图」处理，不要画占位框。
+     *
+     * 只查一条的时候用它：两笔 stat 比把整个目录读一遍便宜。要一次解析一批（日签日历
+     * 一屏最多 31 格）用 [posterModels]，别在这里循环。
      */
     fun posterModel(quote: SplashQuote): Any? = if (quote.bundled) {
         "file:///android_asset/${assetPath(quote.id)}"
     } else {
         file(quote).takeIf { it.exists() && it.length() > 0 }
     }
+
+    /**
+     * 一批台词的海报来源，key 是台词 id。
+     *
+     * 给日签日历用：那一屏最多 31 张缩略图，逐条走 [posterModel] 就是 62 笔 stat，
+     * 而一次 [listFiles] 只要遍历目录一遍。语义与 [isReady] 完全一致（空文件当没下载、
+     * 内置的永远就绪），只是判断依据从「问文件系统」换成「查这一份快照」。
+     *
+     * 快照是一次性的：列完之后才下载好的那张图，这一批里会算没就绪。日签日历没有
+     * 因此少一张图的可能——海报补齐走 SplashPosterWorker，落盘后签到行变更会重新触发
+     * [posterModel] 那条路径；真等着的那格最迟在下次翻月时补上。
+     */
+    suspend fun posterModels(quotes: List<SplashQuote>): Map<String, Any?> =
+        withContext(Dispatchers.IO) {
+            if (quotes.isEmpty()) return@withContext emptyMap()
+            // 用 listFiles 而不是 list：就绪判断还要看长度非零（下载中途被杀会留下空文件，
+            // 见 isReady），只拿文件名的话那一档判断就丢了
+            val usable = dir.listFiles()?.filter { it.length() > 0 }?.map { it.name }?.toSet()
+                ?: emptySet()
+            quotes.associate { quote ->
+                val target = file(quote)
+                quote.id to if (quote.bundled) {
+                    "file:///android_asset/${assetPath(quote.id)}"
+                } else if (target.name in usable) {
+                    target
+                } else {
+                    null
+                }
+            }
+        }
 
     /**
      * 下载单条海报，已就绪则跳过。返回是否处于就绪状态。

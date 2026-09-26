@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -35,6 +37,7 @@ import javax.inject.Inject
  */
 @Immutable
 data class DailyStampUiState(
+    /** 正在看的那个月：切月当场就换，不等这一月的数据到位，见 [DailyStampViewModel.switchTo] */
     val month: YearMonth = YearMonth.now(),
     val stamps: List<DailyStamp> = emptyList(),
     /**
@@ -116,16 +119,12 @@ class DailyStampViewModel @Inject constructor(
         viewModelScope.launch {
             month
                 .flatMapLatest { target -> repository.observeMonth(target).map { target to it } }
-                // 解析一个月的日签会为每条查一次海报文件在不在（SplashPosterStore.posterModel），
-                // 最多 31 次 stat。放在收集端就是切月动画期间在主线程读盘，搬到 IO 上
+                // 解析一个月的日签会为每条查一次海报文件在不在（SplashPosterStore.posterModels），
+                // 一次目录列举。放在收集端就是切月动画期间在主线程读盘，搬到 IO 上
                 .flowOn(Dispatchers.IO)
                 // 日签是只读展示，查询失败就当这个月没有记录，不该把整页变成错误页
                 .catch { _uiState.update { it.copy(loading = false) } }
-                .collect { (target, stamps) ->
-                    _uiState.update { it.copy(month = target, stamps = stamps, loading = false) }
-                    refreshCounters()
-                    refreshUnstamped(target)
-                }
+                .collect { (target, stamps) -> publishMonth(target, stamps) }
         }
     }
 
@@ -158,48 +157,89 @@ class DailyStampViewModel @Inject constructor(
 
     /**
      * 切月。顺手关掉卡片浮层：卡片属于某一天，月份一换它就悬空了。
-     * loading 只用来遮首次进入，切月时不置回 true——月视图已经画在那儿，
-     * 让它闪一下骨架比直接换内容更难看。
+     *
+     * [DailyStampUiState.month] 当场就换，不等数据：它决定报头那个月名、格子里排哪几天，
+     * 以及两个箭头还让不让点。留着上个月的值会让连点箭头时后几下被 [nextMonth] 的闸门
+     * 按掉——用户明明翻动了，界面却答非所问。格子上那一月的内容随后由 [publishMonth] 补上，
+     * 中间那一两帧是干净的新月份空纸，不是上个月串过来的数字。
      */
     private fun switchTo(target: YearMonth) {
-        _uiState.update { it.copy(selected = null) }
+        _uiState.update { it.copy(selected = null, month = target) }
         month.value = target
     }
 
-    private suspend fun refreshCounters() {
-        val streak = repository.streak()
-        val total = repository.totalDays()
-        val earliest = repository.earliestMonth()
-        _uiState.update { it.copy(streak = streak, total = total, earliestMonth = earliest) }
-    }
-
     /**
-     * 补上「没有签到行但仍要显示」的那两类日子：错过的和未来的。
+     * 整月要显示的东西一次凑齐、一次落状态。
      *
-     * 和 [refreshCounters] 一样跟着每次月份变化重算。查失败就保持原样：这三项决定的是
-     * 空格子长什么样、点不点得开，缺了只是退回「你来之前」那种最保守的样子，
-     * 不该让整页崩在一次查询上。
+     * 分几波发布是这一页进页时最贵的做法：签到格画一次、计数画一次、错过和还没到的格子
+     * 再画一次，而这一屏是 42 个格子带最多 31 张海报缩略图，每一波都是整页重排。
+     * 这几项之间没有依赖（只有错过那些天要用 firstUse，而它和计数那几项同源于一条
+     * `MIN(epochDay)`），并发取完总耗时就是最慢的那一项，比原来的串行之和短得多。
      *
-     * 整段搬到 IO：错过那些天要为每条查一次海报文件在不在，和 [init] 里解析日签同一笔代价。
+     * 顺带先等 [DailyStampReadStorage.loadIntoMirror] 落地：镜像没读过就发布，已经补看过的
+     * 日子会先按 12px 糊着请求一次、镜像落地后再换 160px 请求一次，白解一遍图，还留下一眼
+     * 看得出的「先糊再清」。
+     *
+     * 凑不齐也要让格子出来：那几项查询失败时退化成只发 [stamps]，页面上就是少了计数和
+     * 空格子的分类，不是白屏。
      */
-    private suspend fun refreshUnstamped(target: YearMonth) {
-        try {
-            val (firstDay, missed, latent) = withContext(Dispatchers.IO) {
-                Triple(
-                    repository.firstUseDate(),
-                    repository.missedMonth(target),
-                    repository.latentMonth(target),
-                )
-            }
-            _uiState.update {
-                // 期间可能已经切到别的月，那时这一批数据属于上一个月，丢掉
-                if (it.month != target) it
-                else it.copy(firstDay = firstDay, missed = missed, latent = latent)
+    private suspend fun publishMonth(target: YearMonth, stamps: List<DailyStamp>) {
+        val extras = try {
+            withContext(Dispatchers.IO) {
+                try {
+                    readStorage.loadIntoMirror()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 读不回「哪些天看过」只影响错过那几格糊不糊，不该把整月格子一起带走
+                }
+                coroutineScope {
+                    val firstUse = async { repository.firstUseDate() }
+                    val streak = async { repository.streak() }
+                    val total = async { repository.totalDays() }
+                    val latent = async { repository.latentMonth(target) }
+                    val use = firstUse.await()
+                    MonthExtras(
+                        streak = streak.await(),
+                        total = total.await(),
+                        firstDay = use,
+                        earliestMonth = use?.let(YearMonth::from),
+                        missed = repository.missedMonth(target, use),
+                        latent = latent.await(),
+                    )
+                }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // 只读展示，查不到就当这个月没有这两类日子
+            null
+        }
+        _uiState.update { current ->
+            // 期间可能已经切到别的月，那这一批数据属于上一个月，丢掉
+            if (current.month != target) current
+            else when (extras) {
+                null -> current.copy(stamps = stamps, loading = false)
+                else -> current.copy(
+                    stamps = stamps,
+                    loading = false,
+                    streak = extras.streak,
+                    total = extras.total,
+                    earliestMonth = extras.earliestMonth,
+                    firstDay = extras.firstDay,
+                    missed = extras.missed,
+                    latent = extras.latent,
+                )
+            }
         }
     }
+
+    /** [publishMonth] 一次凑齐的那几项，除了签到格本身 */
+    private data class MonthExtras(
+        val streak: Int,
+        val total: Int,
+        val firstDay: LocalDate?,
+        val earliestMonth: YearMonth?,
+        val missed: List<DailyStamp>,
+        val latent: List<DailyStamp>,
+    )
 }

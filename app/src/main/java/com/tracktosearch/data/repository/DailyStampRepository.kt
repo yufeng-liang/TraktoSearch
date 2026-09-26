@@ -88,19 +88,32 @@ class DailyStampRepository @Inject constructor(
      * 月视图的空格由 UI 按 [YearMonth] 自己排，仓库不返回空日子——
      * 一个月里没签到的格子在数据层没有任何内容可带。
      */
-    suspend fun month(month: YearMonth): List<DailyStamp> {
-        val index = index()
-        return dao.range(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay())
-            .map { resolve(it, index) }
-    }
+    suspend fun month(month: YearMonth): List<DailyStamp> =
+        resolveAll(dao.range(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay()))
 
     /** 同 [month]，但随当天签到落库实时更新，日历页订阅这个 */
     fun observeMonth(month: YearMonth): Flow<List<DailyStamp>> =
         dao.observeRange(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay())
-            .map { entities ->
-                val index = index()
-                entities.map { resolve(it, index) }
-            }
+            .map { resolveAll(it) }
+
+    /**
+     * 一批签到行解析成 [DailyStamp]：台词索引取一次，海报就绪问一次目录。
+     *
+     * 就绪判断刻意不走逐条 [SplashPosterStore.posterModel]：一个月最多 31 条，逐条就是
+     * 62 笔 stat，而这是每次翻月、每次签到落库都要付的钱。
+     */
+    private suspend fun resolveAll(entities: List<DailyStampEntity>): List<DailyStamp> {
+        val index = index()
+        val paired = entities.map { it to index[it.quoteId] }
+        val posters = posterStore.posterModels(paired.mapNotNull { it.second })
+        return paired.map { (entity, quote) ->
+            DailyStamp(
+                date = LocalDate.ofEpochDay(entity.epochDay),
+                quote = quote,
+                poster = quote?.let { posters[it.id] },
+            )
+        }
+    }
 
     /**
      * 连续签到天数，从 [today] 往回数。
@@ -136,16 +149,27 @@ class DailyStampRepository @Inject constructor(
      * 签到的意义是那天真的打开过。
      *
      * 今天也算在内：今天可能因为拿不到台词而没签上（见 [checkIn]），那一格照样该能翻开。
+     *
+     * [firstUse] 由调用方传进来而不是这里再查：日历一次发布要凑齐的几项都源自同一条
+     * `MIN(epochDay)`，各查一遍就是把同一句 SQL 跑三遍。
      */
-    suspend fun missedMonth(month: YearMonth, today: LocalDate = LocalDate.now()): List<DailyStamp> {
-        val firstUse = firstUseDate() ?: return emptyList()
+    suspend fun missedMonth(
+        month: YearMonth,
+        firstUse: LocalDate?,
+        today: LocalDate = LocalDate.now(),
+    ): List<DailyStamp> {
+        if (firstUse == null) return emptyList()
         val from = maxOf(month.atDay(1), firstUse)
         val to = minOf(month.atEndOfMonth(), today)
         if (from.isAfter(to)) return emptyList()
         val stamped = dao.range(from.toEpochDay(), to.toEpochDay()).map { it.epochDay }.toSet()
-        return days(from, to)
+        val onDays = days(from, to)
             .filterNot { it.toEpochDay() in stamped }
-            .mapNotNull { date -> resolveByDate(date, withPoster = true) }
+            .mapNotNull { date -> quotes.quoteFor(date)?.let { date to it } }
+        val posters = posterStore.posterModels(onDays.map { it.second })
+        return onDays.map { (date, quote) ->
+            DailyStamp(date = date, quote = quote, poster = posters[quote.id])
+        }
     }
 
     /**
@@ -153,41 +177,27 @@ class DailyStampRepository @Inject constructor(
      *
      * 卡片只拿这里的海报路径去糊一张看不清的图，台词一个字都不显示：那天到底给哪一条
      * 现在算不得准（台词库会变、海报没就绪时会改取一次模），而卡片本来也不打算说。
+     *
+     * 一次磁盘都不碰：这些格子不印海报，卡片糊的那张走的是 w92 地址（见
+     * DailyStampSheet.Latent），[SplashPosterStore.posterModel] 查出来的本地文件没有一处
+     * 会用到。
      */
     suspend fun latentMonth(month: YearMonth, today: LocalDate = LocalDate.now()): List<DailyStamp> {
         val from = maxOf(month.atDay(1), today.plusDays(1))
         val to = month.atEndOfMonth()
         if (from.isAfter(to)) return emptyList()
-        return days(from, to).mapNotNull { date -> resolveByDate(date, withPoster = false) }
+        return days(from, to).mapNotNull { date ->
+            quotes.quoteFor(date)?.let { DailyStamp(date = date, quote = it, poster = null) }
+        }
     }
 
     private fun days(from: LocalDate, to: LocalDate): List<LocalDate> =
         (0..(to.toEpochDay() - from.toEpochDay())).map { from.plusDays(it) }
 
-    /**
-     * 按日期现算那天的台词，凑一个没有落库的 [DailyStamp]。
-     *
-     * [withPoster] 为 false 时一次磁盘都不碰：未来那些天的格子不印海报，卡片糊的那张走的是
-     * w92 地址（见 DailyStampSheet.Latent），[SplashPosterStore.posterModel] 查出来的本地文件
-     * 没有一处会用到。它每条要两次 stat，翻一个未来月份就是白做三十来次。
-     */
-    private suspend fun resolveByDate(date: LocalDate, withPoster: Boolean): DailyStamp? {
-        val quote = quotes.quoteFor(date) ?: return null
-        return DailyStamp(
-            date = date,
-            quote = quote,
-            poster = if (withPoster) posterStore.posterModel(quote) else null,
-        )
-    }
-
-    /** 日历能往前翻到哪个月为止：第一次签到那个月 */
-    suspend fun earliestMonth(): YearMonth? =
-        dao.earliestDay()?.let { YearMonth.from(LocalDate.ofEpochDay(it)) }
-
     private suspend fun index(): Map<String, SplashQuote> =
         catalog.quotes().associateBy { it.id }
 
-    private fun resolve(entity: DailyStampEntity, index: Map<String, SplashQuote>): DailyStamp {
+    private suspend fun resolve(entity: DailyStampEntity, index: Map<String, SplashQuote>): DailyStamp {
         val quote = index[entity.quoteId]
         return DailyStamp(
             date = LocalDate.ofEpochDay(entity.epochDay),

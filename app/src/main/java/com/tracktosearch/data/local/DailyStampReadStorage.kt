@@ -7,15 +7,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,29 +39,26 @@ private val Context.dailyStampReadDataStore: DataStore<Preferences> by preferenc
 class DailyStampReadStorage @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     private val _readDays = MutableStateFlow<Set<Long>>(emptySet())
 
     /**
-     * 已读过卡片的 epochDay 集合。进页面直接读它，不再等磁盘。
+     * 已读过卡片的 epochDay 集合。要读它得先走 [loadIntoMirror]。
      *
-     * 镜像一上来是空集，所以 [loadIntoMirror] 那次预加载要够快：否则已经补看过的日子会先
-     * 糊一下再变清晰。
+     * 镜像一上来是空集，所以谁要用它决定「那一格糊不糊」，谁就得先 await
+     * [loadIntoMirror]：不等的话已经补看过的日子会先按 12px 糊着请求一张图，镜像落地后
+     * 又换成 160px 重请求一次 —— 白解一遍图，还留下一眼看得出的「先糊再清」。
+     * 日签日历正是这么做的（见 DailyStampViewModel.publishMonth）。
      */
     val readDays: StateFlow<Set<Long>> = _readDays.asStateFlow()
-
-    init {
-        scope.launch { loadIntoMirror() }
-    }
 
     /**
      * 从磁盘读回已读集合，并进内存镜像，返回合并后的值。
      *
-     * 预加载和测试都走这一个入口：预加载在 IO 线程上异步跑，测试里没有可靠的时机去等它，
-     * 直接断言 StateFlow 会时灵时不灵。
+     * 谁在用镜像谁负责调它，而不是构造时自己发一趟 fire-and-forget 的预加载：日历发布整月
+     * 数据之前必须先等这一趟落地，否则就是上面那个「先糊再清」。挂在构造里的那次预加载
+     * 只是把同一趟读盘再抢一次，还让调用方失去「已经读过」这个确定的时机。
      *
-     * 取并集而不是赋值——冷启动这次读盘可能和用户点开卡片撞上：那次已经落了盘，
+     * 取并集而不是赋值——这次读盘可能和用户点开卡片撞上：那次已经落了盘，
      * 赋值会把刚记下的那天从内存镜像里抹掉，磁盘上却有。
      */
     suspend fun loadIntoMirror(): Set<Long> {

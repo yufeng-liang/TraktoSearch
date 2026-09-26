@@ -236,16 +236,69 @@ class DailyStampRepositoryTest {
     }
 
     @Test
-    fun `日历往前翻到第一次签到那个月为止`() = runTest {
+    fun `日历往前翻的起点是最早那条签到`() = runTest {
         coEvery { dao.earliestDay() } returns LocalDate.of(2026, 3, 14).toEpochDay()
 
-        assertThat(repository().earliestMonth()).isEqualTo(YearMonth.of(2026, 3))
+        // 起始月由调用方从这一天派生（YearMonth.from）：仓库只留一个查 MIN 的入口，
+        // 否则一次日历发布要为同一条 SQL 跑三趟
+        assertThat(repository().firstUseDate()).isEqualTo(LocalDate.of(2026, 3, 14))
     }
 
     @Test
-    fun `一条日签都没有时没有起始月`() = runTest {
+    fun `一条日签都没有时没有起始日`() = runTest {
         coEvery { dao.earliestDay() } returns null
 
-        assertThat(repository().earliestMonth()).isNull()
+        assertThat(repository().firstUseDate()).isNull()
+    }
+
+    /**
+     * 一个月最多 31 格，逐条问文件系统就是 62 笔 stat，而这笔钱每次翻月都要付一遍。
+     * 钉住「只列一次目录」：改成循环里问就绪，这里立刻红。
+     */
+    @Test
+    fun `解析整月只列一次目录`() = runTest {
+        val first = LocalDate.of(2026, 8, 3)
+        val second = LocalDate.of(2026, 8, 17)
+        coEvery { catalog.quotes() } returns listOf(quote("a"), quote("b"))
+        coEvery { dao.range(any(), any()) } returns listOf(entity(first, "a"), entity(second, "b"))
+        coEvery { posterStore.posterModels(any()) } returns mapOf("a" to "pa", "b" to "pb")
+
+        val days = repository().month(YearMonth.of(2026, 8))
+
+        coVerify(exactly = 1) { posterStore.posterModels(any()) }
+        assertThat(days.map { it.poster }).containsExactly("pa", "pb").inOrder()
+    }
+
+    /** 错过那些天的 firstUse 由调用方传进来：这里再查一次 MIN 就是第三趟同一条 SQL */
+    @Test
+    fun `错过的那些天不再自己查初次使用那天`() = runTest {
+        coEvery { catalog.quotes() } returns listOf(quote("a"))
+        coEvery { quotes.quoteFor(any()) } returns quote("a")
+        coEvery { dao.range(any(), any()) } returns emptyList()
+        coEvery { posterStore.posterModels(any()) } returns emptyMap()
+
+        repository().missedMonth(
+            month = YearMonth.of(2026, 8),
+            firstUse = LocalDate.of(2026, 8, 20),
+            today = today,
+        )
+
+        coVerify(exactly = 0) { dao.earliestDay() }
+    }
+
+    /** 还没到的那些天格子上不印海报，一次目录都不该问（卡片糊的那张走 w92 地址） */
+    @Test
+    fun `未来的那些天一次目录都不列`() = runTest {
+        coEvery { catalog.quotes() } returns listOf(quote("a"))
+        coEvery { quotes.quoteFor(any()) } returns quote("a")
+
+        val days = repository().latentMonth(
+            month = YearMonth.of(2026, 8),
+            today = LocalDate.of(2026, 8, 20),
+        )
+
+        assertThat(days).hasSize(11)
+        assertThat(days.count { it.poster != null }).isEqualTo(0)
+        coVerify(exactly = 0) { posterStore.posterModels(any()) }
     }
 }
