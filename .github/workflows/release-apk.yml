@@ -414,7 +414,7 @@ jobs:
           # 直链必须带 Content-Length：应用内进度条拿不到总量会退化成不确定的转圈。
           # 先 tr -d '\r'：HTTP 头以 CRLF 结尾，留着 \r 的话 "$" 锚点永远匹配不上。
           head=$(curl -sIL "$SITE_ORIGIN/dl/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk" | tr -d '\r')
-          echo "$head" | grep -qi '^content-length: *'"${APK_SIZE}$'" \
+          echo "$head" | grep -qi '^content-length: *'"${APK_SIZE}"'$' \
             || { echo "::error::直链响应缺 Content-Length 或体积不符"; echo "$head"; exit 1; }
           echo "$head" | grep -qi 'attachment; filename=' \
             || { echo "::error::直链响应没有 Content-Disposition attachment"; exit 1; }
