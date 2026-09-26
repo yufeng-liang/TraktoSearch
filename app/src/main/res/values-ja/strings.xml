@@ -2019,7 +2019,7 @@
     <string name="bg_glow_nebula">ネビュラ</string>
     <string name="bg_glow_ink">墨</string>
     <string name="bg_glow_beach">ビーチ</string>
-    <string name="bg_glow_nebula_desc">雲のピンクと二つの空色の光斑が行き交う</string>
+    <string name="bg_glow_nebula_desc">雲のピンク、空色、ラベンダーの光斑が行き交う</string>
     <string name="bg_glow_ink_desc">白黒の高コントラストな流れ。最も強い見た目で、本文の可読性には最も厳しい</string>
     <string name="bg_glow_beach_desc">シアンとサンドイエローが非常にゆっくり漂う。固定配色でテーマ色に追従しない</string>
     <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->

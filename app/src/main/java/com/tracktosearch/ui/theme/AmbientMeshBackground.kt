@@ -46,7 +46,7 @@ import kotlin.math.sin
  * 枚举顺序与设置里的选项顺序一致；持久化按 name() 存，改顺序不影响已保存的值。
  */
 enum class MeshPreset {
-    NEBULA,     // 出题页天空：云隙粉 / 天蓝 / 柔粉 / 深天蓝（原官方 Default 四色已换）
+    NEBULA,     // 出题页天空：云隙粉 / 天蓝 / 柔粉 / 深天蓝 / 薰衣草（原官方 Default 四色已换）
     INK,        // Paper "Ink"：纯黑白，旋转 90°
     BEACH,      // Paper "Beach"：青蓝 / 湖蓝 / 亮青 / 沙黄
     AURORA,     // 极光：色斑沿轨迹流动
@@ -145,8 +145,8 @@ fun AmbientMeshBackground(
  */
 private fun scrimAlpha(preset: MeshPreset, isDark: Boolean): Float = when {
     preset == MeshPreset.INK -> if (isDark) 0.30f else 0.26f
-    // NEBULA 换色后四档都是浅色、mix 也只压到 0.21，可读性已由 mix 保证
-    // （浅底最坏 3.73:1、深底 3.84:1），蒙层再压一道就纯属压颜色了，所以浅色档几乎撤掉。
+    // NEBULA 五档都是浅色、mix 也只压到 0.21，可读性已由 mix 保证
+    // （浅底最坏 3.69:1、深底 4.27:1），蒙层再压一道就纯属压颜色了，所以浅色档几乎撤掉。
     // 深色档保留 0.22：那一屏正文最密，且浅色彩斑压在浅字上最容易糊。
     preset == MeshPreset.NEBULA -> if (isDark) 0.22f else 0.01f
     preset.isPaperPreset -> if (isDark) 0.22f else 0.16f     // 走到这里只剩 BEACH
@@ -182,9 +182,9 @@ private fun paperPalette(preset: MeshPreset, background: Color, isDark: Boolean)
     // 早先这里记的 #5D4638 全仓不存在，是失效注释。
     //   BEACH 全是亮色，0.32 就有约 5.4:1，不必多压，保留鲜艳。
     //   INK 纯黑最难，浅色主题给 0.62（约 3.9:1）。
-    //   NEBULA 换色后四档全是浅色，浅色主题不再需要压到 0.52：0.21 就有 3.73:1
-    //     （同主题下线上四色是 3.63:1，同级线就在这附近），压多了只会重新变灰。
-    //     深色主题反过来必须压重：0.30 只剩 2.40:1，0.45 才回到 3.84:1，那是下限不是审美值。
+    //   NEBULA 五档全是浅色，浅色主题不再需要压到 0.52：0.21 就有 3.69:1
+    //     （同主题下换色前的官方 Default 是 3.62:1，同级线就在这附近），压多了只会重新变灰。
+    //     深色主题反过来必须压重：0.30 只剩 2.40:1，0.45 才回到 4.27:1，那是下限不是审美值。
     val mix = when (preset) {
         MeshPreset.INK -> if (isDark) 0.50f else 0.62f
         MeshPreset.BEACH -> if (isDark) 0.40f else 0.32f
@@ -198,18 +198,29 @@ private fun paperPalette(preset: MeshPreset, background: Color, isDark: Boolean)
     return when (preset) {
         // 观感参照是彩蛋出题页那张位图天空（R.drawable.swiftie_poster_sky，代码里没有色源）。
         // 对位图全图 85978 点采样：粉 73.3% / 蓝 14.4% / 紫 12.0%，蓝天集中在左上角一角。
+        //
+        // 判据不是"总彩度"，而是 tame+scrim 之后的**渲染色度排序**：shader 输出是各档色的
+        // 凸组合（权重恒正），极值必落在某个色点顶点上，所以逐档渲后值就是整幅画面的上下界，
+        // 与动画帧无关。上一版四色渲成 蓝.086 > 粉.070 > 蓝.061 > 粉.035——第一名是蓝，
+        // 肉眼就读作"蓝灰"，尽管它的平均彩度 .063 比换色前的官方 Default .058 还高一点。
+        // 现在这五档渲成 粉.086 > 紫.075 > 蓝.066 > 蓝.061 > 粉.035，逐位对上旧 Default 的
+        // 粉.084 > 紫.075 > 蓝紫.067，把第一名还给粉。
         // 逐档来源：
-        //   云隙粉 #E9C8DC、天蓝 #7DB7DC —— 位图实测取样
-        //   柔粉 #FEB3C8 —— 旧 Default 那档玫粉 #9F50D3 之外、上一版玫粉压制后的渲染值回填
-        //   深天蓝 #4A97CF —— 不在位图里（图中最蓝是 #77ABE5），是为拉开色相跨度刻意推深的
-        // 色点 1 与 3 渲染后只差 ΔE 0.043（肉眼同色），这是**故意的**：mesh 四档等权，
-        // 两档落在同一色区等于给"粉"加权，同时去掉高饱和玫粉那颗扎眼的点 —— 对应
-        // "粉有点重"的诉求。代价是深底下两档粉并得更狠（ΔE 0.024），实际只剩三档可辨。
-        // 上一版用薰衣草 #C9A8DE 替紫罗兰是空操作：它在 mix 0.21 下渲成 #d3b8e2，
-        // 与旧紫罗兰在 mix 0.52 下渲成的 #d4b1e7 只差 ΔE 0.021 —— 降彩度和降压制互相抵消。
-        // 想再调各档占比可以多加重复色：mirage 的 u_colors 上限是 10，多给只是改权重、不动算法。
+        //   云隙粉 #E9C8DC、天蓝 #7DB7DC —— 位图实测取样，未动。
+        //   柔粉 #F89FBD —— 上一版 #FEB3C8 深一档。那颗粉已经踩在自己明度/色相的 sRGB 色域
+        //     边界上（源彩度 .091，渲后 .0705，天花板 .0719），不降明度就没有加彩度的余地，
+        //     所以"粉第一"只能靠降明度换出色域、或把蓝压下去；这里两边各让一点。
+        //   深天蓝 #5F96C1 —— 上一版 #4A97CF 降一档，给粉让位。代价是蓝天浅一档、层次弱一点。
+        //   薰衣草 #CFA8E8 —— 新增，有彩度门槛：旧那颗 #C9A8DE 渲后只 .062，排在蓝和粉后面
+        //     等于没加（实测和现状肉眼无差）。.075 是"看得见但不抢粉"的下限。
+        // 另有一条并片阈值：两档渲后 ΔE 小于约 .05 等于只剩一档。上一版色点 1 与 3 只差 .042，
+        // 四档实际三档可辨；现在最小间距 .066（色点 3 与 5）。
+        // 色点从 4 增到 5 只是把某档色的占比摊薄，不动算法——mirage 的 u_colors 上限是 10。
+        // 历史坑：更早一版拿 #C9A8DE 替紫罗兰 #9F50D3 是空操作，它在 mix 0.21 下渲成 #d3b8e2，
+        // 与旧紫罗兰在 mix 0.52 下渲成的 #d4b1e7 只差 ΔE 0.021——降彩度和降压制互相抵消。
         MeshPreset.NEBULA -> listOf(
-            Color(0xFFE9C8DC), Color(0xFF7DB7DC), Color(0xFFFEB3C8), Color(0xFF4A97CF),
+            Color(0xFFE9C8DC), Color(0xFF7DB7DC), Color(0xFFF89FBD),
+            Color(0xFF5F96C1), Color(0xFFCFA8E8),
         )
         MeshPreset.INK -> listOf(Color(0xFFFFFFFF), Color(0xFF000000))
         MeshPreset.BEACH -> listOf(
