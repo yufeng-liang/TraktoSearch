@@ -532,7 +532,7 @@ internal fun AccentColorDialog(
                     .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) {
                         meshMenuExpanded = true
                     }
-                    .padding(vertical = 4.dp),
+                    .padding(top = 4.dp, bottom = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
