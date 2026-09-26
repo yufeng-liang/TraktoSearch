@@ -34,21 +34,25 @@ val Blue115 = Color(0xFF2563EB)          // 115网盘 - 蓝色
  * 删项是安全的：`ThemeStorage.decodeAccentName` 对认不出的名字有兜底，
  * 历史名字的迁移映射也在那里。[RENOIR] 不能删 ——
  * `CloudThemeManager.commitSwiftieUnlock` 直接引用它。
+ *
+ * 每行行尾的度数是 [light] 档的 **HCT 色相角**（`Hct.fromInt(light).hue`），
+ * 与 `ThemePaletteStructureTest` 运行时算的是同一个量，用来肉眼核对"这批色有没有挤成一堆"。
+ * 早先那些整数是手写近似，最大偏差 15°（星夜蓝记 268°、实际 252.7°），已按实算值校正。
  */
 enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dark: Color) {
-    RENOIR(R.string.accent_renoir, Color(0xFFD4748A), Color(0xFFE8909A)),                     //   7°
-    POPPY(R.string.accent_poppy, Color(0xFFD94040), Color(0xFFE86060)),                       //  31°
-    VINTAGE_TICKET(R.string.accent_vintage_ticket, Color(0xFFB85030), Color(0xFFE5906A)),      //  44°
-    SUNRISE(R.string.accent_sunrise, Color(0xFFE8915A), Color(0xFFF4A460)),                    //  57°
-    HAYSTACK(R.string.accent_haystack, Color(0xFFC4A94D), Color(0xFFD4B96A)),                  //  91°
-    GIVERNY_MOSS(R.string.accent_giverny_moss, Color(0xFF5F8440), Color(0xFF98BE70)),          // 128°
-    JAPANESE_BRIDGE(R.string.accent_japanese_bridge, Color(0xFF5A8F6B), Color(0xFF7AB68A)),    // 152°
-    VENICE_CANAL(R.string.accent_venice_canal, Color(0xFF1C8078), Color(0xFF4FB8AC)),          // 187°
-    BOAT_BREAKFAST(R.string.accent_boat_breakfast, Color(0xFF3A8AA0), Color(0xFF5AA8C0)),      // 227°
-    STARRY_NIGHT(R.string.accent_starry_night, Color(0xFF4A7FB5), Color(0xFF6B9FD4)),          // 268°
-    CATHEDRAL(R.string.accent_cathedral, Color(0xFF6A7180), Color(0xFF9DA4B4)),                // 275°
-    WATER_LILY(R.string.accent_water_lily, Color(0xFF7B68AE), Color(0xFF9B8EC4)),              // 304°
-    BALLET(R.string.accent_ballet, Color(0xFFB06AA0), Color(0xFFC88AB8));                      // 334°
+    RENOIR(R.string.accent_renoir, Color(0xFFD4748A), Color(0xFFE8909A)),                     //   6.0°
+    POPPY(R.string.accent_poppy, Color(0xFFD94040), Color(0xFFE86060)),                       //  22.2°
+    VINTAGE_TICKET(R.string.accent_vintage_ticket, Color(0xFFB85030), Color(0xFFE5906A)),      //  34.9°
+    SUNRISE(R.string.accent_sunrise, Color(0xFFE8915A), Color(0xFFF4A460)),                    //  49.9°
+    HAYSTACK(R.string.accent_haystack, Color(0xFFC4A94D), Color(0xFFD4B96A)),                  //  94.4°
+    GIVERNY_MOSS(R.string.accent_giverny_moss, Color(0xFF5F8440), Color(0xFF98BE70)),          // 134.9°
+    JAPANESE_BRIDGE(R.string.accent_japanese_bridge, Color(0xFF5A8F6B), Color(0xFF7AB68A)),    // 157.4°
+    VENICE_CANAL(R.string.accent_venice_canal, Color(0xFF1C8078), Color(0xFF4FB8AC)),          // 188.8°
+    BOAT_BREAKFAST(R.string.accent_boat_breakfast, Color(0xFF3A8AA0), Color(0xFF5AA8C0)),      // 220.0°
+    STARRY_NIGHT(R.string.accent_starry_night, Color(0xFF4A7FB5), Color(0xFF6B9FD4)),          // 252.7°
+    CATHEDRAL(R.string.accent_cathedral, Color(0xFF6A7180), Color(0xFF9DA4B4)),                // 261.9°
+    WATER_LILY(R.string.accent_water_lily, Color(0xFF7B68AE), Color(0xFF9B8EC4)),              // 299.0°
+    BALLET(R.string.accent_ballet, Color(0xFFB06AA0), Color(0xFFC88AB8));                      // 338.7°
 }
 
 // UI 重设计新增颜色
