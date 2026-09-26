@@ -46,7 +46,7 @@ import kotlin.math.sin
  * 枚举顺序与设置里的选项顺序一致；持久化按 name() 存，改顺序不影响已保存的值。
  */
 enum class MeshPreset {
-    NEBULA,     // 出题页天空：云隙粉 / 天蓝 / 玫粉 / 薰衣草（原官方 Default 四色已换）
+    NEBULA,     // 出题页天空：云隙粉 / 天蓝 / 柔粉 / 深天蓝（原官方 Default 四色已换）
     INK,        // Paper "Ink"：纯黑白，旋转 90°
     BEACH,      // Paper "Beach"：青蓝 / 湖蓝 / 亮青 / 沙黄
     AURORA,     // 极光：色斑沿轨迹流动
@@ -200,15 +200,16 @@ private fun paperPalette(preset: MeshPreset, background: Color, isDark: Boolean)
         // 对位图全图 85978 点采样：粉 73.3% / 蓝 14.4% / 紫 12.0%，蓝天集中在左上角一角。
         // 逐档来源：
         //   云隙粉 #E9C8DC、天蓝 #7DB7DC —— 位图实测取样
-        //   玫粉 #F75092 —— 沿用官方 Default 的那一档，它本身就是画面里最饱和的一点
-        //   薰衣草 #C9A8DE —— 与 SwiftiePalette.Lavender 同值（水彩天空的最暗档）。这里写死字面量
-        //     而不是引用那个常量：公共背景层不该依赖彩蛋页面模块，而 Lavender 本身不许为背景改动。
-        // 紫没去掉：参照物自己就带 12% 的紫。但它从 #9F50D3（Oklab 309°/彩度 0.199）
-        // 换成 #C9A8DE（312°/彩度 0.083）—— 色相基本同位，彩度降到四成，压的是彩度不是色相。
-        // 想调各档占比可以多加几档重复色：mirage 的 u_colors 上限是 10，多给只是改权重、
-        // 不动算法；蓝天在位图里只占一角，进这层无方向等权的弥散会被摊成 1/N。
+        //   柔粉 #FEB3C8 —— 旧 Default 那档玫粉 #9F50D3 之外、上一版玫粉压制后的渲染值回填
+        //   深天蓝 #4A97CF —— 不在位图里（图中最蓝是 #77ABE5），是为拉开色相跨度刻意推深的
+        // 色点 1 与 3 渲染后只差 ΔE 0.043（肉眼同色），这是**故意的**：mesh 四档等权，
+        // 两档落在同一色区等于给"粉"加权，同时去掉高饱和玫粉那颗扎眼的点 —— 对应
+        // "粉有点重"的诉求。代价是深底下两档粉并得更狠（ΔE 0.024），实际只剩三档可辨。
+        // 上一版用薰衣草 #C9A8DE 替紫罗兰是空操作：它在 mix 0.21 下渲成 #d3b8e2，
+        // 与旧紫罗兰在 mix 0.52 下渲成的 #d4b1e7 只差 ΔE 0.021 —— 降彩度和降压制互相抵消。
+        // 想再调各档占比可以多加重复色：mirage 的 u_colors 上限是 10，多给只是改权重、不动算法。
         MeshPreset.NEBULA -> listOf(
-            Color(0xFFE9C8DC), Color(0xFF7DB7DC), Color(0xFFF75092), Color(0xFFC9A8DE),
+            Color(0xFFE9C8DC), Color(0xFF7DB7DC), Color(0xFFFEB3C8), Color(0xFF4A97CF),
         )
         MeshPreset.INK -> listOf(Color(0xFFFFFFFF), Color(0xFF000000))
         MeshPreset.BEACH -> listOf(
