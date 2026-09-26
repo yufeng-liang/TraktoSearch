@@ -61,8 +61,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 65
-        versionName = "4.0.0"
+        versionCode = 66
+        versionName = "4.0.1"
 
         // sherpa-onnx 全 ABI 太重：只保留 arm64-v8a（覆盖全部主流真机），
         // 模拟器（x86_64）与老 32 位设备不再可装
