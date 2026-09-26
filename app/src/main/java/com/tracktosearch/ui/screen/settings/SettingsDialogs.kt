@@ -980,6 +980,8 @@ fun ChangelogDialog(
     AppAlertDialog(
         onDismissRequest = onDismiss,
         // 无标题弹窗：title 槽整省略；内容限高由组件内置（原手写 heightIn 删除）
+        // 内容自带 LazyColumn，必须关掉组件那层 verticalScroll，否则无限高约束直接崩
+        contentScrollable = false,
         content = {
             Box(modifier = Modifier.fillMaxWidth()) {
                 when {
@@ -1042,6 +1044,8 @@ fun DiscoverSectionsDialog(
         // 副提示走 supportMessage：它就是「标题下方一行小字」，与组件里 message+supportMessage
         // 的配方同构，不必再自绘两行标题把字号交回调用点。
         supportMessage = stringResource(R.string.settings_discover_sections_hint),
+        // 内容自带 LazyColumn（含拖动排序），关掉组件那层 verticalScroll 让列表自己滚
+        contentScrollable = false,
         content = {
             // text 槽自带宿主 View；把手那一记在槽内取实例（DiscoverSectionRow 里那份是它自己的）；
             // 限高与滚动由组件内容槽负责（原手写 heightIn(max=500.dp) 删除）

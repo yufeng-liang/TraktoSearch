@@ -126,6 +126,10 @@ fun AppAlertDialog(
     icon: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
     properties: DialogProperties = DialogProperties(),
+    // 内容自带滚动容器（LazyColumn / LazyVerticalGrid 等）时必须置 false：
+    // 本组件默认套的 verticalScroll 会把无限高约束传给子节点，lazy 列表收到直接抛
+    // IllegalStateException（「点更新日志闪退」即此）。关掉后限高仍在，改由列表自己滚。
+    contentScrollable: Boolean = true,
     content: (@Composable () -> Unit)? = null,
 ) {
     val hasTextSlot = message != null || supportMessage != null || content != null
@@ -139,13 +143,16 @@ fun AppAlertDialog(
     // 整个表达式推成 Unit? 编译不过。三字段全空时传 null 而不是空 lambda：
     // AlertDialog 的 text 槽只要非空就套一层带底部内边距的 Box，空槽会白占一段间距。
     val textSlotContent: @Composable () -> Unit = @Composable {
+        // 自带滚动容器（LazyColumn 等）的调用点走 else 分支：限高照旧，滚动交给内容自己。
+        val scrollModifier =
+            if (contentScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
         Column(
             modifier = Modifier
                 // testTag 必须在 heightIn 之前：挂在限高之后命中的是被裁剪的内层节点，
                 // 滚动语义则可能落在别的层上，断言就查不到东西。
                 .testTag(DialogContentTag)
                 .heightIn(max = DesignToken.DialogContentMaxHeight)
-                .verticalScroll(rememberScrollState()),
+                .then(scrollModifier),
         ) {
             if (message != null) {
                 Text(

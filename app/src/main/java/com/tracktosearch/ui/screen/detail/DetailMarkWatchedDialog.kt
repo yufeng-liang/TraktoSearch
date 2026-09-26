@@ -109,6 +109,8 @@ internal fun MarkWatchedDialog(
     AppAlertDialog(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.detail_mark_watched_title),
+        // 内容自带 LazyColumn，关掉组件那层 verticalScroll 让列表自己滚
+        contentScrollable = false,
         content = {
             // content 槽在自己的组合作用域里，Checkbox 的触感句柄单独取一份
             val haptics = rememberAppHaptics()

@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.component
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -228,6 +230,66 @@ class AppDialogTest {
         // 限高本身不在单测断言（Robolectric 密度会让像素断言不稳），由真机截图核验；
         // 这里只锁「内容槽一定带滚动能力」这一条契约。
         composeRule.onNodeWithTag(DialogContentTag).assert(hasScrollAction())
+    }
+
+    @Test
+    fun `contentScrollable=false 时 content 槽可放 LazyColumn 不崩`() {
+        // 回归：verticalScroll 会给子节点无限高约束，LazyColumn 收到就抛
+        // IllegalStateException（线上「点更新日志闪退」即此）。实现若忽略该参数，
+        // 这里会直接抛异常而不是断言失败，同样算红。
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Head",
+                    contentScrollable = false,
+                    content = {
+                        LazyColumn {
+                            items(20) { Text("row $it") }
+                        }
+                    },
+                )
+            }
+        }
+        composeRule.onNodeWithText("row 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `contentScrollable=false 时内容槽自身不再带滚动`() {
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    title = "Head",
+                    contentScrollable = false,
+                    content = { Text("Plain body") },
+                )
+            }
+        }
+        // 断「内容槽这一层没有滚动语义」：滚动若没摘掉，LazyColumn 那类子节点就会崩。
+        // 不能反过来断 hasScrollAction，因为默认 true 时那条已有用例覆盖。
+        composeRule.onNodeWithTag(DialogContentTag).assert(!hasScrollAction())
+    }
+
+    @Test
+    fun `更新日志吸顶内容放进弹窗不崩`() {
+        // 直击线上路径：StickyHeaderChangelogContent 是 LazyColumn，曾与组件内置
+        // verticalScroll 相撞导致点更新日志闪退。
+        composeRule.setContent {
+            MaterialTheme {
+                AppAlertDialog(
+                    onDismissRequest = {},
+                    contentScrollable = false,
+                    content = {
+                        StickyHeaderChangelogContent(
+                            text = "## v9.9.9 更新内容（2026-09-26）\n\n- 修复闪退\n- 优化性能",
+                            headerColor = MaterialTheme.colorScheme.surface,
+                        )
+                    },
+                )
+            }
+        }
+        composeRule.onNodeWithText("v9.9.9 更新内容", substring = true).assertIsDisplayed()
     }
 
     @Test
