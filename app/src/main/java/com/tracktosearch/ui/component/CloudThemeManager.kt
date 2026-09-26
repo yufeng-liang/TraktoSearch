@@ -24,25 +24,33 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 白云主题，对应不同的 Lottie 动画 */
-enum class CloudTheme(val rawRes: Int) {
-    SUNNY(R.raw.cloud_sunny),
-    RAINY(R.raw.cloud_rainy),
-    SNOWY(R.raw.cloud_snowy),
-    THUNDER(R.raw.cloud_thunder),
-    CHRISTMAS(R.raw.cloud_christmas),
-    SPRING_FESTIVAL(R.raw.cloud_spring_festival),
-    HALLOWEEN(R.raw.cloud_halloween),
+/**
+ * 白云主题，对应不同的 Lottie 动画。
+ *
+ * [freezeProgress] = 每次可见完整播完一次之后定格的进度。值是真机之外用
+ * `docs/previews/cloud-frame/` 那页逐主题量出来的：多数主题的首末帧逐像素相同
+ * （本来就按无缝循环做的），所以走自然末态 `1f`；sunny / overcast / mist 选回首帧，
+ * cloudy / night 停在半程最好看的那一帧。新增主题没有显式值会直接编不过——
+ * 就是要逼着看一眼该停在哪，而不是悄悄继承一个默认。
+ */
+enum class CloudTheme(val rawRes: Int, val freezeProgress: Float) {
+    SUNNY(R.raw.cloud_sunny, 0f),
+    RAINY(R.raw.cloud_rainy, 1f),
+    SNOWY(R.raw.cloud_snowy, 1f),
+    THUNDER(R.raw.cloud_thunder, 1f),
+    CHRISTMAS(R.raw.cloud_christmas, 1f),
+    SPRING_FESTIVAL(R.raw.cloud_spring_festival, 1f),
+    HALLOWEEN(R.raw.cloud_halloween, 1f),
     // 新增天气主题
-    CLOUDY(R.raw.cloud_cloudy),
-    OVERCAST(R.raw.cloud_overcast),
-    MIST(R.raw.cloud_mist),
-    NIGHT(R.raw.cloud_night),
+    CLOUDY(R.raw.cloud_cloudy, 0.5f),
+    OVERCAST(R.raw.cloud_overcast, 0f),
+    MIST(R.raw.cloud_mist, 0f),
+    NIGHT(R.raw.cloud_night, 0.5f),
     // 新增节日主题
-    NATIONAL(R.raw.cloud_national),
-    MIDAUTUMN(R.raw.cloud_midautumn),
-    DRAGONBOAT(R.raw.cloud_dragonboat),
-    LABOR(R.raw.cloud_labor);
+    NATIONAL(R.raw.cloud_national, 1f),
+    MIDAUTUMN(R.raw.cloud_midautumn, 1f),
+    DRAGONBOAT(R.raw.cloud_dragonboat, 1f),
+    LABOR(R.raw.cloud_labor, 1f);
 }
 
 /** 彩蛋：动画 + 语义匹配的候选文案池（1:N 配对） */
@@ -130,6 +138,15 @@ class CloudThemeManager @Inject constructor(
      * Tab 都是全新组合。跨进程那一层由 `cloudNudgeShown` 的预算管。
      */
     private var cloudNudgeStartedThisProcess = false
+
+    /**
+     * 上一次起播天气动画的时刻（uptime 毫秒），[NEVER_PLAYED_WEATHER] 表示本进程还没播过。
+     *
+     * 和 [cloudNudgeStartedThisProcess] 同理，不能存在组合里：搜索页每次切回 Tab 都是全新组合，
+     * `remember` 活不过那次重建，节流也就无从谈起。
+     */
+    @Volatile
+    private var lastWeatherPlayAtMs = NEVER_PLAYED_WEATHER
 
     init {
         scope.launch {
@@ -230,6 +247,18 @@ class CloudThemeManager @Inject constructor(
         if (cloudNudgeStartedThisProcess) return false
         cloudNudgeStartedThisProcess = true
         return true
+    }
+
+    /**
+     * 天气动画起一轮播放，允许就顺手盖章。
+     *
+     * 判据本身在 [shouldReplayWeather]，这里只多一件「占额度」的事，所以盖章与判定不分成
+     * 两步给调用方 —— 中间让出去就可能被另一朵花同时占上。
+     */
+    fun claimWeatherPlay(nowMs: Long, reducedMotion: Boolean): Boolean {
+        val allow = shouldReplayWeather(reducedMotion, nowMs, lastWeatherPlayAtMs)
+        if (allow) lastWeatherPlayAtMs = nowMs
+        return allow
     }
 
     /**
@@ -402,6 +431,30 @@ class CloudThemeManager @Inject constructor(
                 weather.weatherCode == 49 ||
                 weather.weatherCode in 53..58 -> CloudTheme.MIST
             else -> CloudTheme.SUNNY
+        }
+    }
+
+    companion object {
+        /** 盖过章之后多久之内不再重播同一种天气。 */
+        const val WEATHER_REPLAY_MIN_INTERVAL_MS = 8_000L
+
+        /** 起底值：本进程从没播过。uptime 毫秒恒 >= 0，-1 不会被真实时刻撞掉。 */
+        const val NEVER_PLAYED_WEATHER = -1L
+
+        /**
+         * 该不该起一轮天气播放。
+         *
+         * 「减少动效」排在节流前面是有意的：静态用户根本没起播，不该顺手占掉那 8 秒窗口，
+         * 否则他把开关关掉之后还要白等一截才看得到动画。
+         */
+        fun shouldReplayWeather(
+            reducedMotion: Boolean,
+            nowMs: Long,
+            lastStartMs: Long,
+        ): Boolean {
+            if (reducedMotion) return false
+            if (lastStartMs == NEVER_PLAYED_WEATHER) return true
+            return nowMs - lastStartMs >= WEATHER_REPLAY_MIN_INTERVAL_MS
         }
     }
 }
