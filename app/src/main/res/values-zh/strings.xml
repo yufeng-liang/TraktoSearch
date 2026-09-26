@@ -2008,7 +2008,7 @@
     <string name="bg_glow_nebula">星云</string>
     <string name="bg_glow_ink">水墨</string>
     <string name="bg_glow_beach">海滩</string>
-    <string name="bg_glow_nebula_desc">深靛底上浮动玫粉与紫罗兰光斑</string>
+    <string name="bg_glow_nebula_desc">天蓝与云隙粉浮动，缀一抹玫粉与薰衣草</string>
     <string name="bg_glow_ink_desc">纯黑白高对比流动，视觉最强，也最挑正文可读性</string>
     <string name="bg_glow_beach_desc">青蓝与沙黄极缓漂移，固定配色，不跟随主题色</string>
     <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->

@@ -38,14 +38,15 @@ import kotlin.math.sin
 /**
  * 主页面背景彩色弥散光晕预设。
  *
- * 前三个是 Paper Shaders 官网 mesh-gradient 的原始预设（Default / Ink / Beach），
- * 用它们自带的固定配色，不跟随主题色；Paper 的 Purple 预设按需求未收录。
+ * [INK] 与 [BEACH] 是 Paper Shaders 官网 mesh-gradient 的原始预设（Ink / Beach），用它们自带的固定
+ * 配色，不跟随主题色；Paper 的 Purple 预设按需求未收录。[NEBULA] 当初照抄的是官方 Default 预设，
+ * 配色现已改向霉粉彩蛋出题页的天空（见 [paperPalette] 的注释），但运动参数仍是官方原值。
  * 后三个是主题色驱动：调色板取自当前主题种子色，四个页面共享同一层，仅运动方式不同。
  *
  * 枚举顺序与设置里的选项顺序一致；持久化按 name() 存，改顺序不影响已保存的值。
  */
 enum class MeshPreset {
-    NEBULA,     // Paper "Default"：淡蓝 / 深靛 / 玫粉 / 紫罗兰
+    NEBULA,     // 出题页天空：云隙粉 / 天蓝 / 玫粉 / 薰衣草（原官方 Default 四色已换）
     INK,        // Paper "Ink"：纯黑白，旋转 90°
     BEACH,      // Paper "Beach"：青蓝 / 湖蓝 / 亮青 / 沙黄
     AURORA,     // 极光：色斑沿轨迹流动
@@ -144,7 +145,11 @@ fun AmbientMeshBackground(
  */
 private fun scrimAlpha(preset: MeshPreset, isDark: Boolean): Float = when {
     preset == MeshPreset.INK -> if (isDark) 0.30f else 0.26f
-    preset.isPaperPreset -> if (isDark) 0.22f else 0.16f
+    // NEBULA 换色后四档都是浅色、mix 也只压到 0.21，可读性已由 mix 保证
+    // （浅底最坏 3.73:1、深底 3.84:1），蒙层再压一道就纯属压颜色了，所以浅色档几乎撤掉。
+    // 深色档保留 0.22：那一屏正文最密，且浅色彩斑压在浅字上最容易糊。
+    preset == MeshPreset.NEBULA -> if (isDark) 0.22f else 0.01f
+    preset.isPaperPreset -> if (isDark) 0.22f else 0.16f     // 走到这里只剩 BEACH
     else -> if (isDark) 0.18f else 0.10f
 }
 /**
@@ -165,27 +170,45 @@ private fun themePalette(colorScheme: ColorScheme, isDark: Boolean): List<Color>
 }
 
 /**
- * Paper Shaders mesh-gradient 官方预设配色，色相与相对关系照抄 paper-design/shaders 源码，
- * 再统一向页面背景色混合一次，把亮度/饱和的极值收进来——这是"不喧宾夺主"的主要手段。
+ * 固定配色档位：向页面背景色混合一次，把亮度/饱和的极值收进来——
+ * 这是"不喧宾夺主"的主要手段。
  *
- * INK 是纯黑白，混合比例必须更高，否则正文压在纯白或纯黑区域上必然有一处看不见。
+ * INK 与 BEACH 照抄 paper-design/shaders 官方同名预设的色相与相对关系。
+ * NEBULA 原本照抄官方 Default 预设，现已改向霉粉彩蛋出题页的天空，见下方 [MeshPreset.NEBULA] 分支。
  */
 private fun paperPalette(preset: MeshPreset, background: Color, isDark: Boolean): List<Color> {
-    // 混合比例按"最暗/最亮那一档色与正文色的 WCAG 对比度"反推（浅色主题正文 #5D4638，
-    // 深色主题 #F7EDE3，叠加 scrimAlpha 后计算）：
-    //   NEBULA 的深靛 #241D9A 是最坏情况，浅色主题 0.52 才到约 3.4:1；不压则只有 2.1:1。
+    // 混合比例按"最暗/最亮那一档色与正文色的 WCAG 对比度"反推。正文取当前主题的实际值：
+    // 票根浅色是 TicketInkLight #3E2A1E（次要文字 #574536）、票根深色是 TicketInkDark #F7EDE3。
+    // 早先这里记的 #5D4638 全仓不存在，是失效注释。
     //   BEACH 全是亮色，0.32 就有约 5.4:1，不必多压，保留鲜艳。
     //   INK 纯黑最难，浅色主题给 0.62（约 3.9:1）。
-    //   深色主题正文是浅色，宽松得多，0.40~0.50 即可全部过 4.5:1。
+    //   NEBULA 换色后四档全是浅色，浅色主题不再需要压到 0.52：0.21 就有 3.73:1
+    //     （同主题下线上四色是 3.63:1，同级线就在这附近），压多了只会重新变灰。
+    //     深色主题反过来必须压重：0.30 只剩 2.40:1，0.45 才回到 3.84:1，那是下限不是审美值。
     val mix = when (preset) {
         MeshPreset.INK -> if (isDark) 0.50f else 0.62f
         MeshPreset.BEACH -> if (isDark) 0.40f else 0.32f
+        MeshPreset.NEBULA -> if (isDark) 0.45f else 0.21f
         else -> if (isDark) 0.45f else 0.52f
     }
+    // lerp(Color, Color, Float) 在 ui 1.12.1 走 Oklab 而非通道线性（调用栈
+    // ColorKt.lerp → Color.convert → Connector.transformToColor → Oklab.xyzaToColor）。
+    // 网页端对色必须同口径，否则混出来的色对不上真机。
     fun tame(color: Color): Color = lerp(color, background, mix)
     return when (preset) {
+        // 观感参照是彩蛋出题页那张位图天空（R.drawable.swiftie_poster_sky，代码里没有色源）。
+        // 对位图全图 85978 点采样：粉 73.3% / 蓝 14.4% / 紫 12.0%，蓝天集中在左上角一角。
+        // 逐档来源：
+        //   云隙粉 #E9C8DC、天蓝 #7DB7DC —— 位图实测取样
+        //   玫粉 #F75092 —— 沿用官方 Default 的那一档，它本身就是画面里最饱和的一点
+        //   薰衣草 #C9A8DE —— 与 SwiftiePalette.Lavender 同值（水彩天空的最暗档）。这里写死字面量
+        //     而不是引用那个常量：公共背景层不该依赖彩蛋页面模块，而 Lavender 本身不许为背景改动。
+        // 紫没去掉：参照物自己就带 12% 的紫。但它从 #9F50D3（Oklab 309°/彩度 0.199）
+        // 换成 #C9A8DE（312°/彩度 0.083）—— 色相基本同位，彩度降到四成，压的是彩度不是色相。
+        // 想调各档占比可以多加几档重复色：mirage 的 u_colors 上限是 10，多给只是改权重、
+        // 不动算法；蓝天在位图里只占一角，进这层无方向等权的弥散会被摊成 1/N。
         MeshPreset.NEBULA -> listOf(
-            Color(0xFFE0EAFF), Color(0xFF241D9A), Color(0xFFF75092), Color(0xFF9F50D3),
+            Color(0xFFE9C8DC), Color(0xFF7DB7DC), Color(0xFFF75092), Color(0xFFC9A8DE),
         )
         MeshPreset.INK -> listOf(Color(0xFFFFFFFF), Color(0xFF000000))
         MeshPreset.BEACH -> listOf(

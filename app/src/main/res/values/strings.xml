@@ -2015,7 +2015,7 @@ Config:
     <string name="bg_glow_nebula">Nebula</string>
     <string name="bg_glow_ink">Ink</string>
     <string name="bg_glow_beach">Beach</string>
-    <string name="bg_glow_nebula_desc">Rose and violet spots drifting over deep indigo.</string>
+    <string name="bg_glow_nebula_desc">Sky blue and cloud pink, lifted by rose and lavender.</string>
     <string name="bg_glow_ink_desc">High-contrast black and white flow. Boldest look, and the hardest on text readability</string>
     <string name="bg_glow_beach_desc">Cyan and sand yellow drifting very slowly. Fixed palette, does not follow the theme color</string>
     <!-- 影视筛选页：类型/标签/地区（原本硬编码中文，英/日/韩用户看到中文） -->
