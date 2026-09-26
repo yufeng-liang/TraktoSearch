@@ -350,22 +350,28 @@ export async function issueInvitation(
         `).bind(currentTime, currentTime, request.id).run();
     } catch (error) {
         console.error('Public invitation email failed', error);
+        // 回滚顺序有硬约束：invite_requests.friend_id / invite_id 有外键指向
+        // friends / invites（D1 默认 foreign_keys=1，batch 又是事务性的），
+        // 必须先清空这两个指针再删父行；反过来整批会被 FOREIGN KEY constraint
+        // failed 拒绝，名额泄漏、请求卡在 ISSUED、用户拿到的是原始 SQL 错误。
         await env.DB.batch([
-            env.DB.prepare(`DELETE FROM invites WHERE id = ?`).bind(inviteId),
-            env.DB.prepare(`DELETE FROM friends WHERE id = ?`).bind(friendId),
             env.DB.prepare(`
                 UPDATE invite_requests
                 SET status = 'EMAIL_FAILED', friend_id = NULL, invite_id = NULL, updated_at = ?
                 WHERE id = ?
             `).bind(now(), request.id),
+            env.DB.prepare(`DELETE FROM invites WHERE id = ?`).bind(inviteId),
+            env.DB.prepare(`DELETE FROM friends WHERE id = ?`).bind(friendId),
             // 邮件发送失败回滚时，前一步已插入的 SUCCESS 审计行成为悬挂记录
             // （显示签发成功但邀请已删），标记为 FAILURE——result 列有
-            // CHECK(result IN ('SUCCESS','FAILURE')) 约束，只能取这两个值
+            // CHECK(result IN ('SUCCESS','FAILURE')) 约束，只能取这两个值。
+            // request_id 列存的是 HTTP 请求 ID（见上面的 INSERT），不是
+            // invite_requests.id，用后者匹配会静默命中 0 行。
             env.DB.prepare(`
                 UPDATE audit_logs
                 SET result = 'FAILURE', detail = detail || ';email_send_failed_rolled_back'
                 WHERE event_type = 'PUBLIC_INVITE_ISSUE' AND friend_id = ? AND request_id = ? AND result = 'SUCCESS'
-            `).bind(friendId, request.id),
+            `).bind(friendId, requestId),
         ]);
         throw new AppError('EMAIL_SEND_FAILED', 'Unable to send invitation email', 503);
     }
@@ -391,6 +397,7 @@ export async function resendInvitation(
                r.id AS request_id,
                r.invite_id,
                r.email_sent_at,
+               r.updated_at AS request_updated_at,
                i.expires_at AS invite_expires_at
         FROM friends f
         JOIN invite_requests r
@@ -413,6 +420,7 @@ export async function resendInvitation(
         request_id: string;
         invite_id: string;
         email_sent_at: number | null;
+        request_updated_at: number;
         invite_expires_at: number;
     }>();
 
@@ -485,6 +493,37 @@ export async function resendInvitation(
         });
     } catch (error) {
         console.error('Public invitation resend failed', error);
+        // 上面那批语句已经提交，发信却失败了。不回滚的话，用户手上/收件箱里的
+        // 旧码已失效、新码从未送达、email_sent_at 还被刷新（60 秒内连重试都不行），
+        // 审计日志却记着 SUCCESS。这里把状态逐项还原成重发前的样子。
+        //
+        // 顺序同样是硬约束：invite_requests.invite_id 此刻指向新码，必须先指回
+        // 旧码，否则 DELETE 新码会撞上外键。
+        await env.DB.batch([
+            env.DB.prepare(`
+                UPDATE invite_requests
+                SET invite_id = ?, email_sent_at = ?, updated_at = ?
+                WHERE id = ? AND invite_id = ?
+            `).bind(
+                current.invite_id,
+                current.email_sent_at,
+                current.request_updated_at,
+                current.request_id,
+                inviteId,
+            ),
+            // revoked_at = ? 是并发护栏：只有仍是本次撤销打上的时间戳才还原
+            env.DB.prepare(`
+                UPDATE invites
+                SET revoked_at = NULL
+                WHERE id = ? AND friend_id = ? AND revoked_at = ?
+            `).bind(current.invite_id, current.friend_id, currentTime),
+            env.DB.prepare(`DELETE FROM invites WHERE id = ?`).bind(inviteId),
+            env.DB.prepare(`
+                UPDATE audit_logs
+                SET result = 'FAILURE', detail = detail || ';email_send_failed_rolled_back'
+                WHERE event_type = 'PUBLIC_INVITE_RESEND' AND friend_id = ? AND request_id = ? AND result = 'SUCCESS'
+            `).bind(current.friend_id, requestId),
+        ]);
         throw new AppError('EMAIL_SEND_FAILED', 'Unable to send invitation email', 503);
     }
 
