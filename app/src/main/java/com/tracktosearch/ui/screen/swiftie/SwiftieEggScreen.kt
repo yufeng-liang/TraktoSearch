@@ -98,8 +98,17 @@ private val POSTER_MAX_WIDTH = 560.dp
 /** 算式底边与键盘托盘之间至少留这么多。 */
 private val EQUATION_GAP = 16.dp
 
-/** `Her lucky number.` 的常驻预留高度。只动 alpha，浮出时不挤动键盘。 */
-private val LUCKY_BAND = 34.dp
+/**
+ * `Her lucky number.` 的常驻预留高度（系统字号 100% 时）。只动 alpha，浮出时不挤动键盘。
+ *
+ * 这一带在 [SwiftieQuizStage] 里是**硬约束**：提示行的行盒一旦高过它，文字就会被裁掉
+ * 上下两头。所以它跟音频提示一样按 `fontScale` 放大，而不是写死一个 dp。
+ * 基准 36dp = 系统字体 16sp 的行盒（1.17 em ≈ 19dp）+ 胶囊上下各 7dp 内边距，另留 3dp 余量。
+ */
+private val LUCKY_BAND_BASE = 36.dp
+
+/** 预留带的上限：再大就该让算式缩，而不是继续吃版面。 */
+private val LUCKY_BAND_MAX = 64.dp
 
 /**
  * 底部音频提示带的基准高度（系统字号 100% 时）。
@@ -1201,6 +1210,9 @@ private fun SwiftieQuizStage(
     // 而字号档位能把它顶到两倍。写死 dp 会让提示压在键盘末行上
     val audioHintBand = (AUDIO_HINT_BAND_BASE * LocalDensity.current.fontScale)
         .coerceIn(AUDIO_HINT_BAND_BASE, AUDIO_HINT_BAND_MAX)
+    // 提示预留带同理：行盒高过去就会被裁，所以按同一个 fontScale 放大
+    val luckyBand = (LUCKY_BAND_BASE * LocalDensity.current.fontScale)
+        .coerceIn(LUCKY_BAND_BASE, LUCKY_BAND_MAX)
     // 键盘采海报这一层做模糊。API < 31 上 hazeBlur 不生效，键盘自己退到厚一档透明度
     val hazeState = remember { HazeState() }
 
@@ -1214,7 +1226,7 @@ private fun SwiftieQuizStage(
         val keypadHeight = swiftieKeypadHeight(keypadWidth)
         // 底部这一摞的总高。算式底边不能越过它
         val bottomStack =
-            LUCKY_BAND + 8.dp + audioHintBand + 10.dp + keypadHeight + 12.dp + bottomInset
+            luckyBand + 8.dp + audioHintBand + 10.dp + keypadHeight + 12.dp + bottomInset
         val fit = swiftiePosterFit(
             screen = with(density) { Size(maxWidth.toPx(), maxHeight.toPx()) },
             equationBottomLimit = with(density) { (maxHeight - bottomStack - EQUATION_GAP).toPx() },
@@ -1254,7 +1266,7 @@ private fun SwiftieQuizStage(
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.height(LUCKY_BAND), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.height(luckyBand), contentAlignment = Alignment.Center) {
                 SwiftieLuckyHint(visible = quiz.showLuckyHint)
             }
             Spacer(modifier = Modifier.height(4.dp))

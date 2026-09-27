@@ -4,10 +4,11 @@ Honey Script SemiBold
 Bundled as: app/src/main/res/font/swiftie_honey.ttf
             (subset to "0123456789+=XHerluckynmb. ", 5,916 B)
 
-Used for the glitter equation and the "Her lucky number." hint on the Swiftie
-easter-egg quiz screen. Chosen because it is the typeface the original poster used
-for "13 + 87 = 100" — rendering that string with this font reproduces the poster's
-digits glyph for glyph.
+Used for the glitter equation and the keypad digits on the Swiftie easter-egg quiz
+screen. Chosen because it is the typeface the original poster used for
+"13 + 87 = 100" — rendering that string with this font reproduces the poster's
+digits glyph for glyph. (The "Her lucky number." hint used it until 2026-09-27;
+it now renders in the system font, see SwiftiePoster.kt.)
 
 Provenance
 ----------

@@ -48,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -61,9 +62,8 @@ import kotlin.math.sin
 /**
  * 答错一次就浮出的小字。
  *
- * 刻意**不本地化** —— 它是这张印刷品的一部分，不是界面文案；而且 Honey Script 只按
- * `0123456789+=XHerluckynmb. ` 子集化过，换成中日韩会整行豆腐块。视障用户拿不到这条
- * 视觉提示，所以另有一份本地化的 `R.string.swiftie_quiz_a11y_hint`，由海报的
+ * 刻意**不本地化** —— 它是这张印刷品的一部分，不是界面文案。视障用户拿不到这条视觉
+ * 提示，所以另有一份本地化的 `R.string.swiftie_quiz_a11y_hint`，由海报的
  * `contentDescription` 带出去。
  */
 private const val LUCKY_HINT = "Her lucky number."
@@ -89,21 +89,15 @@ private val LUCKY_CAPSULE = Color.White.copy(alpha = 0.62f)
 /**
  * 提示的字号。
  *
- * 字号固定 32sp；Honey Script 的字形本身偏窄，因此另外用字距和只作用于文字的横向
- * 拉伸，让 `Her lucky number.` 更舒展，同时不改变胶囊的水平内边距。
+ * 这行用**系统字体**，不跟海报那套手写体走：调用方把它套在一个固定高度的预留带里
+ * （`SwiftieEggScreen.LUCKY_BAND_BASE`，硬约束），行盒高过去就会被裁掉上下两头 ——
+ * Honey Script 32sp 的 1.315 em 行盒（≈42dp）正是这种情况，字看着像缺了笔画。
+ * 系统字体 16sp 的行盒是 1.17 em（≈19dp），配上下 7dp 内边距收得进预留带。
  */
-private val LUCKY_FONT_SIZE = 32.sp
+private val LUCKY_FONT_SIZE = 16.sp
 
-/**
- * 胶囊下缘补的内边距，用来把字在胶囊里摆正。
- *
- * 这个字体的 ascent 0.920 em 比整串墨迹的最高点 0.682 em 高出 0.238 em，而 descent
- * 0.395 em 与 `y` 的尾巴 0.392 em 几乎相等 —— 也就是行盒的空隙**全在上边**，字会贴着
- * 胶囊下沿。补 7dp（= 0.238 em × 30sp）到下边，上下留白就一样了。
- *
- * 不走「压小 lineHeight」那条路：行盒一旦短于 1.315 em，`y` 的尾巴就会伸到胶囊外面。
- */
-private val LUCKY_BASELINE_PAD = 7.dp
+/** 胶囊的竖向内边距，上下对称 —— 系统字体的行盒上下留白本来就均匀。 */
+private val LUCKY_CAPSULE_PAD = 7.dp
 
 /** 三行手写体合计的书写时长；行与行之间另有 [SCRIPT_LINE_PAUSE_MS]。 */
 const val SCRIPT_WRITE_MS: Long = 780L
@@ -552,6 +546,9 @@ private fun DrawScope.drawEquation(
  * 答错一次就浮出的 `Her lucky number.`，一枚浅色胶囊压在键盘正上方。
  *
  * 只动 alpha、位子常驻，所以它出现时不会把键盘顶下去。答对之后跟着淡出。
+ *
+ * 字用系统字体、字号 [LUCKY_FONT_SIZE]，两者一起定死了这一块的高度：调用方在它外面套了
+ * 一个固定高度的预留带，行盒一旦高过去，这一行就会被裁掉上下两头。
  */
 @Composable
 fun SwiftieLuckyHint(visible: Boolean, modifier: Modifier = Modifier) {
@@ -560,25 +557,22 @@ fun SwiftieLuckyHint(visible: Boolean, modifier: Modifier = Modifier) {
         animationSpec = tween(durationMillis = 400),
         label = "luckyHintAlpha"
     )
-    // 外层只负责胶囊和整体淡入淡出，避免横向拉伸把胶囊一起拉宽。
     Box(
         modifier = modifier
             .graphicsLayer { alpha = hintAlpha }
             .background(LUCKY_CAPSULE, CircleShape)
-            .padding(start = 18.dp, end = 18.dp, bottom = LUCKY_BASELINE_PAD)
+            .padding(horizontal = 18.dp, vertical = LUCKY_CAPSULE_PAD)
     ) {
         Text(
             text = LUCKY_HINT,
             style = TextStyle(
-                fontFamily = SwiftieFonts.Marker,
                 fontSize = LUCKY_FONT_SIZE,
+                fontWeight = FontWeight.Medium,
                 letterSpacing = 0.04.em,
                 color = SwiftiePalette.RoyalBlue,
                 textAlign = TextAlign.Center
             ),
-            maxLines = 1,
-            // 只拉伸文字字形，保持胶囊水平内边距不变。
-            modifier = Modifier.graphicsLayer { scaleX = 1.12f }
+            maxLines = 1
         )
     }
 }

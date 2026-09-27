@@ -46,7 +46,7 @@ object SwiftieFonts {
     val Script = FontFamily(Font(R.font.swiftie_script))
 
     /**
-     * 算式、键盘数字、`Her lucky number.`：Honey Script SemiBold。
+     * 算式、键盘数字：Honey Script SemiBold。
      *
      * 这就是原海报「13 + 87 = 100」用的字体，连那个卷曲的加号都对得上。
      * 键盘也用它，是为了让按下去的那个字形和海报上长出来的那个字形是同一个。
