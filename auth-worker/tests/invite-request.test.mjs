@@ -1,3 +1,8 @@
+// 本文件用假库，钉的是「调用形状」：批量语句的条数与顺序、冷却与测试密钥分支。
+// 因此下面每个假 first() 返回的候选行必须与 resolvePublicInviteTarget 的列名同步
+// —— 少了 request_status，实现就会把它当成「需要复活席位」多插一条语句，条数即失配。
+// 真正的 SQL 语义与回滚顺序在 tests/invite-email-rollback.test.mjs 与
+// tests/invite-reissue.test.mjs 里用真实 SQLite 覆盖。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -93,6 +98,7 @@ test('public resend enforces a 60 second cooldown', async () => {
                                     nickname: 'test-user',
                                     email: 'user@example.com',
                                     request_id: 'request-1',
+                                    request_status: 'ISSUED',
                                     invite_id: 'invite-1',
                                     email_sent_at: 1_700_000_000,
                                     invite_expires_at: 1_700_100_000,
@@ -139,6 +145,7 @@ test('private invite test key bypasses the resend cooldown', async () => {
                                     nickname: 'test-user',
                                     email: 'user@example.com',
                                     request_id: 'request-1',
+                                    request_status: 'ISSUED',
                                     invite_id: 'invite-1',
                                     email_sent_at: 1_700_000_000,
                                     invite_expires_at: 1_700_100_000,
@@ -189,6 +196,7 @@ test('public resend atomically revokes the old code and creates a new code', asy
                                     nickname: 'test-user',
                                     email: 'user@example.com',
                                     request_id: 'request-1',
+                                    request_status: 'ISSUED',
                                     invite_id: 'invite-1',
                                     email_sent_at: 1_700_000_000,
                                     invite_expires_at: 1_700_100_000,
@@ -241,6 +249,7 @@ test('public resend rejects a concurrent rotation based on a stale code', async 
                                     nickname: 'test-user',
                                     email: 'user@example.com',
                                     request_id: 'request-1',
+                                    request_status: 'ISSUED',
                                     invite_id: 'invite-1',
                                     email_sent_at: 1_700_000_000,
                                     invite_expires_at: 1_700_100_000,

@@ -40,6 +40,27 @@ interface InviteRequestRecord {
     verification_expires_at: number;
 }
 
+// 同一邮箱相对「取票码」只有三种状态。friends 行是在签发那一刻就建的，所以
+// 「有没有 friends 行」根本区分不了这三态，旧实现把它当成一态直接短路，才导致
+// 未兑换用户再点提交时静默不发信。
+export type PublicInviteTarget =
+    | { kind: 'NEW' }
+    | { kind: 'UNREDEEMED'; candidate: UnredeemedCandidate }
+    | { kind: 'REGISTERED' };
+
+interface UnredeemedCandidate {
+    friend_id: string;
+    nickname: string;
+    email: string;
+    request_id: string | null;
+    request_status: string | null;
+    request_updated_at: number | null;
+    request_friend_id: string | null;
+    invite_id: string | null;
+    email_sent_at: number | null;
+    signup_request_id: string | null;
+}
+
 export function normalizeInviteRequest(input: unknown): InviteRequestInput {
     const body = input && typeof input === 'object' ? input as Partial<InviteRequestInput> : {};
     const nickname = typeof body.nickname === 'string' ? body.nickname.trim() : '';
@@ -64,6 +85,62 @@ function normalizeInviteEmail(input: unknown): string {
     return email;
 }
 
+// 判定该邮箱相对取票码处于哪一态。顺序是「先找可重发候选，未命中再问有没有这个人」：
+// 注册用户必然落不进候选（名下有已兑换的码或有设备），反过来的话每次请求都要多一趟往返。
+//
+// 未兑换的判据故意只看「从没兑换成功过」：兑换过一次再解绑设备的用户属于正式用户，
+// 公共表单不该再给他开一张码（那是第 201 个席位）。
+export async function resolvePublicInviteTarget(
+    env: Pick<PublicInviteEnv, 'DB'>,
+    email: string,
+): Promise<PublicInviteTarget> {
+    const candidate = await env.DB.prepare(`
+        SELECT f.id AS friend_id,
+               f.nickname,
+               f.email,
+               f.signup_request_id,
+               r.id AS request_id,
+               r.status AS request_status,
+               r.updated_at AS request_updated_at,
+               r.friend_id AS request_friend_id,
+               r.email_sent_at,
+               (
+                   SELECT i.id
+                   FROM invites i
+                   WHERE i.friend_id = f.id
+                     AND i.kind = 'ACTIVATION'
+                     AND i.used_at IS NULL
+                     AND i.revoked_at IS NULL
+                   ORDER BY i.created_at DESC
+                   LIMIT 1
+               ) AS invite_id
+        FROM friends f
+        LEFT JOIN invite_requests r ON r.id = f.signup_request_id
+        WHERE LOWER(f.email) = ?
+          AND f.status = 'ACTIVE'
+          AND NOT EXISTS (
+              SELECT 1 FROM invites i WHERE i.friend_id = f.id AND i.used_at IS NOT NULL
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL
+          )
+        ORDER BY f.created_at DESC
+        LIMIT 1
+    `).bind(email).first<UnredeemedCandidate>();
+
+    if (candidate?.friend_id) {
+        return { kind: 'UNREDEEMED', candidate };
+    }
+
+    // 沿用旧那条查询：只要该邮箱有过任何 friends 行（含 DISABLED），就不能再开新行，
+    // 否则被停用的邮箱可以靠重新申请绕开禁令。
+    const existing = await env.DB.prepare(`
+        SELECT id FROM friends WHERE LOWER(email) = ? LIMIT 1
+    `).bind(email).first<{ id: string }>();
+
+    return existing ? { kind: 'REGISTERED' } : { kind: 'NEW' };
+}
+
 export async function handleInviteRequest(
     request: Request,
     env: PublicInviteEnv,
@@ -80,17 +157,27 @@ export async function handleInviteRequest(
     await enforcePublicRateLimit(env, request);
     await releaseExpiredPublicInvitations(env);
 
-    const existing = await env.DB.prepare(`
-        SELECT id FROM friends WHERE LOWER(email) = ? LIMIT 1
-    `).bind(input.email).first<{ id: string }>();
-    if (existing) {
-        return successResponse({ status: 'INVITE_SENT' }, requestId);
+    const currentTime = now();
+    const target = await resolvePublicInviteTarget(env, input.email);
+    if (target.kind === 'UNREDEEMED') {
+        // 码还没兑换：这次提交按「补发」处理，真的再发一封信，而不是像旧实现那样
+        // 静默返回成功。测试密钥同样可以跳过 60 秒冷却，与重发入口一致。
+        await reissueInvitation(env, target.candidate, requestId, currentTime, {
+            via: 'submit',
+            bypassCooldown: isInviteTestRequest(env, request),
+        });
+        return successResponse({
+            status: 'INVITE_REISSUED',
+            cooldownSeconds: PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS,
+        }, requestId);
+    }
+    if (target.kind === 'REGISTERED') {
+        throw new AppError('ALREADY_REGISTERED', 'This email already has an activated account', 409);
     }
 
-    const currentTime = now();
-    const requestIdValue = generateId();
     // verification_token_hash 仅为兼容既有表结构的簿记写入：验证邮件流程已下线，明文 token 即弃，不存在对应链接。
     const verificationTokenHash = await sha256(generateSecureToken(32));
+    const requestIdValue = generateId();
     const expiresAt = currentTime + VERIFICATION_TTL_SECONDS;
 
     await env.DB.prepare(`
@@ -379,55 +466,25 @@ export async function issueInvitation(
     return { friendId, inviteId, inviteCode, expiresAt };
 }
 
-export async function resendInvitation(
+// 给「码还没兑换」的既有用户补发一张新码。两条公开端点（提交申请 / 主动重发）都
+// 收敛到这里，触发来源只写进审计 detail 的 via，便于事后分清是哪条路发的。
+//
+// 席位账目分三种情况：申请行仍是 ISSUED = 复用既有席位（与旧实现一致）；
+// EXPIRED / EMAIL_FAILED / REPLACED = 把这一行复活成 ISSUED；管理员手工建的用户
+// 压根没有申请行 = 补一条。后两种都会让 ISSUED 计数加一，所以必须过 200 上限，
+// 否则一个未兑换的邮箱能无限续座。
+export async function reissueInvitation(
     env: PublicInviteEnv,
-    input: { email: string },
+    current: UnredeemedCandidate,
     requestId: string,
-    currentTime: number = now(),
-    options: { bypassCooldown?: boolean } = {},
-): Promise<{ inviteId: string; inviteCode: string; expiresAt: number }> {
+    currentTime: number,
+    options: { via: 'submit' | 'resend'; bypassCooldown?: boolean },
+): Promise<{ friendId: string; inviteId: string; inviteCode: string; expiresAt: number }> {
     if ((!env.BREVO_API_KEY && !env.EMAIL) || !env.EMAIL_FROM) {
         throw new AppError('EMAIL_NOT_CONFIGURED', 'Invitation email is not configured', 503);
     }
 
-    const current = await env.DB.prepare(`
-        SELECT f.id AS friend_id,
-               f.nickname,
-               f.email,
-               r.id AS request_id,
-               r.invite_id,
-               r.email_sent_at,
-               r.updated_at AS request_updated_at,
-               i.expires_at AS invite_expires_at
-        FROM friends f
-        JOIN invite_requests r
-          ON r.id = f.signup_request_id
-         AND r.status = 'ISSUED'
-        JOIN invites i
-          ON i.id = r.invite_id
-         AND i.friend_id = f.id
-        WHERE LOWER(f.email) = ?
-          AND f.status = 'ACTIVE'
-          AND i.kind = 'ACTIVATION'
-          AND i.used_at IS NULL
-          AND i.revoked_at IS NULL
-        ORDER BY r.updated_at DESC
-        LIMIT 1
-    `).bind(input.email).first<{
-        friend_id: string;
-        nickname: string;
-        email: string;
-        request_id: string;
-        invite_id: string;
-        email_sent_at: number | null;
-        request_updated_at: number;
-        invite_expires_at: number;
-    }>();
-
-    if (!current) {
-        throw new AppError('INVITE_NOT_FOUND', 'No public invitation is available for this email', 404);
-    }
-
+    const friendId = current.friend_id;
     const lastSentAt = Number(current.email_sent_at || 0);
     const elapsed = Math.max(0, currentTime - lastSentAt);
     const remaining = PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS - elapsed;
@@ -435,12 +492,88 @@ export async function resendInvitation(
         throw new AppError('RESEND_COOLDOWN', `Please wait ${remaining} seconds before resending`, 429);
     }
 
+    const heldSeat = current.request_status === 'ISSUED';
+    const createdRequest = current.request_id === null;
+    const requestRowId = current.request_id ?? generateId();
+    const previousInviteId = current.invite_id;
+
+    // 先只为把失败原因说准（抢不到席位要报 PUBLIC_INVITE_LIMIT_REACHED 而不是
+    // RESEND_CONFLICT）；并发正确性由下面 seat 语句里的同一句 COUNT 守卫兜住。
+    if (!heldSeat) {
+        const issued = await env.DB.prepare(`
+            SELECT COUNT(*) AS count FROM invite_requests WHERE status = 'ISSUED'
+        `).first<{ count: number }>();
+        if (Number(issued?.count || 0) >= PUBLIC_INVITE_LIMIT) {
+            throw new AppError('PUBLIC_INVITE_LIMIT_REACHED', 'Invitation limit reached', 409);
+        }
+    }
+
     const inviteId = generateId();
     const { code: inviteCode, codeHash } = await reserveInviteCode(env.DB);
     const codeMask = maskInviteCode(inviteCode);
     const expiresAt = currentTime + PUBLIC_INVITE_RESERVATION_TTL_SECONDS;
 
-    const results = await env.DB.batch([
+    // 条件写入的守卫一律带上「仍未兑换」：resolve 到此刻之间用户可能刚在 App 里
+    // 兑换掉旧码，只靠先读后写就会给已注册用户白开一张码。
+    const stillUnredeemed = `
+        SELECT 1 FROM friends f
+        WHERE f.id = ?
+          AND f.status = 'ACTIVE'
+          AND NOT EXISTS (
+              SELECT 1 FROM invites i WHERE i.friend_id = f.id AND i.used_at IS NOT NULL
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL
+          )
+    `;
+    const seatGuard = `
+        SELECT 1 FROM invite_requests
+        WHERE id = ?
+          AND status = 'ISSUED'
+          AND friend_id = ?
+          AND (? IS NULL OR invite_id = ?)
+    `;
+    // 撤销旧码也吃同一个 seatGuard：batch 里 0 行不算失败、不会回滚，若只让插新码
+    // 带守卫，一次陈旧请求就会先把用户正在用的码作废、再把冲突抛给调用方。
+    // 审计那条同理，改成「指针确实换到新码了才记成功」，否则失败的一次会留下假 SUCCESS。
+
+    const statements = [
+        ...(createdRequest ? [
+            env.DB.prepare(`
+                INSERT INTO invite_requests (
+                    id, nickname, email, email_normalized, verification_token_hash,
+                    status, friend_id, invite_id, verification_expires_at, created_at, updated_at
+                )
+                SELECT ?, f.nickname, f.email, f.email, ?, 'ISSUED', ?, NULL, ?, ?, ?
+                FROM friends f
+                WHERE f.id = ?
+                  AND f.signup_request_id IS NULL
+                  AND (SELECT COUNT(*) FROM invite_requests WHERE status = 'ISSUED') < ?
+            `).bind(
+                requestRowId,
+                // 这条申请行只为「有行可挂」而存在，明文 token 即弃，与签发路径同源。
+                await sha256(generateSecureToken(32)),
+                friendId,
+                currentTime + VERIFICATION_TTL_SECONDS,
+                currentTime,
+                currentTime,
+                friendId,
+                PUBLIC_INVITE_LIMIT,
+            ),
+        ] : heldSeat ? [] : [
+            env.DB.prepare(`
+                UPDATE invite_requests
+                SET status = 'ISSUED', friend_id = ?, updated_at = ?
+                WHERE id = ?
+                  AND (
+                      status = 'ISSUED'
+                      OR (
+                          status IN ('EXPIRED', 'EMAIL_FAILED', 'REPLACED')
+                          AND (SELECT COUNT(*) FROM invite_requests WHERE status = 'ISSUED') < ?
+                      )
+                  )
+            `).bind(friendId, currentTime, requestRowId, PUBLIC_INVITE_LIMIT),
+        ]),
         env.DB.prepare(`
             UPDATE invites
             SET revoked_at = ?
@@ -448,36 +581,74 @@ export async function resendInvitation(
               AND friend_id = ?
               AND used_at IS NULL
               AND revoked_at IS NULL
-              AND expires_at >= ?
-        `).bind(currentTime, current.invite_id, current.friend_id, currentTime),
+              AND EXISTS (${seatGuard})
+        `).bind(currentTime, previousInviteId ?? '', friendId,
+            requestRowId, friendId, previousInviteId, previousInviteId),
         env.DB.prepare(`
             INSERT INTO invites (
                 id, friend_id, kind, code_hash, code_mask, device_id,
                 expires_at, created_at
             )
             SELECT ?, ?, 'ACTIVATION', ?, ?, NULL, ?, ?
-            WHERE EXISTS (
-                SELECT 1 FROM invite_requests
-                WHERE id = ?
-                  AND friend_id = ?
-                  AND invite_id = ?
-                  AND status = 'ISSUED'
-            )
-        `).bind(inviteId, current.friend_id, codeHash, codeMask, expiresAt, currentTime, current.request_id, current.friend_id, current.invite_id),
+            WHERE EXISTS (${stillUnredeemed})
+              AND EXISTS (${seatGuard})
+        `).bind(
+            inviteId,
+            friendId,
+            codeHash,
+            codeMask,
+            expiresAt,
+            currentTime,
+            friendId,
+            requestRowId,
+            friendId,
+            previousInviteId,
+            previousInviteId,
+        ),
         env.DB.prepare(`
             UPDATE invite_requests
             SET invite_id = ?, email_sent_at = ?, updated_at = ?
             WHERE id = ?
               AND status = 'ISSUED'
-              AND invite_id = ?
-        `).bind(inviteId, currentTime, currentTime, current.request_id, current.invite_id),
+              AND friend_id = ?
+              AND (? IS NULL OR invite_id = ?)
+        `).bind(inviteId, currentTime, currentTime, requestRowId, friendId, previousInviteId, previousInviteId),
         env.DB.prepare(`
             INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
-            VALUES ('PUBLIC_INVITE_RESEND', ?, ?, 'SUCCESS', ?, ?)
-        `).bind(current.friend_id, requestId, `invite_id:${inviteId};previous_invite_id:${current.invite_id};invite_mask:${codeMask}`, currentTime),
-    ]);
+            SELECT 'PUBLIC_INVITE_RESEND', ?, ?, 'SUCCESS', ?, ?
+            WHERE EXISTS (
+                SELECT 1 FROM invite_requests
+                WHERE id = ? AND status = 'ISSUED' AND invite_id = ?
+            )
+        `).bind(
+            friendId,
+            requestId,
+            `invite_id:${inviteId};previous_invite_id:${previousInviteId ?? 'none'};`
+                + `invite_mask:${codeMask};via:${options.via}`,
+            currentTime,
+            requestRowId,
+            inviteId,
+        ),
+        ...(createdRequest ? [
+            env.DB.prepare(`
+                UPDATE friends
+                SET signup_request_id = ?, updated_at = ?
+                WHERE id = ? AND signup_request_id IS NULL
+            `).bind(requestRowId, currentTime, friendId),
+        ] : []),
+    ];
+    const expectedChanges = [
+        ...(createdRequest || !heldSeat ? [1] : []),
+        previousInviteId ? 1 : 0,
+        1,
+        1,
+        1,
+        ...(createdRequest ? [1] : []),
+    ];
 
-    if (results.length < 4 || results.some(result => Number(result?.meta?.changes || 0) !== 1)) {
+    const results = await env.DB.batch(statements);
+    if (results.length !== expectedChanges.length
+        || expectedChanges.some((want, index) => Number(results[index]?.meta?.changes || 0) !== want)) {
         throw new AppError('RESEND_CONFLICT', 'Invitation changed while resending', 409);
     }
 
@@ -492,42 +663,84 @@ export async function resendInvitation(
             }),
         });
     } catch (error) {
-        console.error('Public invitation resend failed', error);
+        console.error('Public invitation reissue failed', error);
         // 上面那批语句已经提交，发信却失败了。不回滚的话，用户手上/收件箱里的
         // 旧码已失效、新码从未送达、email_sent_at 还被刷新（60 秒内连重试都不行），
-        // 审计日志却记着 SUCCESS。这里把状态逐项还原成重发前的样子。
+        // 复活过来的席位也被白占着。审计日志同样会留着一条假 SUCCESS。
         //
-        // 顺序同样是硬约束：invite_requests.invite_id 此刻指向新码，必须先指回
-        // 旧码，否则 DELETE 新码会撞上外键。
+        // 顺序是硬约束：invite_requests.invite_id 此刻指向新码，必须先解耦再删新码，
+        // 否则 DELETE 撞上外键，整批回滚失败（D1 的 batch 是事务性的）。
         await env.DB.batch([
-            env.DB.prepare(`
-                UPDATE invite_requests
-                SET invite_id = ?, email_sent_at = ?, updated_at = ?
-                WHERE id = ? AND invite_id = ?
-            `).bind(
-                current.invite_id,
-                current.email_sent_at,
-                current.request_updated_at,
-                current.request_id,
-                inviteId,
-            ),
+            ...(createdRequest ? [
+                env.DB.prepare(`
+                    UPDATE friends
+                    SET signup_request_id = NULL, updated_at = ?
+                    WHERE id = ? AND signup_request_id = ?
+                `).bind(now(), friendId, requestRowId),
+                env.DB.prepare(`
+                    DELETE FROM invite_requests
+                    WHERE id = ? AND invite_id = ?
+                `).bind(requestRowId, inviteId),
+            ] : heldSeat ? [
+                env.DB.prepare(`
+                    UPDATE invite_requests
+                    SET invite_id = ?, email_sent_at = ?, updated_at = ?
+                    WHERE id = ? AND invite_id = ?
+                `).bind(previousInviteId, current.email_sent_at, current.request_updated_at, requestRowId, inviteId),
+            ] : [
+                env.DB.prepare(`
+                    UPDATE invite_requests
+                    SET status = ?, friend_id = ?, invite_id = ?, email_sent_at = ?, updated_at = ?
+                    WHERE id = ? AND invite_id = ?
+                `).bind(
+                    current.request_status,
+                    current.request_friend_id,
+                    previousInviteId,
+                    current.email_sent_at,
+                    current.request_updated_at,
+                    requestRowId,
+                    inviteId,
+                ),
+            ]),
             // revoked_at = ? 是并发护栏：只有仍是本次撤销打上的时间戳才还原
-            env.DB.prepare(`
-                UPDATE invites
-                SET revoked_at = NULL
-                WHERE id = ? AND friend_id = ? AND revoked_at = ?
-            `).bind(current.invite_id, current.friend_id, currentTime),
+            ...(previousInviteId ? [
+                env.DB.prepare(`
+                    UPDATE invites
+                    SET revoked_at = NULL
+                    WHERE id = ? AND friend_id = ? AND revoked_at = ?
+                `).bind(previousInviteId, friendId, currentTime),
+            ] : []),
             env.DB.prepare(`DELETE FROM invites WHERE id = ?`).bind(inviteId),
             env.DB.prepare(`
                 UPDATE audit_logs
                 SET result = 'FAILURE', detail = detail || ';email_send_failed_rolled_back'
                 WHERE event_type = 'PUBLIC_INVITE_RESEND' AND friend_id = ? AND request_id = ? AND result = 'SUCCESS'
-            `).bind(current.friend_id, requestId),
+            `).bind(friendId, requestId),
         ]);
         throw new AppError('EMAIL_SEND_FAILED', 'Unable to send invitation email', 503);
     }
 
-    return { inviteId, inviteCode, expiresAt };
+    return { friendId, inviteId, inviteCode, expiresAt };
+}
+
+export async function resendInvitation(
+    env: PublicInviteEnv,
+    input: { email: string },
+    requestId: string,
+    currentTime: number = now(),
+    options: { bypassCooldown?: boolean } = {},
+): Promise<{ friendId: string; inviteId: string; inviteCode: string; expiresAt: number }> {
+    const target = await resolvePublicInviteTarget(env, input.email);
+    if (target.kind === 'REGISTERED') {
+        throw new AppError('ALREADY_REGISTERED', 'This email already has an activated account', 409);
+    }
+    if (target.kind === 'NEW') {
+        throw new AppError('INVITE_NOT_FOUND', 'No public invitation is available for this email', 404);
+    }
+    return reissueInvitation(env, target.candidate, requestId, currentTime, {
+        via: 'resend',
+        bypassCooldown: options.bypassCooldown,
+    });
 }
 
 export function buildInvitationEmail(input: {
