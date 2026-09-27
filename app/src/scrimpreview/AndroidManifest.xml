@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  scrimpreview 构建类型专用清单：装完点图标直接进「背景光晕压制量对照网格」。
+
+  结构与 eggpreview 那份一致：Application 仍用 main 里 @HiltApp 的 TraktSearchApp
+  （清单合并保留），预览页自己不注入业务对象，只是宿主需要接上 Hilt 才拉得起主题。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 连 application 的名字一起换掉，否则应用列表里几个预览包同名，卸载时容易卸错 -->
+    <application
+        android:label="@string/scrim_preview_label"
+        tools:replace="android:label">
+
+        <activity
+            android:name="com.tracktosearch.scrimpreview.ScrimPreviewActivity"
+            android:exported="true"
+            android:label="@string/scrim_preview_label"
+            android:screenOrientation="portrait"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 抹掉 MainActivity 的入口，桌面上只留这一个图标（同 eggpreview 的处理） -->
+        <activity android:name="com.tracktosearch.MainActivity">
+            <intent-filter tools:node="removeAll" />
+        </activity>
+    </application>
+</manifest>

@@ -219,6 +219,20 @@ android {
             versionNameSuffix = "-ttpd"
             matchingFallbacks += listOf("debug")
         }
+        // 背景光晕压制量（mix / 蒙层 alpha）的候选档对照包。深色下光晕读不出颜色，
+        // 而这两道压制的观感只能真机比：网页侧的调参页建模不到着色器内部朝 colorBack 的
+        // 合成，一次装机又只能看一个值。这个包一屏铺四档、每格叠上真实的裸压文字与卡片，
+        // 见 app/src/scrimpreview/ 与 scripts/scrim-shot.sh。
+        //
+        // 独立 applicationId 而不是塞进 src/debug：日常 debug 包是他核验其它功能用的，
+        // 不该一直挂着这个入口；也不是复用 eggpreview —— 那两个包各自服务一条视觉迭代线，
+        // 与上面 loverpreview 的理由同一套。
+        create("scrimpreview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".scrimpreview"
+            versionNameSuffix = "-scrim"
+            matchingFallbacks += listOf("debug")
+        }
     }
 
     compileOptions {
