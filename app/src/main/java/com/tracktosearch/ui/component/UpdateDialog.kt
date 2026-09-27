@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
 import android.widget.Toast
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -85,6 +84,13 @@ private val RELEASE_PAGE_URL = BuildConfig.UPDATE_BASE_URL.trimEnd('/') + "/#sec
 
 /** 下载速度采样窗口：只保留最近 3 秒样本计算平均速度 */
 private const val SPEED_WINDOW_MS = 3000L
+
+/**
+ * 进度写回 UI 的最小间隔。读流每 8KB 回调一次（37MB ≈ 4700 次、约 370 次/秒），
+ * 逐次写状态会让整个弹窗含日志区 LazyColumn 每帧重组；而界面要显示的粒度远粗于此
+ * —— 百分比 1%、字节数 0.1MB，200ms 足够。终态另有 Completed 兜底，不会卡在最后一格。
+ */
+private const val PROGRESS_EMIT_INTERVAL_MS = 200L
 
 private sealed class DownloadState {
     object Idle : DownloadState()
@@ -599,6 +605,9 @@ fun UpdateDialog(
     /** 主按钮与「重试」共用这一条下载路径 */
     fun startDownload() {
         downloadState = DownloadState.Downloading(0f, 0L, 0L)
+        // 每次点下载各自计一段节流窗口；0 让首块回调必定放行，
+        // 否则「总量未知 → 已知」这一格要等到 200ms 后才翻，indeterminate 会多转一会儿
+        var lastEmitAtMs = 0L
         downloadJob = scope.launch {
             try {
                 val file = ApkDownloader.downloadApk(
@@ -606,13 +615,17 @@ fun UpdateDialog(
                     url = updateInfo.downloadUrl,
                     fileName = "TraktoSearch-v${updateInfo.latestVersion}.apk",
                     onProgress = { bytesRead, totalBytes ->
-                        // 总量未知（<=0）时 progress 置 0，UI 走 indeterminate
-                        val progress = if (totalBytes > 0) {
-                            bytesRead.toFloat() / totalBytes
-                        } else {
-                            0f
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastEmitAtMs >= PROGRESS_EMIT_INTERVAL_MS) {
+                            lastEmitAtMs = now
+                            // 总量未知（<=0）时 progress 置 0，UI 走 indeterminate
+                            val progress = if (totalBytes > 0) {
+                                bytesRead.toFloat() / totalBytes
+                            } else {
+                                0f
+                            }
+                            downloadState = DownloadState.Downloading(progress, bytesRead, totalBytes)
                         }
-                        downloadState = DownloadState.Downloading(progress, bytesRead, totalBytes)
                     },
                     expectedSha256 = updateInfo.sha256,
                     version = updateInfo.latestVersion
@@ -678,13 +691,15 @@ fun UpdateDialog(
         // 但下方整段 changelog 已经是内容主体，标题再着色属于重复强调。
         title = stringResource(R.string.update_dialog_badge),
     ) {
-        // 28dp 圆角与 24dp 内边距由 AppFloatingDialog 承担；animateContentSize 留在内容侧
+        // 28dp 圆角与 24dp 内边距由 AppFloatingDialog 承担。
+        // 这里刻意不给内容加 animateContentSize：弹窗窗口是 wrap_content，动画中的尺寸会反过来
+        // 成为内容的测量约束，内容要变高时每帧只放出约 1px —— 模拟器实测高度从 752px 爬到
+        // 846px 用掉整个下载过程，期间「取消下载」整块在窗口外，用户想取消也点不到
+        // （UpdateDialogDownloadLayoutTest 锁住这条）。换来的只是一次约 94px 的跳变，
+        // 比一颗点不到的按钮便宜得多。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // 状态切换会让内容高度变一点（进度区 / 错误文案），弹窗是居中的，
-                // 不动画就是整块往上跳一下
-                .animateContentSize(animationSpec = tween(220))
         ) {
             // 当前→新版本的迁移信息由下面日志区的「v3.7.0 更新内容（日期）」吸顶标题承担，
             // 两处都写就是重复
@@ -734,8 +749,8 @@ fun UpdateDialog(
             Spacer(Modifier.height(16.dp))
 
             // 状态区 + 操作区一起随下载状态切换。
-            // Idle 与 Downloading 两态高度刻意做齐（主按钮+文字行 ≈ 进度条+信息行+取消按钮），
-            // 剩余的差异交给外层的 animateContentSize 平滑掉，不再整块跳。
+            // 两态高度并不相等（模拟器实测 Idle 752px、Downloading 846px），切换时会跳一下；
+            // 为什么不用 animateContentSize 去平滑，见上面 Column 的注释。
             when (val state = downloadState) {
                 is DownloadState.Idle -> {
                     if (updateInfo.downloadUrl.isEmpty()) {

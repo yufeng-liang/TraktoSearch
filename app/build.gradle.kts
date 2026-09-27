@@ -68,6 +68,10 @@ android {
         // 模拟器（x86_64）与老 32 位设备不再可装
         ndk {
             abiFilters += listOf("arm64-v8a")
+            // -PlabEmulatorAbi 才带上 x86_64：给本机模拟器跑插桩核验用（sherpa-onnx 与
+            // sqlcipher 的 AAR 都带 x86_64 的 .so，richtap 那个没有 jni，所以装得上）。
+            // 默认关：忘了关就是把四份 .so 打进发版包。
+            if (project.hasProperty("labEmulatorAbi")) abiFilters += "x86_64"
         }
 
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
@@ -586,6 +590,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
+    // 插桩里要拿窗口层级坐标（UpdateDialogDownloadLayoutTest），benchmark 模块早已在用同一版本
+    androidTestImplementation(libs.androidx.uiautomator)
     androidTestImplementation(libs.hilt.android.testing)
     androidTestImplementation(libs.mockk.android)
     androidTestImplementation(libs.coroutines.test)
