@@ -171,23 +171,41 @@ internal fun AmbientMeshBackground(
  */
 internal data class MeshWashout(val mix: Float, val scrim: Float)
 
-/** 六预设 × 深浅两档的现行压制量。 */
+/**
+ * 六预设 × 深浅两档的现行压制量。
+ *
+ * 深色档 2026-09-27 分两轮放松，判据是**真机实测彩度**（`scripts/scrim-shot.sh` 铺的
+ * 对照网格：一屏一个自由量、四格冻在同一相位、每格叠上真页面里那些裸压在光晕上的文字
+ * 与卡片，量每格底部净背景条的 max−min 通道，0–255 档）：
+ *   第一轮动 mix —— 主题色系 0.62 → 0.30（雷诺阿粉 17.0 → 30.3、星夜蓝 22.4 → 40.9、
+ *     票根 14.9 → 22.6）、星云 0.45 → 0.20（10.2 → 16.9）、海滩 0.40 → 0.18（34.5 → 54.2）
+ *   第二轮动 scrim —— 主题色系 0.18 → 0.09（30.3 → 33.9）、星云与海滩 0.22 → 0.11
+ *     （16.9 → 19.6 / 54.2 → 62.2）。这一刀收益只有 mix 那一刀的四分之一，收到一半
+ *     而不是收光是因为网格每格只放了一行 12sp 卡外标题，真页面是一整屏那样的标题，
+ *     它对文字的代价被系统性低估了。
+ * 两轮的结论一致：抱怨的是"看不出颜色"，主犯是 mix，蒙层是次要的。
+ *
+ * 水墨不参与这两轮：它是纯黑白，彩度量纲失效（八个候选实测恒在 1.7–2.2，只有亮度在动），
+ * 判据只能是明暗对比。它那层 0.30 蒙层是六档最厚、也是唯一有实际职责的一处——压色点里
+ * 那颗纯白，压在浅字上真会糊，所以跟着撤的是观感不是噪声。
+ *
+ * 需求方明确撤掉了"渲后最坏对比度"这条门槛，所以这里没有对比度下限可引。早先记在 mix
+ * 上的那些 4.27:1 / 5.4:1 / 3.9:1 推导随本次作废（其中 4.27 是次要文字口径、正文实算
+ * 5.73，本来就不是同一条线）。浅色档两轮都没动。
+ */
 internal fun meshWashout(preset: MeshPreset, isDark: Boolean): MeshWashout = when {
-    // 固定配色那三档的 mix 当初按"最暗/最亮那一档色与正文色的 WCAG 对比度"反推。
-    // 正文取当前主题的实际值：票根浅色是 TicketInkLight #3E2A1E（次要文字 #574536）、
-    // 票根深色是 TicketInkDark #F7EDE3。早先有一版记的 #5D4638 全仓不存在，是失效注释。
-    //   INK 纯黑最难，浅色主题给 0.62（约 3.9:1）；深色蒙层最厚 0.30，因为它含纯白点。
+    // 浅色档仍按"最暗那一档色与正文色的对比度"反推：票根浅色正文是 TicketInkLight
+    // #3E2A1E（次要文字 #574536），INK 的纯黑最难压，浅色主题给 0.62。
     preset == MeshPreset.INK -> MeshWashout(if (isDark) 0.50f else 0.62f, if (isDark) 0.30f else 0.26f)
-    //   NEBULA 五档全是浅色，浅色主题不再需要压到 0.52：0.21 就有 3.69:1
-    //     （同主题下换色前的官方 Default 是 3.62:1，同级线就在这附近），压多了只会重新变灰。
-    //     深色主题反过来必须压重：0.30 只剩 2.40:1，0.45 才回到 4.27:1，那是下限不是审美值。
-    // NEBULA 浅色档的蒙层 0.01 形同已撤：五档都是浅色、mix 只压到 0.21，
-    // 可读性已由 mix 保证，蒙层再压一道就纯属压颜色。
-    // 深色档保留 0.22：那一屏正文最密，且浅色彩斑压在浅字上最容易糊。
-    preset == MeshPreset.NEBULA -> MeshWashout(if (isDark) 0.45f else 0.21f, if (isDark) 0.22f else 0.01f)
-    //   BEACH 全是亮色，0.32 就有约 5.4:1，不必多压，保留鲜艳。
-    preset == MeshPreset.BEACH -> MeshWashout(if (isDark) 0.40f else 0.32f, if (isDark) 0.22f else 0.16f)
-    else -> MeshWashout(if (isDark) 0.62f else 0.42f, if (isDark) 0.18f else 0.10f)
+    // 星云五档源色全是浅色（#E9C8DC / #F89FBD 这一族），朝近黑背景混过去时彩度和亮度
+    // 会**双降**：0.45 那档实测彩度只有 10.2，比主题色系当时的现值还低四成，读作
+    // "发亮的灰"而不是"有颜色的灰"。压到 0.20 抬回 16.9。
+    // 浅色档的蒙层 0.01 形同已撤：mix 已经保证了可读性，再压一道纯属压颜色。
+    preset == MeshPreset.NEBULA -> MeshWashout(if (isDark) 0.20f else 0.21f, if (isDark) 0.11f else 0.01f)
+    // 浅色档 0.32 照旧：BEACH 四档全是亮色，不必多压，保留鲜艳。
+    // 深色档 mix 与蒙层各降了一轮，是六档里最艳的一档——压它的只有观感判断。
+    preset == MeshPreset.BEACH -> MeshWashout(if (isDark) 0.18f else 0.32f, if (isDark) 0.11f else 0.16f)
+    else -> MeshWashout(if (isDark) 0.30f else 0.42f, if (isDark) 0.09f else 0.10f)
 }
 
 /** 光晕实际喂给着色器的色点：固定配色预设走 [paperPalette]，主题色驱动走 [themePalette]。 */
