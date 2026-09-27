@@ -1,12 +1,15 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="oval">
-            <solid android:color="#66000000"/>
+            <solid android:color="#8C1C1C1E"/>
+            <stroke
+                android:width="0.5dp"
+                android:color="#33FFFFFF"/>
         </shape>
     </item>
     <item
         android:drawable="@drawable/open_image_ic_download"
         android:gravity="center"
-        android:width="20dp"
-        android:height="20dp"/>
+        android:width="19dp"
+        android:height="19dp"/>
 </layer-list>

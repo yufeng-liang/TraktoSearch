@@ -126,7 +126,7 @@ internal fun openImageViewer(
  */
 private fun topStartCloseParams(activity: Activity): CloseParams {
     val density = activity.resources.displayMetrics.density
-    val size = (44 * density).toInt()
+    val size = (36 * density).toInt()
     val margin = (16 * density).toInt()
     val lp = FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.START).apply {
         topMargin = systemBarInsetTop(activity) + margin
@@ -146,7 +146,7 @@ private fun topStartCloseParams(activity: Activity): CloseParams {
  */
 private fun bottomEndDownloadParams(activity: Activity): DownloadParams {
     val density = activity.resources.displayMetrics.density
-    val size = (44 * density).toInt()
+    val size = (36 * density).toInt()
     val margin = (16 * density).toInt()
     val lp = FrameLayout.LayoutParams(size, size, Gravity.BOTTOM or Gravity.END).apply {
         bottomMargin = systemBarInsetBottom(activity) + margin
