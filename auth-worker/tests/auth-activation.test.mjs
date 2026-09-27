@@ -95,6 +95,8 @@ function createRaceDb(options = {}) {
             max_devices: 2,
         },
         activeDevices = 0,
+        // 该 friend 名下是否还有一张未使用的 ACTIVATION 码（官网补发过就会有了）
+        superseded = false,
     } = options;
 
     const batchedSql = [];
@@ -106,6 +108,11 @@ function createRaceDb(options = {}) {
                         sql,
                         bindings: params,
                         async all() {
+                            // revokedInviteErrorCode：名下还有没有一张没用的新码
+                            // （firstRow 走 all() 而不是 first()）
+                            if (sql.includes('AS hit FROM invites')) {
+                                return { results: superseded ? [{ hit: 1 }] : [] };
+                            }
                             // handleActivate 主查询：SELECT i.id, ..., i.code_hash
                             if (sql.includes('i.code_hash')) {
                                 return {
@@ -215,6 +222,36 @@ test('concurrent activation loser reports INVITE_ALREADY_USED without writing a 
             DEVICE_RECOVERY_HMAC_KEY: 'recovery-secret',
         }, 'request-1'),
         error => error?.code === 'INVITE_ALREADY_USED',
+    );
+});
+
+// 官网再点一次「发送票码」或点重发，都会作废旧码另发一张。用户手上于是有两封邮件，
+// 输错成旧的那张时，正确指引是「去看最新一封」，说「联系管理员」会让人以为账号坏了。
+test('被新码顶掉的旧码报 INVITE_SUPERSEDED，与管理员撤销的 INVITE_REVOKED 分开', async () => {
+    const revokedState = {
+        used_at: null,
+        revoked_at: 1_700_000_000,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        friend_status: 'ACTIVE',
+        friend_expires_at: null,
+        max_devices: 2,
+    };
+    const env = {
+        DB: null,
+        JWT_SIGNING_KEY: 'jwt-secret',
+        DEVICE_RECOVERY_HMAC_KEY: 'recovery-secret',
+    };
+
+    env.DB = createRaceDb({ batchChanges: [0, 1, 1, 1, 1], inviteState: revokedState, superseded: true });
+    await assert.rejects(
+        () => handleActivate(activationRequest(), env, 'request-1'),
+        error => error?.code === 'INVITE_SUPERSEDED',
+    );
+
+    env.DB = createRaceDb({ batchChanges: [0, 1, 1, 1, 1], inviteState: revokedState, superseded: false });
+    await assert.rejects(
+        () => handleActivate(activationRequest(), env, 'request-1'),
+        error => error?.code === 'INVITE_REVOKED',
     );
 });
 

@@ -98,7 +98,11 @@ export async function handleActivate(
         return logAndThrowActivationFailure(env, requestId, 'INVITE_ALREADY_USED', 'Invite code already used', invite);
     }
     if (invite.revoked_at !== null) {
-        return logAndThrowActivationFailure(env, requestId, 'INVITE_REVOKED', 'Invite code has been revoked', invite);
+        const errorCode = await revokedInviteErrorCode(env.DB, invite);
+        return logAndThrowActivationFailure(env, requestId, errorCode,
+            errorCode === 'INVITE_SUPERSEDED'
+                ? 'Invite code was replaced by a newer one'
+                : 'Invite code has been revoked', invite);
     }
     if (invite.expires_at < currentTime) {
         return logAndThrowActivationFailure(env, requestId, 'INVITE_EXPIRED', 'Invite code has expired', invite);
@@ -338,7 +342,11 @@ async function throwActivationRaceFailure(
         return logAndThrowActivationFailure(env, requestId, 'INVITE_ALREADY_USED', 'Invite code already used', invite);
     }
     if (latest.revoked_at !== null) {
-        return logAndThrowActivationFailure(env, requestId, 'INVITE_REVOKED', 'Invite code has been revoked', invite);
+        const errorCode = await revokedInviteErrorCode(env.DB, invite);
+        return logAndThrowActivationFailure(env, requestId, errorCode,
+            errorCode === 'INVITE_SUPERSEDED'
+                ? 'Invite code was replaced by a newer one'
+                : 'Invite code has been revoked', invite);
     }
     if (latest.expires_at < currentTime) {
         return logAndThrowActivationFailure(env, requestId, 'INVITE_EXPIRED', 'Invite code has expired', invite);
@@ -383,6 +391,25 @@ async function enforceActivationRateLimit(
     if (!allowed) {
         throw new AppError('RATE_LIMITED', 'Too many activation attempts', 429);
     }
+}
+
+// 一张被撤销的 ACTIVATION 码，绝大多数是官网补发时作废的上一张（重发或再点一次
+// 「发送票码」都会作废旧码另发一张），此时用户该去翻最新一封邮件，而不是联系管理员。
+// MIGRATION 码由管理员手工撤销，仍然走 INVITE_REVOKED。
+async function revokedInviteErrorCode(
+    db: D1Database,
+    invite: { kind: string; friend_id: string },
+): Promise<'INVITE_SUPERSEDED' | 'INVITE_REVOKED'> {
+    if (invite.kind !== 'ACTIVATION') return 'INVITE_REVOKED';
+    const newer = await firstRow(db.prepare(`
+        SELECT 1 AS hit FROM invites
+        WHERE friend_id = ?
+          AND kind = 'ACTIVATION'
+          AND used_at IS NULL
+          AND revoked_at IS NULL
+        LIMIT 1
+    `).bind(invite.friend_id));
+    return newer ? 'INVITE_SUPERSEDED' : 'INVITE_REVOKED';
 }
 
 async function logAndThrowActivationFailure(
