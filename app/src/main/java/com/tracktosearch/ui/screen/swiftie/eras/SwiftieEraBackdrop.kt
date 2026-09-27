@@ -410,7 +410,7 @@ private fun DrawScope.drawStage(
     when (stage.backdrop) {
         SwiftieEraBackdrop.FIREFLY_PORCH -> drawFireflyPorch(path, top, mid, deep, phase, alpha)
         SwiftieEraBackdrop.GOLDEN_CASTLE -> drawGoldenCastle(path, top, mid, deep, phase, alpha)
-        SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, alpha)
+        SwiftieEraBackdrop.VEIL_SPOTLIGHT -> drawVeilSpotlight(path, top, mid, deep, phase, eraMs, alpha)
         SwiftieEraBackdrop.KNIT_AUTUMN ->
             drawKnitAutumn(top, mid, deep, phase, alpha, shapes.knit, maple, eraMs)
         SwiftieEraBackdrop.SKYLINE_POLAROIDS ->
@@ -1590,6 +1590,28 @@ private const val RAY_COUNT = 12
 // ─────────────────────── 3 · Speak Now ───────────────────────
 
 /**
+ * 拱心四叶饰的自转速率：90° / 20s（一整圈 80s）。
+ *
+ * 速率是需求方「缓慢」的落地值：Speak Now 整段 8474ms，段内只转过约 38°——看得见在动，
+ * 又不会把注意力从尖拱窗上抢走。要调快就改小分母。
+ */
+private const val QUATREFOIL_DEG_PER_SEC = 90f / 20f
+
+/**
+ * 拱心四叶饰这一帧的顺时针角度（度）。
+ *
+ * 刻意**不用** `phase` 那条 3.6s 循环锯齿：锯齿每绕回一圈只能允许整 90° 的累计转角
+ * （四瓣是 90° 对称的，非整数倍会在接缝上当众跳一下），也就是 25°/s 的转速，与「缓慢」
+ * 冲突。段内时间 `eraMs` 连续，段首恰为 0°；换张那 500ms 里本段还没开始，
+ * `SwiftieEraBackdropLayer` 给 incoming 的是 -1L，这里一并折成 0° —— 段起点与淡入
+ * 两端都无接缝。
+ *
+ * `rotate(+deg)` 在 y 轴朝下的坐标系里就是顺时针。
+ */
+internal fun quatrefoilSpinDeg(eraMs: Long): Float =
+    if (eraMs <= 0L) 0f else eraMs / 1000f * QUATREFOIL_DEG_PER_SEC
+
+/**
  * 教堂里那扇尖拱花窗 + 从窗里泻下来的一束光 + 两侧石柱 + 三排长椅。
  *
  * *Speak Now* 的同名曲讲的就是闯进婚礼喊「反对」那一幕，所以这一张的场景是**教堂内景**，
@@ -1604,6 +1626,9 @@ private const val RAY_COUNT = 12
  * 尖拱用的是**等边拱**：两段圆弧的半径都等于窗宽，圆心各在对侧的起拱点上。
  * 这是哥特窗真实的作法，拱高因此恰好是 `width * √3/2` —— 随手画两段贝塞尔凑出来的
  * 尖拱总是又胖又矮，读作清真寺的葱形拱。
+ *
+ * 拱心那枚四叶饰**缓慢顺时针自转**（2026-09-27 需求方）：角度由段内时间给
+ * （`quatrefoilSpinDeg`），外环是圆、转与不转一样，所以只转四瓣、圆环留在外面。
  */
 private fun DrawScope.drawVeilSpotlight(
     path: Path,
@@ -1611,6 +1636,7 @@ private fun DrawScope.drawVeilSpotlight(
     mid: Color,
     deep: Color,
     phase: Float,
+    eraMs: Long,
     alpha: Float
 ) {
     val w = size.width
@@ -1684,7 +1710,7 @@ private fun DrawScope.drawVeilSpotlight(
     path.close()
     // 玻璃：整片先铺首档浅色，窗因此是「亮的洞」，其余全是暗的教堂内壁
     drawPath(path = path, color = top, alpha = alpha * 0.62f)
-    drawWindowGlass(path, winLeft, winW, springY, sillY, mid, alpha)
+    drawWindowGlass(path, winLeft, winW, springY, sillY, mid, eraMs, alpha)
     // 石框：最后描，压住所有窗棂的端头
     drawPath(
         path = path,
@@ -1781,6 +1807,9 @@ private fun DrawScope.drawVeilSpotlight(
  *
  * 上色的格子是**中轴对称的菱形花样**（四处 mid、两处 GOLD）：整窗一个色是磨砂玻璃，
  * 而随机几格又读作「表格里随手填的单元格」—— 铅条彩窗的格子是排过花样的。
+ *
+ * 拱心那枚四叶饰会**缓慢顺时针自转**（2026-09-27 需求方），角度由段内时间给
+ * （`quatrefoilSpinDeg`）：外环是圆、转与不转一样，所以只有四瓣进那个变换。
  */
 private fun DrawScope.drawWindowGlass(
     frame: Path,
@@ -1789,6 +1818,7 @@ private fun DrawScope.drawWindowGlass(
     springY: Float,
     sillY: Float,
     mid: Color,
+    eraMs: Long,
     alpha: Float
 ) {
     val bar = (winW * 0.026f).coerceAtLeast(1.5f)
@@ -1868,27 +1898,35 @@ private fun DrawScope.drawWindowGlass(
             alpha = alpha * 0.55f,
             style = Stroke(width = bar)
         )
-        for (lobe in 0 until 4) {
-            val a = lobe / 4f * TAU
-            drawCircle(
-                color = mid,
-                radius = qr,
-                center = Offset(
-                    winLeft + winW / 2f + cos(a) * qr,
-                    qy + sin(a) * qr
-                ),
-                alpha = alpha * 0.40f
-            )
-            drawCircle(
-                color = INK,
-                radius = qr,
-                center = Offset(
-                    winLeft + winW / 2f + cos(a) * qr,
-                    qy + sin(a) * qr
-                ),
-                alpha = alpha * 0.50f,
-                style = Stroke(width = bar * 0.8f)
-            )
+        // 2026-09-27 需求方：拱心四叶饰**缓慢顺时针自转**。只转四瓣（连同各自的描边
+        // 一起转），外圈那个圆留在外面 —— 圆自转与不自转长得一模一样，跟着转只是
+        // 白绕一次变换。角度见 `quatrefoilSpinDeg`：段内时间驱动，段首 0°，
+        // 换张淡入那 500ms 里本段还没开始，收到的 -1 也折成 0°，两端都无接缝
+        withTransform({
+            rotate(quatrefoilSpinDeg(eraMs), Offset(winLeft + winW / 2f, qy))
+        }) {
+            for (lobe in 0 until 4) {
+                val a = lobe / 4f * TAU
+                drawCircle(
+                    color = mid,
+                    radius = qr,
+                    center = Offset(
+                        winLeft + winW / 2f + cos(a) * qr,
+                        qy + sin(a) * qr
+                    ),
+                    alpha = alpha * 0.40f
+                )
+                drawCircle(
+                    color = INK,
+                    radius = qr,
+                    center = Offset(
+                        winLeft + winW / 2f + cos(a) * qr,
+                        qy + sin(a) * qr
+                    ),
+                    alpha = alpha * 0.50f,
+                    style = Stroke(width = bar * 0.8f)
+                )
+            }
         }
     }
 }

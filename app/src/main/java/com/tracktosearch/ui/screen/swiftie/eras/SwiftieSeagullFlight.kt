@@ -40,7 +40,13 @@ internal class SeagullPose {
  * 上面两只（明信片旁那两只）改从**右上角空白**起步向左飞：offset 按 1989 开场
  * （eraStart 33720ms → travelPhase≈0.124）标定，两张卡片期间跨过整条上天。
  * 标定值写死在注释与测试里，时间轴大改时这两只的起步位置会整体平移 —— 那时
- * 要一起重标。近处两只维持原来的下半屏航线，不跟明信片那片抢视觉。
+ * 要一起重标。近处那一只维持原来的下半屏航线，不跟明信片那片抢视觉。
+ *
+ * 2026-09-27 需求方：删掉「飞得最低、且从右往左飞」的那一只
+ * （`SeagullFlight(2, 0.56f, 0.094f, 0.305f, 0.038f, -1f, 0.87f)` —— altitude 0.305
+ * 是三条逆向（右→左）航线里最低的一条；屏幕整体最低的是 `near` 那只，但它飞左→右，
+ * 不在这次口径内）。非低配因此 4 只减到 3 只；低配那张表本来只有远处与近处两只，
+ * 这一只不在里面，不受影响。
  */
 internal fun seagullFlights(lowRam: Boolean): List<SeagullFlight> {
     val distant = SeagullFlight(2, 0.015f, 0.065f, 0.130f, 0.030f, -1f, 0.16f)
@@ -48,7 +54,6 @@ internal fun seagullFlights(lowRam: Boolean): List<SeagullFlight> {
     return if (lowRam) listOf(distant, near) else listOf(
         distant,
         SeagullFlight(3, 0.885f, 0.078f, 0.228f, -0.024f, -1f, 0.41f),
-        SeagullFlight(2, 0.56f, 0.094f, 0.305f, 0.038f, -1f, 0.87f),
         near
     )
 }

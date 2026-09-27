@@ -240,12 +240,18 @@ internal class RedBranchLeaf(
  * 松手的是子枝梢头与右侧那三片，时刻差 650ms 以上（不会看着像同时剪断），留下主枝
  * 上最大的那片猩红和中间子枝的琥珀：先落梢头的小叶、锚留着大叶，读起来是「这棵树
  * 还在落叶子」而不是「掉光了」。
+ *
+ * 2026-09-27 需求方：落叶「从会落的 9 片里减 3 片，落下速度放慢些」。减的全是循环飘入
+ * 的那一批（见 `buildRedDrifters`）；枝上这三片只放慢、不删 —— 下落时长统一 ×1.5
+ * （3450 / 3900 / 4400 → 5175 / 5850 / 6600ms），**松手时刻不动**：放慢的是「怎么落」，
+ * 不是「谁先松手」。最紧的一片 1700 + 6600 = 8300ms，仍早于段末那 500ms 淡出
+ * （段长 9410ms，`SwiftieRedLeafFallTest` 那条「落完早于换张」钉着这个上界）。
  */
 internal val RedBranchLeaves = listOf(
     RedBranchLeaf(
         twig = 0, mainT = 0f, half = 0.066f, rot = 290f, hue = MapleHues[1],
         RedLeafFall(
-            releaseAtMs = 260L, fallMs = 3450L,
+            releaseAtMs = 260L, fallMs = 5175L,
             freqA = 1.2f, freqB = 3.1f, amp = 0.095f, drift = 0.16f,
             twist = 1.15f, tumble = 4f, nodDeg = 22f, nodFreq = 3f
         )
@@ -255,7 +261,7 @@ internal val RedBranchLeaves = listOf(
     RedBranchLeaf(
         twig = 2, mainT = 0f, half = 0.085f, rot = 330f, hue = MapleHues[4],
         RedLeafFall(
-            releaseAtMs = 950L, fallMs = 3900L,
+            releaseAtMs = 950L, fallMs = 5850L,
             freqA = 0.9f, freqB = 2.4f, amp = 0.115f, drift = -0.10f,
             twist = -0.85f, tumble = 3f, nodDeg = 17f, nodFreq = 2f
         )
@@ -263,7 +269,7 @@ internal val RedBranchLeaves = listOf(
     RedBranchLeaf(
         twig = -1, mainT = 0.90f, half = 0.072f, rot = 175f, hue = MapleHues[5],
         RedLeafFall(
-            releaseAtMs = 1700L, fallMs = 4400L,
+            releaseAtMs = 1700L, fallMs = 6600L,
             freqA = 0.7f, freqB = 1.9f, amp = 0.135f, drift = 0.06f,
             twist = -1.35f, tumble = 2f, nodDeg = 13f, nodFreq = 1.5f
         )
@@ -289,15 +295,23 @@ internal class RedDrifter(
     val nodFreq: Float
 )
 
-/** 固定种子（发行年份），重组不跳位 —— 与 `buildSwarm` 同一套约定。 */
+/**
+ * 固定种子（发行年份），重组不跳位 —— 与 `buildSwarm` 同一套约定。
+ *
+ * 2026-09-27 需求方：Red 的落叶「从会落的 9 片里减 3 片」，减的全在这一批 —— 枝上那三片
+ * 是这一张的叙事本体（与卡片对拍的一次性动作），飘入的只是循环填充，所以 6 → 3。
+ * 前三条的参数逐字沿用（`Random(2012)` 按 index 顺序取数，改条数不动前三条的重掷值），
+ * 色相因此仍是 猩红 / 砖红 / 橘。同一天整体放慢 1.5 倍：一趟 4.6–7.0s → 6.9–10.5s
+ *（`swayRamp` / `fallProgress` 都吃 u，所以横向摆动与翻面跟着等比变慢）。
+ */
 private fun buildRedDrifters(): List<RedDrifter> {
     val random = Random(2012)
-    return List(6) { index ->
+    return List(3) { index ->
         RedDrifter(
             seed = 2012 * 31 + index * 7,
             // 错开进场：段首不会一帧之内凭空满屏叶
             enterAtMs = index * 430L,
-            spanMs = 4600L + random.nextInt(2400),
+            spanMs = 6900L + random.nextInt(3600),
             hueIndex = index,
             half = 0.048f + random.nextFloat() * 0.030f,
             amp = 0.075f + random.nextFloat() * 0.075f,
