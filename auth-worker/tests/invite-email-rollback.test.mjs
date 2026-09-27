@@ -7,104 +7,17 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { issueInvitation, resendInvitation } from '../src/invitations.ts';
-
-const T = 1_700_000_000;
-const COOLDOWN = 60;
-const INVITE_TTL = 72 * 60 * 60;
-const HTTP_REQUEST_ID = 'http-request-1';
-
-const MIGRATIONS = [
-    '0001_init.sql',
-    '0002_indexes.sql',
-    '0003_invite_code_mask.sql',
-    '0004_audit_log_detail.sql',
-    '0007_device_recovery.sql',
-    '0011_public_invite_requests.sql',
-    '0016_rate_limits.sql',
-];
-
-function createDb() {
-    const db = new DatabaseSync(':memory:');
-    db.exec(MIGRATIONS
-        .map(name => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
-        .join('\n'));
-
-    const prepare = sql => ({
-        bind(...bindings) {
-            const statement = db.prepare(sql);
-            return {
-                first() { return statement.get(...bindings) ?? null; },
-                all() { return { results: statement.all(...bindings) }; },
-                run() {
-                    const result = statement.run(...bindings);
-                    return {
-                        meta: {
-                            changes: Number(result.changes),
-                            last_row_id: Number(result.lastInsertRowid),
-                        },
-                    };
-                },
-            };
-        },
-    });
-
-    return {
-        raw: db,
-        env: {
-            DB: {
-                prepare,
-                batch(statements) {
-                    db.exec('BEGIN');
-                    try {
-                        const results = statements.map(statement => statement.run());
-                        db.exec('COMMIT');
-                        return results;
-                    } catch (error) {
-                        db.exec('ROLLBACK');
-                        throw error;
-                    }
-                },
-            },
-            BREVO_API_KEY: 'brevo-test-key',
-            EMAIL_FROM: 'TraktoSearch <noreply@example.com>',
-            PUBLIC_SITE_ORIGIN: 'https://tracktosearch.pages.dev',
-        },
-    };
-}
-
-// 发信结果可控：fail=true 时 Brevo 回 5xx
-async function withEmail(fail, run) {
-    const original = globalThis.fetch;
-    globalThis.fetch = async () => (fail
-        ? new Response('brevo unavailable', { status: 503 })
-        : new Response(JSON.stringify({ messageId: '<brevo-message-id>' }), { status: 201 }));
-    try {
-        return await run();
-    } finally {
-        globalThis.fetch = original;
-    }
-}
-
-function seedIssuedRequest(raw) {
-    raw.exec(`
-        INSERT INTO friends (id, nickname, email, signup_request_id, status, max_devices, created_at, updated_at)
-        VALUES ('f1', '小明', 'user@example.com', 'ir-1', 'ACTIVE', 2, ${T}, ${T});
-        INSERT INTO invites (id, friend_id, kind, code_hash, code_mask, expires_at, created_at)
-        VALUES ('invite-old', 'f1', 'ACTIVATION', 'hash-old', 'OLD***', ${T + INVITE_TTL}, ${T});
-        INSERT INTO invite_requests (
-            id, nickname, email, email_normalized, verification_token_hash, status,
-            friend_id, invite_id, verification_expires_at, email_sent_at, created_at, updated_at
-        ) VALUES (
-            'ir-1', '小明', 'user@example.com', 'user@example.com', 'token-hash', 'ISSUED',
-            'f1', 'invite-old', ${T + 1800}, ${T}, ${T}, ${T}
-        );
-    `);
-}
-
-const row = (raw, sql, ...args) => raw.prepare(sql).get(...args);
+import {
+    createInviteDb as createDb,
+    withEmail,
+    seedIssuedRequest,
+    row,
+    T,
+    COOLDOWN,
+    INVITE_TTL,
+    HTTP_REQUEST_ID,
+} from './helpers/invite-db.mjs';
 
 test('首次签发发信失败：回滚干净，且抛 EMAIL_SEND_FAILED 而不是外键错误', async () => {
     const { raw, env } = createDb();
