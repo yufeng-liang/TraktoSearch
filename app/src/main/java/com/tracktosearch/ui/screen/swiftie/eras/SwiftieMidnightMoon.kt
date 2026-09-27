@@ -24,14 +24,20 @@ internal data class MidnightMoonPose(
 )
 
 /**
- * 月牙的主程时长：比走针快两成（4500 ÷ 1.2 = 3750ms）。
+ * 月牙的主程时长：比走针快两成（4500 × 5/6 = 3750ms）。
  *
  * 起算点仍与走针同一条 [MIDNIGHT_WIND_START_MS]，只是行程短一档 ——
  * 走针放慢到 4500ms 后，抱枕与闭眼跟着拉长到 2.5 倍，读着拖沓。
  * 因此月牙在 `MIDNIGHT_MOON_WIND_MS + MIDNIGHT_SETTLE_MS` 处就入睡完毕，
  * 比钟的回吸早 750ms：屏幕上是月亮先睡下，钟再补上整点那一下顿挫。
+ *
+ * 除数写成 `÷ 6f × 5f` 而不是 `÷ 1.2f`：`1.2f` 不是精确值，4500 ÷ 1.2 在 float 里是
+ * 3749.9998，于是「入睡完毕」那一帧永远差 0.0002ms —— sleep 只到 0.99999744，breath
+ * 也不是精确的 0（`SwiftieMidnightMoonTest` 那两条断言正是踩在这上面）。`÷ 6f × 5f`
+ * 是同一个比值，4500 能整除 6，算出来是**精确的 3750**：`wind + MIDNIGHT_SETTLE_MS`
+ * 因此正好落在整数毫秒上，这一帧的 sleep 与 breath 才是干净的 1 与 0。
  */
-internal const val MIDNIGHT_MOON_WIND_MS: Float = MIDNIGHT_WIND_MS / 1.2f
+internal const val MIDNIGHT_MOON_WIND_MS: Float = MIDNIGHT_WIND_MS / 6f * 5f
 
 // 预览定格、回拨和换张待机不能留下上一次的睡姿。
 internal fun midnightMoonPose(eraMs: Long): MidnightMoonPose {
