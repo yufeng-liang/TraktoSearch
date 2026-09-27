@@ -109,7 +109,9 @@ class AppPullToRefreshState internal constructor(
                     offset.floatValue = value
                 }
             }
-            return Velocity.Zero
+            // 松手时把向下的甩动速度吃掉：否则剩余速度会继续传给列表，在已到顶时触发系统默认
+            // overscroll 拉伸（下拉未达阈值弹回后页面又被拉伸一下）。向上的速度照常放行给列表滚动。
+            return if (available.y > 0f) Velocity(0f, available.y) else Velocity.Zero
         }
     }
 
