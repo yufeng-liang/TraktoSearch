@@ -2245,6 +2245,9 @@
     <string name="swiftie_audio_hint_all">音量をオンにしてイヤホン着用で最高の体験に</string>
     <string name="swiftie_audio_hint_volume">音量をオンにすると最高の体験に</string>
     <string name="swiftie_audio_hint_headphones">イヤホン着用で最高の体験に</string>
+    <string name="swiftie_replay_hint_title">イースターエッグを解除しました</string>
+    <string name="swiftie_replay_hint_message">この Swiftie イースターエッグをもう一度見たいときは、いつでも「設定」画面を開き、一番下の「バージョン」を長押しすると再生できます。</string>
+    <string name="swiftie_replay_hint_confirm">わかりました</string>
     <string name="settings_ai_profile_consent">AI プロフィール</string>
     <string name="settings_ai_profile_consent_desc">マーク、評価、短評を使ってローカルな好みのプロフィールを作り、詳細ページの分析に利用します。</string>
     <string name="settings_ai_profile_unavailable">アカウント認証が復元されると利用できます</string>

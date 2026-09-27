@@ -115,6 +115,14 @@ class CloudThemeManager @Inject constructor(
     private val _swiftieEggVisible = MutableStateFlow(false)
     val swiftieEggVisible: StateFlow<Boolean> = _swiftieEggVisible
 
+    // 首次解锁彩蛋结束后弹一次「如何回看」提示，点「我知道了」后永久不再弹（落盘）。
+    private val _swiftieReplayHintVisible = MutableStateFlow(false)
+    val swiftieReplayHintVisible: StateFlow<Boolean> = _swiftieReplayHintVisible
+
+    // 本次彩蛋会话是否真正触发过解锁（commitSwiftieUnlock）。会话内标志，不落盘：
+    // 用来在 unlocked 已被提前写 true 时仍能判定「这是首次解锁」，从而弹一次回看提示。
+    private var unlockedThisSession = false
+
     val swiftieUnlocked: StateFlow<Boolean> = swiftieEggStorage.unlocked
 
     // 解题机会是否已消耗：搜索关键词拦截只在未解题时生效
@@ -296,7 +304,23 @@ class CloudThemeManager @Inject constructor(
         // 已经 unlocked 就什么都不做：那说明接管早就完成了，没有要补的。**不能**无条件
         // 重跑 —— 存储的两个键是幂等的，但强调色与网格预设不是，用户解锁之后自己改过
         // 主题，重看一次纪念页再退出就会被静默改回 RENOIR + NEBULA
-        if (solved && !swiftieEggStorage.unlocked.value) commitSwiftieUnlock()
+        // 「本次是否真解锁了」：正常路径 onCommitUnlock 在终帧前已把 unlocked 写成 true，
+        // 等到这里 unlocked.value 往往已经是 true，光看它会漏判。所以另记一个会话内标志
+        // unlockedThisSession（commitSwiftieUnlock 里置位），两者取其一即算首次解锁。
+        val firstUnlock = solved && !swiftieEggStorage.unlocked.value
+        if (firstUnlock) commitSwiftieUnlock()
+        // 首次解锁结束后弹一次「如何回看」提示；落盘的 replayHintShown 保证只弹一次。
+        // 重看路径既不 commit、unlocked 也早为 true，两个条件都为假，不会弹。
+        if ((firstUnlock || unlockedThisSession) && !swiftieEggStorage.replayHintShown.value) {
+            _swiftieReplayHintVisible.value = true
+        }
+        unlockedThisSession = false
+    }
+
+    /** 用户在「如何回看」提示上点「我知道了」：收起并落盘，之后永久不再弹。 */
+    fun onSwiftieReplayHintDismissed() {
+        _swiftieReplayHintVisible.value = false
+        scope.launch { swiftieEggStorage.markReplayHintShown() }
     }
 
     /**
@@ -304,6 +328,7 @@ class CloudThemeManager @Inject constructor(
      * 早于此会露出颜色跳变。不可逆，不保存解锁前旧值（Spec §9）。
      */
     fun commitSwiftieUnlock() {
+        unlockedThisSession = true
         scope.launch { applySwiftieUnlock() }
     }
 

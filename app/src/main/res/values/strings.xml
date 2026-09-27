@@ -2241,6 +2241,9 @@ Config:
     <string name="swiftie_audio_hint_all">Sound on and headphones for the best experience</string>
     <string name="swiftie_audio_hint_volume">Turn the sound on for the best experience</string>
     <string name="swiftie_audio_hint_headphones">Headphones for the best experience</string>
+    <string name="swiftie_replay_hint_title">Easter egg unlocked</string>
+    <string name="swiftie_replay_hint_message">Want to watch this Swiftie easter egg again? Open the Settings page anytime and long-press \"Version\" at the very bottom to replay it.</string>
+    <string name="swiftie_replay_hint_confirm">Got it</string>
     <string name="settings_ai_profile_consent">AI profile</string>
     <string name="settings_ai_profile_consent_desc">Use your marked titles, ratings and reviews to build a local taste profile for detail-page analysis.</string>
     <string name="settings_ai_profile_unavailable">Available after account authorization is restored</string>

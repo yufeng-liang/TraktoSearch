@@ -2234,6 +2234,9 @@
     <string name="swiftie_audio_hint_all">打开声音并戴上耳机，体验最佳</string>
     <string name="swiftie_audio_hint_volume">打开声音，体验最佳</string>
     <string name="swiftie_audio_hint_headphones">戴上耳机，体验最佳</string>
+    <string name="swiftie_replay_hint_title">彩蛋已解锁</string>
+    <string name="swiftie_replay_hint_message">想再看一次这段霉粉彩蛋，随时打开「设置」页，长按最底部的「版本」即可重新播放。</string>
+    <string name="swiftie_replay_hint_confirm">我知道了</string>
     <string name="settings_ai_profile_consent">AI 个性化画像</string>
     <string name="settings_ai_profile_consent_desc">使用你的标记、评分和短评建立本地口味画像，用于详情页分析。</string>
     <string name="settings_ai_profile_unavailable">账号授权恢复后即可使用</string>

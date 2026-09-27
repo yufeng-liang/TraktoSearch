@@ -104,6 +104,8 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.AppVisualSurface
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.GlassNavigationTabIndicator
 import com.tracktosearch.ui.component.GlassTabIndicator
@@ -272,6 +274,8 @@ fun MainScreen(
     val swiftieUnlocked by cloudThemeManager.swiftieUnlocked.collectAsState()
     // 只决定「要不要用揭示」，原点另说：见 cloudCoordinates 的注释。
     val swiftieEggOpenedFromCloud by cloudThemeManager.swiftieEggOpenedFromCloud
+        .collectAsStateWithLifecycle()
+    val swiftieReplayHintVisible by cloudThemeManager.swiftieReplayHintVisible
         .collectAsStateWithLifecycle()
     var showOnboarding by remember { mutableStateOf(false) }
     // Tab 位置的普通暂存（非 state）：布局回调每次都覆盖写入不触发重组。
@@ -1060,6 +1064,19 @@ fun MainScreen(
                 openedFromCloud = swiftieEggOpenedFromCloud,
                 modifier = Modifier.zIndex(5f)
             )
+
+            // 首次解锁彩蛋结束后的一次性「如何回看」提示；点「我知道了」后永久不再弹
+            if (swiftieReplayHintVisible) {
+                AppAlertDialog(
+                    onDismissRequest = { cloudThemeManager.onSwiftieReplayHintDismissed() },
+                    title = stringResource(R.string.swiftie_replay_hint_title),
+                    message = stringResource(R.string.swiftie_replay_hint_message),
+                    confirm = DialogAction(
+                        label = stringResource(R.string.swiftie_replay_hint_confirm),
+                        onClick = { cloudThemeManager.onSwiftieReplayHintDismissed() }
+                    )
+                )
+            }
 
         }
     }

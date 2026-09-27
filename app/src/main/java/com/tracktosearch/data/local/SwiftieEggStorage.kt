@@ -57,6 +57,11 @@ class SwiftieEggStorage private constructor(
     /** 已经抖给用户的暗示轮数。抖满 `SwiftieEggController.NUDGE_BUDGET` 轮后永久停。 */
     val cloudNudgeShown: StateFlow<Int> = _cloudNudgeShown.asStateFlow()
 
+    private val _replayHintShown = MutableStateFlow(false)
+
+    /** 首次解锁后的「回看提示」弹窗是否已展示过。只展示一次，之后永久不再弹。 */
+    val replayHintShown: StateFlow<Boolean> = _replayHintShown.asStateFlow()
+
     init {
         scope.launch {
             val prefs = dataStore.data.first()
@@ -64,6 +69,7 @@ class SwiftieEggStorage private constructor(
             _quizSolved.value = prefs[KEY_QUIZ_SOLVED] ?: false
             _cloudClickCount.value = prefs[KEY_CLICK_COUNT] ?: 0
             _cloudNudgeShown.value = prefs[KEY_CLOUD_NUDGE_SHOWN] ?: 0
+            _replayHintShown.value = prefs[KEY_REPLAY_HINT_SHOWN] ?: false
             ready.complete(Unit)
         }.invokeOnCompletion { error ->
             if (error != null && !ready.isCompleted) ready.completeExceptionally(error)
@@ -82,6 +88,13 @@ class SwiftieEggStorage private constructor(
         ready.await()
         dataStore.edit { it[KEY_QUIZ_SOLVED] = true }
         _quizSolved.value = true
+    }
+
+    /** 记「回看提示」弹窗已展示。幂等，之后永久不再弹。 */
+    suspend fun markReplayHintShown() {
+        ready.await()
+        dataStore.edit { it[KEY_REPLAY_HINT_SHOWN] = true }
+        _replayHintShown.value = true
     }
 
     /** @return 递增后的点击总数 */
@@ -133,5 +146,6 @@ class SwiftieEggStorage private constructor(
         internal val KEY_CLICK_COUNT = intPreferencesKey("cloud_click_count")
         internal val KEY_CLOUD_NUDGE_SHOWN = intPreferencesKey("cloud_nudge_shown")
         internal val KEY_MIGRATED = booleanPreferencesKey("swiftie_migrated")
+        internal val KEY_REPLAY_HINT_SHOWN = booleanPreferencesKey("swiftie_replay_hint_shown")
     }
 }
