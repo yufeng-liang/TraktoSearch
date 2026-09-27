@@ -8,6 +8,7 @@
     <string name="auth_error_invalid_invite">チケットコードが無効です。</string>
     <string name="auth_error_invite_used">このチケットコードは使用済みです。新しいコードを管理者に依頼してください。</string>
     <string name="auth_error_invite_revoked">このチケットコードは取り消されています。管理者に連絡してください。</string>
+    <string name="auth_error_invite_superseded">このチケットコードは新しいコードに置き換えられました。最新のメールのコードでやり直してください。</string>
     <string name="auth_error_invite_expired">チケットコードの有効期限が切れています。</string>
     <string name="auth_error_device_limit">デバイス上限に達しました。</string>
     <string name="auth_error_migration_device_not_found">移行には登録済みのデバイスが必要です。</string>
@@ -28,6 +29,7 @@
     <string name="machine_status_invalid">コード不正</string>
     <string name="machine_status_used">使用済み</string>
     <string name="machine_status_revoked">取消済み</string>
+    <string name="machine_status_superseded">新コード</string>
     <string name="machine_status_expired">期限切れ</string>
     <string name="machine_status_device_limit">上限到達</string>
     <string name="machine_status_device_bound">登録済み</string>

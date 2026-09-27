@@ -8,6 +8,7 @@
     <string name="auth_error_invalid_invite">This ticket code is invalid.</string>
     <string name="auth_error_invite_used">This ticket code has already been used. Please request a new one.</string>
     <string name="auth_error_invite_revoked">This ticket code has been revoked. Please contact the administrator.</string>
+    <string name="auth_error_invite_superseded">This ticket code was replaced by a newer one. Use the code from the most recent email.</string>
     <string name="auth_error_invite_expired">This ticket code has expired.</string>
     <string name="auth_error_device_limit">The device limit has been reached.</string>
     <string name="auth_error_migration_device_not_found">Migration requires an existing bound device.</string>
@@ -28,6 +29,7 @@
     <string name="machine_status_invalid">BAD CODE</string>
     <string name="machine_status_used">CODE USED</string>
     <string name="machine_status_revoked">REVOKED</string>
+    <string name="machine_status_superseded">NEWER CODE</string>
     <string name="machine_status_expired">EXPIRED</string>
     <string name="machine_status_device_limit">NO SLOT</string>
     <string name="machine_status_device_bound">BOUND</string>

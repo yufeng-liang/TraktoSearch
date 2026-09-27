@@ -8,6 +8,7 @@
     <string name="auth_error_invalid_invite">티켓 코드가 올바르지 않습니다.</string>
     <string name="auth_error_invite_used">이 티켓 코드는 이미 사용되었습니다. 관리자에게 새 코드를 요청하세요.</string>
     <string name="auth_error_invite_revoked">이 티켓 코드는 취소되었습니다. 관리자에게 문의하세요.</string>
+    <string name="auth_error_invite_superseded">이 티켓 코드가 새 코드로 교체되었습니다. 최신 메일의 코드로 다시 시도하세요.</string>
     <string name="auth_error_invite_expired">티켓 코드가 만료되었습니다.</string>
     <string name="auth_error_device_limit">기기 한도에 도달했습니다.</string>
     <string name="auth_error_migration_device_not_found">마이그레이션하려면 기존에 등록된 기기가 필요합니다.</string>
@@ -28,6 +29,7 @@
     <string name="machine_status_invalid">코드 오류</string>
     <string name="machine_status_used">사용됨</string>
     <string name="machine_status_revoked">취소됨</string>
+    <string name="machine_status_superseded">새 코드</string>
     <string name="machine_status_expired">만료됨</string>
     <string name="machine_status_device_limit">한도 초과</string>
     <string name="machine_status_device_bound">이미 등록</string>

@@ -615,6 +615,7 @@ internal fun machineStatusString(error: String): Int = when {
     error.contains("DEVICE_LIMIT_REACHED") -> R.string.machine_status_device_limit
     error.contains("INVITE_ALREADY_USED") -> R.string.machine_status_used
     error.contains("INVITE_REVOKED") -> R.string.machine_status_revoked
+    error.contains("INVITE_SUPERSEDED") -> R.string.machine_status_superseded
     error.contains("INVITE_EXPIRED") -> R.string.machine_status_expired
     error.contains("FRIEND_DISABLED") -> R.string.machine_status_friend_disabled
     error.contains("INVALID_INVITE") -> R.string.machine_status_invalid
@@ -807,6 +808,9 @@ internal fun authErrorString(error: String): Int = when {
     error.contains("DEVICE_LIMIT_REACHED") -> R.string.auth_error_device_limit
     error.contains("INVITE_ALREADY_USED") -> R.string.auth_error_invite_used
     error.contains("INVITE_REVOKED") -> R.string.auth_error_invite_revoked
+    // 官网再点一次「发送票码」会把旧码作废、另发一张：这张旧码要引导的是去翻最新
+    // 一封邮件，而不是联系管理员——后者会让人以为自己的账号出了问题。
+    error.contains("INVITE_SUPERSEDED") -> R.string.auth_error_invite_superseded
     error.contains("INVITE_EXPIRED") -> R.string.auth_error_invite_expired
     error.contains("FRIEND_DISABLED") -> R.string.auth_error_friend_disabled
     error.contains("INVALID_INVITE") -> R.string.auth_error_invalid_invite

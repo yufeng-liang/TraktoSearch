@@ -287,6 +287,7 @@ class ActivationLoginActionsTest {
             "DEVICE_LIMIT_REACHED",
             "INVITE_ALREADY_USED",
             "INVITE_REVOKED",
+            "INVITE_SUPERSEDED",
             "INVITE_EXPIRED",
             "FRIEND_DISABLED",
             "INVALID_INVITE",

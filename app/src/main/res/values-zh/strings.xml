@@ -8,6 +8,7 @@
     <string name="auth_error_invalid_invite">取票码无效。</string>
     <string name="auth_error_invite_used">取票码已被使用，请向管理员索取新的取票码。</string>
     <string name="auth_error_invite_revoked">取票码已被撤销，请联系管理员。</string>
+    <string name="auth_error_invite_superseded">取票码已换成新的了，请用最新一封邮件里的码重试。</string>
     <string name="auth_error_invite_expired">取票码已过期。</string>
     <string name="auth_error_device_limit">设备上限已满。</string>
     <string name="auth_error_migration_device_not_found">迁移需要已有绑定设备。</string>
@@ -28,6 +29,7 @@
     <string name="machine_status_invalid">码不对</string>
     <string name="machine_status_used">码已用过</string>
     <string name="machine_status_revoked">码已作废</string>
+    <string name="machine_status_superseded">码已更新</string>
     <string name="machine_status_expired">码已过期</string>
     <string name="machine_status_device_limit">设备已满</string>
     <string name="machine_status_device_bound">设备已绑</string>
