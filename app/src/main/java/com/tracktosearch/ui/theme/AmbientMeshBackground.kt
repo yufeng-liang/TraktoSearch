@@ -81,14 +81,34 @@ fun AmbientMeshBackground(
     enabled: Boolean = true,
     motionActive: () -> Boolean = { true },
 ) {
+    AmbientMeshBackground(
+        modifier = modifier,
+        preset = preset,
+        enabled = enabled,
+        motionActive = motionActive,
+        washoutOverride = null,
+    )
+}
+
+/**
+ * 背景光晕层，可覆盖两道压制量。
+ *
+ * [washoutOverride] 只给 `scrimpreview` 预览宿主铺候选档用（见
+ * `app/src/scrimpreview/`），生产路径一律传 null 走 [meshWashout] 的现行值。
+ */
+@Composable
+internal fun AmbientMeshBackground(
+    modifier: Modifier = Modifier,
+    preset: MeshPreset = MeshPreset.BLOOM,
+    enabled: Boolean = true,
+    motionActive: () -> Boolean = { true },
+    washoutOverride: MeshWashout?,
+) {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = colorScheme.isDarkScheme
-    val palette = remember(colorScheme, isDark, preset) {
-        if (preset.isPaperPreset) {
-            paperPalette(preset, colorScheme.background, isDark)
-        } else {
-            themePalette(colorScheme, isDark)
-        }
+    val washout = washoutOverride ?: meshWashout(preset, isDark)
+    val palette = remember(colorScheme, isDark, preset, washout) {
+        ambientPaletteFor(preset, colorScheme, isDark, washout)
     }
 
     // 息屏/切后台时冻结动画。mirage 的时间是逐帧累加进 MutableFloatState 的（见
@@ -128,7 +148,7 @@ fun AmbientMeshBackground(
                 } else {
                     LegacyMeshAmbient(preset, palette, speedScale > 0f)
                 }
-                val scrim = colorScheme.background.copy(alpha = scrimAlpha(preset, isDark))
+                val scrim = colorScheme.background.copy(alpha = washout.scrim)
                 Box(Modifier.fillMaxSize().background(scrim))
             }
         }
@@ -136,29 +156,58 @@ fun AmbientMeshBackground(
 }
 
 /**
- * 可读性蒙层强度。
+ * 光晕的两道压制量：色点向页面背景混合的比例 [mix]，以及蒙层的 alpha [scrim]。
  *
  * 关键取舍：让背景"不喧宾夺主"主要靠 [paperPalette] / [themePalette] 在**源头**把配色向
  * 背景色混合，而不是靠加厚这层灰蒙层。蒙层是全屏均匀降低对比度，加厚会把整片彩色一起
  * 压成脏灰（就是旧实现 0.40/0.55 的结果）——花了 shader 的成本却看不到颜色。
  * 源头降饱和只压极值，色相和弥散结构还留着，蒙层就能做得很薄。
+ *
+ * 两道都是把颜色朝同一个 [MeshPreset] 无关的 `colorScheme.background` 拉近，对色点之间的
+ * 间距是同一个缩放因子，所以观感上一阶等价、只有合计量有意义：
+ * 合计 = 1 − (1 − mix) × (1 − scrim)。例外是 BLOOM / LAVA_LAMP——它们走
+ * GrainGradient / Metaballs 并传了 `colorBack = background`，着色器**内部**还会再朝背景
+ * 合成一次，合计量还要再乘一道，只能上真机量。
  */
-private fun scrimAlpha(preset: MeshPreset, isDark: Boolean): Float = when {
-    preset == MeshPreset.INK -> if (isDark) 0.30f else 0.26f
-    // NEBULA 五档都是浅色、mix 也只压到 0.21，可读性已由 mix 保证
-    // （浅底最坏 3.69:1、深底 4.27:1），蒙层再压一道就纯属压颜色了，所以浅色档几乎撤掉。
+internal data class MeshWashout(val mix: Float, val scrim: Float)
+
+/** 六预设 × 深浅两档的现行压制量。 */
+internal fun meshWashout(preset: MeshPreset, isDark: Boolean): MeshWashout = when {
+    // 固定配色那三档的 mix 当初按"最暗/最亮那一档色与正文色的 WCAG 对比度"反推。
+    // 正文取当前主题的实际值：票根浅色是 TicketInkLight #3E2A1E（次要文字 #574536）、
+    // 票根深色是 TicketInkDark #F7EDE3。早先有一版记的 #5D4638 全仓不存在，是失效注释。
+    //   INK 纯黑最难，浅色主题给 0.62（约 3.9:1）；深色蒙层最厚 0.30，因为它含纯白点。
+    preset == MeshPreset.INK -> MeshWashout(if (isDark) 0.50f else 0.62f, if (isDark) 0.30f else 0.26f)
+    //   NEBULA 五档全是浅色，浅色主题不再需要压到 0.52：0.21 就有 3.69:1
+    //     （同主题下换色前的官方 Default 是 3.62:1，同级线就在这附近），压多了只会重新变灰。
+    //     深色主题反过来必须压重：0.30 只剩 2.40:1，0.45 才回到 4.27:1，那是下限不是审美值。
+    // NEBULA 浅色档的蒙层 0.01 形同已撤：五档都是浅色、mix 只压到 0.21，
+    // 可读性已由 mix 保证，蒙层再压一道就纯属压颜色。
     // 深色档保留 0.22：那一屏正文最密，且浅色彩斑压在浅字上最容易糊。
-    preset == MeshPreset.NEBULA -> if (isDark) 0.22f else 0.01f
-    preset.isPaperPreset -> if (isDark) 0.22f else 0.16f     // 走到这里只剩 BEACH
-    else -> if (isDark) 0.18f else 0.10f
+    preset == MeshPreset.NEBULA -> MeshWashout(if (isDark) 0.45f else 0.21f, if (isDark) 0.22f else 0.01f)
+    //   BEACH 全是亮色，0.32 就有约 5.4:1，不必多压，保留鲜艳。
+    preset == MeshPreset.BEACH -> MeshWashout(if (isDark) 0.40f else 0.32f, if (isDark) 0.22f else 0.16f)
+    else -> MeshWashout(if (isDark) 0.62f else 0.42f, if (isDark) 0.18f else 0.10f)
 }
+
+/** 光晕实际喂给着色器的色点：固定配色预设走 [paperPalette]，主题色驱动走 [themePalette]。 */
+internal fun ambientPaletteFor(
+    preset: MeshPreset,
+    colorScheme: ColorScheme,
+    isDark: Boolean,
+    washout: MeshWashout,
+): List<Color> = if (preset.isPaperPreset) {
+    paperPalette(preset, colorScheme.background, washout.mix)
+} else {
+    themePalette(colorScheme, washout.mix)
+}
+
 /**
  * 把主题色向背景色混合，得到低饱和的"弥散"光斑色。
  * 直接用 primary/secondary/tertiary 原色会过艳，只能靠重蒙层压，结果发灰；
  * 在源头降对比反而更干净，也让蒙层可以做薄。
  */
-private fun themePalette(colorScheme: ColorScheme, isDark: Boolean): List<Color> {
-    val mix = if (isDark) 0.62f else 0.42f
+private fun themePalette(colorScheme: ColorScheme, mix: Float): List<Color> {
     fun soft(color: Color): Color = lerp(color, colorScheme.background, mix)
     return listOf(
         soft(colorScheme.primary),
@@ -176,21 +225,7 @@ private fun themePalette(colorScheme: ColorScheme, isDark: Boolean): List<Color>
  * INK 与 BEACH 照抄 paper-design/shaders 官方同名预设的色相与相对关系。
  * NEBULA 原本照抄官方 Default 预设，现已改向霉粉彩蛋出题页的天空，见下方 [MeshPreset.NEBULA] 分支。
  */
-private fun paperPalette(preset: MeshPreset, background: Color, isDark: Boolean): List<Color> {
-    // 混合比例按"最暗/最亮那一档色与正文色的 WCAG 对比度"反推。正文取当前主题的实际值：
-    // 票根浅色是 TicketInkLight #3E2A1E（次要文字 #574536）、票根深色是 TicketInkDark #F7EDE3。
-    // 早先这里记的 #5D4638 全仓不存在，是失效注释。
-    //   BEACH 全是亮色，0.32 就有约 5.4:1，不必多压，保留鲜艳。
-    //   INK 纯黑最难，浅色主题给 0.62（约 3.9:1）。
-    //   NEBULA 五档全是浅色，浅色主题不再需要压到 0.52：0.21 就有 3.69:1
-    //     （同主题下换色前的官方 Default 是 3.62:1，同级线就在这附近），压多了只会重新变灰。
-    //     深色主题反过来必须压重：0.30 只剩 2.40:1，0.45 才回到 4.27:1，那是下限不是审美值。
-    val mix = when (preset) {
-        MeshPreset.INK -> if (isDark) 0.50f else 0.62f
-        MeshPreset.BEACH -> if (isDark) 0.40f else 0.32f
-        MeshPreset.NEBULA -> if (isDark) 0.45f else 0.21f
-        else -> if (isDark) 0.45f else 0.52f
-    }
+private fun paperPalette(preset: MeshPreset, background: Color, mix: Float): List<Color> {
     // lerp(Color, Color, Float) 在 ui 1.12.1 走 Oklab 而非通道线性（调用栈
     // ColorKt.lerp → Color.convert → Connector.transformToColor → Oklab.xyzaToColor）。
     // 网页端对色必须同口径，否则混出来的色对不上真机。
