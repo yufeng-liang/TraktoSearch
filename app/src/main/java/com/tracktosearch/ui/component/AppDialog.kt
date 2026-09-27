@@ -355,6 +355,10 @@ fun AppFloatingDialog(
                 .padding(horizontal = DesignToken.DialogPadding),
             shape = DesignToken.Dialog,
             color = floatingDialogColor(),
+            // 与 AppBottomSheet 同一个坑：浮层底色不是 scheme 色，Surface 默认
+            // contentColor = contentColorFor(color) 会得到 Unspecified，没显式设色的
+            // 文字（AppDialogTitle 就没有）落黑色兜底，深色模式下标题看不清。
+            contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = tonalElevation,
         ) {
             Column(modifier = Modifier.padding(contentPadding)) {
@@ -405,6 +409,11 @@ fun AppBottomSheet(
         modifier = modifier,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartiallyExpanded),
         containerColor = floatingSheetColor(),
+        // 浮层底色是非 scheme 色，ModalBottomSheet 默认的 contentColor =
+        // contentColorFor(containerColor) 对它会返回 Unspecified，面板里没显式设色的
+        // 文字就落到黑色兜底 —— 深色模式下标题直接看不见（筛选弹层踩过）。
+        // 显式给 onSurface，与容器底色重新配对。
+        contentColor = MaterialTheme.colorScheme.onSurface,
         dragHandle = sheetDragHandle,
         contentWindowInsets = contentWindowInsets,
     ) {

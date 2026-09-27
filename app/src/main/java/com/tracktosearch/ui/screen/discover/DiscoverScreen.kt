@@ -340,7 +340,10 @@ fun DiscoverScreen(
     )
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
+        // containerColor 不是 scheme 色：Scaffold 默认 contentColor = contentColorFor(containerColor)
+        // 对 Transparent 会拿到 Unspecified，整页没显式设色的文字就落黑色兜底，深色模式下不可见。
+        contentColor = MaterialTheme.colorScheme.onBackground,
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
