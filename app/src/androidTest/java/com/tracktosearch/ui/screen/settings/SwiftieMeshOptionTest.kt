@@ -33,8 +33,13 @@ class SwiftieMeshOptionTest {
             AccentColorDialog(
                 currentAccent = MonetAccent.VINTAGE_TICKET,
                 onAccentSelected = {},
-                customAccentArgb = null,
+                // 本测试只断言「星云」选项随解锁状态显隐，自定义色调槽位一律给空值与 no-op
+                customAccentColors = emptyList(),
+                selectedCustomAccentArgb = null,
                 onCustomAccentSelected = {},
+                onCustomAccentAdd = {},
+                onCustomAccentUpdate = { _, _ -> },
+                onCustomAccentRemove = {},
                 currentMode = VisualEffectMode.BLUR,
                 currentVariant = GlassVariant.CLEAR,
                 onVisualEffectSelected = { _, _ -> },
