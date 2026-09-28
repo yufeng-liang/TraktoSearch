@@ -6,8 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.tracktosearch.data.local.createEncryptedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -72,18 +71,10 @@ class AiStorage private constructor(
     private val preferencesFactory: () -> SharedPreferences
 ) {
     @Inject
-    constructor(@ApplicationContext context: Context) : this(context, {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    })
+    constructor(@ApplicationContext context: Context) : this(
+        context,
+        { createEncryptedPreferences(context, PREFS_NAME) }
+    )
 
     /** Robolectric 无 Android Keystore 时使用隔离的测试 prefs，不影响生产 Hilt 构造。 */
     internal constructor(context: Context, preferences: SharedPreferences) : this(context, { preferences })

@@ -2,8 +2,6 @@ package com.tracktosearch.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -27,16 +25,7 @@ class TokenStorage @Inject constructor(
         prefsCache?.let { return it }
         return withContext(Dispatchers.IO) {
             prefsCache?.let { return@withContext it }
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            val created = EncryptedSharedPreferences.create(
-                context,
-                "auth_encrypted",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            val created = createEncryptedPreferences(context, "auth_encrypted")
             prefsCache = created
             created
         }

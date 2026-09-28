@@ -2,8 +2,7 @@ package com.tracktosearch.data.local.db
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.tracktosearch.data.local.createEncryptedPreferences
 import java.security.SecureRandom
 
 /**
@@ -104,18 +103,8 @@ object DatabaseKeyProvider {
         }
     }
 
-    private fun createEncryptedPrefs(context: Context): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        return EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }
+    private fun createEncryptedPrefs(context: Context): SharedPreferences =
+        createEncryptedPreferences(context, PREFS_NAME)
 
     private fun bytesToHex(bytes: ByteArray): String =
         bytes.joinToString("") { "%02x".format(it) }
