@@ -11,6 +11,7 @@ test('admin branding uses the app icon for both logo and favicon', () => {
 });
 const appSource = fs.readFileSync(path.join(root, 'public/admin/app.js'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(root, 'public/admin/index.html'), 'utf8');
+const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, '../auth-worker/src/admin/admin.ts'), 'utf8');
 const proxySource = fs.readFileSync(path.join(root, 'functions/admin-api/[[path]].js'), 'utf8');
 const indexSource = fs.readFileSync(path.join(root, '../auth-worker/src/index.ts'), 'utf8');
@@ -364,4 +365,67 @@ test('feedback detail is reachable by hash deep link from the notification email
     const listLink = run('#/feedback');
     assert.equal(listLink.route, 'feedback');
     assert.deepEqual(listLink.params, {});
+});
+
+test('手机端底部标签栏接管主导航，顶栏不再重复一套链接', () => {
+    assert.match(htmlSource, /<nav class="tabbar" id="tabbar" aria-label="主导航">/);
+    const tabs = htmlSource.match(/class="tab-link" data-route="[a-z-]+"/g) || [];
+    assert.equal(tabs.length, 4, '底部应是 4 个页面标签 + 1 个「更多」');
+    assert.match(htmlSource, /class="tab-link tab-more" id="tabMore"[\s\S]*?aria-expanded="false"/);
+    assert.doesNotMatch(htmlSource, /class="topbar-nav"/, '顶栏那套导航与侧栏重复且少了反馈管理');
+    assert.doesNotMatch(stylesSource, /\.topbar-nav|\.nav-link\b/, '删掉的导航不该留下死样式');
+    assert.match(appSource, /querySelectorAll\('\.sidebar-link, \.tab-link\[data-route\]'\)/);
+    // 抽屉在手机上只装底部没放下的两个页面
+    assert.equal((htmlSource.match(/<li data-tab-dup>/g) || []).length, 4);
+    assert.match(stylesSource, /\.sidebar-list li\[data-tab-dup\] \{ display: none; \}/);
+});
+
+test('卡片化的字段名取自同一张表的 <th>，模板不维护第二份标签', () => {
+    assert.match(appSource, /function labelizeTables\(root\) \{/);
+    assert.match(appSource, /cell\.dataset\.label = labels\[index\]/);
+    // 骨架 / 空态 / 错误横幅是整行 colspan，不能被贴上字段名
+    assert.match(appSource, /if \(cell\.colSpan > 1\) return/);
+    assert.ok((appSource.match(/labelizeTables\(/g) || []).length >= 11, '每张表的渲染点都要调用一次');
+    // 邮箱列改回模板直写：事后插 <th> 会让列数与硬写 colspan 各自漂移
+    assert.match(appSource, /<th>昵称<\/th><th>邮箱<\/th><th>状态<\/th>/);
+    assert.doesNotMatch(appSource, /insertAdjacentHTML\('afterend', '<th>邮箱<\/th>'\)/);
+    assert.match(appSource, /<table data-card-wide="2" data-card-hide="7">/);
+});
+
+test('parseColumnIndexes 只收整数列下标，缺省不会命中所有列', () => {
+    const src = appSource.match(/function parseColumnIndexes\(value\) \{[\s\S]*?\n\}/);
+    assert.ok(src, 'parseColumnIndexes should exist');
+    const parse = new Function(`return (${src[0]})`)();
+    assert.deepEqual(parse('2,7'), [2, 7]);
+    assert.deepEqual(parse(undefined), [], '缺省不能产出会误伤整列的值');
+    assert.deepEqual(parse('3,'), [3]);
+});
+
+test('手机端排版硬约束：动态视口高度、44px 触控靶、截图留在应用内', () => {
+    assert.ok(
+        stylesSource.indexOf('height: 100dvh') > stylesSource.indexOf('height: 100vh'),
+        'dvh 必须写在 vh 之后才会生效'
+    );
+    const mobileBlocks = (stylesSource.match(/@media \(max-width: 640px\)[\s\S]*?\n\}/g) || []).join('\n');
+    assert.match(mobileBlocks, /\.tabbar \{/);
+    assert.match(mobileBlocks, /\.btn-sm \{ padding: 7px 12px; min-height: 44px/);
+    assert.match(mobileBlocks, /\.palette-btn \{ padding: 6px 8px; min-height: 44px/);
+    assert.match(mobileBlocks, /\.ai-probe-model \{[^}]*min-height: 44px/);
+    assert.match(mobileBlocks, /\.detail-heading-actions \{[\s\S]*?position: fixed/);
+    assert.match(mobileBlocks, /\.fb-reply-dock \{[\s\S]*?position: sticky/);
+    // 吸底回复区必须不透明，否则钉住时会把底下的对话文字透出来
+    assert.match(mobileBlocks, /\.fb-reply-dock \{[\s\S]*?background: var\(--surface-solid\)/);
+    // 统计加载失败时只有一张错误卡，不能落在半格网格里把中文挤成一列一字
+    assert.match(appSource, /<div class="card dashboard-error-card"><div class="error-banner">/);
+    assert.match(stylesSource, /\.dashboard-error-card \{ grid-column: 1 \/ -1; \}/);
+    assert.doesNotMatch(appSource, /window\.open\(img\.dataset\.key/, '手机上开新标签会丢掉当前页面状态');
+    assert.match(appSource, /function showImageLightbox\(src, alt\)/);
+});
+
+test('详情卡的「标签—值」行由类名承载，标签不参与收缩', () => {
+    assert.match(stylesSource, /\.kv-row > span:first-child \{ flex: 0 0 auto; \}/);
+    assert.ok(
+        !appSource.includes('style="display:flex;justify-content:space-between"'),
+        '内联排版会让中文标签在窄屏逐字竖排'
+    );
 });

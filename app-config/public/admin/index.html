@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" id="themeColorMeta" content="#141821">
     <title>TrackToSearch Admin</title>
     <link rel="icon" type="image/png" href="app-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260928-mobile-v1">
 </head>
 <body>
     <div id="app">
@@ -22,21 +23,18 @@
         <!-- Topbar -->
         <header class="topbar glass">
             <div class="topbar-left">
-                <button class="menu-toggle" id="menuToggle" aria-label="切换侧栏" aria-controls="sidebar" aria-expanded="false">
+                <button class="menu-toggle" id="menuToggle" aria-label="打开更多页面" aria-controls="sidebar" aria-expanded="false">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
                 <span class="brand">
                     <img class="brand-mark" src="app-icon.png" alt="TrackToSearch">
-                    TrackToSearch
+                    <span class="brand-text">TrackToSearch</span>
+                </span>
+                <span class="topbar-status" aria-label="网关状态">
+                    <span class="status-dot" id="gatewayStatusDot"></span>
+                    <span class="status-text" id="gatewayStatusText">网关在线</span>
                 </span>
             </div>
-            <nav class="topbar-nav" id="topbarNav">
-                <a href="#/dashboard" class="nav-link" data-route="dashboard">仪表盘</a>
-                <a href="#/ai-health" class="nav-link" data-route="ai-health">AI 健康</a>
-                <a href="#/friends" class="nav-link" data-route="friends">用户</a>
-                <a href="#/crash-logs" class="nav-link" data-route="crash-logs">崩溃日志</a>
-                <a href="#/audit" class="nav-link" data-route="audit">审计日志</a>
-            </nav>
             <div class="topbar-right">
                 <button class="palette-btn" id="paletteBtn" aria-label="主题配色" aria-controls="palettePanel" aria-expanded="false">
                     <span class="palette-current" id="paletteCurrent"></span>
@@ -59,8 +57,9 @@
         <div class="layout">
             <!-- Sidebar -->
             <aside class="sidebar glass" id="sidebar">
+                <p class="sidebar-heading">更多页面</p>
                 <ul class="sidebar-list">
-                    <li>
+                    <li data-tab-dup>
                         <a href="#/dashboard" class="sidebar-link" data-route="dashboard">
                             <span class="sidebar-icon">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -68,7 +67,7 @@
                             <span>仪表盘</span>
                         </a>
                     </li>
-                    <li>
+                    <li data-tab-dup>
                         <a href="#/ai-health" class="sidebar-link" data-route="ai-health">
                             <span class="sidebar-icon">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -76,7 +75,7 @@
                             <span>AI 健康</span>
                         </a>
                     </li>
-                    <li>
+                    <li data-tab-dup>
                         <a href="#/friends" class="sidebar-link" data-route="friends">
                             <span class="sidebar-icon">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -92,7 +91,7 @@
                             <span>审计日志</span>
                         </a>
                     </li>
-                    <li>
+                    <li data-tab-dup>
                         <a href="#/feedback" class="sidebar-link" data-route="feedback">
                             <span class="sidebar-icon">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -109,12 +108,6 @@
                         </a>
                     </li>
                 </ul>
-                <div class="sidebar-footer">
-                    <div class="sidebar-status">
-                        <span class="status-dot" id="gatewayStatusDot"></span>
-                        <span id="gatewayStatusText">网关在线</span>
-                    </div>
-                </div>
             </aside>
 
             <button class="sidebar-scrim" id="sidebarScrim" type="button" aria-label="关闭侧栏" hidden></button>
@@ -122,6 +115,30 @@
             <!-- Main -->
             <main class="main" id="mainContent"></main>
         </div>
+
+        <!-- 手机端底部标签栏：拇指热区放主入口，剩余页面与外观设置走「更多」抽屉 -->
+        <nav class="tabbar" id="tabbar" aria-label="主导航">
+            <a href="#/dashboard" class="tab-link" data-route="dashboard">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <span>仪表盘</span>
+            </a>
+            <a href="#/ai-health" class="tab-link" data-route="ai-health">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                <span>AI 健康</span>
+            </a>
+            <a href="#/feedback" class="tab-link" data-route="feedback">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>反馈</span>
+            </a>
+            <a href="#/friends" class="tab-link" data-route="friends">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>用户</span>
+            </a>
+            <button type="button" class="tab-link tab-more" id="tabMore" aria-controls="sidebar" aria-expanded="false">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+                <span>更多</span>
+            </button>
+        </nav>
 
         <!-- Toast container -->
         <div class="toast-container" id="toastContainer" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -141,6 +158,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=20260910-dashboard-v3"></script>
+    <script src="app.js?v=20260928-mobile-v1"></script>
 </body>
 </html>

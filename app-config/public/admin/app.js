@@ -30,6 +30,9 @@ const Theme = {
         const moon = document.querySelector('.theme-icon-moon');
         if (theme === 'dark') { sun.hidden = false; moon.hidden = true; }
         else { sun.hidden = true; moon.hidden = false; }
+        // 手机状态栏/浏览器工具栏跟着主题走，避免深色页面配浅色状态栏
+        const meta = document.getElementById('themeColorMeta');
+        if (meta) meta.setAttribute('content', theme === 'light' ? '#e4e3e0' : '#141821');
     }
 };
 
@@ -728,6 +731,35 @@ function auditDetail(log) {
     return '—';
 }
 
+// ===== 截图大图预览 =====
+// 不用 window.open：手机上会新开标签丢掉当前页面状态，且容易被弹窗拦截
+function showImageLightbox(src, alt) {
+    const box = document.createElement('div');
+    box.className = 'lightbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', alt || '截图预览');
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = alt || '截图';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'lightbox-close';
+    close.setAttribute('aria-label', '关闭预览');
+    close.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const onKey = (event) => { if (event.key === 'Escape') dismiss(); };
+    function dismiss() {
+        document.removeEventListener('keydown', onKey);
+        box.remove();
+    }
+    box.append(img, close);
+    close.addEventListener('click', dismiss);
+    box.addEventListener('click', (event) => { if (event.target === box) dismiss(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(box);
+    close.focus();
+}
+
 // ===== Toast =====
 function showToast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
@@ -815,7 +847,7 @@ function navigate(route, params = {}) {
 }
 
 function updateActiveNav() {
-    document.querySelectorAll('.nav-link, .sidebar-link').forEach(el => {
+    document.querySelectorAll('.sidebar-link, .tab-link[data-route]').forEach(el => {
         const active = el.dataset.route === state.route
             || (el.dataset.route === 'crash-logs' && state.route === 'crash-log-detail');
         el.classList.toggle('active', active);
@@ -836,20 +868,31 @@ function parseHash() {
 
 // ===== Sidebar toggle =====
 const menuToggle = document.getElementById('menuToggle');
+const tabMore = document.getElementById('tabMore');
 const sidebar = document.getElementById('sidebar');
 const sidebarScrim = document.getElementById('sidebarScrim');
+// 手机上汉堡被底部「更多」标签取代，两者共用同一个抽屉
+function drawerTrigger() {
+    return menuToggle.offsetParent ? menuToggle : tabMore;
+}
+function setDrawerState(open) {
+    sidebar.classList.toggle('open', open);
+    sidebarScrim.hidden = !open;
+    menuToggle.setAttribute('aria-expanded', String(open));
+    tabMore.setAttribute('aria-expanded', String(open));
+}
 function closeSidebar({ restoreFocus = true } = {}) {
-    sidebar.classList.remove('open');
-    sidebarScrim.hidden = true;
-    menuToggle.setAttribute('aria-expanded', 'false');
-    if (restoreFocus) menuToggle.focus();
+    setDrawerState(false);
+    if (restoreFocus) drawerTrigger().focus();
 }
 function openSidebar() {
-    sidebar.classList.add('open');
-    sidebarScrim.hidden = false;
-    menuToggle.setAttribute('aria-expanded', 'true');
+    setDrawerState(true);
 }
 menuToggle.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) closeSidebar({ restoreFocus: false });
+    else openSidebar();
+});
+tabMore.addEventListener('click', () => {
     if (sidebar.classList.contains('open')) closeSidebar({ restoreFocus: false });
     else openSidebar();
 });
@@ -1103,6 +1146,7 @@ async function loadDashboard(container, renderToken, stats, grid) {
     if (auditRes.status === 'fulfilled') {
         const failures = auditRes.value.logs.filter(l => l.result === 'FAILURE').slice(0, 5);
         grid.insertAdjacentHTML('afterbegin', dashboardFailuresCard(failures));
+        labelizeTables(grid);
         grid.querySelector('.js-view-all-failures')?.addEventListener('click', showAllFailuresModal);
     } else {
         grid.insertAdjacentHTML('afterbegin', dashboardErrorCard('失败记录加载失败', auditRes.reason, container, renderToken));
@@ -1181,6 +1225,7 @@ function showAllFailuresModal() {
         `;
         body.querySelector('.failure-prev')?.addEventListener('click', () => loadPage(Math.max(0, page.offset - limit)));
         body.querySelector('.failure-next')?.addEventListener('click', () => loadPage(page.offset + limit));
+        labelizeTables(body);
     };
     const loadPage = (offset) => {
         body.innerHTML = '<div class="loading-skeleton" style="height:240px"></div>';
@@ -1202,7 +1247,7 @@ function dashboardErrorCard(title, error, container, renderToken) {
             renderDashboard(container, renderToken);
         });
     }, 0);
-    return `<div class="card"><div class="error-banner"><span class="error-text">${escapeHtml(title)}：${escapeHtml(errorMessage(error))}</span><button class="btn btn-sm btn-ghost" id="${retryId}">重试</button></div></div>`;
+    return `<div class="card dashboard-error-card"><div class="error-banner"><span class="error-text">${escapeHtml(title)}：${escapeHtml(errorMessage(error))}</span><button class="btn btn-sm btn-ghost" id="${retryId}">重试</button></div></div>`;
 }
 
 // ===== Friends list =====
@@ -1231,10 +1276,8 @@ function renderFriends(container, renderToken) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table data-card-wide="2" data-card-hide="7"><thead><tr><th>昵称</th><th>邮箱</th><th>状态</th><th>设备</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
     container.appendChild(tableWrap);
-    const friendHeaderRow = tableWrap.querySelector('thead tr');
-    friendHeaderRow?.children[0]?.insertAdjacentHTML('afterend', '<th>邮箱</th>');
 
     const searchInput = toolbar.querySelector('#searchInput');
     const statusFilter = toolbar.querySelector('#statusFilter');
@@ -1260,8 +1303,9 @@ function renderFriends(container, renderToken) {
                 tbody.querySelector('.js-create-friend')?.addEventListener('click', showCreateFriendModal);
             } else {
                 tbody.innerHTML = friends.map(f => `
-                    <tr>
+                    <tr class="friend-row" data-id="${escapeHtml(f.id)}" style="cursor:pointer">
                         <td><div style="font-weight:600">${escapeHtml(f.nickname)}</div>${f.note ? `<div style="font-size:12px;color:var(--text-dim)">${escapeHtml(f.note)}</div>` : ''}</td>
+                        <td style="font-size:12px;color:var(--text-dim);overflow-wrap:anywhere">${escapeHtml(f.email || '—')}</td>
                         <td>${statusBadge(f.status)}</td>
                         <td>${f.devices}/${f.maxDevices}</td>
                         <td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatDate(f.expiresAt)}</td>
@@ -1269,15 +1313,19 @@ function renderFriends(container, renderToken) {
                         <td><button class="btn btn-ghost btn-sm js-friend-detail" data-id="${escapeHtml(f.id)}">详情</button></td>
                     </tr>
                 `).join('');
-                tbody.querySelectorAll('tr').forEach((row, index) => {
-                    const friend = friends[index];
-                    if (friend) row.children[0]?.insertAdjacentHTML('afterend', `<td style="font-size:12px;color:var(--text-dim)">${escapeHtml(friend.email || '—')}</td>`);
+                // 整行可点：手机卡片排版收掉了「详情」按钮后，行本身就是入口
+                tbody.querySelectorAll('.friend-row').forEach(row => {
+                    row.addEventListener('click', () => navigate('friend-detail', { id: row.dataset.id }));
                 });
                 tbody.querySelectorAll('.js-friend-detail').forEach(button => {
-                    button.addEventListener('click', () => navigate('friend-detail', { id: button.dataset.id }));
+                    button.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        navigate('friend-detail', { id: button.dataset.id });
+                    });
                 });
             }
             const end = Math.min(friendsPage.offset + friends.length, friendsPage.total);
+            labelizeTables(tableWrap);
             pagination.innerHTML = `<span>共 ${friendsPage.total} 条${friendsPage.total ? `，第 ${friendsPage.offset + 1} - ${end} 条` : ''}</span><div><button class="btn btn-ghost btn-sm friends-prev" ${friendsPage.offset === 0 ? 'disabled' : ''}>上一页</button><button class="btn btn-ghost btn-sm friends-next" ${friendsPage.hasMore ? '' : 'disabled'}>下一页</button></div>`;
             pagination.querySelector('.friends-prev')?.addEventListener('click', () => { offset = Math.max(0, friendsPage.offset - friendsPage.limit); loadAndRender(); });
             pagination.querySelector('.friends-next')?.addEventListener('click', () => { if (friendsPage.hasMore) { offset = friendsPage.offset + friendsPage.limit; loadAndRender(); } });
@@ -1324,10 +1372,10 @@ function renderFriendDetail(container, renderToken) {
                 <div class="card detail-card">
                     <div class="card-header"><span class="card-title">基本信息</span><span>${statusBadge(f.status)}</span></div>
                     <div style="display:grid;gap:14px;font-size:13px">
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">昵称</span><span style="font-weight:500">${escapeHtml(f.nickname)}</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">备注</span><span>${escapeHtml(f.note || '—')}</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">设备上限</span><span>${f.maxDevices} 台</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">有效期至</span><span>${formatDate(f.expiresAt)}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">昵称</span><span style="font-weight:500">${escapeHtml(f.nickname)}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">备注</span><span>${escapeHtml(f.note || '—')}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">设备上限</span><span>${f.maxDevices} 台</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">有效期至</span><span>${formatDate(f.expiresAt)}</span></div>
                     </div>
                 </div>
                 <div class="card">
@@ -1355,7 +1403,8 @@ function renderFriendDetail(container, renderToken) {
                 </div>
         `;
         const basicInfo = content.querySelector('.detail-card > div:last-child');
-        basicInfo?.insertAdjacentHTML('beforeend', `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">邮箱</span><span>${escapeHtml(f.email || '—')}</span></div>`);
+        labelizeTables(content);
+        basicInfo?.insertAdjacentHTML('beforeend', `<div class="kv-row"><span style="color:var(--text-dim)">邮箱</span><span>${escapeHtml(f.email || '—')}</span></div>`);
         const deviceRows = content.querySelectorAll('tbody tr');
         deviceRows.forEach((row, index) => {
             const device = f.devicesList[index];
@@ -1395,9 +1444,9 @@ function renderFriendDetail(container, renderToken) {
             <div class="card-header"><span class="card-title">最近活动 IP</span></div>
             ${f.lastIp ? `
                 <div style="display:grid;gap:10px;font-size:13px">
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">IP 地址</span><span style="font-family:var(--font-mono)">${escapeHtml(f.lastIp)}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">地理位置</span><span>${escapeHtml(f.lastIpGeo || '未知')}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">更新时间</span><span>${formatTime(f.ipUpdatedAt)}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">IP 地址</span><span style="font-family:var(--font-mono)">${escapeHtml(f.lastIp)}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">地理位置</span><span>${escapeHtml(f.lastIpGeo || '未知')}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">更新时间</span><span>${formatTime(f.ipUpdatedAt)}</span></div>
                 </div>
                 <button class="btn btn-ghost btn-sm" id="show-ip-logs" style="margin-top:12px">查看 IP 历史</button>
                 <div id="ip-logs-list" hidden style="margin-top:12px"></div>
@@ -1427,6 +1476,7 @@ function renderFriendDetail(container, renderToken) {
                             const geo = [l.country, l.region, l.city].filter(Boolean).join(' ') || '未知';
                             return `<tr><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.ip || '—')}</td><td>${escapeHtml(geo)}</td><td style="font-size:12px;color:var(--text-dim)">${escapeHtml(l.isp || '—')}</td><td style="color:var(--text-dim);font-size:12px">${formatTime(l.created_at)}</td></tr>`;
                         }).join('')}</tbody></table></div>`;
+                        labelizeTables(logsDiv);
                     }
                 }).catch(err => {
                     showIpLogsBtn.disabled = false;
@@ -1492,6 +1542,7 @@ function loadInvitesSection(friendId, section, renderToken) {
                 '<div><button class="btn btn-ghost btn-sm invite-prev" ' + (offset === 0 ? 'disabled' : '') + '>上一页</button>' +
                 '<button class="btn btn-ghost btn-sm invite-next" ' + (data.hasMore ? '' : 'disabled') + '>下一页</button></div></div>';
         section.querySelector('.invite-status-filter').value = status;
+        labelizeTables(section);
         section.querySelector('.invite-status-filter').addEventListener('change', (event) => {
             status = event.target.value;
             offset = 0;
@@ -1602,7 +1653,7 @@ function renderAudit(container, renderToken) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>详情</th><th>用户</th><th>设备</th><th>结果</th><th>错误码</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination audit-pagination"></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table data-card-wide="3"><thead><tr><th>时间</th><th>事件</th><th>详情</th><th>用户</th><th>设备</th><th>结果</th><th>错误码</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination audit-pagination"></div>`;
     container.appendChild(tableWrap);
 
     const eventFilter = toolbar.querySelector('#eventFilter');
@@ -1644,6 +1695,7 @@ function renderAudit(container, renderToken) {
                 `).join('');
             }
             const pagination = tableWrap.querySelector('.audit-pagination');
+            labelizeTables(tableWrap);
             const end = Math.min(page.offset + page.logs.length, page.total);
             pagination.innerHTML = `<span>共 ${page.total} 条，${page.total ? `第 ${page.offset + 1} - ${end} 条` : '暂无记录'}</span><div><button class="btn btn-ghost btn-sm audit-prev" ${page.offset === 0 ? 'disabled' : ''}>上一页</button><button class="btn btn-ghost btn-sm audit-next" ${page.hasMore ? '' : 'disabled'}>下一页</button></div>`;
             pagination.querySelector('.audit-prev')?.addEventListener('click', () => loadAndRender(Math.max(0, page.offset - page.limit)));
@@ -2153,6 +2205,34 @@ function debounce(fn, ms) {
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 }
 
+/** 手机端把表格渲染成卡片时，字段名取自同一张表的 <th>，模板里不必维护第二份标签。
+ *  <table> 上的 data-card-wide / data-card-hide 是 1-based 列下标，
+ *  分别表示「内容长到要跨整行」与「手机上不显示的列」。 */
+function labelizeTables(root) {
+    (root || document).querySelectorAll('table').forEach((table) => {
+        const labels = Array.from(table.querySelectorAll('thead th'), (th) => th.textContent.trim());
+        if (labels.length === 0) return;
+        const wide = parseColumnIndexes(table.dataset.cardWide);
+        const hide = parseColumnIndexes(table.dataset.cardHide);
+        table.querySelectorAll('tbody tr').forEach((row) => {
+            Array.from(row.children).forEach((cell, index) => {
+                if (cell.colSpan > 1) return; // 骨架 / 空态 / 错误横幅的整行占位不贴字段名
+                const column = index + 1;
+                if (labels[index]) cell.dataset.label = labels[index];
+                if (wide.includes(column)) cell.dataset.cardWide = '';
+                if (hide.includes(column)) cell.dataset.cardHide = '';
+            });
+        });
+    });
+}
+
+function parseColumnIndexes(value) {
+    return String(value || '')
+        .split(',')
+        .map((item) => Number.parseInt(item, 10))
+        .filter(Number.isFinite);
+}
+
 // ===== Feedback Management =====
 function renderFeedback(container, renderToken) {
     const header = document.createElement('div');
@@ -2233,7 +2313,7 @@ function renderFeedback(container, renderToken) {
                     </tr>`;
                 }).join('');
                 tableWrap.innerHTML = `
-                    <div class="table-scroll"><table>
+                    <div class="table-scroll"><table data-card-wide="4">
                         <thead><tr><th>ID</th><th>类型</th><th>用户</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table></div>
@@ -2250,6 +2330,7 @@ function renderFeedback(container, renderToken) {
             }
 
             const total = page.total || 0;
+            labelizeTables(tableWrap);
             const end = Math.min(offset + feedbacks.length, total);
             pagination.innerHTML = `<span>共 ${total} 条${total ? `，第 ${offset + 1} - ${end} 条` : ''}</span><div>
                 <button class="btn btn-ghost btn-sm fb-prev" ${offset === 0 ? 'disabled' : ''}>上一页</button>
@@ -2325,11 +2406,11 @@ function showFeedbackDetail(id, container, renderToken) {
                 <div class="card detail-card">
                     <div class="card-header"><span class="card-title">反馈内容</span><span style="color:${statusColors[f.status] || '#9ca3af'};font-weight:500">${escapeHtml(statusLabels[f.status] || f.status || '')}</span></div>
                     <div style="display:grid;gap:10px;font-size:13px;margin-bottom:16px">
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">用户</span><span>${escapeHtml(f.friend_nickname || '—')}</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">时间</span><span>${formatTime(f.created_at)}</span></div>
-                        ${f.trakt_username ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Trakt</span><span>${escapeHtml(f.trakt_username)}</span></div>` : ''}
-                        ${f.douban_username ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">豆瓣</span><span>${escapeHtml(f.douban_username)}</span></div>` : ''}
-                        ${f.contact ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">联系方式</span><span>${escapeHtml(f.contact)}</span></div>` : ''}
+                        <div class="kv-row"><span style="color:var(--text-dim)">用户</span><span>${escapeHtml(f.friend_nickname || '—')}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">时间</span><span>${formatTime(f.created_at)}</span></div>
+                        ${f.trakt_username ? `<div class="kv-row"><span style="color:var(--text-dim)">Trakt</span><span>${escapeHtml(f.trakt_username)}</span></div>` : ''}
+                        ${f.douban_username ? `<div class="kv-row"><span style="color:var(--text-dim)">豆瓣</span><span>${escapeHtml(f.douban_username)}</span></div>` : ''}
+                        ${f.contact ? `<div class="kv-row"><span style="color:var(--text-dim)">联系方式</span><span>${escapeHtml(f.contact)}</span></div>` : ''}
                     </div>
                     <div style="padding:12px;border-radius:8px;background:var(--surface-2);white-space:pre-wrap;word-break:break-word">${escapeHtml(f.content || '')}</div>
                     ${screenshotsHtml}
@@ -2338,6 +2419,7 @@ function showFeedbackDetail(id, container, renderToken) {
                     <div class="card-header"><span class="card-title">对话（${replies.length}）</span></div>
                     <div id="replies-list" class="fb-conversation" style="margin-bottom:16px">${repliesHtml || '<div class="empty-state" style="text-align:center;padding:16px;color:var(--text-dim)">暂无对话</div>'}</div>
                     ${f.status !== 'CLOSED' ? `
+                        <div class="fb-reply-dock">
                         <div class="fb-upload-area">
                             <div id="fb-upload-thumbs" class="fb-upload-thumbs"></div>
                             <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
@@ -2351,14 +2433,15 @@ function showFeedbackDetail(id, container, renderToken) {
                             <button class="btn btn-primary btn-sm" id="fb-reply">回复</button>
                             <button class="btn btn-ghost btn-sm" id="fb-close">关闭反馈</button>
                         </div>
+                        </div>
                     ` : '<div class="empty-state" style="text-align:center;padding:8px;color:var(--text-dim)">此反馈已关闭</div>'}
                 </div>
                 <div class="card">
                     <div class="card-header"><span class="card-title">应用信息</span></div>
                     <div style="display:grid;gap:10px;font-size:13px">
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">App 版本</span><span>${escapeHtml(f.app_version || '—')}</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">系统版本</span><span>${escapeHtml(f.os_version || '—')}</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">设备型号</span><span>${escapeHtml(f.device_model || '—')}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">App 版本</span><span>${escapeHtml(f.app_version || '—')}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">系统版本</span><span>${escapeHtml(f.os_version || '—')}</span></div>
+                        <div class="kv-row"><span style="color:var(--text-dim)">设备型号</span><span>${escapeHtml(f.device_model || '—')}</span></div>
                     </div>
                 </div>
             </div>
@@ -2460,7 +2543,7 @@ function showFeedbackDetail(id, container, renderToken) {
             });
         });
         container.querySelectorAll('.fb-screenshot-img').forEach(img => {
-            img.addEventListener('click', () => window.open(img.dataset.key, '_blank'));
+            img.addEventListener('click', () => showImageLightbox(img.dataset.key, img.alt));
         });
     }).catch(err => {
         if (renderToken !== state.renderToken || !container.isConnected) return;
@@ -2566,7 +2649,7 @@ function renderCrashLogs(container, renderToken) {
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
     tableWrap.innerHTML = `
-        <div class="table-scroll"><table>
+        <div class="table-scroll"><table data-card-wide="7">
             <thead><tr><th>时间</th><th>设备</th><th>Android</th><th>App 版本</th><th>当前页面</th><th>状态</th><th>堆栈预览</th></tr></thead>
             <tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody>
         </table></div>
@@ -2617,7 +2700,7 @@ function renderCrashLogs(container, renderToken) {
                         <td>${entityCell(e.device, '', '未知设备')}</td>
                         <td style="font-size:12px">${escapeHtml(e.androidVersion || '—')}</td>
                         <td style="font-size:12px">${escapeHtml(e.appVersion || '—')}</td>
-                        <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.currentPage || '—')}</td>
+                        <td style="font-size:12px;overflow-wrap:anywhere">${escapeHtml(e.currentPage || '—')}</td>
                         <td>${crashStatusBadge(e.status)}</td>
                         <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);max-width:280px;white-space:pre-wrap;word-break:break-word">${escapeHtml(e.stackTracePreview || '')}</td>
                     </tr>
@@ -2634,6 +2717,7 @@ function renderCrashLogs(container, renderToken) {
             }
 
             const end = Math.min(offset + entries.length, data.total);
+            labelizeTables(tableWrap);
             pagination.innerHTML = `<span>共 ${data.total} 条${data.total ? `，第 ${offset + 1} - ${end} 条` : ''}</span><div>
                 <button class="btn btn-ghost btn-sm crash-prev" ${offset === 0 ? 'disabled' : ''}>上一页</button>
                 <button class="btn btn-ghost btn-sm crash-next" ${data.hasMore ? '' : 'disabled'}>下一页</button>
@@ -2675,11 +2759,11 @@ function renderCrashLogDetailView(e, container, renderToken) {
             <div class="card">
                 <div class="card-header"><span class="card-title">崩溃信息</span>${crashStatusBadge(e.status)}</div>
                 <div style="display:grid;gap:10px;font-size:13px;margin-bottom:16px">
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">时间</span><span>${formatDateTime(e.timestamp)}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">App 版本</span><span>${escapeHtml(e.appVersion || '—')}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Android 版本</span><span>${escapeHtml(e.androidVersion || '—')}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">设备型号</span><span>${escapeHtml(e.device || '—')}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">当前页面</span><span>${escapeHtml(e.currentPage || '—')}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">时间</span><span>${formatDateTime(e.timestamp)}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">App 版本</span><span>${escapeHtml(e.appVersion || '—')}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">Android 版本</span><span>${escapeHtml(e.androidVersion || '—')}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">设备型号</span><span>${escapeHtml(e.device || '—')}</span></div>
+                    <div class="kv-row"><span style="color:var(--text-dim)">当前页面</span><span>${escapeHtml(e.currentPage || '—')}</span></div>
                 </div>
                 <div class="card-header" style="margin-top:12px"><span class="card-title">堆栈跟踪</span></div>
                 <div style="background:var(--surface-2);padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-word;font-family:var(--font-mono);font-size:12px;line-height:1.6">${escapeHtml(e.stackTrace || '无堆栈信息')}</div>
@@ -2860,6 +2944,7 @@ async function loadAiHealth(container, renderToken) {
             aiProviderCardHtml(key, meta, data)).join('');
         bindAiCardActions(container);
         tableEl.innerHTML = aiEventTableHtml(data);
+        labelizeTables(tableEl);
     } catch (error) {
         if (renderToken !== state.renderToken) return;
         cardsEl.innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-title">加载失败</div><div class="empty-desc">${escapeHtml(errorMessage(error))}</div></div></div>`;
@@ -2981,7 +3066,7 @@ function aiEventTableHtml(data) {
     if (rows.length === 0) {
         return '<div class="empty-state"><div class="empty-title">窗口内无事件</div><div class="empty-desc">尚无真实 AI 流量或探针记录</div></div>';
     }
-    return `<div class="table-scroll ai-event-scroll"><table class="ai-event-table"><thead><tr>
+    return `<div class="table-scroll ai-event-scroll"><table class="ai-event-table" data-card-wide="7"><thead><tr>
         <th>时间</th><th>来源</th><th>路由</th><th>供应商</th><th>模型</th><th>耗时</th><th>结果</th>
     </tr></thead><tbody>${rows.map(r => `
         <tr>
