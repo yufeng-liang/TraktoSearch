@@ -4,6 +4,7 @@ import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -200,7 +201,10 @@ fun SwiftieEggScreen(
     openedFromCloud: Boolean = false,
     previewStartMs: Long? = null,
     previewPaused: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // 退场动画彻底跑完、内容从组合移除后回调一次（即彩蛋在屏幕上完全消失的时刻）。
+    // 调用方用它把「回看提示」等 UI 推迟到彩蛋不见之后再出现。
+    onFullyHidden: () -> Unit = {}
 ) {
     val reducedMotion = rememberReducedMotion()
     val lowRam = rememberIsLowRamDevice()
@@ -242,8 +246,17 @@ fun SwiftieEggScreen(
     BackHandler(enabled = visible) { onDismiss(false) }
     LockPortraitWhile(visible)
 
+    // 用 MutableTransitionState 追踪退场动画：isIdle && !currentState 表示退场彻底跑完、
+    // 内容已从组合移除，此刻彩蛋在屏幕上完全消失。用它把「回看提示」推迟到消失之后再弹。
+    // 初始 false→idle 也会触发一次，但调用方以 pending 标志兜底，空回调无副作用。
+    val visibleState = remember { MutableTransitionState(false) }
+    visibleState.targetState = visible
+    LaunchedEffect(visibleState.isIdle, visibleState.currentState) {
+        if (visibleState.isIdle && !visibleState.currentState) onFullyHidden()
+    }
+
     AnimatedVisibility(
-        visible = visible,
+        visibleState = visibleState,
         // 有遮罩时把淡入关掉：两者叠着会让揭示前 200ms 既在半透明又在被裁，
         // 边缘发灰糊成一片。谁也不服谁的时候让遮罩说话。
         enter = if (revealing) EnterTransition.None else fadeIn(animationSpec = tween(200)),

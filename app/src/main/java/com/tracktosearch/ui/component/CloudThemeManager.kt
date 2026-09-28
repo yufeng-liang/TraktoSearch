@@ -123,6 +123,10 @@ class CloudThemeManager @Inject constructor(
     // 用来在 unlocked 已被提前写 true 时仍能判定「这是首次解锁」，从而弹一次回看提示。
     private var unlockedThisSession = false
 
+    // 待弹的「如何回看」提示：首次解锁在彩蛋退场时置位，等彩蛋完全消失后（onSwiftieEggFullyHidden）
+    // 才真正弹出。会话内标志，不落盘。
+    private var replayHintPending = false
+
     val swiftieUnlocked: StateFlow<Boolean> = swiftieEggStorage.unlocked
 
     // 解题机会是否已消耗：搜索关键词拦截只在未解题时生效
@@ -309,12 +313,25 @@ class CloudThemeManager @Inject constructor(
         // unlockedThisSession（commitSwiftieUnlock 里置位），两者取其一即算首次解锁。
         val firstUnlock = solved && !swiftieEggStorage.unlocked.value
         if (firstUnlock) commitSwiftieUnlock()
-        // 首次解锁结束后弹一次「如何回看」提示；落盘的 replayHintShown 保证只弹一次。
-        // 重看路径既不 commit、unlocked 也早为 true，两个条件都为假，不会弹。
+        // 首次解锁结束后要弹一次「如何回看」提示，但**不能在这里立刻弹**：此刻彩蛋才刚开始
+        // 退场（fadeOut 还没跑完），弹窗会压在正在消失的彩蛋上。改为先记一个待弹标志，
+        // 等彩蛋退场动画彻底结束（onSwiftieEggFullyHidden）再真正弹出。
+        // 落盘的 replayHintShown 保证只弹一次；重看路径既不 commit、unlocked 也早为 true，不会弹。
         if ((firstUnlock || unlockedThisSession) && !swiftieEggStorage.replayHintShown.value) {
-            _swiftieReplayHintVisible.value = true
+            replayHintPending = true
         }
         unlockedThisSession = false
+    }
+
+    /**
+     * 彩蛋退场动画彻底跑完、内容从屏幕完全消失后调用（SwiftieEggScreen.onFullyHidden）。
+     * 此刻才把待弹的「如何回看」提示真正弹出，避免弹窗压在正在淡出的彩蛋上。
+     */
+    fun onSwiftieEggFullyHidden() {
+        if (replayHintPending) {
+            replayHintPending = false
+            _swiftieReplayHintVisible.value = true
+        }
     }
 
     /** 用户在「如何回看」提示上点「我知道了」：收起并落盘，之后永久不再弹。 */

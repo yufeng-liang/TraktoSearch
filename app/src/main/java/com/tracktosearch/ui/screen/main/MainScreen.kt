@@ -1062,6 +1062,7 @@ fun MainScreen(
                 replay = swiftieUnlocked,
                 cloudCoordinates = cloudCoordinates,
                 openedFromCloud = swiftieEggOpenedFromCloud,
+                onFullyHidden = { cloudThemeManager.onSwiftieEggFullyHidden() },
                 modifier = Modifier.zIndex(5f)
             )
 
