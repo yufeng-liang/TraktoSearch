@@ -1684,7 +1684,7 @@ function renderAudit(container, renderToken) {
             } else {
                 tbody.innerHTML = logs.map(l => `
                     <tr>
-                        <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
+                        <td class="cell-nowrap" style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
                         <td>${eventLabel(l.eventType)}</td>
                         <td>${auditDetail(l)}</td>
                         <td>${entityCell(l.friendName, l.friendId, '未知用户')}</td>
@@ -2309,7 +2309,7 @@ function renderFeedback(container, renderToken) {
                         <td>${contentPreview}</td>
                         <td style="text-align:center">${screenshotBadge}</td>
                         <td><span style="color:${statusColor};font-weight:500">${statusLabel}</span></td>
-                        <td style="color:var(--text-dim);font-size:12px">${formatTime(f.created_at)}</td>
+                        <td class="cell-nowrap" style="color:var(--text-dim);font-size:12px">${formatTime(f.created_at)}</td>
                     </tr>`;
                 }).join('');
                 tableWrap.innerHTML = `

@@ -429,3 +429,16 @@ test('详情卡的「标签—值」行由类名承载，标签不参与收缩',
         '内联排版会让中文标签在窄屏逐字竖排'
     );
 });
+
+test('平板档（641–1024）按触屏对待，时间列不再断成两行', () => {
+    const tablet = stylesSource.match(/@media \(min-width: 641px\) and \(max-width: 1024px\)[\s\S]*?\n\}/);
+    assert.ok(tablet, '平板档触控靶段落应存在');
+    assert.match(tablet[0], /\.btn-sm \{ min-height: 44px; \}/);
+    assert.match(tablet[0], /\.form-input, \.form-select \{ min-height: 44px; font-size: 16px; \}/);
+    // 下界必须写 641px，否则会把上面 ≤640 段落已定的手机尺寸反向盖掉
+    assert.match(stylesSource, /\.cell-nowrap \{ white-space: nowrap; \}/);
+    assert.ok((appSource.match(/class="cell-nowrap"/g) || []).length >= 2, '审计与反馈的时间列都要贴上');
+    const mobileBlocks = (stylesSource.match(/@media \(max-width: 640px\)[\s\S]*?\n\}/g) || []).join('\n');
+    // 卡片头当标题用，nowrap 的时间戳在手机上要能换行
+    assert.match(mobileBlocks, /\.table-scroll td:first-child \{[\s\S]*?white-space: normal/);
+});

@@ -708,6 +708,8 @@ th, td {
 .entity-cell {
     min-width: 132px;
 }
+/* 时间戳断成两行会让整列高度翻倍，扫读时反而更慢 */
+.cell-nowrap { white-space: nowrap; }
 .entity-cell[title] {
     cursor: help;
 }
@@ -1209,6 +1211,7 @@ tbody tr:last-child td { border-bottom: none; }
     /* 卡片头没有字段名，用普通块级排版，中文昵称才不会逐字换行 */
     .table-scroll td:first-child {
         display: block;
+        white-space: normal;
         font-size: 15px !important;
         font-weight: 600;
         color: var(--text) !important;
@@ -1709,6 +1712,21 @@ tbody tr:last-child td { border-bottom: none; }
 .text-danger { color: var(--danger); }
 .mono { font-family: var(--font-mono); }
 .health-dot.warn { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
+
+/* ===== 平板档（641–1024）触屏适配 =====
+   这个区间同样靠手指操作：触控靶收进 44px，输入框字号 16px 免得 iOS 聚焦时整页放大。
+   下界写 641px 是为了不去覆盖上面 ≤640 段落里已定的手机尺寸。 */
+@media (min-width: 641px) and (max-width: 1024px) {
+    .menu-toggle { padding: 10px; min-width: 44px; min-height: 44px; }
+    .theme-toggle { width: 44px; height: 44px; }
+    .palette-btn { min-height: 44px; }
+    .btn-sm { min-height: 44px; }
+    #logoutBtn { min-height: 44px; }
+    .form-input, .form-select { min-height: 44px; font-size: 16px; }
+    .sidebar-link { min-height: 44px; }
+    .ai-probe-model { min-height: 44px; }
+    .segmented button { min-height: 44px; }
+}
 
 /* ===== 手机端覆盖：AI 健康与反馈气泡 =====
    这些基础规则写在本文件更靠后的段落里，媒体查询必须跟在它们之后才会生效。 */
