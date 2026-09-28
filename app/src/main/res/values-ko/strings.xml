@@ -2246,7 +2246,7 @@
     <string name="swiftie_audio_hint_volume">소리를 켜면 가장 좋습니다</string>
     <string name="swiftie_audio_hint_headphones">이어폰을 착용하면 가장 좋습니다</string>
     <string name="swiftie_replay_hint_title">이스터에그를 해제했어요</string>
-    <string name="swiftie_replay_hint_message">이 스위프티 이스터에그를 다시 보고 싶다면 언제든 '설정' 화면을 열고 맨 아래의 '버전'을 길게 누르면 다시 재생돼요.</string>
+    <string name="swiftie_replay_hint_message">이 스위프티 이스터에그를 다시 보고 싶다면 언제든 \'설정\' 화면을 열고 맨 아래의 \'버전\'을 길게 누르면 다시 재생돼요.</string>
     <string name="swiftie_replay_hint_confirm">확인</string>
     <string name="settings_ai_profile_consent">AI 프로필</string>
     <string name="settings_ai_profile_consent_desc">표시한 작품, 평점과 짧은 리뷰로 로컬 취향 프로필을 만들어 상세 페이지 분석에 사용합니다.</string>
