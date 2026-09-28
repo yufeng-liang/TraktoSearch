@@ -86,8 +86,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -431,7 +429,7 @@ fun DetailScreen(
         }
     }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var playingVideoKey by remember { mutableStateOf<String?>(null) }
+    var playingVideoKey by rememberSaveable { mutableStateOf<String?>(null) }
     var showAllVideos by remember { mutableStateOf(false) }
 
     // 内容就绪状态：沉浸背景优先显示，其他内容(cast/视频/简介/tab)淡入。
@@ -1378,22 +1376,6 @@ fun DetailScreen(
             )
             } // CompositionLocalProvider
 
-            // YouTube 内置播放器（用 Dialog 包裹以确保覆盖在 AppBottomSheet 之上）
-            playingVideoKey?.let { key ->
-                Dialog(
-                    onDismissRequest = { playingVideoKey = null },
-                    properties = DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false
-                    )
-                ) {
-                    YouTubePlayerOverlay(
-                        videoKey = key,
-                        videoTitle = "",
-                        onDismiss = { playingVideoKey = null }
-                    )
-                }
-            }
 
             // 全部预告片与截图弹窗
             if (showAllVideos) {
@@ -1425,6 +1407,15 @@ fun DetailScreen(
                             )
                         }
                     }
+                )
+            }
+
+            // 播放器位于全部预告片弹层之上，关闭后保留原列表与滚动位置。
+            playingVideoKey?.let { key ->
+                YouTubePlayerDialog(
+                    videoKey = key,
+                    videoTitle = uiState.videos.firstOrNull { it.key == key }?.name.orEmpty(),
+                    onDismiss = { playingVideoKey = null }
                 )
             }
 
@@ -1695,5 +1686,6 @@ private fun BareEmptyHint(icon: ImageVector, title: String) {
 // - DetailMarkWatchedDialog.kt: MarkWatchedDialog
 // - DetailFilterSection.kt: FilterSection
 // - DetailComments.kt: CommentItem
-// - DetailVideosImages.kt: VideosAndImagesSection, VideoCard, BackdropCard, FullVideosImagesSheet, FullVideoItem, FullBackdropItem, YouTubePlayerOverlay
+// - DetailVideosImages.kt: VideosAndImagesSection, VideoCard, BackdropCard, FullVideosImagesSheet, FullVideoItem, FullBackdropItem
+// - YouTubePlayerDialog.kt: YouTube 官方嵌入播放器及全屏窗口
 // 全屏图片查看器已迁移到 OpenImage（OpenImageViewer.kt 桥接层）

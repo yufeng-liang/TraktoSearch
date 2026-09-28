@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -37,6 +38,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -333,6 +335,7 @@ fun AppDialogActionRow(
  *
  * tonalElevation 默认 0.dp（与遮罩同色平铺）；浮在内容上需要抬升感的调用点
  * （如版权确认弹窗）显式传 [DesignToken.ElevationFloating]，原样透传给内部 Surface。
+ * [fullScreen] 供媒体播放器使用；默认浮层的留白、圆角和系统栏行为保持不变。
  */
 @Composable
 fun AppFloatingDialog(
@@ -343,17 +346,22 @@ fun AppFloatingDialog(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(DesignToken.DialogPadding),
     tonalElevation: Dp = 0.dp,
+    fullScreen: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(
         onDismissRequest = onDismissRequest,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = !fullScreen,
+        ),
     ) {
         Surface(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = DesignToken.DialogPadding),
-            shape = DesignToken.Dialog,
+            modifier = modifier.then(
+                if (fullScreen) Modifier.fillMaxSize()
+                else Modifier.fillMaxWidth().padding(horizontal = DesignToken.DialogPadding)
+            ),
+            shape = if (fullScreen) RectangleShape else DesignToken.Dialog,
             color = floatingDialogColor(),
             // 与 AppBottomSheet 同一个坑：浮层底色不是 scheme 色，Surface 默认
             // contentColor = contentColorFor(color) 会得到 Unspecified，没显式设色的

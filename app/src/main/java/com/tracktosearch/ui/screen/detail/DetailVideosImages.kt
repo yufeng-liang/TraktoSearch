@@ -1,11 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -32,14 +26,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.BrokenImage
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
@@ -54,15 +45,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
@@ -97,6 +85,9 @@ internal fun VideosAndImagesSection(
             actionText = stringResource(R.string.detail_videos_all, totalCount),
             onActionClick = onShowAll
         )
+        if (videos.isNotEmpty()) {
+            TrailerNetworkNotice()
+        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 0.dp)
@@ -125,6 +116,48 @@ internal fun VideosAndImagesSection(
                 )
             }
         }
+    }
+}
+
+/** 网络要求属于整个预告片区域，不依赖图片请求的临时加载状态。 */
+@Composable
+internal fun TrailerNetworkNotice(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("trailer_network_notice")
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            Icons.Rounded.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp).size(16.dp)
+        )
+        Text(
+            stringResource(R.string.trailer_youtube_restricted),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun TrailerThumbnailPlaceholder() {
+    Box(
+        Modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(8.dp)
+    ) {
+        Icon(
+            Icons.Rounded.BrokenImage,
+            contentDescription = stringResource(R.string.trailer_thumbnail_failed),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -162,30 +195,7 @@ internal fun VideoCard(
             contentDescription = video.name,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
-            error = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Rounded.BrokenImage,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.trailer_youtube_restricted),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
+            error = { TrailerThumbnailPlaceholder() }
         )
         // 半透明渐变遮罩
         Box(
@@ -406,15 +416,20 @@ internal fun FullVideosImagesSheet(
 
                 when {
                     showVideos -> {
-                        LazyColumn(
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
-                                FullVideoItem(
-                                    video = video,
-                                    onClick = { onVideoClick(video) }
-                                )
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // 说明位于列表外，滚动或缩略图重试都不会将它回收。
+                            TrailerNetworkNotice(Modifier.padding(horizontal = 16.dp))
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).testTag("detail_all_videos_list"),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
+                                    FullVideoItem(
+                                        video = video,
+                                        onClick = { onVideoClick(video) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -469,11 +484,12 @@ internal fun FullVideoItem(
                 .height(68.dp)
                 .clip(RoundedCornerShape(6.dp))
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = thumbnailUrl,
                 contentDescription = video.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                error = { TrailerThumbnailPlaceholder() }
             )
             // 播放按钮
             Box(
@@ -541,149 +557,3 @@ internal fun FullBackdropItem(
     }
 }
 
-// ==================== 预告片播放界面 ====================
-
-@Composable
-internal fun YouTubePlayerOverlay(
-    videoKey: String,
-    videoTitle: String,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    val haptics = rememberAppHaptics()
-    val thumbnailUrl = "https://img.youtube.com/vi/$videoKey/hqdefault.jpg"
-    val watchUrl = "https://www.youtube.com/watch?v=$videoKey"
-
-    BackHandler(onBack = onDismiss)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .statusBarsPadding()
-            .hapticClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                // 黑背景不是操作面（有显式 × 与播放按钮），不震
-                semantic = null,
-                onClick = onDismiss
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            // 缩略图 + 播放按钮
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {} // 阻止穿透
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(thumbnailUrl)
-                        .crossfade(false)
-                        .build(),
-                    contentDescription = videoTitle,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    error = {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Rounded.BrokenImage,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = stringResource(R.string.trailer_youtube_restricted),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
-                )
-                // 播放按钮
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                        // 这层浮层就是为了「看这条预告」而开的，播放与下面那颗「在浏览器中打开」
-                        // 是同一个动作的两个落点，都是本浮层的主按钮 → 按显著度给 tap()，
-                        // 不按外跳静默（否则整层唯一会震的是关闭 ×，主次颠倒）
-                        .hapticClickable(semantic = HapticSemantic.TAP) {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
-                            context.startActivity(intent)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.PlayArrow,
-                        contentDescription = stringResource(R.string.detail_video_play),
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 视频标题
-            if (videoTitle.isNotEmpty()) {
-                Text(
-                    text = videoTitle,
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // 在浏览器中打开按钮
-            FilledTonalButton(onClick = {
-                haptics.tap()
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
-                context.startActivity(intent)
-            }) {
-                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.detail_video_open_browser), maxLines = 1)
-            }
-        }
-
-        // 关闭按钮
-        IconButton(
-            onClick = { haptics.lightTap(); onDismiss() },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-        ) {
-            Icon(
-                Icons.Rounded.Close,
-                contentDescription = stringResource(R.string.detail_close),
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-    }
-}

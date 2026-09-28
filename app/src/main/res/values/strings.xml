@@ -1,6 +1,7 @@
 <resources>
     <string name="auth_migration_invite_hint">Silent recovery was not completed. Enter a migration ticket code to continue.</string>
     <string name="auth_offline_mode">Offline mode: using cached data.</string>
+    <string name="auth_verify_unavailable">Authorization cannot be verified right now; using cached data.</string>
     <string name="app_name">TraktoSearch</string>
     <string name="auth_expired_message">Connect to the internet and collect your ticket again.</string>
     <string name="auth_invite_code">Enter 6-digit ticket code</string>
@@ -460,6 +461,16 @@
     <string name="detail_video_open_browser">Open in Browser</string>
     <string name="detail_video_play">Play</string>
     <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>
+    <string name="trailer_thumbnail_failed">Trailer thumbnail failed to load</string>
+    <string name="trailer_loading">Loading trailer…</string>
+    <string name="trailer_retry">Retry</string>
+    <string name="trailer_network_failed">Network unavailable, cannot load the YouTube player. Check your connection or enable VPN.</string>
+    <string name="trailer_unavailable">This trailer is currently unavailable.</string>
+    <string name="trailer_embed_disabled">This trailer does not allow embedded playback. You can open it in a browser.</string>
+    <string name="trailer_identity_failed">Player identity check failed. Please retry.</string>
+    <string name="trailer_playback_failed">Trailer playback failed. Please retry.</string>
+    <string name="trailer_open_failed">No browser available</string>
+    <string name="trailer_exit_fullscreen">Exit full screen</string>
 
     <!-- Crash Dialog -->
     <string name="crash_dialog_cancel">Not now</string>
@@ -775,7 +786,7 @@ Config:
   urlPath = $.url
   diskTypePath = $.type</string>
     <string name="help_detail_custom">Custom Detail Page: In settings you can control the visibility of each detail page module (cast, videos &amp; screenshots, overview, my rating, comments, recommendations)</string>
-    <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it in the browser, tap a screenshot to view fullscreen and save to gallery</string>
+    <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it inside the app (YouTube must be reachable), tap a screenshot to view fullscreen and save to gallery</string>
     <string name="help_detail_pull_refresh">Pull to refresh: Pull down on a movie/TV detail page to reload ratings, cast, seasons, comments and recommendations; on a Douban item page it reloads the item info and re-searches resources if you already searched</string>
     <string name="help_detail_comments">Comments: when Douban has short comments they are shown first, with their posting time and like count; Trakt/TMDB comments appear only when Douban has none. If the Douban item is resolved after the page opens, its short comments are added automatically</string>
     <string name="help_discover_filter_b1">Discover Filter: Tap the filter icon in the discover page toolbar (or the \"Go to Discover Filter\" card at the bottom) to enter the filter page</string>

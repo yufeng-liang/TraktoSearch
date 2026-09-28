@@ -1,6 +1,7 @@
 <resources>
     <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用のチケットコードを入力して続行してください。</string>
     <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
+    <string name="auth_verify_unavailable">現在、認証状態を確認できないため、キャッシュデータを使用しています。</string>
     <string name="app_name">TraktoSearch</string>
     <string name="auth_expired_message">ネットワークに接続して、もう一度発券してください。</string>
     <string name="auth_invite_code">6桁のチケットコードを入力</string>
@@ -654,6 +655,16 @@
     <string name="detail_video_open_browser">ブラウザで開く</string>
     <string name="detail_video_play">再生</string>
     <string name="trailer_youtube_restricted">YouTubeは現在の地域で制限されています\nVPNをご使用ください</string>
+    <string name="trailer_thumbnail_failed">予告編サムネイルの読み込みに失敗しました</string>
+    <string name="trailer_loading">予告編を読み込み中…</string>
+    <string name="trailer_retry">再試行</string>
+    <string name="trailer_network_failed">ネットワークに接続できないため、YouTubeプレーヤーを読み込めません。接続を確認するかVPNを有効にしてください。</string>
+    <string name="trailer_unavailable">この予告編は現在再生できません。</string>
+    <string name="trailer_embed_disabled">この予告編は埋め込み再生が許可されていません。ブラウザで開けます。</string>
+    <string name="trailer_identity_failed">プレーヤーの認証に失敗しました。もう一度お試しください。</string>
+    <string name="trailer_playback_failed">予告編の再生に失敗しました。もう一度お試しください。</string>
+    <string name="trailer_open_failed">利用できるブラウザがありません</string>
+    <string name="trailer_exit_fullscreen">全画面を終了</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">映画出演</string>
@@ -1520,7 +1531,7 @@
   urlPath = $.url
   diskTypePath = $.type</string>
     <string name="help_detail_custom">カスタム詳細ページ：設定で詳細ページの各モジュール（キャスト、予告編とスクリーンショット、あらすじ、マイレーティング、コメント、おすすめ）の表示/非表示を制御</string>
-    <string name="help_videos_images">予告編とスクリーンショット：詳細ページに予告編とスチールを表示、予告編をタップしてブラウザで再生、スクリーンショットをタップして拡大表示しアルバムに保存</string>
+    <string name="help_videos_images">予告編とスクリーンショット：詳細ページに予告編とスチールを表示、予告編をタップするとアプリ内でそのまま再生（YouTubeに接続できる必要があります）、スクリーンショットをタップして拡大表示しアルバムに保存</string>
     <string name="help_detail_pull_refresh">プルトゥリフレッシュ：作品詳細ヘージで下に引くと評価/キャスト/シーズン/コメント/おすすめを再取得。豆矣詳細ヘージでは作品情報を再取得し、検索済みの場合はリソースも再検索します</string>
     <string name="help_detail_comments">コメント：豆瓣に短評がある場合は豆瓣の短評を優先して表示し、投稿日時といいね数も表示します。豆瓣に短評がない場合のみ Trakt/TMDB のコメントを表示します。ページを開いた後に豆瓣の作品が判明した場合は、自動で豆瓣の短評を取得します</string>
     <string name="help_discover_filter_b1">作品フィルター：発見ページのタイトルバーでフィルターアイコンをタップ、または下部の「作品フィルターページへ」カードからフィルターページに移動</string>
