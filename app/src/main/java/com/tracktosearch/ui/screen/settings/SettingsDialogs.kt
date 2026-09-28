@@ -687,7 +687,7 @@ internal fun AccentColorDialog(
                                             onClick = {
                                                 if (isCustom && pendingDeleteArgb == customSwatch) {
                                                     // 待删态再点 = 确认删除
-                                                    onCustomAccentRemove(customSwatch!!)
+                                                    onCustomAccentRemove(customSwatch)
                                                     pendingDeleteArgb = null
                                                 } else {
                                                     pendingDeleteArgb = null

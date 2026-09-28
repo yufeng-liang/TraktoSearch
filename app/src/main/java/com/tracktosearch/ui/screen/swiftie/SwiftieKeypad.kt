@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Backspace
+import androidx.compose.material.icons.automirrored.outlined.Backspace
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -160,7 +160,7 @@ fun SwiftieKeypad(
             .clip(shape)
             .then(
                 if (blurred) {
-                    Modifier.hazeBlur(input = HazeInput.Sources(hazeState!!), style = blurStyle)
+                    Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = blurStyle)
                 } else {
                     Modifier
                 }
@@ -217,7 +217,7 @@ private fun RowScope.BackspaceKey(enabled: Boolean, onClick: () -> Unit) {
     val label = stringResource(R.string.swiftie_quiz_backspace)
     KeyCell(enabled = enabled, highlight = false, onClick = onClick) {
         Icon(
-            imageVector = Icons.Outlined.Backspace,
+            imageVector = Icons.AutoMirrored.Outlined.Backspace,
             contentDescription = label,
             tint = SwiftiePalette.RoyalBlue,
             modifier = Modifier.size(26.dp)

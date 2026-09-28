@@ -137,8 +137,8 @@ class UpdateRepository @Inject constructor(
         } ?: ""
         val cleanBody = sanitizeChangelog(body)
         val firstLine = cleanBody.lineSequence().firstOrNull()
-        val firstLineIsSectionHeader = firstLine?.trimStart()?.startsWith("## ") == true
-        return if (firstLineIsSectionHeader && firstLine != null) {
+        val firstLineIsSectionHeader = firstLine != null && firstLine.trimStart().startsWith("## ")
+        return if (firstLineIsSectionHeader) {
             if (dateStr.isNotBlank()) {
                 // 移除已有的尾部日期括号(若有),再追加 (dateStr)
                 val titleWithoutDate = firstLine.replace(Regex("（[^）]*\\d{4}-\\d{2}-\\d{2}[^）]*）$"), "").trimEnd()

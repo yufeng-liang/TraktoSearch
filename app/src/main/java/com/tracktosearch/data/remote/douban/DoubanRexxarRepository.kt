@@ -204,12 +204,12 @@ class DoubanRexxarRepository(
             if (!forceRefresh) {
                 val publicPhotos = publicDataPoolManager?.getPhotos(doubanId, mediaType)
                 if (publicPhotos != null) {
-                    existing = mergePhotoEntries(existing, publicPhotos)
-                    if (existing != null) {
-                        photosCache.put(key, existing)
-                        if (existing.isFresh(now) && existing.satisfies(start, count)) {
-                            return@withLock Result.success(existing.toPage(start, count))
-                        }
+                    // mergePhotoEntries 恒返回非空条目：原先再判一次 null 在 K2 下被判成恒真条件
+                    val pooled = mergePhotoEntries(existing, publicPhotos)
+                    existing = pooled
+                    photosCache.put(key, pooled)
+                    if (pooled.isFresh(now) && pooled.satisfies(start, count)) {
+                        return@withLock Result.success(pooled.toPage(start, count))
                     }
                 }
             }

@@ -2,6 +2,7 @@ package com.tracktosearch.data.util
 
 import android.content.Context
 import android.os.Build
+import androidx.core.content.pm.PackageInfoCompat
 import com.tracktosearch.data.local.CrashLogRecord
 import com.tracktosearch.data.local.CrashLogRecordStore
 import com.tracktosearch.data.local.CrashLogStorage
@@ -180,7 +181,7 @@ class CrashLogUploader @Inject constructor(
     private suspend fun uploadLog(logContent: String): Boolean {
         val appVersion = runCatching {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
-            "${pi.versionName} (${if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode})"
+            "${pi.versionName} (${PackageInfoCompat.getLongVersionCode(pi)})"
         }.getOrNull() ?: "unknown"
 
         // 解析本地日志的字段

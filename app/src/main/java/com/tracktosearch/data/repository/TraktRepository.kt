@@ -878,7 +878,7 @@ class TraktRepository @Inject constructor(
                             MediaType.SHOW -> r.show?.ids?.trakt
                             // PERSON 结果同样可缓存：缺这个分支会让人名搜索永不命中缓存
                             MediaType.PERSON -> r.person?.ids?.trakt
-                            else -> null
+                            MediaType.DISK -> null
                         }
                         id != null && id > 0
                     }

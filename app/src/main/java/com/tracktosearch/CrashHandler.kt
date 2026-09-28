@@ -3,6 +3,7 @@ package com.tracktosearch
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import androidx.core.content.pm.PackageInfoCompat
 import com.tracktosearch.data.util.CurrentPageHolder
 import com.tracktosearch.data.util.UserActionTracker
 import java.io.File
@@ -137,7 +138,7 @@ class CrashHandler private constructor(
     private fun getAppVersion(): String {
         return try {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
-            "${pi.versionName} (${if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode})"
+            "${pi.versionName} (${PackageInfoCompat.getLongVersionCode(pi)})"
         } catch (_: Exception) {
             "unknown"
         }

@@ -444,6 +444,10 @@ private fun SwipeableMessageRow(
         return
     }
     val haptics = rememberAppHaptics()
+    // confirmValueChange 这个重载已废弃（官方要求改用动态 anchors），但本行只需要「滑过阈值就
+    // 通报一次、随后弹回」：按官方写法要重做 anchors、并把震动时机挪到状态落定之后，会改变
+    // 侧滑手感。这里保留原行为并显式抑制，等 Material3 给出等价回调再迁移。
+    @Suppress("DEPRECATION")
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.StartToEnd) {

@@ -37,6 +37,9 @@ import retrofit2.Response
 
 private val AI_SUCCESS_CODES = setOf("SUCCESS", "OK", "200")
 
+// 服务端响应里可能带新字段：这里的解码统一走宽松 Json，避免每次调用都新建实例（JSON_FORMAT_REDUNDANT）
+private val lenientJson = Json { ignoreUnknownKeys = true }
+
 enum class AiErrorCode {
     UNAUTHORIZED,
     QUOTA_EXCEEDED,
@@ -434,7 +437,7 @@ class AiRepository @Inject constructor(
         if (!response.isSuccessful || body == null) {
             throw AiErrorMapper.exception(
                 serverCode = runCatching {
-                    Json { ignoreUnknownKeys = true }
+                    lenientJson
                         .decodeFromString(AiErrorDto.serializer(), response.errorBody()?.string().orEmpty())
                         .code
                 }.getOrNull() ?: "HTTP_${response.code()}",
@@ -659,7 +662,7 @@ class AiRepository @Inject constructor(
         if (!response.isSuccessful || body == null) {
             throw AiErrorMapper.exception(
                 serverCode = runCatching {
-                    Json { ignoreUnknownKeys = true }
+                    lenientJson
                         .decodeFromString(AiErrorDto.serializer(), response.errorBody()?.string().orEmpty())
                         .code
                 }.getOrNull() ?: "HTTP_${response.code()}",
@@ -877,7 +880,7 @@ class AiRepository @Inject constructor(
     suspend fun readQuotaSnapshotDailyUsed(friendId: String): Int? = runCatching {
         val raw = storage.read(friendId, AiCacheFeature.QUOTA_SNAPSHOT, quotaSnapshotDay())
             ?: return@runCatching null
-        Json { ignoreUnknownKeys = true }.decodeFromString<AiQuotaSnapshotDto>(raw).dailyUsed
+        lenientJson.decodeFromString<AiQuotaSnapshotDto>(raw).dailyUsed
     }.getOrNull()
 
     /** 把最近一次响应里的额度用量落到当日快照，供重启后恢复显示。 */
@@ -1388,11 +1391,11 @@ private fun parseQuizStreamEvent(line: String): AiQuizStreamEvent? {
         "result" -> {
             val quizElement = root["quiz"] ?: return null
             val dto = runCatching {
-                Json { ignoreUnknownKeys = true }.decodeFromJsonElement(AiQuizDto.serializer(), quizElement)
+                lenientJson.decodeFromJsonElement(AiQuizDto.serializer(), quizElement)
             }.getOrNull() ?: return null
             val quiz = dto.toDomainOrNull(root["quota"]?.let { quota ->
                 runCatching {
-                    Json { ignoreUnknownKeys = true }.decodeFromJsonElement(AiQuotaDto.serializer(), quota)
+                    lenientJson.decodeFromJsonElement(AiQuotaDto.serializer(), quota)
                 }.getOrNull()
             }) ?: throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz stream result is invalid", 200)
             AiQuizStreamEvent.Completed(quiz)
@@ -1450,12 +1453,12 @@ private fun parseDailyStreamEvent(line: String): AiDailyStreamEvent? {
         "result" -> {
             val dailyElement = root["daily"] ?: return null
             val dto = runCatching {
-                Json { ignoreUnknownKeys = true }
+                lenientJson
                     .decodeFromJsonElement(AiDailyKnowledgeDto.serializer(), dailyElement)
             }.getOrNull() ?: return null
             val quota = root["quota"]?.let {
                 runCatching {
-                    Json { ignoreUnknownKeys = true }
+                    lenientJson
                         .decodeFromJsonElement(AiQuotaDto.serializer(), it)
                 }.getOrNull()
             }
@@ -1480,7 +1483,7 @@ private fun <T> Response<AiApiResponse<T>>.requirePayload(): AiResponsePayload<T
     val envelope = body()
     val errorEnvelope = envelope ?: errorBody()?.string()?.let { raw ->
         runCatching {
-            Json { ignoreUnknownKeys = true }.decodeFromString(AiErrorDto.serializer(), raw)
+            lenientJson.decodeFromString(AiErrorDto.serializer(), raw)
         }.getOrNull()
     }
     val code = envelope?.code ?: (errorEnvelope as? AiErrorDto)?.code

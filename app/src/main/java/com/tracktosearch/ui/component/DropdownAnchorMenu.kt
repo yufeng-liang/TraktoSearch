@@ -3,8 +3,8 @@ package com.tracktosearch.ui.component
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,7 +97,7 @@ fun DropdownAnchorMenu(
                 properties = PopupProperties(focusable = true, dismissOnBackPress = true)
             ) {
                 // 官方同款动画：scale + alpha（graphicsLayer），非 AnimatedVisibility
-                val transition = updateTransition(expandedState, "AnchorDropdownMenu")
+                val transition = rememberTransition(expandedState, "AnchorDropdownMenu")
                 val scale by transition.animateFloat(
                     transitionSpec = { tween(150, easing = FastOutSlowInEasing) }
                 ) { if (it) 1f else 0.8f }

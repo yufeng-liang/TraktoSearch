@@ -406,40 +406,13 @@ fun NeumorphicFrostedSurface(
                 content = content
             )
         } else {
-            val fallbackToken = if (glassRole != null) {
-                glassToken(
-                    role = glassRole,
-                    variant = com.tracktosearch.ui.theme.LocalGlassVariant.current,
-                    isDark = isDark,
-                    scene = scene
-                )
-            } else {
-                null
-            }
-            val fallbackBackground = if (glassRole != null && fallbackToken != null) {
-                resolveGlassFallbackFill(
-                    backgroundColor = backgroundColor,
-                    themeSurface = MaterialTheme.colorScheme.surface,
-                    tokenAlpha = fallbackToken.tintAlpha,
-                    ambientColor = resolveGlassAmbientColor(
-                        sceneAmbient = scene.ambientColor,
-                        themeBackground = MaterialTheme.colorScheme.background
-                    ),
-                    environmentTintStrength = fallbackToken.environmentTintStrength
-                )
-            } else {
-                backgroundColor
-            }
-            val fallbackBorder = if (glassRole != null) {
-                glassBorderColor(glassRole, borderColor, scene)
-            } else {
-                borderColor
-            }
+            // 走到这里 glassRole 必为 null（上方 if 的另一支），直接用调用方传入的颜色。
+            // 原先这里还有一段 glassRole 判空取 token 的分支，在该位置恒不成立（死代码），已删除。
             Box(
                 modifier = modifier
                     .clip(shape)
-                    .background(fallbackBackground, shape)
-                    .border(1.dp, fallbackBorder, shape),
+                    .background(backgroundColor, shape)
+                    .border(1.dp, borderColor, shape),
             ) {
                 content()
             }

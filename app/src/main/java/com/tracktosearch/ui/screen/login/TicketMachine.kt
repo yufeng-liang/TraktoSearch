@@ -904,7 +904,7 @@ private fun DrawScope.drawMarqueeBulbs(
         drawCircle(unlit, radius = radius, center = center)
         drawBulbGlassSheen(center, radius)
         if (signalOn) {
-            drawBulbLight(center, radius, signalHeat, signalGlow!!)
+            drawBulbLight(center, radius, signalHeat, signalGlow)
             continue
         }
         if (head == null) continue

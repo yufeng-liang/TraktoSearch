@@ -177,7 +177,7 @@ class SettingsViewModel @Inject constructor(
 
     /** 旧单值视图（迁移期保留，UI 重画完成后删除） */
     @Deprecated("改用 customAccentColors / selectedCustomAccentArgb")
-    val customAccentArgb: StateFlow<Long?> = themeStorage.customAccentArgb
+    val customAccentArgb: StateFlow<Long?> = themeStorage.selectedCustomAccentArgb
 
     val visualEffectMode: StateFlow<VisualEffectMode> = themeStorage.visualEffectMode
 

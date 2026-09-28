@@ -2002,7 +2002,7 @@ class AiSpriteViewModel @Inject constructor(
                 movie.mediaType.equals("tv", ignoreCase = true)
             if (isShow) {
                 val enrichment = tmdbRepository.peekTvEnrichment(tmdbId, movie.title, movie.year)
-                    ?: if (networkAvailableAtStart) tmdbRepository.enrichTv(tmdbId, movie.title, movie.year) else null
+                    ?: (if (networkAvailableAtStart) tmdbRepository.enrichTv(tmdbId, movie.title, movie.year) else null)
                     ?: return QuizPreviewEnrichment(movie, null)
                 val localizedTitle = enrichment.chineseTitle.trim()
                     .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
@@ -2022,7 +2022,7 @@ class AiSpriteViewModel @Inject constructor(
                 QuizPreviewEnrichment(enrichedMovie, localizedTitle)
             } else {
                 val enrichment = tmdbRepository.peekMovieEnrichment(tmdbId, movie.title, movie.year)
-                    ?: if (networkAvailableAtStart) tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year) else null
+                    ?: (if (networkAvailableAtStart) tmdbRepository.enrichMovie(tmdbId, movie.title, movie.year) else null)
                     ?: return QuizPreviewEnrichment(movie, null)
                 val localizedTitle = enrichment.chineseTitle.trim()
                     .takeIf { it.isNotBlank() && !it.equals(movie.title.trim(), ignoreCase = true) }
@@ -2164,7 +2164,7 @@ class AiSpriteViewModel @Inject constructor(
             val shownDate = currentDailyKnowledgeChangeDay()
             val history = aiRepository.readDailyKnowledgeHistory(friendId)
             val todayRecords = history.filter {
-                it.shownDate == shownDate.toString() && it.locale == locale
+                it.shownDate == shownDate && it.locale == locale
             }
             val historyChangeCount = (todayRecords.size - 1).coerceIn(0, 2)
             val latestRecord = todayRecords.firstOrNull()
@@ -2455,12 +2455,10 @@ class AiSpriteViewModel @Inject constructor(
             if (System.currentTimeMillis() - cached.first < WATCHED_TITLES_TTL_MS) return cached.second
         }
         val loaded = withContext(ioDispatcher) {
-            val results = listOf(
-                async { traktRepository.getAllMovieHistory(extended = "full") },
-                async { traktRepository.getAllShowHistory(extended = "full") }
-            ).awaitAll()
-            val movies = (results[0].getOrNull() as? List<TraktWatchlistMovieItem>).orEmpty().map { it.toAiWatched() }
-            val shows = (results[1].getOrNull() as? List<TraktWatchlistShowItem>).orEmpty().map { it.toAiWatched() }
+            val moviesDeferred = async { traktRepository.getAllMovieHistory(extended = "full") }
+            val showsDeferred = async { traktRepository.getAllShowHistory(extended = "full") }
+            val movies = moviesDeferred.await().getOrNull().orEmpty().map { it.toAiWatched() }
+            val shows = showsDeferred.await().getOrNull().orEmpty().map { it.toAiWatched() }
             (movies + shows).sortedByDescending { it.watchedAt.orEmpty() }.take(60)
         }
         if (loaded.isNotEmpty()) watchedTitlesCache = System.currentTimeMillis() to loaded

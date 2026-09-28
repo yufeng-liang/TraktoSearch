@@ -156,6 +156,9 @@ class AiAudioPlayer(private val context: Context) {
                     if (playEpoch == epoch) onFinished()
                 }
 
+                // 基类 onError(String) 已在 API 21 弃用，但框架仍按这条回调派发播放错误；
+                // 覆盖它才能保证失败时一定回到 onFinished，这里显式抑制该弃用诊断。
+                @Suppress("OVERRIDE_DEPRECATION")
                 override fun onError(utteranceId: String?) {
                     if (playEpoch == epoch) onFinished()
                 }

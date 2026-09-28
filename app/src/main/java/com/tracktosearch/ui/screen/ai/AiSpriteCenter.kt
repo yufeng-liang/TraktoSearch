@@ -35,6 +35,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
@@ -45,7 +46,6 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.RateReview
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WavingHand
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -623,7 +623,7 @@ private fun GreetingSummaryCard(
                 haptics.lightTap()
                 onPlayAudio(audio)
             }) {
-                Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
+                Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
             }
         }
     }
@@ -768,7 +768,7 @@ private fun CharacterStage(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                     AuditionPlaybackState.IDLE -> Icon(
-                                        Icons.Rounded.VolumeUp,
+                                        Icons.AutoMirrored.Rounded.VolumeUp,
                                         contentDescription = stringResource(R.string.ai_audio_play),
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -792,7 +792,7 @@ private fun CharacterStage(
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play), modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play), modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -1290,7 +1290,7 @@ private fun ActivatedCompactHeader(
                 when (auditionPlaybackState) {
                     AuditionPlaybackState.LOADING -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     AuditionPlaybackState.PLAYING -> Icon(Icons.Rounded.GraphicEq, stringResource(R.string.ai_audio_playing), tint = MaterialTheme.colorScheme.primary)
-                    AuditionPlaybackState.IDLE -> Icon(Icons.Rounded.VolumeUp, stringResource(R.string.ai_audio_play), tint = MaterialTheme.colorScheme.primary)
+                    AuditionPlaybackState.IDLE -> Icon(Icons.AutoMirrored.Rounded.VolumeUp, stringResource(R.string.ai_audio_play), tint = MaterialTheme.colorScheme.primary)
                 }
             }
             TextButton(onClick = onChangeCharacter, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {

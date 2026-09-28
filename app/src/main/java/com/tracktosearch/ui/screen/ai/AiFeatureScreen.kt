@@ -42,6 +42,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -51,9 +53,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -581,7 +581,7 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Rounded.VolumeUp, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = null)
                         Text(
                             text = stringResource(R.string.ai_audio_play),
                             modifier = Modifier.weight(1f),
@@ -593,7 +593,7 @@ private fun GreetingFeature(greeting: AiGreeting?, onPlayAudio: (AiAudio) -> Uni
                             haptics.lightTap()
                             onPlayAudio(audio)
                         }) {
-                            Icon(Icons.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
+                            Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = stringResource(R.string.ai_audio_play))
                         }
                     }
                 }
@@ -986,7 +986,7 @@ private fun RecommendationCard(recommendation: AiRecommendation, onOpen: () -> U
                 }
             }
             if (hasMediaId) {
-                Icon(Icons.Rounded.OpenInNew, contentDescription = stringResource(R.string.ai_taste_details), tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = stringResource(R.string.ai_taste_details), tint = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -1032,7 +1032,7 @@ private fun DailyFeature(
     val correctOptionId = question?.correctOptionIds?.firstOrNull()
     val correctOption = question?.options?.firstOrNull { it.id == correctOptionId }
     val answered = selectedOption != null && correctOption != null
-    val answerIsCorrect = answered && selectedOption?.id == correctOption?.id
+    val answerIsCorrect = answered && selectedOption.id == correctOption.id
 
     val realWorldExample = daily.realWorldExample?.trim().orEmpty()
     val boundary = daily.boundary?.trim().orEmpty()
@@ -2129,7 +2129,7 @@ private fun DailySourceBlock(
                         overflow = TextOverflow.Ellipsis
                     )
                     Icon(
-                        imageVector = Icons.Rounded.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = stringResource(R.string.ai_daily_source_open_url),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
