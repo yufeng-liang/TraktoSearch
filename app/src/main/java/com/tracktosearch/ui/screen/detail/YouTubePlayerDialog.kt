@@ -254,7 +254,7 @@ private fun TrailerPlayerContent(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            TrailerNetworkNotice(Modifier.widthIn(max = 960.dp))
+            TrailerNetworkNoticeCompact()
             Spacer(Modifier.height(12.dp))
             AppDialogActionRow(
                 primary = if (errorMessage != null) DialogAction(

@@ -156,6 +156,31 @@ internal fun TrailerNetworkNotice(modifier: Modifier = Modifier) {
     }
 }
 
+/** 弹层里的单行居中版：整行内容按宽度水平居中，图标与文字垂直对齐。 */
+@Composable
+internal fun TrailerNetworkNoticeCompact(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("trailer_network_notice_compact")
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Rounded.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            stringResource(R.string.trailer_youtube_restricted_single_line),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun TrailerThumbnailPlaceholder() {
     Box(
@@ -430,7 +455,7 @@ internal fun FullVideosImagesSheet(
                     showVideos -> {
                         Column(modifier = Modifier.fillMaxSize()) {
                             // 说明位于列表外，滚动或缩略图重试都不会将它回收。
-                            TrailerNetworkNotice(Modifier.padding(horizontal = 16.dp))
+                            TrailerNetworkNoticeCompact(Modifier.padding(horizontal = 16.dp))
                             LazyColumn(
                                 modifier = Modifier.weight(1f).testTag("detail_all_videos_list"),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),

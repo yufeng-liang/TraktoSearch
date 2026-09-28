@@ -461,6 +461,7 @@
     <string name="detail_video_open_browser">在浏览器中打开</string>
     <string name="detail_video_play">播放</string>
     <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>
+    <string name="trailer_youtube_restricted_single_line">YouTube在国内访问受限，请使用VPN</string>
     <string name="trailer_thumbnail_failed">预告片封面加载失败</string>
     <string name="trailer_loading">正在加载预告片…</string>
     <string name="trailer_retry">重试</string>

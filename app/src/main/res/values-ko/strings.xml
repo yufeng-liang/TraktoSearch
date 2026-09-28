@@ -655,6 +655,7 @@
     <string name="detail_video_open_browser">브라우저에서 열기</string>
     <string name="detail_video_play">재생</string>
     <string name="trailer_youtube_restricted">YouTube가 현재 지역에서 접근 제한됨\nVPN을 사용해 주세요</string>
+    <string name="trailer_youtube_restricted_single_line">YouTube가 현재 지역에서 접근 제한되었습니다. VPN을 사용해 주세요</string>
     <string name="trailer_thumbnail_failed">예고편 썸네일을 불러오지 못했습니다</string>
     <string name="trailer_loading">예고편 불러오는 중…</string>
     <string name="trailer_retry">다시 시도</string>

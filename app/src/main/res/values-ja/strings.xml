@@ -655,6 +655,7 @@
     <string name="detail_video_open_browser">ブラウザで開く</string>
     <string name="detail_video_play">再生</string>
     <string name="trailer_youtube_restricted">YouTubeは現在の地域で制限されています\nVPNをご使用ください</string>
+    <string name="trailer_youtube_restricted_single_line">YouTubeは現在の地域で制限されています。VPNをご使用ください</string>
     <string name="trailer_thumbnail_failed">予告編サムネイルの読み込みに失敗しました</string>
     <string name="trailer_loading">予告編を読み込み中…</string>
     <string name="trailer_retry">再試行</string>
