@@ -556,4 +556,3 @@ internal fun FullBackdropItem(
         )
     }
 }
-
