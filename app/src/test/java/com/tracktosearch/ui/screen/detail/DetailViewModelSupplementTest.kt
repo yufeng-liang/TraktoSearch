@@ -51,6 +51,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -194,6 +197,41 @@ class DetailViewModelSupplementTest {
         method.isAccessible = true
         method.invoke(viewModel)
     }
+
+    private suspend fun resolveDoubanId(doubanId: String) {
+        val method = DetailViewModel::class.java.getDeclaredMethod(
+            "setResolvedDoubanId", String::class.java, Continuation::class.java
+        )
+        method.isAccessible = true
+        suspendCoroutineUninterceptedOrReturn<Unit> { continuation ->
+            method.invoke(viewModel, doubanId, continuation)
+        }
+    }
+
+    private fun seedFallbackComments(): List<TraktComment> {
+        setupLoggedInState()
+        setPrivateField("currentDoubanId", null)
+        coEvery { doubanRepository.getDetailSnapshot() } returns emptyMap()
+        val comments = listOf(TraktComment(id = 1, comment = "已有 Trakt 评论"))
+        setUiState {
+            it.copy(
+                comments = comments,
+                commentSource = CommentSource.FALLBACK,
+                commentPage = 2,
+                tmdbCommentPage = 1,
+                hasMoreComments = true,
+                translatedComments = listOf(comments.single().copy(comment = "已有译文"))
+            )
+        }
+        return comments
+    }
+
+    private fun doubanFirstPage() = DoubanRexxarShortCommentPage(
+        total = 25,
+        start = 0,
+        count = 10,
+        comments = listOf(DoubanRexxarShortComment(id = "late-douban-1", text = "豆瓣短评"))
+    )
 
     // ==================== toggleSource 分支 ====================
 
@@ -399,6 +437,144 @@ class DetailViewModelSupplementTest {
         assertThat(viewModel.uiState.value.doubanCommentPage).isEqualTo(2)
         assertThat(viewModel.uiState.value.hasMoreComments).isFalse()
         coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun resolvedDoubanId_replacesFallbackOnlyAfterNonEmptyPageArrives() = runTest {
+        val fallback = seedFallbackComments()
+        val pending = CompletableDeferred<Result<DoubanRexxarShortCommentPage>>()
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-late", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } coAnswers { pending.await() }
+
+        resolveDoubanId("db-late")
+        runCurrent()
+
+        assertThat(viewModel.uiState.value.comments).isEqualTo(fallback)
+        assertThat(viewModel.uiState.value.isLoadingComments).isFalse()
+        pending.complete(Result.success(doubanFirstPage()))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.commentSource).isEqualTo(CommentSource.DOUBAN)
+        assertThat(state.comments.map { it.comment }).containsExactly("豆瓣短评")
+        assertThat(state.commentPage).isEqualTo(0)
+        assertThat(state.tmdbCommentPage).isEqualTo(0)
+        assertThat(state.doubanCommentPage).isEqualTo(1)
+        assertThat(state.translatedComments).isEmpty()
+        assertThat(state.hasMoreComments).isTrue()
+        assertThat(state.commentsError).isFalse()
+        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { tmdbRepository.getReviews(any(), any(), any()) }
+    }
+
+    @Test
+    fun resolvedDoubanId_emptyPagePreservesFallbackAndPagination() = runTest {
+        val fallback = seedFallbackComments()
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-empty", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } returns Result.success(DoubanRexxarShortCommentPage())
+
+        resolveDoubanId("db-empty")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.comments).isEqualTo(fallback)
+        assertThat(state.commentSource).isEqualTo(CommentSource.FALLBACK)
+        assertThat(state.commentPage).isEqualTo(2)
+        assertThat(state.tmdbCommentPage).isEqualTo(1)
+        assertThat(state.translatedComments).hasSize(1)
+        assertThat(state.hasMoreComments).isTrue()
+        assertThat(state.commentsError).isFalse()
+        coVerify(exactly = 1) {
+            doubanRexxarRepository.getShortComments("db-empty", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        }
+        coVerify(exactly = 0) { traktRepository.getComments(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun resolvedDoubanId_failurePreservesFallbackWithoutError() = runTest {
+        val fallback = seedFallbackComments()
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-failed", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } returns Result.failure(IllegalStateException("Douban unavailable"))
+
+        resolveDoubanId("db-failed")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.comments).isEqualTo(fallback)
+        assertThat(viewModel.uiState.value.commentSource).isEqualTo(CommentSource.FALLBACK)
+        assertThat(viewModel.uiState.value.commentsError).isFalse()
+        assertThat(viewModel.uiState.value.isLoadingComments).isFalse()
+        coVerify(exactly = 1) {
+            doubanRexxarRepository.getShortComments("db-failed", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        }
+    }
+
+    @Test
+    fun resolvedDoubanId_lateFallbackPaginationCannotMixIntoDouban() = runTest {
+        seedFallbackComments()
+        val pending = CompletableDeferred<List<TraktComment>>()
+        coEvery {
+            traktRepository.getComments(100, MediaType.MOVIE, limit = 10, page = 3)
+        } coAnswers { Result.success(pending.await()) }
+        coEvery { tmdbRepository.getReviews(200, MediaType.MOVIE, page = 2) } returns null
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-late", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } returns Result.success(doubanFirstPage())
+
+        viewModel.loadMoreComments()
+        runCurrent()
+        resolveDoubanId("db-late")
+        runCurrent()
+        pending.complete(listOf(TraktComment(id = 2, comment = "迟到的 Trakt 分页")))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.commentSource).isEqualTo(CommentSource.DOUBAN)
+        assertThat(state.comments.map { it.comment }).containsExactly("豆瓣短评")
+        assertThat(state.isLoadingMoreComments).isFalse()
+        assertThat(state.commentPage).isEqualTo(0)
+    }
+
+    @Test
+    fun resolvedDoubanId_lateTranslationCannotPolluteDouban() = runTest {
+        seedFallbackComments()
+        setUiState { it.copy(translatedComments = emptyList()) }
+        val pending = CompletableDeferred<TraktComment>()
+        coEvery { commentTranslator.translateSingleComment(any()) } coAnswers { pending.await() }
+        coEvery {
+            doubanRexxarRepository.getShortComments("db-late", DoubanRexxarMediaType.MOVIE, 0, 10, false)
+        } returns Result.success(doubanFirstPage())
+
+        viewModel.translateSingleComment(1)
+        runCurrent()
+        resolveDoubanId("db-late")
+        runCurrent()
+        pending.complete(TraktComment(id = 1, comment = "迟到的译文"))
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.commentSource).isEqualTo(CommentSource.DOUBAN)
+        assertThat(viewModel.uiState.value.translatedComments).isEmpty()
+        assertThat(viewModel.uiState.value.translatingCommentId).isNull()
+        assertThat(viewModel.uiState.value.isTranslating).isFalse()
+    }
+
+    @Test
+    fun resolvedDoubanId_existingDoubanSourceDoesNotReload() = runTest {
+        seedFallbackComments()
+        setUiState {
+            it.copy(
+                comments = listOf(TraktComment(id = 5, comment = "已有豆瓣短评", source = DOUBAN_COMMENT_SOURCE)),
+                commentSource = CommentSource.DOUBAN
+            )
+        }
+
+        resolveDoubanId("db-existing")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.comments.single().comment).isEqualTo("已有豆瓣短评")
+        coVerify(exactly = 0) { doubanRexxarRepository.getShortComments(any(), any(), any(), any(), any()) }
     }
 
     // ==================== translateComments ====================

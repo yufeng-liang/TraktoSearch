@@ -436,6 +436,64 @@ internal fun CommentItem(
                 }
                 ExpandableText(text = displayText, bottomAction = bottomAction)
             }
+            // 豆瓣短评：底部补一行时间与点赞数。豆瓣接口给的是 vote_count；
+            // Trakt/TMDB 评论不产生这一行，保持原有信息量不变。
+            if (comment.source == DOUBAN_COMMENT_SOURCE) {
+                val timeLabel = remember(comment.created_at) { commentTimeLabel(comment.created_at) }
+                val likesLabel = comment.likes.takeIf { it > 0 }
+                    ?.let { count -> stringResource(R.string.detail_comment_likes, formatCommentLikes(count)) }
+                if (timeLabel != null || likesLabel != null) {
+                    Row(
+                        modifier = Modifier.padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        timeLabel?.let { label ->
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                        if (timeLabel != null && likesLabel != null) {
+                            Text(
+                                text = " · ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                        likesLabel?.let { label ->
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
+
+/** 豆瓣短评时间格式：接口返回形如 "2008-02-27 21:43:23"。 */
+private const val DOUBAN_COMMENT_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss"
+
+/**
+ * 评论时间展示文案：收窄到分钟。
+ * 解析失败时原样返回原始字符串，空值返回 null（该行不显示时间）。
+ */
+internal fun commentTimeLabel(raw: String): String? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    val parsed = runCatching {
+        java.text.SimpleDateFormat(DOUBAN_COMMENT_TIME_PATTERN, java.util.Locale.US).parse(trimmed)
+    }.getOrNull() ?: return trimmed
+    return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(parsed)
+}
+
+/** 点赞数按当前语言加千位分隔（26473 -> 26,473）。 */
+internal fun formatCommentLikes(count: Int): String =
+    java.text.NumberFormat.getIntegerInstance().format(count)

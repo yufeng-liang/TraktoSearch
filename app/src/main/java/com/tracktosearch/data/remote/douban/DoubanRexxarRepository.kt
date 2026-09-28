@@ -92,7 +92,9 @@ data class DoubanRexxarShortComment(
     val authorName: String? = null,
     val ratingStars: Int? = null,
     val text: String? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    /** 点赞数；旧缓存与旧公共池文件没有该字段，缺失即 null。 */
+    val voteCount: Int? = null
 )
 
 @Serializable
@@ -449,7 +451,8 @@ class DoubanRexxarRepository(
             authorName = dto.user?.name,
             ratingStars = rating,
             text = dto.comment,
-            createdAt = dto.createTime
+            createdAt = dto.createTime,
+            voteCount = dto.voteCount
         )
     }
 

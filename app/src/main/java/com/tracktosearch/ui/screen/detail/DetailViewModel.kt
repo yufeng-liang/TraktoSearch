@@ -543,6 +543,10 @@ class DetailViewModel @Inject constructor(
     private var searchJob: Job? = null
     private var ratingsJob: Job? = null
     private var commentsJob: Job? = null
+
+    // 评论内容代次：豆瓣源替换兜底源、或整段重拉评论时递增。
+    // 迟到的兜底分页与单条译文凭代次作废，避免混进已切换后的豆瓣列表。
+    private var commentsGeneration = 0
     private var ownCommentJob: Job? = null
     private var seasonsJob: Job? = null
     private var delayedLoadJob: Job? = null
@@ -649,6 +653,8 @@ class DetailViewModel @Inject constructor(
             // 否则关闭该模块后头部评分卡在 ratings==null 时永久骨架
             if (cached.uiState.ratings == null) fetchRatingsAsync(cached.currentTraktRating)
             if (visibility.comments && cached.uiState.comments.isEmpty()) fetchComments()
+            // 缓存里是兜底源评论且已知 doubanId 时静默补查豆瓣短评（豆瓣有短评即接管列表）
+            if (visibility.comments && cached.uiState.comments.isNotEmpty()) refreshDoubanCommentsAfterIdResolved()
             if (cached.uiState.seasons.isEmpty() && cached.currentMediaType == MediaType.SHOW) fetchSeasons()
             if (visibility.cast && cached.uiState.cast.isEmpty() && cached.uiState.crew.isEmpty()) fetchCredits()
             if (visibility.videosImages && (cached.uiState.isLoadingVideosImages || (cached.uiState.videos.isEmpty() && cached.uiState.backdrops.isEmpty()))) fetchVideosAndImages()
@@ -1017,8 +1023,8 @@ class DetailViewModel @Inject constructor(
             applyWatchStates(cacheKey, currentTraktId, currentMediaType, currentImdbId)
         }
         currentDetailCacheKey?.let { startDoubanRexxarLoad(it, doubanId) }
-        if (_uiState.value.sectionVisible.comments && _uiState.value.comments.isEmpty()) {
-            fetchComments()
+        if (_uiState.value.sectionVisible.comments) {
+            refreshDoubanCommentsAfterIdResolved()
         }
     }
 
@@ -1390,6 +1396,8 @@ class DetailViewModel @Inject constructor(
 
     private fun fetchComments() {
         commentsJob?.cancel()
+        // 整段重拉作废在途的评论工作（兜底分页 / 单条翻译），否则旧结果会写回新列表
+        commentsGeneration++
         _uiState.value = _uiState.value.copy(
             isLoadingComments = true,
             commentsError = false
@@ -1494,6 +1502,7 @@ class DetailViewModel @Inject constructor(
         val nextTraktPage = current.commentPage + 1
         val nextTmdbPage = current.tmdbCommentPage + 1
         _uiState.value = current.copy(isLoadingMoreComments = true, commentsError = false)
+        val generation = commentsGeneration
 
         viewModelScope.launch {
             try {
@@ -1528,6 +1537,11 @@ class DetailViewModel @Inject constructor(
                 val newHasMoreTrakt = newTraktComments.size >= 10
                 val newHasMoreTmdb = tmdbResponse != null && nextTmdbPage < tmdbResponse.total_pages
 
+                // 豆瓣源已接管列表：清掉加载态并丢弃这次迟到的兜底分页结果
+                if (generation != commentsGeneration) {
+                    _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+                    return@launch
+                }
                 _uiState.value = _uiState.value.copy(
                     comments = _uiState.value.comments + uniqueNew,
                     commentPage = if (newTraktComments.isNotEmpty()) nextTraktPage else current.commentPage,
@@ -1588,6 +1602,64 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 豆瓣 ID 晚于首屏评论解析出来时的补查。
+     *
+     * 首屏评论可能已经按兜底源（Trakt/TMDB）落在列表上，而用户不会为此手动下拉刷新；
+     * 这里静默补查一次豆瓣短评，只有拿到非空结果才整体替换，空页或失败都维持原样。
+     * 全程不置 isLoadingComments，避免既有内容被骨架顶掉再填回。
+     */
+    private fun refreshDoubanCommentsAfterIdResolved() {
+        val state = _uiState.value
+        // 已经是豆瓣源且有内容：无需补查
+        if (state.commentSource == CommentSource.DOUBAN && state.comments.isNotEmpty()) return
+        // 一条评论都还没有：走完整链路（豆瓣优先、空页再兜底），骨架与错误标志交给它
+        if (state.comments.isEmpty()) {
+            fetchComments()
+            return
+        }
+        val doubanId = currentDoubanId ?: state.doubanIdForSync
+        val doubanType = currentDoubanMediaType()
+        if (doubanId.isNullOrBlank() || doubanType == null) return
+
+        commentsGeneration++
+        val generation = commentsGeneration
+        commentsJob?.cancel()
+        commentsJob = viewModelScope.launch {
+            val page = doubanRexxarRepository.getShortComments(
+                doubanId,
+                doubanType,
+                start = 0,
+                count = COMMENT_PAGE_SIZE
+            ).getOrNull() ?: return@launch
+            if (generation != commentsGeneration) return@launch
+            val comments = page.comments.map { it.toTraktComment() }
+            if (comments.isEmpty()) return@launch
+            _uiState.value = _uiState.value.copy(
+                comments = comments,
+                translatedComments = emptyList(),
+                commentSource = CommentSource.DOUBAN,
+                commentPage = 0,
+                tmdbCommentPage = 0,
+                doubanCommentPage = 1,
+                hasMoreComments = page.start + comments.size < page.total,
+                isLoadingComments = false,
+                isLoadingMoreComments = false,
+                isTranslating = false,
+                translatingCommentId = null,
+                translationProgress = null,
+                commentsError = false
+            )
+        }
+    }
+
+    /** 当前条目的豆瓣 Rexxar 类型；人物/网盘等非影视条目返回 null。 */
+    private fun currentDoubanMediaType(): DoubanRexxarMediaType? = when (currentMediaType) {
+        MediaType.MOVIE -> DoubanRexxarMediaType.MOVIE
+        MediaType.SHOW -> DoubanRexxarMediaType.TV
+        MediaType.PERSON, MediaType.DISK -> null
+    }
+
     /** 用户点击翻译按钮时调用，按需翻译全部评论（流式更新，先翻完的先展示） */
     fun translateComments() {
         // 豆瓣评论基本都是中文，无需翻译，全部翻译时跳过
@@ -1641,9 +1713,17 @@ class DetailViewModel @Inject constructor(
         if (_uiState.value.translatedComments.any { it.id == commentId }) return
 
         _uiState.value = _uiState.value.copy(translatingCommentId = commentId)
+        val generation = commentsGeneration
         viewModelScope.launch {
             try {
                 val translated = commentTranslator.translateSingleComment(comment)
+                // 期间评论源已切换（豆瓣接管）：这条译文不再适用
+                if (generation != commentsGeneration) {
+                    if (_uiState.value.translatingCommentId == commentId) {
+                        _uiState.value = _uiState.value.copy(translatingCommentId = null)
+                    }
+                    return@launch
+                }
                 val updated = _uiState.value.translatedComments.toMutableList()
                 if (translated.comment != comment.comment) updated.add(translated)
                 _uiState.value = _uiState.value.copy(
@@ -4074,6 +4154,8 @@ private fun DoubanRexxarShortComment.toTraktComment(): TraktComment {
         comment = text.orEmpty(),
         created_at = createdAt.orEmpty(),
         user_rating = ratingStars?.times(2.0),
+        // 豆瓣 vote_count 直接作为点赞数；字段缺失按 0 处理，UI 侧 0 与缺失都不显示
+        likes = voteCount ?: 0,
         user = TraktCommentUser(username = author, name = author),
         source = DOUBAN_COMMENT_SOURCE
     )

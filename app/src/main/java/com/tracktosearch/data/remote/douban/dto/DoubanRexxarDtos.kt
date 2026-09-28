@@ -108,6 +108,8 @@ data class DoubanRexxarInterestDto(
     val id: String = "",
     val comment: String? = null,
     @SerialName("create_time") val createTime: String? = null,
+    /** 点赞数（豆瓣短评的 vote_count）。 */
+    @SerialName("vote_count") val voteCount: Int? = null,
     val rating: DoubanRexxarRatingDto? = null,
     val user: DoubanRexxarUserDto? = null
 )
