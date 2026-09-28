@@ -85,10 +85,8 @@ internal fun VideosAndImagesSection(
             actionText = stringResource(R.string.detail_videos_all, totalCount),
             onActionClick = onShowAll
         )
-        if (videos.isNotEmpty()) {
-            TrailerNetworkNotice()
-        }
         LazyRow(
+            modifier = Modifier.testTag("videos_images_row"),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 0.dp)
         ) {
@@ -104,6 +102,19 @@ internal fun VideosAndImagesSection(
                     bounds = backdropBounds,
                     shimmer = shimmer
                 )
+            }
+            // 提示插在截图与预告片之间：浏览截图时不受干扰，滚到预告片栏才出现
+            if (videos.isNotEmpty()) {
+                item(key = "trailer_network_notice", contentType = "notice") {
+                    Box(
+                        modifier = Modifier
+                            .width(190.dp)
+                            .height(135.dp)
+                            .padding(vertical = 8.dp)
+                    ) {
+                        TrailerNetworkNotice()
+                    }
+                }
             }
             itemsIndexed(
                 videos,

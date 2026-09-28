@@ -10,10 +10,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import coil.Coil
@@ -99,5 +102,31 @@ class TrailerNetworkNoticeTest {
         composeRule.onNodeWithTag("test_detail_list").performScrollToIndex(0)
         composeRule.waitUntil(5_000) { requests.get() >= 2 }
         composeRule.onNodeWithText(hint).assertIsDisplayed()
+    }
+
+    @Test
+    fun notice_hidden_while_browsing_backdrops_and_shown_at_trailers() {
+        val video = TmdbVideo(key = "M7lc1UVf-VE", name = "Trailer", site = "YouTube", type = "Trailer")
+        val backdrops = List(5) { "https://image.tmdb.org/t/p/w780/backdrop_$it.jpg" }
+        composeRule.setContent {
+            MaterialTheme {
+                val shimmer = rememberShimmer(subtle = true)
+                val bounds = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
+                VideosAndImagesSection(
+                    videos = listOf(video),
+                    backdrops = backdrops,
+                    backdropBounds = bounds,
+                    shimmer = shimmer
+                )
+            }
+        }
+
+        // 初始停在截图区，提示不得露头（行内条目定高，滚动不引起行高跳变）
+        composeRule.onNodeWithTag("trailer_network_notice").assertIsNotDisplayed()
+
+        // 横滑到预告片栏，提示随预告片一起出现
+        composeRule.onNodeWithTag("videos_images_row")
+            .performScrollToNode(hasTestTag("trailer_network_notice"))
+        composeRule.onNodeWithTag("trailer_network_notice").assertIsDisplayed()
     }
 }
