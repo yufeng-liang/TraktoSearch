@@ -504,16 +504,22 @@ class DoubanSyncManager @Inject constructor(
      * 流程:
      * 1. 立即更新 progress 为 isCancelling=true + phase="正在取消...",UI 即时响应
      * 2. 设置 cancelled=true,同步循环在下一个 checkpoint 退出
-     * 3. 异步上传当前进度到云端(pending/synced/sync_meta/dirty 详情池),失败不阻塞取消
+     * 3. 异步上传当前进度到云端(pending/synced/sync_meta/dirty 详情池),结果写回
+     *    cloudUploadAttempted/cloudUploadSucceeded,失败不阻塞取消
      *
      * 用户从 UI 点击取消后立即看到"正在取消..."不可再点,同步作业在后台自然退出。
+     * 空闲状态(登出/重复取消)是 no-op;UI 残留运行态但作业已死时直接走收尾落终态解卡。
      */
     fun cancel() {
+        val jobActive = syncJob?.isActive == true
+        // 登出/重复取消等空闲场景：没有正在跑的同步，进度保持不动，避免凭空造出「已取消」结果。
+        // 但 UI 仍显示运行中而作业已不在（异常退出没发终态）时必须继续走收尾，
+        // 否则弹窗会永远卡在「正在取消」且按钮全部禁用、无法关闭。
+        if (!jobActive && !(_progress.value.isRunning && !_progress.value.isComplete)) return
         cancelled = true
         // 同步状态更新到 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
         progressPublisher.publishCancelling()
-        // 登出或重复点击等场景可能没有活跃同步任务，不能凭空制造收尾 Job。
-        if (syncJob?.isActive != true) return
+        // 作业已不在时 join 立即返回，照常完成云端收尾并落取消终态
         scheduleCancellationFinalization()
     }
 
@@ -526,11 +532,19 @@ class DoubanSyncManager @Inject constructor(
             cancellationFinalizationJob = appScope.launch {
                 // 等待同步作业退出后再上传，避免 dirtyDetailIds toList/clear 竞态导致数据丢失。
                 syncJob?.join()
-                runCatching {
+                val personalUploaded = runCatching {
                     cloudPersonalSyncManager.uploadAll(
                         lastSyncMode = "CANCELLED",
                         isFullComplete = false
                     )
+                }.getOrDefault(false)
+                // 上传结果写回进度：弹窗摘要「云端」行据此显示已上传/需重试；
+                // 不写回的话取消路径永远显示「未尝试」，与实际已执行的收尾上传不符
+                _progress.value = _progress.value.copy(
+                    cloudUploadAttempted = true,
+                    cloudUploadSucceeded = personalUploaded
+                )
+                runCatching {
                     cloudFailureSyncManager.uploadIfHasFailures()
                     uploadDirtyDetails()
                 }

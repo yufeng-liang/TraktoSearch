@@ -159,7 +159,18 @@ fun DoubanSyncDialog(
                     )
                 }
 
-                if (!showProgressCount) {
+                if (p.isComplete && p.stage == DoubanSyncStage.CANCELLING) {
+                    // 取消终态：标题用「同步已取消」而非阶段名「正在取消」——阶段名是进行时，
+                    // 取消完成后还挂着会让人以为没停干净；有待续传时顺带告知可继续处理的数量
+                    Text(
+                        if (p.pendingItemCount > 0) {
+                            stringResource(R.string.douban_sync_cancelled_with_pending, p.pendingItemCount)
+                        } else {
+                            stringResource(R.string.douban_sync_cancelled_banner)
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else if (!showProgressCount) {
                     Text(stageLabel, style = MaterialTheme.typography.bodyMedium)
                 } else {
                     Text(stringResource(R.string.douban_sync_progress_format, stageLabel, p.current, p.total))
@@ -538,6 +549,16 @@ fun DoubanSyncDialog(
                                         }
                                     )
                                 }
+                            )
+                        )
+                    }
+                    p.isComplete &&
+                        p.stage == DoubanSyncStage.CANCELLING -> {
+                        // 取消终态：确认按钮叫「关闭」，不再沿用「同步完成」与取消语义打架
+                        AppDialogActionRow(
+                            primary = DialogAction(
+                                label = stringResource(R.string.common_close),
+                                onClick = onDismiss
                             )
                         )
                     }

@@ -1514,7 +1514,10 @@ fun WatchlistScreen(
                                                 stringResource(R.string.douban_sync_trakt_login_required_banner)
                                             } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
                                                 stringResource(R.string.douban_sync_stage_failed)
-                                            } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
+                                            } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING &&
+                                                syncProgress.isComplete
+                                            ) {
+                                                // 终态才报「已取消」；正在收尾的中间态落到下方 stageLabel 显示「正在取消」
                                                 if (syncProgress.pendingItemCount > 0) {
                                                     stringResource(
                                                         R.string.douban_sync_cancelled_with_pending,
