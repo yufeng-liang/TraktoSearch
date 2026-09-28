@@ -387,7 +387,8 @@ internal fun FullVideosImagesSheet(
                 PrimaryTabRow(
                     selectedTabIndex = selectedTabIndex,
                     modifier = Modifier.fillMaxWidth(),
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    // 透出 sheet 底色，Tab 栏不自带填充色
+                    containerColor = Color.Transparent
                 ) {
                     if (hasBackdrops) {
                         Tab(
