@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -69,7 +68,6 @@ import com.tracktosearch.data.ai.AiRecommendation
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.auth.hasGatewayAccess
-import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.ShareCodec
@@ -138,7 +136,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 @EntryPoint
@@ -445,7 +442,6 @@ fun AppNavigation(
     val context = LocalContext.current
     val loginFailedMessage = stringResource(R.string.login_failed)
     val loginDeniedMessage = stringResource(R.string.login_denied)
-    val authOfflineMessage = stringResource(R.string.auth_offline_mode)
     val syncAlreadyRunningMessage = stringResource(R.string.sync_already_running)
     val importSuccessMessage = stringResource(R.string.import_success)
     /**
@@ -454,10 +450,7 @@ fun AppNavigation(
      * 这里挂一个宿主给 NavHost 之外的导航级回调用，页面内的反馈仍由各页自己的宿主负责。
      */
     val appSnackbarHostState = remember { SnackbarHostState() }
-    /**
-     * 网络状态：MainScreen 的离线胶囊用的就是 auth_offline_mode 这同一句文案，断网时它已常驻显示，
-     * 鉴权离线提示再说一遍属于重复打扰。只在网络可用、单纯是鉴权校验没通过时才提示。
-     */
+    // 设备断网由主页横幅提示；授权服务不可达的提示独立处理。
     val connectivityObserver = remember {
         EntryPointAccessors.fromApplication(context, ConnectivityObserverEntryPoint::class.java)
             .connectivityObserver()
@@ -633,22 +626,11 @@ fun AppNavigation(
         if (currentRoute == Routes.MAIN) onEnterMain()
     }
 
-    LaunchedEffect(currentAuthState) {
-        // 延迟确认：冷启动/后台校验的网络抖动会短暂置 OFFLINE 随后恢复 AUTHORIZED，
-        // 只有状态稳定为 OFFLINE 才提示离线，避免网络正常时误报。
-        if (currentAuthState == AuthState.OFFLINE) {
-            delay(3_000)
-            if (authStateHolder.authState.value == AuthState.OFFLINE &&
-                connectivityObserver.status.value != ConnectivityObserver.NetworkStatus.OFFLINE
-            ) {
-                // 不用 scope.launch：留在本 effect 里，网络/鉴权状态一变 effect 取消，Snackbar 随之收起
-                appSnackbarHostState.showSnackbar(
-                    message = authOfflineMessage,
-                    duration = SnackbarDuration.Long
-                )
-            }
-        }
-    }
+    AuthNetworkNotice(
+        authState = authStateHolder.authState,
+        networkStatus = connectivityObserver.status,
+        snackbarHostState = appSnackbarHostState,
+    )
 
     // 授权失效重定向：撤销可能发生在任意页面，原逻辑只在「状态变化瞬间恰好位于 MAIN」时跳登录页，
     // 用户在详情/搜索页被撤销后返回 MAIN 不再触发，会被困在无会话的主界面。
