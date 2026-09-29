@@ -190,7 +190,7 @@ fun GlassIconButton(
             glassShape = shape,
             glassTint = surfaceColor,
             scene = scene,
-            blurPerformanceMode = HazePerformanceMode.Adaptive,
+            blurPerformanceMode = HazePerformanceMode.Default,
             interactionSource = resolvedInteractionSource
         )
         else -> Modifier.background(surfaceColor, shape)

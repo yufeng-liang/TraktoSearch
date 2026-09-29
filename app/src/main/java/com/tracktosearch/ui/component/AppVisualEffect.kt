@@ -30,7 +30,7 @@ fun Modifier.appVisualEffect(
     backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene(),
     glassEffectEnabled: Boolean = true,
-    blurPerformanceMode: HazePerformanceMode = HazePerformanceMode.Adaptive,
+    blurPerformanceMode: HazePerformanceMode = HazePerformanceMode.Default,
     interactionSource: InteractionSource? = null
 ): Modifier {
     return when (LocalVisualEffectMode.current) {
@@ -75,7 +75,7 @@ fun Modifier.appVisualEffect(
     backdropOverride: Backdrop? = null,
     scene: GlassScene = GlassScene(),
     glassEffectEnabled: Boolean = true,
-    blurPerformanceMode: HazePerformanceMode = HazePerformanceMode.Adaptive,
+    blurPerformanceMode: HazePerformanceMode = HazePerformanceMode.Default,
     interactionSource: InteractionSource? = null
 ): Modifier = appVisualEffect(
     input = HazeInput.Sources(state),

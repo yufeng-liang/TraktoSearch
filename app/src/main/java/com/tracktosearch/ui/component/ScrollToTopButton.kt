@@ -193,7 +193,7 @@ private fun ScrollToTopButtonContent(
                         alpha = if (isAppDarkTheme()) 0.18f else 0.72f
                     ),
                     scene = scene,
-                    blurPerformanceMode = HazePerformanceMode.Adaptive,
+                    blurPerformanceMode = HazePerformanceMode.Default,
                     interactionSource = interactionSource
                 )
                 .border(

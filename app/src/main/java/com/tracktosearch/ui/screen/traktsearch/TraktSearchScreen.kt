@@ -992,7 +992,7 @@ fun TraktSearchScreen(
                             glassShape = RoundedCornerShape(50),
                             glassTint = hazeSurface.copy(alpha = 0.6f),
                             scene = traktSearchGlassScene,
-                            blurPerformanceMode = HazePerformanceMode.Adaptive,
+                            blurPerformanceMode = HazePerformanceMode.Default,
                             interactionSource = interactionSource
                         )
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)

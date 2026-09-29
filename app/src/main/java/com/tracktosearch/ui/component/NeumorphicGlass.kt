@@ -428,7 +428,7 @@ fun NeumorphicFrostedSurface(
                 selection = sourceSelection
             ),
             hazeStyle = resolvedHazeStyle,
-            blurPerformanceMode = HazePerformanceMode.Adaptive,
+            blurPerformanceMode = HazePerformanceMode.Default,
             interactionSource = interactionSource
         )
     } else Modifier
@@ -533,7 +533,7 @@ fun NeumorphicIconButton(
             glassShape = RoundedCornerShape(50),
             glassTint = MaterialTheme.colorScheme.surface.copy(alpha = blurTintAlpha),
             scene = scene,
-            blurPerformanceMode = HazePerformanceMode.Adaptive,
+            blurPerformanceMode = HazePerformanceMode.Default,
             interactionSource = resolvedInteractionSource
         )
     } else {
