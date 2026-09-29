@@ -353,6 +353,7 @@
     <string name="daily_stamp_share_chooser">하루 도장 공유</string>
     <string name="daily_stamp_share_failed">카드를 공유하지 못했어요</string>
     <string name="settings_storage">저장소</string>
+    <string name="settings_privacy_and_cache">개인정보 및 캐시</string>
     <string name="settings_clear_cache">캐시 지우기</string>
     <string name="settings_about">정보</string>
     <string name="settings_version">버전</string>

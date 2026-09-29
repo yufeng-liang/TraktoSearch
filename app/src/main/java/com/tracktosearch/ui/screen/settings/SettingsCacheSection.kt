@@ -25,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +39,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import com.tracktosearch.ui.component.GlassSurfaceRole
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.SettingsEntryCardCorner
+import com.tracktosearch.ui.theme.GlassBorderDarkSubtle
+import com.tracktosearch.ui.theme.GlassFillDarkSubtle
+import com.tracktosearch.ui.theme.LocalVisualEffectMode
+import com.tracktosearch.ui.theme.VisualEffectMode
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -59,18 +69,35 @@ fun CacheManagementItem(
     breakdown: SettingsViewModel.CacheBreakdown,
     onClearCategory: (SettingsViewModel.CacheCategory) -> Unit,
     onClearAll: () -> Unit,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+    hazeState: HazeState? = null
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val haptics = rememberAppHaptics()
+    val isDark = isAppDarkTheme()
+    // BLUR 模式列表卡片不再各自开一层离屏做真模糊，改用更实的填充；GLASS 模式不变。
+    val realBlur = LocalVisualEffectMode.current == VisualEffectMode.GLASS
 
-    // 卡片样式：独占一行的圆角卡片
-    Surface(
+    // 卡片样式：与「数据与隐私」等入口卡片同构的毛玻璃圆角卡片
+    NeumorphicFrostedSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(SettingsEntryCardCorner)),
+        isDark = isDark,
+        shape = RoundedCornerShape(SettingsEntryCardCorner),
+        backgroundColor = if (realBlur) {
+            if (isDark) GlassFillDarkSubtle else Color.White.copy(alpha = 0.70f)
+        } else {
+            if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            else Color.White.copy(alpha = 0.82f)
+        },
+        borderColor = if (isDark) GlassBorderDarkSubtle
+                      else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+        elevation = 6.dp,
+        blurRadius = 18.dp,
+        hazeState = if (realBlur) hazeState else null,
+        hazeStyle = HazeMaterials.thin(),
+        glassRole = GlassSurfaceRole.Card
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 概览行（整卡可点击展开/收起）
@@ -86,10 +113,9 @@ fun CacheManagementItem(
                                    else HapticSemantic.TOGGLE_ON
                     ) { expanded = !expanded }
                     .semantics { contentDescription = toggleDescription }
-                    .padding(horizontal = 6.dp, vertical = 10.dp),
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val isDark = isAppDarkTheme()
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -114,6 +140,7 @@ fun CacheManagementItem(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = stringResource(R.string.settings_cache_total, formatFileSize(breakdown.totalBytes)),
                         style = MaterialTheme.typography.bodySmall,
@@ -125,8 +152,8 @@ fun CacheManagementItem(
                 Icon(
                     imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -158,7 +185,7 @@ fun CacheManagementItem(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                            .padding(horizontal = 18.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.End
                     ) {
                         Button(
@@ -190,7 +217,7 @@ private fun CacheCategoryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(

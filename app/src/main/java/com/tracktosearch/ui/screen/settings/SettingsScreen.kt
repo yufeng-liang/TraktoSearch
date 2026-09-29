@@ -723,12 +723,18 @@ fun SettingsScreen(
                 }
             }
 
-            // 缓存管理（倒数第二）：概览行 + 点击展开 5 个类目
-            item(key = "group_storage") {
-                SettingsGroupCard(
-                    title = stringResource(R.string.settings_storage),
-                    hazeState = settingsHazeState
-                ) {
+            // 隐私与缓存：一个分组标题下，依次是「数据与隐私」「缓存管理」两张独立入口卡片
+            item(key = "group_privacy_cache") {
+                Column {
+                    SettingsSectionLabel(
+                        title = stringResource(R.string.settings_privacy_and_cache)
+                    )
+                    // 数据与隐私：独立管理页入口（AI taste/崩溃上报开关与隐私说明迁入隐私页）
+                    PrivacyEntryCard(
+                        onClick = onPrivacyClick,
+                        hazeState = settingsHazeState
+                    )
+                    // 缓存管理：与「数据与隐私」同构的入口卡片；点击展开类目
                     CacheManagementSectionItem(
                         viewModel = viewModel,
                         onClearCategory = { category ->
@@ -736,17 +742,9 @@ fun SettingsScreen(
                             showClearCategoryDialog = true
                         },
                         onClearAll = { showClearCacheDialog = true },
-                        containerColor = Color.Transparent
+                        hazeState = settingsHazeState
                     )
                 }
-            }
-
-            // 数据与隐私：独立管理页入口（AI taste/崩溃上报开关与隐私说明迁入隐私页，与搜索源入口卡片同构）
-            item(key = "privacy_entry") {
-                PrivacyEntryCard(
-                    onClick = onPrivacyClick,
-                    hazeState = settingsHazeState
-                )
             }
 
             // 关于（更新信息/最新版本在 AboutGroupItem 内部收集，检查更新只重组本 item）
@@ -1447,6 +1445,22 @@ private fun SearchSourcesEntryCard(
             )
         }
     }
+}
+
+/**
+ * 独立分组标题：用于「隐私与缓存」这类由多张独立入口卡片组成、
+ * 不共用同一个 SettingsGroupCard 外壳的分组，样式与卡片内分组标题一致。
+ */
+@Composable
+private fun SettingsSectionLabel(title: String, modifier: Modifier = Modifier) {
+    Text(
+        text = title,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = 0.3.sp,
+        modifier = modifier.padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
+    )
 }
 
 /**
@@ -2223,14 +2237,14 @@ private fun CacheManagementSectionItem(
     viewModel: SettingsViewModel,
     onClearCategory: (SettingsViewModel.CacheCategory) -> Unit,
     onClearAll: () -> Unit,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+    hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val breakdown by viewModel.cacheBreakdown.collectAsStateWithLifecycle()
     CacheManagementItem(
         breakdown = breakdown,
         onClearCategory = onClearCategory,
         onClearAll = onClearAll,
-        containerColor = containerColor
+        hazeState = hazeState
     )
 }
 

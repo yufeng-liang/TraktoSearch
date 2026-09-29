@@ -353,6 +353,7 @@
     <string name="daily_stamp_share_chooser">日めくりを共有</string>
     <string name="daily_stamp_share_failed">カードを共有できませんでした</string>
     <string name="settings_storage">ストレージ</string>
+    <string name="settings_privacy_and_cache">プライバシーとキャッシュ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>
     <string name="settings_about">について</string>
     <string name="settings_version">バージョン</string>

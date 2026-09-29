@@ -622,6 +622,7 @@
     <string name="daily_stamp_share_chooser">Share daily stamp</string>
     <string name="daily_stamp_share_failed">Could not share the card</string>
     <string name="settings_storage">Storage</string>
+    <string name="settings_privacy_and_cache">Privacy &amp; Cache</string>
     <string name="settings_clear_cache">Clear Cache</string>
     <string name="settings_clear_cache_confirm">Are you sure you want to clear all cached data?</string>
     <string name="settings_about">About</string>

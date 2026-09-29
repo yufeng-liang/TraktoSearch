@@ -616,6 +616,7 @@
     <string name="daily_stamp_share_chooser">分享日签</string>
     <string name="daily_stamp_share_failed">没能分享这张卡</string>
     <string name="settings_storage">存储</string>
+    <string name="settings_privacy_and_cache">隐私与缓存</string>
     <string name="settings_clear_cache">清除缓存</string>
     <string name="settings_clear_cache_confirm">确定要清除所有缓存数据吗？</string>
     <string name="settings_about">关于</string>
