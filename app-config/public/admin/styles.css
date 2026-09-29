@@ -710,6 +710,24 @@ th, td {
 }
 /* 时间戳断成两行会让整列高度翻倍，扫读时反而更慢 */
 .cell-nowrap { white-space: nowrap; }
+/* 次要字段（如反馈里的用户名）单行截断，长内容按两行截，别让一行文字撑满整卡 */
+.cell-ellipsis {
+    display: block;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cell-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
 .entity-cell[title] {
     cursor: help;
 }
@@ -1216,11 +1234,26 @@ tbody tr:last-child td { border-bottom: none; }
         font-weight: 600;
         color: var(--text) !important;
     }
+    /* 邀请码是识别用的定长串，当卡片标题也不能断成两行 */
+    .table-scroll td:first-child.invite-code-masked { white-space: nowrap; }
     .table-scroll td:first-child::before { content: none; }
     .table-scroll td[data-card-wide] { grid-column: 1 / -1; justify-content: flex-start; }
+    /* 跨整行的长文本统一从标签下一行开始，短内容不会和标签挤在同一行导致卡片高度抖动 */
+    .table-scroll td[data-card-wide] > .cell-clamp { flex: 1 1 100%; }
     .table-scroll td[data-card-hide] { display: none; }
     .table-scroll .entity-cell { min-width: 0; }
     .table-scroll .fb-row, .table-scroll .crash-row, .table-scroll .friend-row { cursor: pointer; }
+
+    /* 反馈卡重排成「编号+类型 / 用户+时间 / 内容 / 截图+状态」：
+       默认顺序里时间孤零零占一行、长昵称把右列撑成两行，读起来没有层级 */
+    .fb-list-table td { order: 10; }
+    .fb-list-table td:nth-child(1) { order: 1; }
+    .fb-list-table td:nth-child(2) { order: 2; }
+    .fb-list-table td:nth-child(3) { order: 3; }
+    .fb-list-table td:nth-child(7) { order: 4; }
+    .fb-list-table td:nth-child(4) { order: 5; }
+    .fb-list-table td:nth-child(5) { order: 6; }
+    .fb-list-table td:nth-child(6) { order: 7; }
 }
 
 /* ===== 截图灯箱（替代 window.open，手机上不丢应用状态） ===== */
@@ -1373,6 +1406,9 @@ tbody tr:last-child td { border-bottom: none; }
     .detail-heading { margin-bottom: 16px; }
     .detail-heading .section-title,
     .detail-heading .section-subtitle { font-size: 20px; }
+    /* 标题与副标题纵向排，破折号前缀在窄屏会掉成孤零零的第二行 */
+    .detail-heading-copy { flex-direction: column; align-items: flex-start; row-gap: 3px; }
+    .detail-heading .section-subtitle::before { content: none; margin-right: 0; }
     .detail-heading-actions {
         position: fixed;
         left: 0;

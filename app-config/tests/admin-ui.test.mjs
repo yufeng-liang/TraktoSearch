@@ -442,3 +442,23 @@ test('平板档（641–1024）按触屏对待，时间列不再断成两行', (
     // 卡片头当标题用，nowrap 的时间戳在手机上要能换行
     assert.match(mobileBlocks, /\.table-scroll td:first-child \{[\s\S]*?white-space: normal/);
 });
+
+test('反馈列表卡片层级稳定：内容整行两行截断，次要字段单行省略', () => {
+    assert.match(appSource, /<span class="cell-clamp">\$\{escapeHtml\(f\.content \|\| '—'\)\}<\/span>/);
+    assert.match(appSource, /<span class="cell-ellipsis">\$\{escapeHtml\(f\.friend_nickname/);
+    assert.match(appSource, /<table class="fb-list-table" data-card-wide="4">/);
+    const mobileBlocks = (stylesSource.match(/@media \(max-width: 640px\)[\s\S]*?\n\}/g) || []).join('\n');
+    // 时间从末列提到用户同一行，卡片才不会每行只有一项
+    assert.match(mobileBlocks, /\.fb-list-table td:nth-child\(7\) \{ order: 4; \}/);
+    assert.match(mobileBlocks, /\.table-scroll td\[data-card-wide\] > \.cell-clamp \{ flex: 1 1 100%; \}/);
+    assert.match(stylesSource, /\.cell-ellipsis \{[\s\S]*?text-overflow: ellipsis/);
+
+    // 列表接口的 screenshots 是 JSON 字符串：坏数据要降级成 0，不能抛错打断整页
+    const src = appSource.match(/function screenshotCount\(raw\) \{[\s\S]*?\n\}/);
+    assert.ok(src, 'screenshotCount should exist');
+    const count = new Function(`return (${src[0]})`)();
+    assert.equal(count('["a","b"]'), 2);
+    assert.equal(count(null), 0);
+    assert.equal(count('{"not":"array"}'), 0);
+    assert.equal(count('坏数据'), 0);
+});

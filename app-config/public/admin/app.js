@@ -2233,6 +2233,17 @@ function parseColumnIndexes(value) {
         .filter(Number.isFinite);
 }
 
+/** 反馈列表的截图角标：列表接口给的是 JSON 字符串，坏数据按 0 张处理 */
+function screenshotCount(raw) {
+    if (!raw) return 0;
+    try {
+        const keys = JSON.parse(raw);
+        return Array.isArray(keys) ? keys.length : 0;
+    } catch {
+        return 0;
+    }
+}
+
 // ===== Feedback Management =====
 function renderFeedback(container, renderToken) {
     const header = document.createElement('div');
@@ -2299,21 +2310,22 @@ function renderFeedback(container, renderToken) {
                     const typeColor = typeColors[f.type] || '#9ca3af';
                     const statusLabel = escapeHtml(statusLabels[f.status] || f.status);
                     const statusColor = statusColors[f.status] || '#9ca3af';
-                    const screenshotBadge = f.screenshots ? '📷' : '';
-                    const contentPreview = escapeHtml((f.content || '').slice(0, 50)) + (f.content && f.content.length > 50 ? '...' : '');
+                    const shots = screenshotCount(f.screenshots);
+                    const screenshotBadge = shots ? `📷 ${shots} 张` : '—';
+                    const contentPreview = `<span class="cell-clamp">${escapeHtml(f.content || '—')}</span>`;
                     const displayId = escapeHtml(f.displayId || f.display_id || '');
                     return `<tr data-id="${escapeHtml(f.id)}" class="fb-row" style="cursor:pointer" tabindex="0" role="button" aria-label="查看反馈详情">
                         <td><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span></td>
                         <td><span class="badge" style="background:${typeColor};color:white">${typeLabel}</span></td>
-                        <td>${escapeHtml(f.friend_nickname || '—')}</td>
+                        <td><span class="cell-ellipsis">${escapeHtml(f.friend_nickname || '—')}</span></td>
                         <td>${contentPreview}</td>
-                        <td style="text-align:center">${screenshotBadge}</td>
-                        <td><span style="color:${statusColor};font-weight:500">${statusLabel}</span></td>
+                        <td class="cell-nowrap">${screenshotBadge}</td>
+                        <td class="cell-nowrap"><span style="color:${statusColor};font-weight:500">${statusLabel}</span></td>
                         <td class="cell-nowrap" style="color:var(--text-dim);font-size:12px">${formatTime(f.created_at)}</td>
                     </tr>`;
                 }).join('');
                 tableWrap.innerHTML = `
-                    <div class="table-scroll"><table data-card-wide="4">
+                    <div class="table-scroll"><table class="fb-list-table" data-card-wide="4">
                         <thead><tr><th>ID</th><th>类型</th><th>用户</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table></div>
