@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -146,17 +145,6 @@ fun ColumnScope.GroupDivider(modifier: Modifier = Modifier) {
         color = if (isDark) Color.White.copy(alpha = 0.06f)
                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     )
-}
-
-/**
- * 设置页卡片背景色。
- * 浅色模式下 surfaceVariant 接近白色，叠加 alpha 后与白色背景几乎无对比，
- * 因此浅色模式用完整 surfaceVariant 提升对比度，深色模式保持 0.3 半透明效果。
- */
-@Composable
-internal fun cardSurfaceColor(): Color {
-    val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
-    return MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isLight) 1.0f else 0.3f)
 }
 
 @Composable
