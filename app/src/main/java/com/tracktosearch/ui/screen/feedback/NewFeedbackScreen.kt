@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.DialogTone
@@ -348,23 +349,10 @@ private fun NewFeedbackTopBar(
             .clickable(enabled = false, onClick = {})
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(R.string.feedback_new),
-                    fontWeight = FontWeight.ExtraBold
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack, enabled = backEnabled) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(R.string.content_desc_back)
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            windowInsets = WindowInsets(0, 0, 0, 0)
+        SubPageTopBar(
+            title = stringResource(R.string.feedback_new),
+            onBack = onBack,
+            backEnabled = backEnabled,
         )
     }
 }

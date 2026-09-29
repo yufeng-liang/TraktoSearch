@@ -474,7 +474,7 @@ fun MarkRecordScreen(
                         ) {
                             Text(
                                 text = stringResource(R.string.mark_records_title),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

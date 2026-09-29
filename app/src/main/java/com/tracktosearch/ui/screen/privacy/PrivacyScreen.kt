@@ -104,6 +104,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.GlassSurfaceRole
@@ -321,28 +322,9 @@ fun PrivacyScreen(
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.privacy_title),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = stringResource(R.string.content_desc_back),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        // 底色交给外层 hazeTopBar；M3 默认容器色会盖死毛玻璃
-                        containerColor = Color.Transparent
-                    ),
-                    windowInsets = WindowInsets(0, 0, 0, 0)
+                SubPageTopBar(
+                    title = stringResource(R.string.privacy_title),
+                    onBack = onBack,
                 )
             }
         }

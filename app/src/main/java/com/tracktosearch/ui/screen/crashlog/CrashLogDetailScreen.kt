@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.data.local.CrashLogRecord
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import java.text.SimpleDateFormat
@@ -149,17 +150,11 @@ fun CrashLogDetailScreen(
                 }
 
                 Box {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.crash_detail_title), fontWeight = FontWeight.ExtraBold) },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.ArrowBack,
-                                    contentDescription = stringResource(R.string.content_desc_back)
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                    SubPageTopBar(
+                        title = stringResource(R.string.crash_detail_title),
+                        onBack = onBack,
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                        windowInsets = TopAppBarDefaults.windowInsets,
                     )
                 }
             }

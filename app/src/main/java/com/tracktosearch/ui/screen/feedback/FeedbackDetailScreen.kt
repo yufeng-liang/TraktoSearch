@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.recordOpenImageBounds
@@ -344,25 +345,13 @@ private fun FeedbackDetailTopBar(
             .clickable(enabled = false, onClick = {})
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
-        TopAppBar(
-            title = {
-                Text(
-                    text = if (!displayId.isNullOrBlank()) {
-                        stringResource(R.string.feedback_id_format, displayId)
-                    } else {
-                        stringResource(R.string.feedback_title)
-                    },
-                    fontWeight = FontWeight.ExtraBold
-                )
+        SubPageTopBar(
+            title = if (!displayId.isNullOrBlank()) {
+                stringResource(R.string.feedback_id_format, displayId)
+            } else {
+                stringResource(R.string.feedback_title)
             },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(R.string.content_desc_back)
-                    )
-                }
-            },
+            onBack = onBack,
             actions = {
                 IconButton(onClick = {
                     haptics.lightTap()
@@ -374,8 +363,6 @@ private fun FeedbackDetailTopBar(
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-            windowInsets = WindowInsets(0, 0, 0, 0)
         )
     }
 }

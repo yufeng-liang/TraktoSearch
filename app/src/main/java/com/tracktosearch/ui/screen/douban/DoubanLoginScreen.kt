@@ -55,6 +55,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import androidx.compose.material3.TopAppBarDefaults
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -179,13 +181,11 @@ fun DoubanLoginScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.douban_login_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.content_desc_back))
-                    }
-                }
+            SubPageTopBar(
+                title = stringResource(R.string.douban_login_title),
+                onBack = onBack,
+                colors = TopAppBarDefaults.topAppBarColors(),
+                windowInsets = TopAppBarDefaults.windowInsets,
             )
         },
     ) { padding ->

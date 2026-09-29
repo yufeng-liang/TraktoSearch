@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.data.remote.feedback.MessageItem
@@ -326,21 +327,9 @@ private fun MessagesTopBar(
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
         Box {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.feedback_messages_title),
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                },
+            SubPageTopBar(
+                title = stringResource(R.string.feedback_messages_title),
+                onBack = onBack,
                 actions = {
                     // 一次把所有未读清掉，有实际后果，按带文字的主操作给 tap。
                     // 全读完了就没有可清的了，禁用比留个点了没反应的按钮清楚
@@ -363,8 +352,6 @@ private fun MessagesTopBar(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                windowInsets = WindowInsets(0, 0, 0, 0)
             )
             if (refreshing) {
                 LinearProgressIndicator(

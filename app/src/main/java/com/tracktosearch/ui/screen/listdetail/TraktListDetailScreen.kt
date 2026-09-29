@@ -240,7 +240,7 @@ fun TraktListDetailScreen(
                                         // 榜单名是导航参数，进页就有；骨架阶段直接显示，避免「加载中」再跳成真名闪一下。
                                         // 从别处进来没带名字时才退回「加载中」
                                         text = uiState.listName.ifBlank { stringResource(R.string.common_loading) },
-                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                                         color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -358,7 +358,7 @@ fun TraktListDetailScreen(
                                 }
                                 Text(
                                     text = uiState.listName,
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,

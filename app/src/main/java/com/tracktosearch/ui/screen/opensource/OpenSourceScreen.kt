@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.hasListScrolled
@@ -153,29 +154,9 @@ fun OpenSourceScreen(
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.opensource_title),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        // 底色交给外层 hazeTopBar；这里若留 surface 会盖死毛玻璃
-                        containerColor = Color.Transparent
-                    ),
-                    // 外层 Column 已让出状态栏，这里必须清零，否则状态栏高度被算两遍、标题栏变高
-                    windowInsets = WindowInsets(0, 0, 0, 0)
+                SubPageTopBar(
+                    title = stringResource(R.string.opensource_title),
+                    onBack = onBack,
                 )
             }
         }

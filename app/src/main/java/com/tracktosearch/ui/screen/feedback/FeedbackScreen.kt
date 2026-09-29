@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
 import com.tracktosearch.ui.component.EmptyStateCard
@@ -310,23 +311,9 @@ private fun FeedbackTopBar(
     ) {
         Spacer(modifier = Modifier.statusBarsPadding())
         Box {
-            TopAppBar(
-                title = {
-                    Text(
-                        stringResource(R.string.feedback_title),
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                windowInsets = WindowInsets(0, 0, 0, 0)
+            SubPageTopBar(
+                title = stringResource(R.string.feedback_title),
+                onBack = onBack,
             )
             if (refreshing) {
                 LinearProgressIndicator(

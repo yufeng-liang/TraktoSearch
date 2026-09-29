@@ -101,6 +101,7 @@ import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.SubPageTopBar
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.ui.component.AppAlertDialog
@@ -246,22 +247,14 @@ fun AiFeatureScreen(
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = featureTitle(feature),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.ai_feature_back)
-                        )
-                    }
-                },
+            SubPageTopBar(
+                title = featureTitle(feature),
+                onBack = onBack,
+                backContentDescription = stringResource(R.string.ai_feature_back),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                ),
+                windowInsets = TopAppBarDefaults.windowInsets,
                 actions = {
                     // 刷新是最主要的配额消耗入口，把当日+本会话用量摆在按钮旁边
                     state.quota?.let { quota ->
@@ -299,9 +292,6 @@ fun AiFeatureScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
             )
             }
         ) { paddingValues ->

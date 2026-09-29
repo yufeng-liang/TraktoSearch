@@ -464,7 +464,7 @@ fun DoubanSpiderTestScreen(
                         Text(
                             text = stringResource(R.string.douban_spider_test_title),
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.ExtraBold
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
@@ -484,7 +484,8 @@ fun DoubanSpiderTestScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
+                            contentDescription = stringResource(R.string.content_desc_back),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
