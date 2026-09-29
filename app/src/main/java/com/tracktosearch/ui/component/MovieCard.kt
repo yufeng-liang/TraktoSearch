@@ -168,7 +168,7 @@ fun MovieCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
             val posterShape = RoundedCornerShape(topStart = 13.dp, topEnd = 13.dp)

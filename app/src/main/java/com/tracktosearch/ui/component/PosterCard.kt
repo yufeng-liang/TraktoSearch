@@ -66,7 +66,9 @@ fun PosterCard(
     onLongClick: (() -> Unit)? = null,
     posterModifier: Modifier = Modifier,
     imageSize: Int? = null,
-    onImageSuccess: ((android.graphics.Bitmap) -> Unit)? = null
+    onImageSuccess: ((android.graphics.Bitmap) -> Unit)? = null,
+    /** 是否绘制拟物阴影/高光装饰；默认关闭，影视卡片一律扁平无阴影。 */
+    decorated: Boolean = false
 ) {
     val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -107,7 +109,8 @@ fun PosterCard(
 
     val isDark = isAppDarkTheme()
     val posterShape = remember { RoundedCornerShape(12.dp) }
-    val useNeumorphicDecoration = usesNeumorphicDecoration(LocalVisualEffectMode.current) &&
+    val useNeumorphicDecoration = decorated &&
+        usesNeumorphicDecoration(LocalVisualEffectMode.current) &&
         !LocalFastScrollMode.current
     Box(modifier = modifier.scale(scale)) {
         Box(
