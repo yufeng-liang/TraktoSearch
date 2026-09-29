@@ -510,6 +510,29 @@ input, select { font-family: inherit; }
 }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 
+/* 详情页返回：原先是「← 返回列表」文字链，箭头用字符画、行高随字号飘。
+   改成箭头图标 + 两字文案的胶囊按钮，与标题顶对齐。 */
+.back-btn {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 34px;
+    padding: 5px 14px 5px 9px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color var(--transition), background var(--transition), border-color var(--transition);
+}
+.back-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.back-btn:active { background: var(--surface); }
+.back-btn svg { flex: 0 0 auto; }
+
 /* ===== Stat grid ===== */
 .stat-grid {
     display: grid;
@@ -1409,6 +1432,7 @@ tbody tr:last-child td { border-bottom: none; }
     /* 标题与副标题纵向排，破折号前缀在窄屏会掉成孤零零的第二行 */
     .detail-heading-copy { flex-direction: column; align-items: flex-start; row-gap: 3px; }
     .detail-heading .section-subtitle::before { content: none; margin-right: 0; }
+    .back-btn { min-height: 44px; padding: 5px 16px 5px 11px; }
     .detail-heading-actions {
         position: fixed;
         left: 0;

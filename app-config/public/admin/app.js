@@ -1347,7 +1347,7 @@ function renderFriendDetail(container, renderToken) {
     const id = state.params.id;
     const title = document.createElement('div');
     title.className = 'detail-heading';
-    title.innerHTML = `<div style="display:flex;align-items:flex-start;gap:12px;min-width:0"><button class="btn btn-ghost btn-sm" id="friend-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button><div class="detail-heading-copy"><h1 class="section-title">用户详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用用户</button></div>`;
+    title.innerHTML = `<div style="display:flex;align-items:flex-start;gap:12px;min-width:0"><button class="back-btn" id="friend-back"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button><div class="detail-heading-copy"><h1 class="section-title">用户详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用用户</button></div>`;
     container.appendChild(title);
 
     // 返回用户列表
@@ -2410,7 +2410,7 @@ function showFeedbackDetail(id, container, renderToken) {
         container.innerHTML = `
             <div class="detail-heading">
                 <div style="display:flex;align-items:flex-start;gap:12px;min-width:0">
-                    <button class="btn btn-ghost btn-sm" id="fb-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button>
+                    <button class="back-btn" id="fb-back"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button>
                     <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle feedback-detail-subtitle"><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span><span>· ${escapeHtml(f.friend_nickname || '')}</span></p></div>
                 </div>
             </div>
@@ -2759,7 +2759,7 @@ function renderCrashLogDetailView(e, container, renderToken) {
     container.innerHTML = `
         <div class="detail-heading">
             <div style="display:flex;align-items:flex-start;gap:12px;min-width:0">
-                <button class="btn btn-ghost btn-sm" id="crash-back" style="flex:0 0 auto;margin-top:6px">← 返回列表</button>
+                <button class="back-btn" id="crash-back"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button>
                 <div class="detail-heading-copy"><h1 class="section-title">崩溃日志详情</h1><p class="section-subtitle">ID: <span style="font-family:var(--font-mono)">${escapeHtml(id || 'unknown')}</span></p></div>
             </div>
             <div class="detail-heading-actions">
