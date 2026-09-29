@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,7 +69,6 @@ internal fun TrendingListCard(
             .fillMaxWidth()
             // scale 放在裁剪与填色之前：按压缩放要连卡面一起缩，只缩内容会露出卡面边缘
             .scale(cardScale)
-            .shadow(1.dp, TrendingListCardShape)
             .clip(TrendingListCardShape)
             .background(MaterialTheme.colorScheme.surfaceContainerLowest)
             // 一屏里排十几张的榜单行，与 ui/component/MovieCard、PosterCard 同档

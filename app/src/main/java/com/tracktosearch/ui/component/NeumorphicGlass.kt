@@ -370,6 +370,8 @@ fun NeumorphicFrostedSurface(
     hazeStyle: HazeBlurStyle? = null,
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
+    // 拟态外投影开关：false 时保留裁剪/毛玻璃/内阴影/高光/边框，仅去掉右下暗投影
+    castOuterShadow: Boolean = true,
     // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
     // 应传入 Behind.where { source -> source.zIndex < 自身 zIndex } 排除自采样。
     sourceSelection: HazeSourceSelection = HazeSourceSelection.Behind,
@@ -435,13 +437,15 @@ fun NeumorphicFrostedSurface(
 
     Box(
         modifier = modifier
-            .neumorphicOuterShadow(
-                shape = shape,
-                isDark = isDark,
-                elevation = elevation,
-                darkAlpha = darkShadowAlpha,
-                blurRadius = blurRadius,
-                shadowOffset = shadowOffset
+            .then(
+                if (castOuterShadow) Modifier.neumorphicOuterShadow(
+                    shape = shape,
+                    isDark = isDark,
+                    elevation = elevation,
+                    darkAlpha = darkShadowAlpha,
+                    blurRadius = blurRadius,
+                    shadowOffset = shadowOffset
+                ) else Modifier
             )
             .clip(shape)
             .then(hazeModifier)

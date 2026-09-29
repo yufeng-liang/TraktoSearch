@@ -175,6 +175,8 @@ fun AppVisualSurface(
                 darkShadowAlpha = config.darkShadowAlpha,
                 lightShadowAlpha = config.lightShadowAlpha,
                 showHighlight = config.showHighlight,
+                // 发现页卡片（Content）去掉外投影，仅保留内高光/边框；玻璃/顶栏等 Glass 表面保持原样
+                castOuterShadow = kind != VisualSurfaceKind.Content,
                 content = content
             )
         }
