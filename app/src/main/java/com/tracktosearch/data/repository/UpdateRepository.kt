@@ -163,9 +163,6 @@ class UpdateRepository @Inject constructor(
         val createdAt: String
     )
 
-    /** 获取缓存的最新版本号 */
-    fun getCachedLatestVersion(): String? = cachedLatestVersion
-
     /**
      * 检查更新。
      * @param force true 时强制走网络（设置页手动检查用）；false 时在有效期内复用上次结果，

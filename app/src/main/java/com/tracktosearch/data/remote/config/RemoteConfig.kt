@@ -45,15 +45,6 @@ interface RemoteConfigProvider {
     /** 同步查询布尔配置。无值返回 [default]。 */
     fun getBoolean(key: String, default: Boolean): Boolean
 
-    /**
-     * 同步查询字符串列表(用于 tmdb.apiKeys 等数组字段)。
-     * 无值或类型不匹配返回 [fallback]。
-     */
-    fun getStringList(key: String, fallback: List<String> = emptyList()): List<String>
-
     /** 强制刷新(从云端重新拉取)。 */
     suspend fun refresh(): Result<Unit>
-
-    /** 是否已初始化完成(DataStore 加载到内存)。 */
-    fun isInitialized(): Boolean
 }

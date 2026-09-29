@@ -76,10 +76,6 @@ interface DoubanSyncedItemDao {
     @Query("SELECT * FROM douban_synced_items WHERE status = :status ORDER BY syncedAt DESC")
     suspend fun getByStatus(status: String): List<DoubanSyncedItem>
 
-    /** 按 status + mediaType 拉取条目（豆瓣模式 watchlist 分电影/剧集 tab） */
-    @Query("SELECT * FROM douban_synced_items WHERE status = :status AND mediaType = :mediaType ORDER BY syncedAt DESC")
-    suspend fun getByStatusAndMediaType(status: String, mediaType: String): List<DoubanSyncedItem>
-
     /** 拉取待重试的乐观更新条目（pendingSync=true），下次同步时重试豆瓣 API */
     @Query("SELECT * FROM douban_synced_items WHERE pendingSync = 1")
     suspend fun getPendingSyncItems(): List<DoubanSyncedItem>
@@ -87,18 +83,6 @@ interface DoubanSyncedItemDao {
     /** 删除单条（豆瓣模式移除标记时清本地记录） */
     @Query("DELETE FROM douban_synced_items WHERE doubanId = :doubanId")
     suspend fun deleteByDoubanId(doubanId: String)
-
-    /** 同步时回写 TMDB 富化信息（tmdbId/displayTitle/year/genres/posterUrl/listedAt） */
-    @Query("UPDATE douban_synced_items SET tmdbId = :tmdbId, displayTitle = :displayTitle, year = :year, genres = :genres, posterUrl = :posterUrl, listedAt = :listedAt WHERE doubanId = :doubanId")
-    suspend fun updateRichInfo(
-        doubanId: String,
-        tmdbId: Int?,
-        displayTitle: String?,
-        year: Int?,
-        genres: String?,
-        posterUrl: String?,
-        listedAt: String?
-    )
 
     /** 详情页拿到 Rexxar 大图后只更新已有同步记录，避免意外插入个人数据。 */
     @Query("UPDATE douban_synced_items SET posterUrl = :posterUrl WHERE doubanId = :doubanId")

@@ -56,6 +56,3 @@ fun CinemaClapperIcon(
         )
     }
 }
-
-@Composable
-fun BrandClapperIcon(modifier: Modifier = Modifier) = CinemaClapperIcon(modifier)

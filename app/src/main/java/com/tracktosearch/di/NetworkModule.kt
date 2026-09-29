@@ -8,7 +8,6 @@ import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.ai.AiApiService
 import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.local.TokenStorage
-import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
 import com.tracktosearch.data.remote.douban.DoubanRexxarRequestInterceptor
 import com.tracktosearch.data.remote.cloud.GiteePublicRawApi
@@ -351,19 +350,6 @@ object NetworkModule {
         )
     }
 
-    @Provides
-    @Singleton
-    fun provideDoubanHotApiService(
-        @Named("douban") okHttpClient: OkHttpClient
-    ): DoubanHotApiService {
-        return Retrofit.Builder()
-            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/douban/")
-            .client(okHttpClient)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(DoubanHotApiService::class.java)
-    }
-
     /** Rexxar 直连客户端：不带网关鉴权，只添加移动端 UA 和 Referer。 */
     @Provides
     @Singleton
@@ -394,32 +380,6 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(DoubanRexxarApiService::class.java)
-    }
-
-    /** 豆瓣热榜专用 OkHttpClient（带 API Key） */
-    @Provides
-    @Singleton
-    @Named("douban")
-    fun provideDoubanOkHttpClient(
-        baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor,
-        cache: Cache,
-        authInterceptor: AuthInterceptor
-    ): OkHttpClient {
-        return baseClient.newBuilder()
-            .cache(cache)
-            .addInterceptor(authInterceptor)
-            .addInterceptor(Interceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .addHeader("User-Agent", USER_AGENT)
-                    .build()
-                chain.proceed(request)
-            })
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .callTimeout(20, TimeUnit.SECONDS)
-            .build()
     }
 
     @Provides

@@ -55,11 +55,6 @@ enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dar
     BALLET(R.string.accent_ballet, Color(0xFFB06AA0), Color(0xFFC88AB8));                      // 338.7°
 }
 
-// UI 重设计新增颜色
-val CinemaBackground = Color(0xFF0F0F1A)
-val CinemaSurface = Color(0xFF1A1A2E)
-val CinemaCard = Color(0xFF242442)
-
 /**
  * 压在 [background] 上该用黑字还是白字 —— 取对比度更高的那一个。
  *

@@ -77,13 +77,4 @@ class DeviceKeyManager @Inject constructor(
         signature.update(challenge)
         return signature.sign()
     }
-
-    // 获取公钥指纹（用于刷新时验证）
-    fun getPublicKeyFingerprint(): String {
-        val keyPair = getOrCreateKeyPair()
-        val publicKey = keyPair.public as PublicKey
-        val bytes = publicKey.encoded
-        // 取前 16 字节作为指纹
-        return bytes.take(16).joinToString("") { "%02x".format(it) }
-    }
 }

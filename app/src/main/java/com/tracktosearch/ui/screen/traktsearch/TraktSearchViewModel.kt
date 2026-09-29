@@ -129,7 +129,6 @@ class TraktSearchViewModel @Inject constructor(
         "disk" -> MediaType.DISK
         else -> null
     }
-    private val initialQueryStr = savedStateHandle.get<String>("query") ?: ""
 
     // 初始类型：优先使用导航参数，否则使用默认值 MOVIE
     private val _initialTab = initialTypeFromNav ?: MediaType.MOVIE

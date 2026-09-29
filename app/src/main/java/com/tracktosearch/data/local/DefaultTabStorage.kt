@@ -46,8 +46,6 @@ class DefaultTabStorage @Inject constructor(
 
     companion object {
         const val DEFAULT_TAB_SEARCH = 0
-        const val DEFAULT_TAB_DISCOVER = 1
-        const val DEFAULT_TAB_PROFILE = 2
         private val KEY_DEFAULT_TAB = intPreferencesKey("default_tab")
     }
 }

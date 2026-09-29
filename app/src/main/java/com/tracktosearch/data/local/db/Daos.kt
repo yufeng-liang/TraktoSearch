@@ -19,9 +19,6 @@ interface MediaItemDao {
     @Query("SELECT COUNT(*) FROM media_items WHERE type = :type")
     suspend fun countByType(type: String): Int
 
-    @Query("SELECT COUNT(*) FROM media_details")
-    suspend fun countDetails(): Int
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<MediaItemEntity>)
 

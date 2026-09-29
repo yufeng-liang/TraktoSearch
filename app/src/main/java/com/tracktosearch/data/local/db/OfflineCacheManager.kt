@@ -68,14 +68,6 @@ class OfflineCacheManager @Inject constructor(
 
     // ========== 详情页 ==========
 
-    suspend fun saveMediaDetail(detail: MediaDetailEntity) {
-        mediaDetailDao.insert(detail)
-    }
-
-    suspend fun getMediaDetail(traktId: Int): MediaDetailEntity? {
-        return mediaDetailDao.getByTraktId(traktId)
-    }
-
     // ========== 按类目清除 ==========
 
     /** 清除图片缓存（Coil 磁盘缓存） */
@@ -155,30 +147,6 @@ class OfflineCacheManager @Inject constructor(
 
     // ========== 聚合查询 ==========
 
-    /** 全部缓存总大小（字节） */
-    fun getCacheSizeBytes(): Long {
-        return getImageCacheSizeBytes() +
-            getHttpCacheSizeBytes() +
-            getDatabaseSizeBytes() +
-            getDataStoreSizeBytes()
-    }
-
-    /** 各类目缓存明细，用于设置页分项展示 */
-    suspend fun getCacheInfo(): CacheInfo {
-        val watchlistMovies = mediaItemDao.countByType(TYPE_WATCHLIST_MOVIE)
-        val watchlistShows = mediaItemDao.countByType(TYPE_WATCHLIST_SHOW)
-        val historyMovies = mediaItemDao.countByType(TYPE_HISTORY_MOVIE)
-        val historyShows = mediaItemDao.countByType(TYPE_HISTORY_SHOW)
-        val details = mediaItemDao.countDetails()
-        return CacheInfo(
-            watchlistMovies = watchlistMovies,
-            watchlistShows = watchlistShows,
-            historyMovies = historyMovies,
-            historyShows = historyShows,
-            details = details
-        )
-    }
-
     private fun dirSize(dir: File): Long {
         if (!dir.exists()) return 0
         var size = 0L
@@ -188,14 +156,4 @@ class OfflineCacheManager @Inject constructor(
         }
         return size
     }
-}
-
-data class CacheInfo(
-    val watchlistMovies: Int,
-    val watchlistShows: Int,
-    val historyMovies: Int,
-    val historyShows: Int,
-    val details: Int
-) {
-    val totalItems: Int get() = watchlistMovies + watchlistShows + historyMovies + historyShows + details
 }

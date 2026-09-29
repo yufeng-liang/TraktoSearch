@@ -44,10 +44,4 @@ class DnsCache(
         }
         return addrs
     }
-
-    /** 清理过期条目，避免长时间运行后内存残留；图片 client 为应用级单例，容量极小可省略，保留供调试/测试。 */
-    fun evictExpired() {
-        val now = System.currentTimeMillis()
-        cache.entries.removeIf { it.value.expiresAt <= now }
-    }
 }

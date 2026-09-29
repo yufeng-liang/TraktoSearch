@@ -7,8 +7,6 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,13 +41,5 @@ class NotificationScheduler @Inject constructor(
 
     fun cancelPeriodicCheck() {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
-    }
-
-    suspend fun isScheduled(): Boolean = withContext(Dispatchers.IO) {
-        WorkManager.getInstance(context)
-            .getWorkInfosForUniqueWork(WORK_NAME)
-            .get()
-            .any { it.state == androidx.work.WorkInfo.State.ENQUEUED ||
-                    it.state == androidx.work.WorkInfo.State.RUNNING }
     }
 }

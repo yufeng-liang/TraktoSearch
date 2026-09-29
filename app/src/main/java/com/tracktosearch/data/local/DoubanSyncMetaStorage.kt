@@ -61,26 +61,6 @@ class DoubanSyncMetaStorage @Inject constructor(
     suspend fun getLastSyncAt(): Long =
         context.doubanSyncMetaStore.data.map { it[lastSyncAtKey] ?: 0L }.first()
 
-    /** 上次同步模式（"INCREMENTAL_WITH_CHANGES" / "FULL_REWRITE" / "RESUME" / "RETRY" / "CANCELLED"） */
-    suspend fun getLastSyncMode(): String? =
-        context.doubanSyncMetaStore.data.map { it[lastSyncModeKey] }.first()
-
-    /** 读取最近一次同步摘要；旧版本未写摘要时返回 null。 */
-    suspend fun getLastSyncSummary(): DoubanSyncSummary? =
-        context.doubanSyncMetaStore.data.map { prefs ->
-            val mode = prefs[lastSummaryModeKey] ?: return@map null
-            DoubanSyncSummary(
-                mode = mode,
-                completedAt = prefs[lastSummaryCompletedAtKey] ?: 0L,
-                successCount = (prefs[lastSummarySuccessCountKey] ?: 0L).toInt(),
-                skippedCount = (prefs[lastSummarySkippedCountKey] ?: 0L).toInt(),
-                failedCount = (prefs[lastSummaryFailedCountKey] ?: 0L).toInt(),
-                conflictFixedCount = (prefs[lastSummaryConflictFixedCountKey] ?: 0L).toInt(),
-                pendingCount = (prefs[lastSummaryPendingCountKey] ?: 0L).toInt(),
-                isComplete = (prefs[lastSummaryCompleteKey] ?: 0L) == 1L
-            )
-        }.first()
-
     /** 原子替换最近摘要，始终只保留一条记录，避免 DataStore 无限增长。 */
     suspend fun recordLastSyncSummary(summary: DoubanSyncSummary) {
         context.doubanSyncMetaStore.edit { prefs ->

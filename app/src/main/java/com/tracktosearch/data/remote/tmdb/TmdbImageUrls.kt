@@ -23,7 +23,6 @@ object TmdbImageUrls {
     val W500: String = "$BASE/w500"
     val W780: String = "$BASE/w780"
     val H632: String = "$BASE/h632"
-    val ORIGINAL: String = "$BASE/original"
 
     /** 拼接完整图片 URL，path 需以 / 开头（TMDB file_path 格式） */
     fun build(path: String, size: String = W342): String = "$size$path"

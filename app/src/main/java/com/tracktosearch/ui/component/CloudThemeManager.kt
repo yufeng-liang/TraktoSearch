@@ -428,13 +428,6 @@ class CloudThemeManager @Inject constructor(
         _showPermissionDialog.value = false
     }
 
-    /** 触发权限提示弹窗（新手引导完成后调用） */
-    fun requestPermissionPrompt() {
-        if (!_hasLocationPermission.value) {
-            _showPermissionDialog.value = true
-        }
-    }
-
     /** 关闭彩蛋 */
     fun onEasterDismissed() {
         _easterEggRes.value = null

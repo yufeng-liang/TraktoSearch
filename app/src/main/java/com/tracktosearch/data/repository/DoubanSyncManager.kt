@@ -483,14 +483,6 @@ class DoubanSyncManager @Inject constructor(
         _progress.value = _progress.value.copy(recentItems = recentPreviewBuffer.snapshot())
     }
 
-    private fun updatePipelineStage(legacySubStage: String) {
-        val subStage = subStageFromLegacy(legacySubStage)
-        _progress.value = _progress.value.copy(
-            stage = stageFromSubStage(subStage),
-            subStage = subStage
-        )
-    }
-
     /**
      * 同步过程中新爬取的豆瓣详情 doubanId 集合（非缓存命中的）。
      * 同步完成时一次性批量上传到全局详情池，避免每批次上传导致的多次网络请求。

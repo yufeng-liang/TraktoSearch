@@ -97,9 +97,6 @@ data class DiscoverUiState(
     val trendingTimeWindow: String = "day",
     val trendingLists: List<TraktTrendingListResponse> = emptyList(),
     val isLoadingTraktLists: Boolean = false,
-    val popularTotal: Int = 0,
-    val upcomingTotal: Int = 0,
-    val recommendationsTotal: Int = 0,
     val isLoadingPopular: Boolean = false,
     val isLoadingUpcoming: Boolean = false,
     val isLoadingRecommendations: Boolean = false,
@@ -1105,10 +1102,6 @@ class DiscoverViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    fun retryAll() {
-        loadVisibleSections()
     }
 
     /** 豆瓣标题 → TMDB 搜索结果缓存（标题不变，映射永不过期） */

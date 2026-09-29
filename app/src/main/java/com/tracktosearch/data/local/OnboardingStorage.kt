@@ -21,34 +21,15 @@ class OnboardingStorage @Inject constructor(
 ) {
     private companion object {
         val KEY_COMPLETED = booleanPreferencesKey("onboarding_completed")
-        val KEY_THEME_SELECTION_COMPLETED = booleanPreferencesKey("theme_selection_completed")
     }
 
     val isCompleted: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
         prefs[KEY_COMPLETED] ?: false
     }.distinctUntilChanged()
 
-    @Deprecated(
-        "引导阶段已不再弹主题选择弹窗。key 保留不删，避免对存量数据多做一次迁移。",
-        level = DeprecationLevel.WARNING
-    )
-    val isThemeSelectionCompleted: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
-        prefs[KEY_THEME_SELECTION_COMPLETED] ?: false
-    }.distinctUntilChanged()
-
     suspend fun setCompleted(completed: Boolean) {
         context.onboardingDataStore.edit { prefs ->
             prefs[KEY_COMPLETED] = completed
-        }
-    }
-
-    @Deprecated(
-        "引导阶段已不再弹主题选择弹窗。key 保留不删，避免对存量数据多做一次迁移。",
-        level = DeprecationLevel.WARNING
-    )
-    suspend fun setThemeSelectionCompleted(completed: Boolean) {
-        context.onboardingDataStore.edit { prefs ->
-            prefs[KEY_THEME_SELECTION_COMPLETED] = completed
         }
     }
 }

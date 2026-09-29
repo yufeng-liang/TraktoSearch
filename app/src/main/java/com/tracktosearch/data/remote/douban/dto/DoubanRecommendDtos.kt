@@ -37,9 +37,6 @@ data class DoubanRecommendItem(
      */
     val alg_json: String? = null
 ) {
-    /** 是否为单剧推荐 */
-    val isSubject: Boolean get() = type == "movie" || type == "tv"
-
     /**
      * 推荐理由标签（如 ["日本", "悬疑", "犯罪"]），仅个性化单剧推荐才有。
      * alg_json.reason_data 结构：[["tag_descr",null,{"tags":["日本","悬疑","犯罪"]}],[\"director\",...],...]

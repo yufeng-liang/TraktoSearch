@@ -9,8 +9,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
@@ -97,9 +95,6 @@ class RemoteConfigManager @Inject constructor(
     /** 等待初始化完成(磁盘加载完毕)。供需要确保读到缓存的调用方使用。 */
     suspend fun awaitInitialized() = initializedDeferred.await()
 
-    /** 是否已初始化完成(DataStore 加载到内存)。 */
-    override fun isInitialized(): Boolean = initializedDeferred.isCompleted
-
     /**
      * 强制刷新:从网关重新拉取明文配置。
      *
@@ -150,17 +145,5 @@ class RemoteConfigManager @Inject constructor(
 
     override fun getBoolean(key: String, default: Boolean): Boolean {
         return getOrNull(key)?.toBooleanStrictOrNull() ?: default
-    }
-
-    override fun getStringList(key: String, fallback: List<String>): List<String> {
-        val element = cachedValues[key] ?: return fallback
-        return try {
-            val array = element as? JsonArray ?: return fallback
-            array.mapNotNull { item ->
-                (item as? JsonPrimitive)?.contentOrNull
-            }
-        } catch (e: Exception) {
-            fallback
-        }
     }
 }

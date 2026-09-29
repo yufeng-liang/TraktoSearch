@@ -24,29 +24,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 重试数据源。
- *
- * - [LocalDatabase]: 从 douban_sync_failures 表读取(默认选项,无需用户操作)
- * - [ImportedJson]: 从用户选择的 JSON 文件加载(跨设备/重装后恢复重试数据)
- */
-sealed class RetrySource {
-    object LocalDatabase : RetrySource()
-    data class ImportedJson(val failures: List<DoubanSyncFailure>) : RetrySource()
-}
-
-/**
- * 重试请求。
- *
- * @param source 重试数据源
- * @param selectedReasons 要重试的失败类型集合(默认仅可恢复类型,
- *   用户可在子对话框中手动勾选不可恢复类型强制重试)
- */
-data class RetryRequest(
-    val source: RetrySource,
-    val selectedReasons: Set<FailureReason>
-)
-
-/**
  * 豆瓣同步失败项重试状态。
  *
  * 用于 UI 检测是否有可重试的失败项数据。
@@ -68,7 +45,7 @@ data class RetryState(
  * 职责:
  * - 加载本地失败项数据(用于「有失败才弹」入口逻辑检测)
  * - 统计可恢复/不可恢复分布(用于重试选项子对话框)
- * - 编排重试请求:根据 [RetrySource] 加载数据 → 调用 [DoubanSyncManager.startRetry]
+ * - 编排重试:从本地失败表或调用方传入的失败列表加载数据 → 调用 [DoubanSyncManager.startRetry]
  *
  * 重试流程的实际执行(详情页 → TraktId → Trakt 写入)由 [DoubanSyncManager] 负责,
  * 本类只负责数据加载和分发,不参与网络请求。

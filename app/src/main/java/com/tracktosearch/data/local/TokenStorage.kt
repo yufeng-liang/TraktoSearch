@@ -6,8 +6,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,9 +53,6 @@ class TokenStorage @Inject constructor(
     private val _accessTokenFlow = MutableStateFlow<String?>(null)
     val accessToken: Flow<String?> = _accessTokenFlow
 
-    private val _isLoggedInState = MutableStateFlow(false)
-    val isLoggedInState: StateFlow<Boolean> = _isLoggedInState.asStateFlow()
-
     // 异步加载 token，由 MainActivity 在 IO 线程调用
     suspend fun ensureCacheLoaded() {
         if (cacheLoaded) return
@@ -77,7 +72,6 @@ class TokenStorage @Inject constructor(
             val nowSec = System.currentTimeMillis() / 1000
             if (!token.isNullOrEmpty() && expiresAt > nowSec) {
                 _accessTokenFlow.value = token
-                _isLoggedInState.value = true
             }
         }
     }
@@ -120,7 +114,6 @@ class TokenStorage @Inject constructor(
         cachedRefreshAttemptId = null
         cacheLoaded = true
         _accessTokenFlow.value = accessToken
-        _isLoggedInState.value = true
     }
 
     fun getCachedDeviceId(): String? = cachedDeviceId
@@ -140,30 +133,6 @@ class TokenStorage @Inject constructor(
         ensureCacheLoaded()
         commit(prefs().edit().putString(KEY_REFRESH_ATTEMPT_ID, normalized))
         cachedRefreshAttemptId = normalized
-    }
-
-    suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
-        val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
-        val p = prefs()
-        commit(p.edit()
-            .putString(KEY_ACCESS_TOKEN, accessToken)
-            .putString(KEY_REFRESH_TOKEN, refreshToken)
-            .putLong(KEY_EXPIRES_AT, expiresAt))
-        cachedAccessToken = accessToken
-        cachedExpiresAt = expiresAt
-        cacheLoaded = true
-        _accessTokenFlow.value = accessToken
-        _isLoggedInState.value = true
-    }
-
-    suspend fun getAccessToken(): String? {
-        cachedAccessToken?.let { return it }
-        val p = prefs()
-        return withContext(Dispatchers.IO) {
-            p.getString(KEY_ACCESS_TOKEN, null).also {
-                cachedAccessToken = it
-            }
-        }
     }
 
     fun getCachedAccessToken(): String? = cachedAccessToken
@@ -203,7 +172,6 @@ class TokenStorage @Inject constructor(
         cachedRefreshAttemptId = null
         cacheLoaded = false
         _accessTokenFlow.value = null
-        _isLoggedInState.value = false
     }
 
     private suspend fun commit(editor: SharedPreferences.Editor) {

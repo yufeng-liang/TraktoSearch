@@ -57,8 +57,6 @@ enum class MeshPreset {
     internal val isPaperPreset: Boolean
         get() = this == NEBULA || this == INK || this == BEACH
 
-    fun toStorage(): String = name
-
     companion object {
         /** 默认 BLOOM：星云是霉粉彩蛋解锁内容，未解锁时选项不可见，不能当默认值。 */
         fun fromStorage(value: String?): MeshPreset {

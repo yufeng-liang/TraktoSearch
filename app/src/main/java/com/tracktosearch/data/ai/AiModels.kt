@@ -219,22 +219,6 @@ data class AiTasteDto(
 )
 
 @Serializable
-data class AiWatchedTitle(
-    val mediaId: String,
-    val mediaType: String,
-    val title: String,
-    val year: Int?,
-    val genres: List<String>,
-    val publicRating: Double?,
-    val userRating: Double?,
-    val watchedAt: String?,
-    val overview: String = "",
-    val originalTitle: String = "",
-    val runtime: Int? = null,
-    val country: String = ""
-)
-
-@Serializable
 data class AiRecommendation(
     val id: String,
     val mediaType: String,

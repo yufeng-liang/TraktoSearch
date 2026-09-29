@@ -106,10 +106,6 @@ class ViewedItemStorage @Inject constructor(
         return cachedUrls
     }
 
-    fun isViewedSync(url: String): Boolean {
-        return cachedUrls.contains(url)
-    }
-
     suspend fun markViewed(url: String) {
         val p = prefs()
         withContext(Dispatchers.IO) {

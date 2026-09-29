@@ -7,7 +7,6 @@ import com.tracktosearch.data.ai.AiDailyCheckQuestion
 import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiQuizAnswer
 import com.tracktosearch.data.ai.AiQuizQuestion
-import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.data.ai.AiQuizQuestionResult
 import com.tracktosearch.data.ai.AiQuizStage
 import com.tracktosearch.data.ai.AiDailyStage
@@ -704,15 +703,6 @@ fun quizProgress(current: Int, total: Int): Float {
     if (total <= 0) return 0f
     return (current.toFloat() / total.toFloat()).coerceIn(0f, 1f)
 }
-
-fun localQuestionScore(type: AiQuizQuestionType, answered: Boolean): Int {
-    if (!answered) return 0
-    return when (type) {
-        AiQuizQuestionType.SINGLE -> 7
-        AiQuizQuestionType.MULTIPLE, AiQuizQuestionType.SHORT -> 10
-    }
-}
-
 
 /**
  * 复盘/答案拼接：逐项去掉选项文本末尾的句读标点再连接。

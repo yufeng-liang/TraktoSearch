@@ -63,10 +63,6 @@ object OAuthCallback {
     private val _authDeniedFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
     val authDeniedFlow: kotlinx.coroutines.flow.StateFlow<Boolean> = _authDeniedFlow
 
-    // 暴露当前待处理的 OAuth code
-    val pendingCode: String? get() = _pendingCodeFlow.value
-    val authDenied: Boolean get() = _authDeniedFlow.value
-
     fun setPendingCode(code: String?) { _pendingCodeFlow.value = code }
     fun setAuthDenied(denied: Boolean) { _authDeniedFlow.value = denied }
 

@@ -51,23 +51,6 @@ class CrashHandler private constructor(
         }
 
         /**
-         * 获取所有崩溃日志内容
-         */
-        fun getCrashLogs(context: Context): String {
-            val dir = File(context.applicationContext.filesDir, CRASH_DIR)
-            if (!dir.exists()) return ""
-            return dir.listFiles()
-                ?.filter { it.name.endsWith(".log") }
-                ?.sortedByDescending { it.name }
-                ?.take(MAX_LOG_FILES)
-                ?.mapNotNull {
-                    try { it.readText() } catch (_: Exception) { null }
-                }
-                ?.joinToString("\n\n---\n\n")
-                ?: ""
-        }
-
-        /**
          * 删除所有崩溃日志
          */
         fun clearCrashLogs(context: Context) {

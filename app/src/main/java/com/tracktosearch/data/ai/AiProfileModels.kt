@@ -97,15 +97,6 @@ data class AiProfileSettings(
     val clearedAt: Long?
 )
 
-data class AiProfileSnapshot(
-    val friendId: String,
-    val profileVersion: Long,
-    val status: String,
-    val summaryJson: String,
-    val generatedAt: Long?,
-    val updatedAt: Long
-)
-
 @Serializable
 data class AiProfileSettingsDto(
     val profileConsent: Boolean = false,

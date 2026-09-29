@@ -101,14 +101,6 @@ object SharedOrigin {
     const val DISCOVER_FILTER = "discover-filter"
 
     /**
-     * 全屏图片查看器的缩略图/全屏配对。
-     *
-     * 这一族不需要 origin 消歧：同一时刻只可能开着一个查看器，由 [LocalFullscreenSharedElement]
-     * 指定哪一侧是 target，且调用点的字符串 id 里已经带了页面与索引。
-     */
-    const val FULLSCREEN_VIEWER = "fullscreen-viewer"
-
-    /**
      * 同一屏里有多个可能撞 id 的列表时，用列表自己的 id 再分一层。
      *
      * 发现页各栏目共用一套卡片，同一部片子出现在「热门」和「为你推荐」两栏是常态；

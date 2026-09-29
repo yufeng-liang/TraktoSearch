@@ -105,26 +105,4 @@ class DiscoverSectionStorage @Inject constructor(
             context.discoverSectionDataStore.data.first()
         )
     }
-
-    /** 将指定栏目上移 */
-    suspend fun moveUp(id: String) {
-        val configs = _sectionConfigs.value
-        val ids = configs.map { it.id }.toMutableList()
-        val index = ids.indexOf(id)
-        if (index > 0) {
-            java.util.Collections.swap(ids, index, index - 1)
-            setSectionOrder(ids)
-        }
-    }
-
-    /** 将指定栏目下移 */
-    suspend fun moveDown(id: String) {
-        val configs = _sectionConfigs.value
-        val ids = configs.map { it.id }.toMutableList()
-        val index = ids.indexOf(id)
-        if (index >= 0 && index < ids.size - 1) {
-            java.util.Collections.swap(ids, index, index + 1)
-            setSectionOrder(ids)
-        }
-    }
 }

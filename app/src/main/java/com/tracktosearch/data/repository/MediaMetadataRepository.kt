@@ -229,28 +229,11 @@ class MediaMetadataRepository @Inject constructor(
         return merged
     }
 
-    /** 同步读取内存摘要；未命中返回 null，不读 Room、不发网络。 */
-    suspend fun peekSummary(key: MediaKey): MediaSummary? =
-        summaryMemory.get(key.normalized().cacheKey())?.value
-
     /** 真正同步的内存摘要读取，供详情首帧 seed 使用。 */
     fun peekSummaryLocal(key: MediaKey): MediaSummary? =
         summaryMemory.get(key.normalized().cacheKey())
             ?.takeIf { it.schemaVersion == SCHEMA_VERSION }
             ?.value
-
-    /** 让列表和详情共用同一份摘要落盘入口。 */
-    suspend fun putSummary(summary: MediaSummary) {
-        val key = MediaKey(summary.mediaType, summary.tmdbId, summary.locale).normalized()
-        val now = System.currentTimeMillis()
-        val existing = dao.getByKey(key.cacheKey())
-        val existingByKey = if (existing == null) {
-            emptyMap()
-        } else {
-            mapOf(key.cacheKey() to existing)
-        }
-        persistSummaries(listOf(summary), existingByKey, now)
-    }
 
     private suspend fun fetchSummaries(
         locale: String,

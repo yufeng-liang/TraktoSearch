@@ -79,10 +79,6 @@ class SplashPosterScheduler @Inject constructor(
         )
     }
 
-    fun cancelPeriodicPrefetch() {
-        WorkManager.getInstance(context).cancelUniqueWork(SplashPosterWorker.WORK_NAME)
-    }
-
     companion object {
         private const val PREFETCH_INTERVAL_HOURS = 24L
     }

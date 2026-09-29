@@ -1175,13 +1175,6 @@ private const val RING_START = 0.74f
 private const val RING_END = 0.88f
 private const val HANDS_START = 0.86f
 
-/** 戒指钻石只闪一次。 */
-private const val RING_GLINT_START = 0.80f
-private const val RING_GLINT_END = 0.96f
-
-/** 过渡数字从卡片原色切换到暖白金色的强度。 */
-private const val SOURCE_DIGIT_ALPHA = 0.94f
-
 /** 铭牌上的两枚 emoji（戒指 / 牵手）相对数字参考字号的倍数。 */
 private const val SEAL_EMOJI_SCALE = 1.05f
 

@@ -187,52 +187,6 @@ object DiscoverFilterConstants {
         return context.getString(res)
     }
 
-    /** 语言代码 → 国家代码映射（discover/movie 不返回 origin_country，用 original_language 回退推断） */
-    private val LANGUAGE_TO_COUNTRY: Map<String, String> = mapOf(
-        "zh" to "CN",
-        "yue" to "HK",
-        "nan" to "TW",
-        "ja" to "JP",
-        "ko" to "KR",
-        "en" to "US",
-        "fr" to "FR",
-        "de" to "DE",
-        "it" to "IT",
-        "es" to "ES",
-        "pt" to "PT",
-        "ru" to "RU",
-        "hi" to "IN",
-        "th" to "TH",
-        "tr" to "TR",
-        "ar" to "SA",
-        "fa" to "IR",
-        "pl" to "PL",
-        "nl" to "NL",
-        "sv" to "SE",
-        "da" to "DK",
-        "fi" to "FI",
-        "no" to "NO",
-        "cs" to "CZ",
-        "hu" to "HU",
-        "el" to "GR",
-        "he" to "IL",
-        "id" to "ID",
-        "ms" to "MY",
-        "vi" to "VN",
-        "tl" to "PH",
-        "uk" to "UA"
-    )
-
-    /**
-     * 根据原始语言代码推断国家信息。
-     * discover/movie 返回 original_language 但不返回 origin_country，用此回退。
-     * @return (国家代码, 国家名)，无法推断时返回 null
-     */
-    fun countryByLanguage(context: Context, languageCode: String): Pair<String, String>? {
-        val code = LANGUAGE_TO_COUNTRY[languageCode] ?: return null
-        return code to regionName(context, code)
-    }
-
     /** 根据 keyword ID 查找标签名 */
     fun tagName(context: Context, keywordId: Int): String {
         val res = TAGS.firstOrNull { it.first == keywordId }?.second ?: return ""

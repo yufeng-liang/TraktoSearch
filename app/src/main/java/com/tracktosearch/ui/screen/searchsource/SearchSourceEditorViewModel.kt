@@ -267,20 +267,6 @@ class SearchSourceEditorViewModel @Inject constructor(
     }
 
     // ---- 导入 ----
-    fun parseImport(text: String) {
-        val decoded = ShareCodec.decode(text.trim())
-        _importState.value = if (decoded == null) {
-            ImportUiState.Invalid
-        } else {
-            ImportUiState.Preview(decoded)
-        }
-    }
-
-    fun applyImportedSource(source: CustomSearchSource) {
-        applySource(source)
-        _step.value = 3
-    }
-
     fun renameForImport(newName: String) {
         val current = _importState.value
         if (current is ImportUiState.Preview) {

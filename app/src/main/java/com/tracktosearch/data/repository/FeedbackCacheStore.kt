@@ -57,10 +57,6 @@ class FeedbackCacheStore(
         return detailCache.get(id)
     }
 
-    suspend fun saveDetail(id: String, response: FeedbackDetailResponse) {
-        detailCache.put(id, response)
-    }
-
     suspend fun mergeDetail(id: String, remote: FeedbackDetailResponse): FeedbackDetailResponse {
         val cached = detailCache.get(id)
         val merged = if (cached != null) {

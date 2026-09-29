@@ -425,13 +425,6 @@ class TmdbRepository @Inject constructor(
         return buildTvEnrichment(detail, localizedTitle, year)
     }
 
-    /** 同步读取已缓存的剧集本地化标题，不读盘、不挂起、不发网络。 */
-    fun peekTvLocalizedTitle(tmdbId: Int): String? {
-        val key = langKey(tmdbId)
-        return tvTitleCache.get(key)?.trim()?.takeIf { it.isNotEmpty() }
-            ?: tvAltTitlesCache.get(key)?.let { findLocalizedAlternativeTitle(it, getTmdbCountry()) }
-    }
-
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
         val key = langKey(tmdbId)
         val cached = tvDetailCache.get(key)

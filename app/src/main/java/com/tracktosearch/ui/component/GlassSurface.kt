@@ -357,10 +357,6 @@ internal fun GlassSurfaceImpl(
     specularHighlightAlphaScale: Float = 1f,
     content: @Composable () -> Unit
 ) {
-    @Suppress("UNUSED_VARIABLE")
-    val compatibilityHazeState = hazeState
-    @Suppress("UNUSED_VARIABLE")
-    val compatibilitySourceSelection = sourceSelection
     val isDark = isAppDarkTheme()
     val token = if (useNavigationSelectionStyle) {
         backdropNavigationSelectionToken(

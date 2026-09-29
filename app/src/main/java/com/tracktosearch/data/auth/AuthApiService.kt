@@ -31,9 +31,6 @@ interface AuthApiService {
     @POST("api/trakt/oauth/exchange")
     suspend fun exchangeTraktCode(@Body request: TraktOAuthCodeRequest): Response<GatewayResponse<GatewaySuccessResponse>>
 
-    @POST("api/trakt/oauth/refresh")
-    suspend fun refreshTrakt(): Response<GatewayResponse<GatewaySuccessResponse>>
-
     @POST("api/trakt/oauth/disconnect")
     suspend fun disconnectTrakt(): Response<GatewayResponse<GatewaySuccessResponse>>
 

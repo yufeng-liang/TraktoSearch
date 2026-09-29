@@ -43,22 +43,6 @@ class TraktAuthManager @Inject constructor(
         }
     }
 
-    suspend fun refreshAccessToken(): Result<Unit> {
-        return try {
-            val response = authApiService.refreshTrakt()
-            if (response.isSuccessful && response.body()?.code == "SUCCESS") {
-                Result.success(Unit)
-            } else {
-                val body = response.body()
-                Result.failure(Exception("${body?.code ?: response.code()}: ${body?.message ?: "Token refresh failed"}"))
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     suspend fun disconnect(): Result<Unit> {
         return try {
             val response = authApiService.disconnectTrakt()

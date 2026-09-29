@@ -628,11 +628,7 @@ class AuthManager @Inject constructor(
 
     // === Getters ===
 
-    fun getDeviceId(): String? = deviceId
-
     fun getNextCheckAt(): Long = nextCheckAt
-
-    fun getLastOnlineAt(): Long = lastOnlineAt
 
     private fun <T> retrofit2.Response<GatewayResponse<T>>.errorMessage(fallback: String): String {
         val envelope = body()

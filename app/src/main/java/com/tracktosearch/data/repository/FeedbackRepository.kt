@@ -20,7 +20,6 @@ class FeedbackRepository(
     private val api: FeedbackApiService,
     private val cacheStore: FeedbackCacheStore
 ) {
-    suspend fun loadCacheFromDisk() = cacheStore.loadFromDisk()
     fun getCachedList(): MineResponse? = cacheStore.getCachedList()
 
     suspend fun uploadScreenshot(bytes: ByteArray, mimeType: String, fileName: String = "screenshot.jpg"): Result<String> {

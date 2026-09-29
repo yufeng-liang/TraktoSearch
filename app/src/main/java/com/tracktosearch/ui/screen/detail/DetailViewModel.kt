@@ -2841,21 +2841,6 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 按当前源/网盘筛选 + "仅显示高相关"过滤，返回展示列表与被隐藏数量。
-     * 始终从 [allResources] 重新过滤，避免开关切换时复用已被旧开关过滤的子集导致低相关项丢失。
-     */
-    private fun applyCurrentFilters(): Pair<List<ResourceItem>, Int> {
-        val state = _uiState.value
-        val filtered = resourceRepository.filterItems(allResources, state.enabledSources, state.enabledDiskTypes)
-        return applyHighRelevanceFilter(filtered, state.showHighRelevanceOnly)
-    }
-
-    /**
-     * 本地过滤当前已缓存的全量结果，不调 API（保留原签名供复用）
-     */
-    private fun applyLocalFilter(): List<ResourceItem> = applyCurrentFilters().first
-
-    /**
      * 重新搜索：清除缓存，强制重新请求 API（中英文名并行搜索）
      */
     fun searchResources() {

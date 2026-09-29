@@ -1,9 +1,7 @@
 package com.tracktosearch.ui.screen.watchlist
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -289,11 +287,6 @@ fun WatchlistScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
     val haptics = rememberAppHaptics()
-    // 用外置浏览器打开 Trakt，共享外置浏览器登录态（内置 WebView 有独立 CookieJar 不共享）
-    val openTraktExternal: () -> Unit = {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://trakt.tv/watchlist")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-    }
 
     LaunchedEffect(sessionKey) {
         viewModel.onSessionModeChanged(sessionKey)

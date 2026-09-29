@@ -40,8 +40,4 @@ enum class MarkActionType(val value: String) {
     ADD_WATCHLIST("ADD_WATCHLIST"),
     REMOVE_WATCHLIST("REMOVE_WATCHLIST"),
     UNMARK_WATCHED("UNMARK_WATCHED");
-
-    companion object {
-        fun fromValue(v: String) = entries.firstOrNull { it.value == v }
-    }
 }

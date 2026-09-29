@@ -70,10 +70,6 @@ class UserRatingSnapshot @Inject constructor(
         traktRatings.remove(traktKey(traktId, mediaType))
     }
 
-    fun removeDouban(doubanId: String) {
-        doubanRatings.remove(doubanId)
-    }
-
     private companion object {
         const val DOUBAN_TO_TEN_SCALE = 2
     }

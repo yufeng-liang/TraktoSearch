@@ -146,7 +146,6 @@ data class WatchlistUiState(
     val hasMoreOthers: Boolean = false,
     val moviePage: Int = 1,
     val showPage: Int = 1,
-    val otherPage: Int = 1,
     // 已看历史
     val historyMovies: List<MediaUiItem> = emptyList(),
     val historyShows: List<MediaUiItem> = emptyList(),

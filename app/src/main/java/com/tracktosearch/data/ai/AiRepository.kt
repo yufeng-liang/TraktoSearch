@@ -869,10 +869,6 @@ class AiRepository @Inject constructor(
         runCatching { storage.write(friendId, AiCacheFeature.ACTIVATION, normalized) }
     }
 
-    suspend fun clearActivatedCharacterId(friendId: String) {
-        runCatching { storage.remove(friendId, AiCacheFeature.ACTIVATION) }
-    }
-
     /**
      * 读取当日额度用量快照（dailyUsed），按 UTC 日隔离。
      * 服务端没有独立额度查询接口，重启后恢复激活态时靠它把「今日 x/80」显示出来。

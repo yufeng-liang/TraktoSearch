@@ -68,16 +68,6 @@ data class ConsistencyCheckResult(
     val isCancelled: Boolean = false    // true=检查已被用户取消(区分正常完成与取消,避免 WatchlistScreen 自动弹窗)
 )
 
-data class ConsistencyConflictRecord(
-    val doubanId: String,
-    val title: String,
-    val doubanStatus: String,
-    val traktStatus: String,
-    val conflictType: String,
-    val resolutionStatus: String,
-    val errorMessage: String? = null
-)
-
 /**
  * 豆瓣与 Trakt 影视状态一致性检查器。
  *
@@ -1296,7 +1286,6 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         val traktNeedWatchlist: List<Pair<Int, MediaType>>,
         val doubanNeedUpdate: List<DoubanStatusUpdate>,
         val conflicts: Int,
-        val skipped: Int,
-        val conflictRecords: List<ConsistencyConflictRecord> = emptyList()
+        val skipped: Int
     )
 }
