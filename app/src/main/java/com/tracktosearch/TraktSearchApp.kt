@@ -84,14 +84,16 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             StartupTrace.markProcessStart()
             StartupTrace.mark("application.onCreate.enter")
             // 系统 Splash 在 Application.onCreate 完成前就渲染，必须在这里同步读取 app 主题设置
-            // 并联动系统 uiMode（AppCompatDelegate.setDefaultNightMode，API 31+ 内部走
-            // UiModeManager.setApplicationNightMode），否则冷启动的系统 Splash 只会跟随
-            // 系统夜间模式，忽略 app 内的深色设置。DataStore 首值一般几十毫秒内读完。
+            // 并把「深/浅」持久化到系统 per-app 夜间模式（UiModeManager.setApplicationNightMode，
+            // API 31+）。系统启动窗口在进程 fork 前创建，只认这份持久化值——AppCompatDelegate 的
+            // 本地覆盖到不了它，否则冷启动的系统 Splash 只会跟随系统夜间模式，忽略 app 内深色设置。
+            // DataStore 首值一般几十毫秒内读完。
             StartupTrace.mark("application.theme_mode.apply.start")
             // 主题模式应用在 ThemeStorage 的 companion 中，初始化阶段直接调用静态入口
-            // 即可，避免把 DataStore 实例误当成扩展方法接收者。
+            // 即可，避免把 DataStore 实例误当成扩展方法接收者。传入 applicationContext 落 UiModeManager。
             ThemeStorage.applyThemeModeToSystem(
-                runBlocking { themeStorage.readThemeModeSnapshot() }
+                runBlocking { themeStorage.readThemeModeSnapshot() },
+                this
             )
             StartupTrace.mark("application.theme_mode.apply.done")
             // 开屏日签开关：系统 splash 用哪一档图标靠它（开着的场合用静态图标，

@@ -1,6 +1,10 @@
 package com.tracktosearch.data.local
 
+import android.app.UiModeManager
 import android.content.Context
+import android.content.res.Configuration
+import android.content.res.Resources
+import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -129,9 +133,9 @@ class ThemeStorage private constructor(
             prefs[KEY_THEME_MODE] = mode
         }
         _themeMode.value = mode
-        // App 内主题模式联动系统 uiMode（API 31+ 内部走 UiModeManager.setApplicationNightMode），
-        // 让下次冷启动时系统 Splash 直接按 app 设置选择 values/values-night 资源。
-        applyThemeModeToSystem(mode)
+        // App 内主题模式联动系统 uiMode，并把「深/浅」持久化到系统 per-app 夜间模式，
+        // 让下次冷启动时系统 Splash（启动窗口）直接按 app 设置选择 values/values-night 资源。
+        applyThemeModeToSystem(mode, context)
     }
 
     suspend fun setAccentColor(accent: MonetAccent?) {
@@ -312,19 +316,53 @@ class ThemeStorage private constructor(
 
     companion object {
         /**
-         * 把 app 内主题模式应用到系统 uiMode，让系统 Splash（starting window）在冷启动时
-         * 按 app 自己的深浅设置选资源，而不是只看系统夜间模式。
+         * 把 app 内主题模式应用到系统 uiMode，并把「深/浅」持久化到系统 per-app 夜间模式，
+         * 让系统 Splash（starting window）在冷启动时按 app 自己的深浅设置选资源，
+         * 而不是只看系统夜间模式。
          *
-         * dark/light 会覆盖 app 进程的 uiMode（API 31+ 由 AppCompat 走
-         * UiModeManager.setApplicationNightMode），system 则恢复跟随系统。
+         * 关键：系统启动窗口在 App 进程 fork **之前**就由系统创建，AppCompatDelegate 的
+         * 本地 uiMode 覆盖到不了它——只有系统持久化的 per-app 夜间模式
+         * （[UiModeManager.setApplicationNightMode]，API 31+）才会被启动窗口采用。所以显式
+         * dark/light 必须在这里落到 UiModeManager，系统下次冷启动的 Splash 才会跟着变。
+         *
+         * @param context 用于取 [UiModeManager]；为 null（或 API < 31）时只做 AppCompat 本地联动。
          */
-        fun applyThemeModeToSystem(mode: String) {
+        fun applyThemeModeToSystem(mode: String, context: Context? = null) {
             val appCompatMode = when (mode) {
                 MODE_DARK -> AppCompatDelegate.MODE_NIGHT_YES
                 MODE_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
                 else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
             }
             AppCompatDelegate.setDefaultNightMode(appCompatMode)
+
+            if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+            val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+                ?: return
+            try {
+                when (mode) {
+                    MODE_DARK -> uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)
+                    MODE_LIGHT -> uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_NO)
+                    else -> {
+                        // 跟随系统：T(33)+ 交给 AppCompatDelegate 自身联动 UiModeManager（含清除
+                        // 旧的 per-app 覆盖、会话内实时跟随系统切换），这里不再插手。
+                        // 31/32 上 AppCompat 不联动 UiModeManager，平台又没有「清除 per-app 覆盖」
+                        // 的公开 API（一旦设过 dark/light 就回不到跟随系统），只能按当前真实系统夜间
+                        // 模式打一份快照持久化，保证 Splash 与系统一致。代价：31/32 的「跟随系统」在
+                        // 会话内不再实时跟随系统切换，改为每次冷启动重新取值。真实系统值取自
+                        // Resources.getSystem()——它不受本 App 的 per-app 覆盖影响。
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            val systemNight = (Resources.getSystem().configuration.uiMode and
+                                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+                            uiModeManager.setApplicationNightMode(
+                                if (systemNight) UiModeManager.MODE_NIGHT_YES
+                                else UiModeManager.MODE_NIGHT_NO
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // 个别 ROM 可能限制该调用；失败不影响 app 内主题（AppCompatDelegate 已生效）。
+            }
         }
 
         const val MODE_SYSTEM = "system"
