@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -66,12 +67,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppVisualSurface
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.VisualSurfaceKind
 import com.tracktosearch.ui.component.YearBadge
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
 import com.tracktosearch.ui.component.sheetTitleStyle
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 
@@ -204,6 +207,7 @@ internal fun TmdbAllSheet(
         // 必须在这一层取，不能复用调用页那一份
         val sheetHaptics = rememberAppHaptics()
         Column(modifier = Modifier.fillMaxWidth()) {
+            val fadeColor = floatingSheetColor()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -249,7 +253,9 @@ internal fun TmdbAllSheet(
                 columns = GridCells.Fixed(3),
                 state = listState,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(listState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -328,11 +334,14 @@ internal fun TraktMovieAllSheet(
         title = title
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val fadeColor = floatingSheetColor()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(listState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -380,11 +389,14 @@ internal fun TraktShowAllSheet(
         title = title
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val fadeColor = floatingSheetColor()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(listState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -420,11 +432,14 @@ internal fun TraktAnticipatedAllSheet(
         title = stringResource(R.string.discover_trakt_anticipated)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val fadeColor = floatingSheetColor()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(listState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -467,8 +482,13 @@ internal fun TrendingListsAllSheet(
         title = stringResource(R.string.discover_trending_lists)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val listState = rememberLazyListState()
+            val fadeColor = floatingSheetColor()
             LazyColumn(
-                modifier = Modifier.fillMaxHeight(0.8f),
+                state = listState,
+                modifier = Modifier
+                    .bottomScrollFade(listState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

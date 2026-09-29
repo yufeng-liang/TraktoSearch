@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -40,11 +41,13 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.theme.WatchedGreen
 import kotlinx.coroutines.flow.MutableSharedFlow
 
@@ -118,7 +121,11 @@ internal fun MarkWatchedDialog(
             val sortedSeasons = remember(seasons) {
                 seasons.filter { it.number > 0 } + seasons.filter { it.number == 0 }
             }
+            val listState = rememberLazyListState()
+            val fadeColor = floatingDialogColor()
             LazyColumn(
+                state = listState,
+                modifier = Modifier.bottomScrollFade(listState, fadeColor),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(sortedSeasons.size, key = { sortedSeasons[it].number }) { index ->

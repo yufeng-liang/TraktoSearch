@@ -9,7 +9,6 @@ import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +37,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +46,6 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -178,79 +175,6 @@ private fun formatRemainingTime(context: Context, seconds: Long): String =
     } else {
         context.getString(R.string.download_time_minutes, seconds / 60, seconds % 60)
     }
-
-/**
- * 轻量级更新日志渲染：
- * - 标题字号缩小为 titleMedium，保持加粗
- * - 列表符号（•）与文字垂直居中对齐
- * - 支持简单的 **粗体** 内联标记
- * - 支持 --- 水平分隔线
- */
-@Composable
-fun ChangelogContent(text: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        text.lineSequence()
-            .map { it.trimEnd() }
-            .forEach { line ->
-                if (line.isBlank()) return@forEach
-                val trimmed = line.trimStart()
-                when {
-                    // 水平分隔线
-                    trimmed == "---" || trimmed == "***" || trimmed == "___" -> {
-                        Spacer(modifier = Modifier.height(1.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant)
-                        )
-                        Spacer(modifier = Modifier.height(1.dp))
-                    }
-                    // Markdown 标题 # / ## / ...
-                    trimmed.startsWith("#") -> {
-                        val level = trimmed.takeWhile { it == '#' }.length
-                        val clean = trimmed.trimStart('#').trimStart()
-                        val style = when (level) {
-                            1 -> MaterialTheme.typography.titleLarge
-                            2 -> MaterialTheme.typography.titleMedium
-                            else -> MaterialTheme.typography.titleSmall
-                        }
-                        Text(
-                            text = parseInlineMarkdown(clean),
-                            style = style,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    // 列表项 — 用 Row + 固定宽度占位符实现换行缩进对齐
-                    trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ") -> {
-                        val itemText = trimmed.removePrefix("• ").let { if (it == trimmed) it.removePrefix("- ").let { if (it == trimmed) it.removePrefix("* ") else it } else it }
-                        Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                            Text(
-                                text = "•  ",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = parseInlineMarkdown(itemText),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    // 普通段落
-                    else -> {
-                        Text(
-                            text = parseInlineMarkdown(trimmed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-    }
-}
 
 /** 解析 **粗体** 内联标记 */
 fun parseInlineMarkdown(input: String): androidx.compose.ui.text.AnnotatedString {
@@ -707,18 +631,13 @@ fun UpdateDialog(
             // 更新日志区：不再套卡片，直接铺在弹窗底色上；changelog 为空时兜底显示版本号
             val dialogColor = floatingDialogColor()
             val changelogListState = rememberLazyListState()
-            // 列表下面还有内容时画一道渐隐，替掉「最后一行被硬切一半」那种像渲染坏了的观感
-            val changelogHasMore = remember {
-                derivedStateOf {
-                    val info = changelogListState.layoutInfo
-                    val last = info.visibleItemsInfo.lastOrNull()
-                    last != null && last.offset + last.size > info.viewportEndOffset
-                }
-            }
+            // 列表下面还有内容时画一道渐隐（bottomScrollFade），替掉「最后一行被硬切一半」
+            // 那种像渲染坏了的观感；滚到底自动消失。
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 420.dp)
+                    .bottomScrollFade(changelogListState, dialogColor)
             ) {
                 StickyHeaderChangelogContent(
                     text = updateInfo.changelog.ifBlank {
@@ -730,20 +649,6 @@ fun UpdateDialog(
                     headerHorizontalPadding = 0.dp,
                     listState = changelogListState
                 )
-                if (changelogHasMore.value) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(28.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    0f to Color.Transparent,
-                                    1f to dialogColor
-                                )
-                            )
-                    )
-                }
             }
 
             Spacer(Modifier.height(16.dp))

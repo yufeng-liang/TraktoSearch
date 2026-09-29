@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -26,9 +27,11 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.recordOpenImageBounds
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.component.rememberOpenImageBounds
 import com.tracktosearch.ui.haptic.hapticClickable
 
@@ -63,6 +66,8 @@ internal fun AllPersonImagesPanel(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.person_images)
     ) {
+        val gridState = rememberLazyGridState()
+        val fadeColor = floatingSheetColor()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -70,7 +75,9 @@ internal fun AllPersonImagesPanel(
         ) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
+                state = gridState,
                 modifier = Modifier
+                    .bottomScrollFade(gridState, fadeColor)
                     .fillMaxWidth()
                     .fillMaxHeight(0.8f)
                     .testTag("person_images_grid"),

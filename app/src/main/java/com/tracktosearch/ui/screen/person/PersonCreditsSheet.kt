@@ -21,8 +21,10 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.LoadMoreFooter
 import com.tracktosearch.ui.component.LoadMoreFooterState
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 /** 全部参演电影弹窗 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,12 +55,15 @@ internal fun AllMovieCreditsSheet(
         onDismissRequest = onDismiss,
         title = title
     ) {
+        val fadeColor = floatingSheetColor()
         Column(modifier = Modifier.fillMaxWidth()) {
             // Grid 列表
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(gridState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -128,12 +133,15 @@ internal fun AllTvCreditsSheet(
         onDismissRequest = onDismiss,
         title = title
     ) {
+        val fadeColor = floatingSheetColor()
         Column(modifier = Modifier.fillMaxWidth()) {
             // Grid 列表
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(gridState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

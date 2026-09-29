@@ -77,6 +77,7 @@ import com.tracktosearch.ui.theme.MeshPreset
 import com.tracktosearch.ui.theme.VisualEffectMode
 import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
@@ -983,7 +984,13 @@ fun ChangelogDialog(
         // 内容自带 LazyColumn，必须关掉组件那层 verticalScroll，否则无限高约束直接崩
         contentScrollable = false,
         content = {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            val changelogListState = rememberLazyListState()
+            val fadeColor = floatingDialogColor()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bottomScrollFade(changelogListState, fadeColor)
+            ) {
                 when {
                     isLoading && changelog == null -> {
                         Row(
@@ -996,6 +1003,7 @@ fun ChangelogDialog(
                     changelog != null && changelog!!.isNotBlank() -> {
                         StickyHeaderChangelogContent(
                             text = changelog!!,
+                            listState = changelogListState,
                             // 标题吸顶后的填充色跟弹窗容器同色，静态看不出色块
                             headerColor = floatingDialogColor()
                         )
@@ -1050,9 +1058,12 @@ fun DiscoverSectionsDialog(
             // text 槽自带宿主 View；把手那一记在槽内取实例（DiscoverSectionRow 里那份是它自己的）；
             // 限高与滚动由组件内容槽负责（原手写 heightIn(max=500.dp) 删除）
             val haptics = rememberAppHaptics()
+            val fadeColor = floatingDialogColor()
             LazyColumn(
                 state = lazyListState,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .bottomScrollFade(lazyListState, fadeColor)
+                    .fillMaxWidth()
             ) {
                 items(reorderedSections, key = { it.id }) { section ->
                     ReorderableItem(

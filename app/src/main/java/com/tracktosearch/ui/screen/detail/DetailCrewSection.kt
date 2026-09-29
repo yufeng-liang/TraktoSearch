@@ -59,6 +59,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ShimmerState
@@ -66,6 +67,7 @@ import com.tracktosearch.ui.component.appSharedBounds
 import com.tracktosearch.ui.component.personAvatarSharedKey
 import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.hapticClickable
+import com.tracktosearch.ui.theme.floatingSheetColor
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 
@@ -326,10 +328,13 @@ internal fun FullCastCrewSheet(
         title = stringResource(R.string.detail_cast_all_title)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val fadeColor = floatingSheetColor()
             // 分组列表
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxHeight(0.8f),
+                modifier = Modifier
+                    .bottomScrollFade(listState, fadeColor)
+                    .fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {

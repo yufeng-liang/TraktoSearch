@@ -106,6 +106,8 @@ import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.DialogAction
@@ -1649,10 +1651,13 @@ private fun DailyKnowledgeHistorySheet(
     onOpenRecord: (AiDailyKnowledgeHistoryRecord) -> Unit
 ) {
     val sheetHaptics = rememberAppHaptics()
+    val scrollState = rememberScrollState()
+    val fadeColor = floatingSheetColor()
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .bottomScrollFade(scrollState, fadeColor)
+            .verticalScroll(scrollState)
             .padding(horizontal = 20.dp)
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)

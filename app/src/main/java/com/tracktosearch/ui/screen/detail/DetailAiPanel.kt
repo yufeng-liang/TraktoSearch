@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
@@ -37,7 +38,9 @@ import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiDetailInterestLevel
 import com.tracktosearch.data.ai.AiDetailWatchTiming
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.sheetTitleStyle
+import com.tracktosearch.ui.theme.floatingSheetColor
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,8 +55,12 @@ fun DetailAiPanel(
 ) {
     if (!state.panelVisible) return
     AppBottomSheet(onDismissRequest = onDismiss) {
+        val listState = rememberLazyListState()
+        val fadeColor = floatingSheetColor()
         LazyColumn(
+            state = listState,
             modifier = Modifier
+                .bottomScrollFade(listState, fadeColor)
                 .fillMaxWidth()
                 .onGloballyPositioned { onBoundsChanged(it.boundsInRoot()) },
             contentPadding = WindowInsets.navigationBars.asPaddingValues()

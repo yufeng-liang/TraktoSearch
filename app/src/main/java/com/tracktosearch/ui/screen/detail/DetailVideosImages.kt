@@ -18,8 +18,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -55,6 +57,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.recordOpenImageBounds
 import com.tracktosearch.ui.component.rememberShimmer
@@ -62,6 +65,7 @@ import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
+import com.tracktosearch.ui.theme.floatingSheetColor
 import kotlinx.coroutines.launch
 
 // ==================== 预告片与截图 ====================
@@ -406,6 +410,9 @@ internal fun FullVideosImagesSheet(
         val sheetHaptics = rememberAppHaptics()
         // 三列网格共享一条 shimmer，避免每格各跑一条无限动画；与详情页栏目骨架同用低对比档
         val sheetShimmer = rememberShimmer(subtle = true)
+        val fadeColor = floatingSheetColor()
+        val videosListState = rememberLazyListState()
+        val backdropsGridState = rememberLazyGridState()
         Column(modifier = Modifier.fillMaxWidth()) {
             // Tab 行
             if (tabCount > 1) {
@@ -457,7 +464,10 @@ internal fun FullVideosImagesSheet(
                             // 说明位于列表外，滚动或缩略图重试都不会将它回收。
                             TrailerNetworkNoticeCompact(Modifier.padding(horizontal = 16.dp))
                             LazyColumn(
-                                modifier = Modifier.weight(1f).testTag("detail_all_videos_list"),
+                                state = videosListState,
+                                modifier = Modifier
+                                    .bottomScrollFade(videosListState, fadeColor)
+                                    .weight(1f).testTag("detail_all_videos_list"),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
@@ -472,8 +482,11 @@ internal fun FullVideosImagesSheet(
                     }
                     showBackdrops -> {
                         LazyVerticalGrid(
+                            state = backdropsGridState,
                             columns = GridCells.Fixed(3),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .bottomScrollFade(backdropsGridState, fadeColor)
+                                .fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)

@@ -37,6 +37,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.theme.DesignToken
+import com.tracktosearch.ui.theme.floatingDialogColor
 
 /** 资源卡片的动作类型，决定确认按钮文案。 */
 enum class ResourceCopyrightAction {
@@ -79,9 +80,12 @@ fun ResourceCopyrightDialog(
     ) {
         // 小屏或大字体档下内容可能高于弹窗可用高度：允许纵向滚动，正常档位无感。
         // 24dp 内边距由 AppFloatingDialog 的 contentPadding 承担，这里不再重复。
+        val scrollState = rememberScrollState()
+        val fadeColor = floatingDialogColor()
         Column(
             modifier = Modifier
-                .verticalScroll(rememberScrollState())
+                .bottomScrollFade(scrollState, fadeColor)
+                .verticalScroll(scrollState)
         ) {
             DialogHeader()
             Spacer(modifier = Modifier.height(18.dp))

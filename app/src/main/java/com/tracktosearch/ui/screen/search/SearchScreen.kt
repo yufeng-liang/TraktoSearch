@@ -52,6 +52,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -154,6 +155,7 @@ import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.DropdownAnchorMenu
 import com.tracktosearch.ui.component.GlassHighlight
@@ -202,6 +204,7 @@ import com.tracktosearch.ui.theme.SearchTypePerson
 import com.tracktosearch.ui.theme.SearchTypeShow
 import com.tracktosearch.ui.theme.SearchTypeUnknown
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.theme.ambientTextHalo
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
@@ -936,7 +939,10 @@ fun SearchScreen(
                 borderColor = if (isDark) GlassBorderDark else Color.White.copy(alpha = 0.8f),
                 glassRole = GlassSurfaceRole.SearchField,
                 scene = searchGlassScene,
-                darkShadowAlpha = if (isDark) 0.65f else 0.28f,
+                // 深色 + BLUR 档下 0.65 的纯黑投影压在平滑弥散背景上，外沿梯度远高于背景本身，
+                // 会被读成搜索框上/下方的一条"分割线"（真机横向实测贴框处 -28 lum）。降到 0.40 让投影
+                // 淡入背景、保留悬浮层次但外沿不再成线；浅色档本就弱(0.28)不动。
+                darkShadowAlpha = if (isDark) 0.40f else 0.28f,
                 lightShadowAlpha = if (isDark) 0.12f else 0.9f,
                 hazeState = hazeState,
                 interactionSource = searchInteractionSource
@@ -1903,6 +1909,8 @@ fun DoubanHotAllSheet(
         title = doubanCategoryLabel(category.id)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val gridState = rememberLazyGridState()
+            val fadeColor = floatingSheetColor()
             when {
                 // 首载骨架：页 1 加载中且无任何条目时给占位，避免弹层白板
                 category.items.isEmpty() && category.isLoading -> {
@@ -1932,8 +1940,11 @@ fun DoubanHotAllSheet(
                 }
                 else -> {
                     androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(3),
-                        modifier = Modifier.fillMaxHeight(0.8f),
+                        modifier = Modifier
+                            .bottomScrollFade(gridState, fadeColor)
+                            .fillMaxHeight(0.8f),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)

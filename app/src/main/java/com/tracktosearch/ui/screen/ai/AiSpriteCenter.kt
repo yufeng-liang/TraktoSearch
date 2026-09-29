@@ -97,8 +97,10 @@ import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiQuizQuestionType
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.sheetTitleStyle
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.PopupShowEffect
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -1313,8 +1315,10 @@ private fun CharacterPickerSheet(
         onDismissRequest = onDismiss,
         skipPartiallyExpanded = false
     ) {
+        val scrollState = rememberScrollState()
+        val fadeColor = floatingSheetColor()
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(
+            Modifier.fillMaxWidth().bottomScrollFade(scrollState, fadeColor).verticalScroll(scrollState).padding(
                 start = 20.dp,
                 end = 20.dp,
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 20.dp

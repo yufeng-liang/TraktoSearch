@@ -54,6 +54,12 @@ import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.theme.floatingSheetColor
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 
 /*
  * 统一弹窗组件，三族共用一份按钮行与配色，按「对话框 → 浮动卡片 → 底部面板」组织，
@@ -104,6 +110,41 @@ internal fun dialogButtonColors(tone: DialogTone, scheme: ColorScheme): ButtonCo
 /** 内容槽的滚动节点 tag，AppDialogTest 用它断言可滚动。 */
 internal const val DialogContentTag = "app_dialog_content"
 
+/** 可滚动弹窗内容底部渐隐遮罩的默认高度。 */
+internal val DialogScrollFadeHeight: Dp = 28.dp
+
+/**
+ * 可滚动弹窗内容的底部渐隐遮罩：内容下方还能滚动时，在节点底部叠一道
+ * 「顶透明 → 底为弹窗底色」的渐变，提示「下面还有内容」，替掉「最后一行被硬切一半」
+ * 那种像渲染坏了的观感；滚到底后 [ScrollableState.canScrollForward] 变 false 自动消失。
+ *
+ * 用 drawWithContent 直接在节点上叠画，不额外套 Box：本 Modifier 必须挂在**滚动容器
+ * 之外**（verticalScroll / LazyColumn 等的左侧），否则渐变会跟着内容一起滚走。
+ *
+ * [color] 必传且应等于所在弹窗族的底色：AppAlertDialog / AppFloatingDialog 传
+ * floatingDialogColor()，AppBottomSheet 传 floatingSheetColor()。这是用底色盖住文字的
+ * overlay 方案（非真透明擦除），底色对不上就会露色块。
+ */
+fun Modifier.bottomScrollFade(
+    state: ScrollableState,
+    color: Color,
+    height: Dp = DialogScrollFadeHeight,
+): Modifier = this.drawWithContent {
+    drawContent()
+    if (state.canScrollForward) {
+        val h = height.toPx()
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Transparent, color),
+                startY = size.height - h,
+                endY = size.height,
+            ),
+            topLeft = Offset(0f, size.height - h),
+            size = Size(size.width, h),
+        )
+    }
+}
+
 /**
  * 全 App 唯一的居中对话框。内部仍是 M3 AlertDialog，把底色、圆角、标题字号、
  * 内容限高、按钮行和触感全部收口，调用点只描述内容。
@@ -145,9 +186,17 @@ fun AppAlertDialog(
     // 整个表达式推成 Unit? 编译不过。三字段全空时传 null 而不是空 lambda：
     // AlertDialog 的 text 槽只要非空就套一层带底部内边距的 Box，空槽会白占一段间距。
     val textSlotContent: @Composable () -> Unit = @Composable {
-        // 自带滚动容器（LazyColumn 等）的调用点走 else 分支：限高照旧，滚动交给内容自己。
+        // 自带滚动容器（LazyColumn 等）的调用点走 else 分支：限高照旧，滚动交给内容自己，
+        // 底部渐隐也交给内容自己（组件拿不到它的 list state）。
+        val scrollState = rememberScrollState()
+        val fadeColor = floatingDialogColor()
+        // bottomScrollFade 必须在 verticalScroll 左侧，否则渐变会跟着内容一起滚。
         val scrollModifier =
-            if (contentScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
+            if (contentScrollable) {
+                Modifier
+                    .bottomScrollFade(scrollState, fadeColor)
+                    .verticalScroll(scrollState)
+            } else Modifier
         Column(
             modifier = Modifier
                 // testTag 必须在 heightIn 之前：挂在限高之后命中的是被裁剪的内层节点，

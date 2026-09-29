@@ -174,6 +174,7 @@ import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.AppBottomSheet
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppIconButton
 import com.tracktosearch.ui.component.AppPullToRefreshIndicator
@@ -214,6 +215,7 @@ import com.tracktosearch.ui.theme.GlassFillDark
 import com.tracktosearch.ui.theme.GlassFillDarkSubtle
 import com.tracktosearch.ui.theme.LocalVisualEffectMode
 import com.tracktosearch.ui.theme.VisualEffectMode
+import com.tracktosearch.ui.theme.floatingSheetColor
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
@@ -2264,11 +2266,14 @@ private fun WatchlistFilterSheet(
     AppBottomSheet(
         onDismissRequest = onApply
     ) {
+        val scrollState = rememberScrollState()
+        val fadeColor = floatingSheetColor()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
-                .verticalScroll(rememberScrollState())
+                .bottomScrollFade(scrollState, fadeColor)
+                .verticalScroll(scrollState)
         ) {
             // 取在 sheet 内容里：弹层有自己的宿主 View，
             // 在 WatchlistFilterSheet 顶部取会捕获到页面那个 View

@@ -98,6 +98,7 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.AppErrorVariant
 import com.tracktosearch.ui.component.AppFloatingDialog
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.EmptyStateCard
@@ -114,6 +115,7 @@ import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
 import com.tracktosearch.ui.component.rememberPosterPrefetch
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
+import com.tracktosearch.ui.theme.floatingDialogColor
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -881,6 +883,7 @@ private fun MultiSelectDialog(
     useScrollableList: Boolean = false
 ) {
     val scrollState = rememberScrollState()
+    val fadeColor = floatingDialogColor()
     // 「完成」是这个弹窗唯一的确认按钮，关掉的同时由调用方发起搜索；
     // 点外部关闭走 onDismissRequest，按约定静默。触感由 AppDialogActionRow 统一承担。
     AppFloatingDialog(
@@ -897,6 +900,7 @@ private fun MultiSelectDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 400.dp)
+                    .bottomScrollFade(scrollState, fadeColor)
                     .verticalScroll(scrollState),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

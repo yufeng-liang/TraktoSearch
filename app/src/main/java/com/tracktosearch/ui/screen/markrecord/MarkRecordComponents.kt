@@ -60,6 +60,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.AppDialogActionRow
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.SharedOrigin
 import com.tracktosearch.ui.component.rememberShimmer
@@ -69,6 +70,7 @@ import com.tracktosearch.ui.haptic.hapticClickable
 import com.tracktosearch.ui.haptic.rememberAppHaptics
 import com.tracktosearch.ui.theme.WcagBlackWhiteCrossover
 import com.tracktosearch.ui.theme.floatingDialogColor
+import com.tracktosearch.ui.theme.floatingSheetColor
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -481,12 +483,15 @@ fun FilterSheetContent(
     // 本内容整块在 AppBottomSheet 里，sheet 有自己的宿主 View，在这一层取
     val haptics = rememberAppHaptics()
 
+    val scrollState = rememberScrollState()
+    val fadeColor = floatingSheetColor()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight(0.8f)
             // 字体放大 / 小屏时内容会超过 80% 屏高，不能滚的话「确定」按钮点不到
-            .verticalScroll(rememberScrollState())
+            .bottomScrollFade(scrollState, fadeColor)
+            .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
         // 媒体类型

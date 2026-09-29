@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,7 +101,9 @@ import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.component.AppFloatingDialog
+import com.tracktosearch.ui.component.bottomScrollFade
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.theme.floatingDialogColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1723,9 +1726,14 @@ private fun CachedItemsPickerDialog(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
+            val fadeColor = floatingDialogColor()
+            val gridState = rememberLazyGridState()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.heightIn(max = 420.dp),
+                state = gridState,
+                modifier = Modifier
+                    .bottomScrollFade(gridState, fadeColor)
+                    .heightIn(max = 420.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
