@@ -32,7 +32,6 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.androidx.baselineprofile)
-    id("com.huawei.agconnect") apply false
 }
 
 val versionCatalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
