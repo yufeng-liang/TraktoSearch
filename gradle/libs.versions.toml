@@ -51,7 +51,7 @@ hiltTesting = "2.60.1"
 composeMeshGradient = "0.3.0"
 mirage = "0.1.0"
 # Macrobenchmark / Baseline Profile 生成（:benchmark 模块）
-# 1.5.0-rc02 而非 1.4.1 stable：1.4.x 的 baselineprofile 插件对 AGP 版本有上限校验，
+# 用 1.5.x 而非 1.4.1 stable：1.4.x 的 baselineprofile 插件对 AGP 版本有上限校验，
 # 本项目是 AGP 9.4.x，需要 1.5.x 才在支持范围内。
 benchmark = "1.5.0"
 uiautomator = "2.4.0"
@@ -74,6 +74,9 @@ androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graph
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+# material-icons-extended 上游已冻结在 1.7.8：官方 2026-08 起停止发布更新，
+# 推荐改用 Material Symbols 矢量资源。Compose BOM 仍显式 pin 住该系列，
+# 故这里不写版本号，跟随 BOM。替换方案见依赖审计报告。
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 
 # Navigation
