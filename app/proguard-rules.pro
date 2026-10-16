@@ -58,4 +58,9 @@
 # app 代码不引用 openimagecoillib 任何类（全仓 grep 为零命中），那条路径是死代码，
 # 所以按 AGP 生成的建议抑制，而不是去补一个用不上的 Coil3 依赖。
 # 缺这条规则的代价不是"警告变多"：R8 会真的编不过，CI 与本机空缓存构建都会红。
+#
+# 同源的另一个缺类（okhttp3.internal.Util）**不能照这样抑制**：那条路径运行期真的会走到
+# （本项目装 Coil2，InitProvider 探测 coil3 失败后必落 Coil2 轨），dontwarn 只会把构建期
+# 错误换成运行期 NoClassDefFoundError。故改为补真实实现，见
+# app/src/main/java/okhttp3/internal/Util.kt（含完整来龙去脉与删除条件）。
 -dontwarn coil3.**
