@@ -2143,7 +2143,6 @@ Config:
     <string name="opensource_use_navigation">Screen routing and back stack management</string>
     <string name="opensource_use_haze">Frosted glass blur for sticky top bars and background glass layers</string>
     <string name="opensource_use_lottie">Playing JSON vector animations (loading, empty states, etc.)</string>
-    <string name="opensource_use_richtext">Rendering Markdown rich text (changelog)</string>
     <string name="opensource_use_reorderable">Long-press drag-to-reorder for lists</string>
     <string name="opensource_use_openimage">Full-screen image viewer with transition, pinch zoom, swipe-to-close and built-in save</string>
     <string name="opensource_use_backdrop">Screen-level sampling backdrop for the liquid glass effect</string>

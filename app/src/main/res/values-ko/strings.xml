@@ -2147,7 +2147,6 @@
     <string name="opensource_use_navigation">화면 라우팅 및 뒤로 가기 스택 관리</string>
     <string name="opensource_use_haze">상단 바와 배경 유리층에 쓰이는 흐린 유리 블러 효과</string>
     <string name="opensource_use_lottie">JSON 벡터 애니메이션 재생(로딩, 빈 상태 등)</string>
-    <string name="opensource_use_richtext">Markdown 리치 텍스트 렌더링(업데이트 로그)</string>
     <string name="opensource_use_reorderable">목록 길게 눌러 드래그 정렬</string>
     <string name="opensource_use_openimage">전체 화면 이미지 뷰어: 전환 애니메이션, 핀치 줌, 스와이프로 닫기, 내장 저장</string>
     <string name="opensource_use_backdrop">리퀴드 글래스 효과의 화면 단위 샘플링 배경</string>

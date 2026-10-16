@@ -20,7 +20,6 @@ browser = "1.10.0"
 splashscreen = "1.2.0"
 haze = "2.0.1"
 backdrop = "2.0.1"
-richtext = "0.20.0"
 room = "2.8.5"
 workManager = "2.12.0"
 hiltWork = "1.4.0"
@@ -114,10 +113,6 @@ haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
 haze-blur-materials = { group = "dev.chrisbanes.haze", name = "haze-blur-materials", version.ref = "haze" }
 backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
-
-# Markdown
-richtext-commonmark = { group = "com.halilibo.compose-richtext", name = "richtext-commonmark", version.ref = "richtext" }
-richtext-ui-material = { group = "com.halilibo.compose-richtext", name = "richtext-ui-material", version.ref = "richtext" }
 
 # Room
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

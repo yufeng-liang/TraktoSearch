@@ -521,10 +521,6 @@ dependencies {
     implementation(libs.haze.blur.materials)
     implementation(libs.backdrop)
 
-    // Markdown
-    implementation(libs.richtext.commonmark)
-    implementation(libs.richtext.ui.material)
-
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

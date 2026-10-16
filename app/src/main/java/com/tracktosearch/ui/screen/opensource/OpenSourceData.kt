@@ -113,14 +113,6 @@ object OpenSourceData {
                 repoUrl = "https://github.com/airbnb/lottie-android"
             ),
             OssLibrary(
-                name = "Compose RichText",
-                versionAliases = versionAliases("richtext"),
-                license = APACHE,
-                developer = "halilibo",
-                usageRes = R.string.opensource_use_richtext,
-                repoUrl = "https://github.com/halilozercan/compose-richtext"
-            ),
-            OssLibrary(
                 name = "Reorderable",
                 versionAliases = versionAliases("reorderable"),
                 license = APACHE,
