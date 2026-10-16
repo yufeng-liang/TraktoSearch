@@ -589,7 +589,7 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.core.testing)
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation(libs.okhttp.mockwebserver)
 
     // Compose UI 测试（Robolectric 组件测试用）
     testImplementation(libs.androidx.compose.ui.test.junit4)
