@@ -444,7 +444,7 @@ tasks.configureEach {
 
 dependencies {
     // sherpa-onnx：精灵语音激活的本地关键词识别（KWS）引擎，AAR 含全 ABI JNI 库
-    implementation(files("libs/sherpa-onnx-1.13.6.aar"))
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
     /**
      * 把 `androidx.concurrent:concurrent-futures{,-ktx}` 抬到 1.3.0。
      *

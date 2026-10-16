@@ -56,19 +56,21 @@ RichTapAudioPlayer、RichTapVideoPlayer 三个示例工程）在 `RichTapUtils.i
 
 ## sherpa-onnx 语音关键词识别
 
-`app/libs/sherpa-onnx-1.13.6.aar`
+`app/libs/sherpa-onnx-1.13.8.aar`
 
 | 项 | 值 |
 | --- | --- |
 | 组件 | sherpa-onnx Android native AAR |
-| 版本 | 1.13.6 |
+| 版本 | 1.13.8 |
 | 用途 | AI 精灵按住说话时的本地关键词检测（KWS），将 PCM 音频流匹配到 `keywords.txt` 中的角色 ID |
-| 大小 | 49 097 942 字节（约 46.82 MiB） |
-| SHA-256 | `0012d9a28f15bd6fb966b62b70a75da3990512fdccce28b83098248ce4be1698` |
+| 大小 | 50 129 134 字节（约 47.81 MiB） |
+| SHA-256 | `633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96` |
 | 上游项目 | [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) |
-| 对应发布 | [v1.13.6](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.6) |
+| 对应发布 | [v1.13.8](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.8) |
 | 许可证 | Apache-2.0；以上游仓库的 [LICENSE](https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE) 为准 |
-| 项目集成 | `implementation(files("libs/sherpa-onnx-1.13.6.aar"))` |
+| 项目集成 | `implementation(files("libs/sherpa-onnx-1.13.8.aar"))` |
+
+从 1.13.6 升到 1.13.8 的实质变化是内嵌 onnxruntime 由 1.27.1 升到 1.28.2（`libonnxruntime.so` 的 arm64-v8a 由 21 684 880 字节增至 22 249 560 字节）。本项目只用到 `KeywordSpotter` 等 6 个 KWS 类，经 `javap` 逐一比对，这 6 个类的公共签名在 1.13.8 中与 1.13.6 **完全一致**，故升级无需改动任何 Kotlin 代码。
 
 当前项目没有通过 Gradle/Maven 坐标解析该 Android 二进制，而是直接引用 `app/libs/` 下的固定 AAR。这样可以锁定当前验证过的 native 实现、版本与 ABI，保证源码克隆后能够按相同二进制复现构建；如果以后改为构建脚本下载或 Git LFS / Release 分发，应同步更新版本、下载来源和 SHA-256。
 
