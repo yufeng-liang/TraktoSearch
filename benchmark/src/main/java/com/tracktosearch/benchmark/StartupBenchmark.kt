@@ -54,7 +54,7 @@ class StartupBenchmark {
         packageName = TARGET_PACKAGE,
         metrics = listOf(StartupTimingMetric()),
         compilationMode = compilationMode,
-        // 10 次：冷启动的 run-to-run 抖动比帧耗时大（磁盘缓存、DB 解密、SQLCipher loadLibs），
+        // 10 次：冷启动的 run-to-run 抖动比帧耗时大（磁盘缓存、DB 解密、SQLCipher 原生库加载），
         // 少于 10 次的中位数不足以跟现有 ±7pp 噪声地板区分开。
         iterations = 10,
         startupMode = StartupMode.COLD,
