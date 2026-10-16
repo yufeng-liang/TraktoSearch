@@ -52,9 +52,14 @@ val openSourceVersionCatalogBase64 = Base64.getEncoder()
 
 android {
     namespace = "com.tracktosearch"
-    // 37.2 是扩展级版本，compileSdk 属性只收 Int，扩展版本必须用字符串形式指定 platform android-37.2。
+    // 37.2 是扩展级版本（minor 2），旧写法 compileSdkVersion("android-37.2") 在 AGP 10 会被移除，
+    // 这里改用 compileSdk 块 + minorApiLevel 表达同一语义。
     // 选 37.2 是因为 haze 2.0.0-rc01 的 AAR metadata 要求 minor 2；2.0.0 已放宽到 minor 0，这里沿用不改。
-    compileSdkVersion("android-37.2")
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
         applicationId = "com.tracktosearch"
