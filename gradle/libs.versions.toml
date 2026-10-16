@@ -31,6 +31,8 @@ reorderable = "3.1.0"
 # OpenImage：成熟图片查看器（微信式转场/拖拽关闭/内置下载，Coil2 版）
 openImage = "2.5.2"
 lottie = "6.7.1"
+# Hilt 生成的组件源码 import com.google.errorprone.annotations.CanIgnoreReturnValue，
+# 且 hilt-android 的 POM 不传递该依赖，故必须由 app 显式声明，删掉会编不过。
 errorproneAnnotations = "2.50.0"
 profileinstaller = "1.4.1"
 securityCrypto = "1.1.0"
@@ -39,11 +41,9 @@ jieba-analysis = "1.0.2"
 pinyin4j = "2.5.1"
 junit = "4.13.2"
 mockk = "1.14.11"
-turbine = "1.2.1"
 coroutinesTest = "1.11.0"
 truth = "1.4.5"
 robolectric = "4.17"
-coreTesting = "2.2.0"
 testExtJunit = "1.3.0"
 testCore = "1.7.0"
 testRunner = "1.7.0"
@@ -144,7 +144,7 @@ compose-mesh-gradient = { group = "io.github.om252345", name = "composemeshgradi
 # Mirage (AGSL 着色器背景光晕，API 33+ 主实现；Paper Shaders 的 AGSL 移植)
 mirage = { group = "io.github.androidpoet", name = "mirage", version.ref = "mirage" }
 
-# Error Prone (required by Hilt 2.60)
+# Error Prone (required by Hilt 2.60：生成的组件源码用到 @CanIgnoreReturnValue)
 errorprone-annotations = { group = "com.google.errorprone", name = "error_prone_annotations", version.ref = "errorproneAnnotations" }
 
 # Baseline Profile
@@ -167,11 +167,9 @@ pinyin4j = { group = "com.belerweb", name = "pinyin4j", version.ref = "pinyin4j"
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
-turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "coreTesting" }
 # Compose UI Test
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }

@@ -585,11 +585,9 @@ dependencies {
     // 单元测试
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
-    testImplementation(libs.turbine)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
-    testImplementation(libs.core.testing)
     testImplementation(libs.okhttp.mockwebserver)
 
     // Compose UI 测试（Robolectric 组件测试用）
