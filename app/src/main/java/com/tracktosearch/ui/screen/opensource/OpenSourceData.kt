@@ -186,7 +186,7 @@ object OpenSourceData {
                 license = "BSD-style License",
                 developer = "Zetetic LLC",
                 usageRes = R.string.opensource_use_sqlcipher,
-                repoUrl = "https://github.com/sqlcipher/android-database-sqlcipher"
+                repoUrl = "https://github.com/sqlcipher/sqlcipher-android"
             ),
             OssLibrary(
                 name = "DataStore",

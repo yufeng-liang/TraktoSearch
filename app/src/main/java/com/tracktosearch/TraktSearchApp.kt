@@ -110,7 +110,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                 "application.splash_quote_flag",
                 "enabled=${SplashStartup.quoteEnabled}"
             )
-            // 数据库与豆瓣凭据存储预热：SQLCipher 的 loadLibs 与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
+            // 数据库与豆瓣凭据存储预热：SQLCipher 的原生库加载与 Keystore 密钥解密在 MainActivity 主线程 Hilt 注入
             // （TraktRepository → MarkActionRecordDao → AppDatabase）时固定消耗 200ms-1s；
             // DoubanAuthStorage 首次初始化同样同步读 EncryptedSharedPreferences（MasterKey 走 Keystore），
             // 首次注入点在 AppNavigation 组合期主线程。

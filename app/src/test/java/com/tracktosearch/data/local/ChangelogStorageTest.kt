@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
  * 这条测试的价值在于「有人改回 v2 时立刻变红」。
  *
  * application 必须指定成裸 Application：默认会用 AndroidManifest 里的 TrakSearchApp，
- * 它注入 Hilt 单例图时会走到 DatabaseModule 的 SQLiteDatabase.loadLibs()，
+ * 它注入 Hilt 单例图时会走到 DatabaseModule 的 SQLCipher 原生库加载（System.loadLibrary("sqlcipher")），
  * 本机没有桌面版 sqlcipher 原生库，四个用例会全部以 UnsatisfiedLinkError 收场。
  * 本测试只需要一个真实的 DataStore 目录，不需要 Hilt 图。
  */

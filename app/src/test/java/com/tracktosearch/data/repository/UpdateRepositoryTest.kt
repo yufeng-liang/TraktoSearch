@@ -40,7 +40,7 @@ import org.robolectric.annotation.Config
  * 使用 Robolectric：BuildConfig.VERSION_NAME + android.util.Log。
  *
  * application 必须指定成裸 Application：默认会用 AndroidManifest 里的 TraktSearchApp，
- * 而它注入 Hilt 单例图时会走到 DatabaseModule 的 SQLiteDatabase.loadLibs()，
+ * 而它注入 Hilt 单例图时会走到 DatabaseModule 的 SQLCipher 原生库加载（System.loadLibrary("sqlcipher")），
  * 本机没有桌面版 sqlcipher 原生库（app/src/test/jniLibs 不存在），于是 25 个用例
  * 全部以 UnsatisfiedLinkError 收场。本测试的三个依赖都是 mock，不需要真实 Application 图。
  */

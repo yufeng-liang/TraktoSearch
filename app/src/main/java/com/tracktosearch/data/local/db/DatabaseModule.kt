@@ -5,8 +5,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
-import net.sqlcipher.database.SQLiteDatabase
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -637,12 +636,13 @@ object DatabaseModule {
             DatabaseKeyProvider.deleteLegacyPlaintextDb(context)
         }
 
-        // 加载 SQLCipher native 库（需在创建 SupportFactory 前调用）
-        SQLiteDatabase.loadLibs(context)
+        // 加载 SQLCipher native 库（sqlcipher-android 4.6.1+ 不再提供 SQLiteDatabase.loadLibs，
+        // 改为直接加载 libsqlcipher.so；需在创建 SupportOpenHelperFactory 前调用）
+        System.loadLibrary("sqlcipher")
 
         val passphrase = DatabaseKeyProvider.getPassphrase(context)
-        // SupportFactory 用 SQLCipher 密钥打开加密数据库
-        val factory: SupportSQLiteOpenHelper.Factory = SupportFactory(passphrase)
+        // SupportOpenHelperFactory 用 SQLCipher 密钥打开加密数据库
+        val factory: SupportSQLiteOpenHelper.Factory = SupportOpenHelperFactory(passphrase)
 
         return Room.databaseBuilder(
             context,

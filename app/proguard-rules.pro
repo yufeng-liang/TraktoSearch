@@ -28,9 +28,11 @@
 }
 
 # SQLCipher：保留 native 方法和 JNI 桥接类
--keep class net.sqlcipher.** { *; }
--keep class net.sqlcipher.database.** { *; }
--dontwarn net.sqlcipher.**
+# sqlcipher-android 4.19.1 的 AAR 自带 consumer 规则（-keep net.zetetic.database.**），
+# 这里显式重复一份做冗余保护：release 走 R8 fullMode，JNI 桥接类被裁会在运行期才崩，
+# 且只在 release 复现（debug 不复现），属难查 bug。
+-keep class net.zetetic.database.** { *; }
+-dontwarn net.zetetic.database.**
 
 # sherpa-onnx：保留 JNI 桥接类（native 方法按类名反射绑定）
 -keep class com.k2fsa.sherpa.onnx.** { *; }
