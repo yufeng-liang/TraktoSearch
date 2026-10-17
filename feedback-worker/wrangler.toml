@@ -3,6 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 workers_dev = false  # 仅经 gateway service binding 调用，不开放 workers.dev 公网直连
 
+# wrangler 4.150.0 起 deploy 默认上传 source maps（config-schema 明示 defaults to
+# true）。这里显式关掉：恢复升级前行为，避免把源码片段推到 Cloudflare 侧、
+# 也避免上传体积与耗时无谓增加。
+upload_source_maps = false
+
 # D1：反馈数据
 [[d1_databases]]
 binding = "DB"

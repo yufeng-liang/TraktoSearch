@@ -5,6 +5,11 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+# wrangler 4.150.0 起 deploy / versions upload / preview 默认上传 source maps
+# （config-schema 明示 defaults to true）。这里显式关掉：恢复升级前行为，
+# 避免把源码片段推到 Cloudflare 侧、也避免上传体积与耗时无谓增加。
+upload_source_maps = false
+
 # Workers Logs：wrangler tail 看不到经 service binding 进来的请求，开启后服务端
 # 采集全部调用（含绑定流量）的 console 输出，供出题/每日知识 [QUIZ_DIAG] 诊断用
 [observability]
