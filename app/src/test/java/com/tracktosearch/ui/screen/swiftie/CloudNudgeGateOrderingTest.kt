@@ -97,4 +97,27 @@ class CloudNudgeGateOrderingTest {
         // 日签自己散场时放行
         assertThat(src).contains("SplashStartup.quoteOverlayGone.value = true")
     }
+
+    /**
+     * 日签「本进程只演一次」的闸门必须挂在进程级，且必须挡住 load。
+     *
+     * Trakt OAuth 走 Custom Tabs，浏览器压在本 task 顶上，回跳 intent 到达时栈顶不是
+     * MainActivity，`singleTop` 失效 —— 同进程里会再起一个 MainActivity 实例。新实例的
+     * splashQuoteDone 是全新的 false，只有进程级标记拦得住它。实测 logcat 里同一个 task
+     * 同时挂着三个 MainActivity。删掉这道门，用户登录成功后日签会再闪一遍。
+     */
+    @Test
+    fun splashQuote_playsAtMostOncePerProcess() {
+        val src = source("app/src/main/java/com/tracktosearch/MainActivity.kt")
+        // 标记存在，且起底 false（进程刚起来时当然还没演过）
+        assertThat(src).contains("var quotePlayedInProcess: Boolean = false")
+        // 闸门必须挡在 load 之前，不能只挡上屏：新实例连台词与海报都不该再解一遍
+        assertThat(src).contains("if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess)")
+        // 选中台词即置位，不能等到 onFinished —— 日签正演时被新实例顶掉也不该重演
+        assertThat(src.indexOf("SplashStartup.quotePlayedInProcess = true"))
+            .isGreaterThan(src.indexOf("if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess)"))
+        // 置位排在放行之前：这一帧定下「日签不上了」，quoteOverlayGone 才能跟着放行
+        assertThat(src.indexOf("SplashStartup.quotePlayedInProcess = true"))
+            .isLessThan(src.indexOf("SplashStartup.quoteOverlayGone.value = !stampReady"))
+    }
 }
