@@ -251,6 +251,16 @@ class MainActivity : AppCompatActivity() {
         // 那半截动画只会像卡住），关着时保留合板动画（那种情况下系统 splash 要停到 App 就绪，
         // 动画正好把那段时间用掉）。主题必须在 super.onCreate 之前换掉，见 chooseSplashTheme。
         setTheme(chooseSplashTheme())
+        // 「回到原来那一屏，还是重新开一次 App」的分水岭。
+        //
+        // savedInstanceState 非空只有一种来历：系统在恢复一个已经存在的任务——进程被回收后
+        // 用户从最近任务/桌面点回来、配置变更（切语言、日夜模式）重建 Activity。这两种场合
+        // 用户都在等「刚才那一屏」回来，不是来看开屏的：
+        //   · 日签不演：它是一次「开幕」，重开一次会让用户以为 App 自己重启了；
+        //   · 系统 splash 也不占屏：heldMs 起底为 0，会白压 720ms 的最短时长。
+        // 真正的冷启动 savedInstanceState 为 null，一切照旧。
+        val restoringExistingTask = savedInstanceState != null
+        StartupTrace.mark("activity.onCreate.restore", "restoring=$restoringExistingTask")
         var isReady by mutableStateOf(false)
         // 日签层的门：当天那条台词（连同它的海报）到手了才开。
         // 它要的就这么多：台词与海报一到手，这一页就是完整的，主界面在它背后继续加载。
@@ -285,6 +295,9 @@ class MainActivity : AppCompatActivity() {
             val heldMs = System.currentTimeMillis() - splashHeldFrom
             when {
                 heldMs >= SPLASH_MAX_HOLD_MS -> false
+                // 恢复已有任务：日签不演，也就没有「让位给日签」这一拍。这里只等主界面摆好，
+                // 不能落到下面那条最短时长上——那样用户点回 App 会白看 720ms 场记板。
+                restoringExistingTask -> !navPlaced
                 stampReady -> false
                 heldMs < MIN_SYSTEM_SPLASH_DURATION_MS -> true
                 else -> !navPlaced
@@ -342,7 +355,9 @@ class MainActivity : AppCompatActivity() {
             // 是全新的 false，没有这道闸门就会以短促档再演一遍。最初的触发源是 OAuth 回跳
             // 新建实例（已由清单 singleTask 修掉），但配置变更（切语言、日夜模式）一样会重建
             // Activity，这道闸门作为第二层留着。
-            if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess) {
+            //
+            // 恢复已有任务（system 回收进程后点回来）也不演：那是「回到刚才那一屏」，不是开幕。
+            if (splashQuoteEnabled && !restoringExistingTask && !SplashStartup.quotePlayedInProcess) {
                 splashQuote = StartupTrace.measure("splash_quote.load") {
                     splashQuoteLoader.load(language)
                 }

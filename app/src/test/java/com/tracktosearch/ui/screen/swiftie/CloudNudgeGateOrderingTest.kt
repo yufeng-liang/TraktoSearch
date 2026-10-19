@@ -116,12 +116,38 @@ class CloudNudgeGateOrderingTest {
         // 标记存在，且起底 false（进程刚起来时当然还没演过）
         assertThat(src).contains("var quotePlayedInProcess: Boolean = false")
         // 闸门必须挡在 load 之前，不能只挡上屏：新实例连台词与海报都不该再解一遍
-        assertThat(src).contains("if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess)")
+        assertThat(src)
+            .contains("if (splashQuoteEnabled && !restoringExistingTask && !SplashStartup.quotePlayedInProcess)")
         // 选中台词即置位，不能等到 onFinished —— 日签正演时被新实例顶掉也不该重演
         assertThat(src.indexOf("SplashStartup.quotePlayedInProcess = true"))
-            .isGreaterThan(src.indexOf("if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess)"))
+            .isGreaterThan(
+                src.indexOf(
+                    "if (splashQuoteEnabled && !restoringExistingTask && !SplashStartup.quotePlayedInProcess)"
+                )
+            )
         // 置位排在放行之前：这一帧定下「日签不上了」，quoteOverlayGone 才能跟着放行
         assertThat(src.indexOf("SplashStartup.quotePlayedInProcess = true"))
             .isLessThan(src.indexOf("SplashStartup.quoteOverlayGone.value = !stampReady"))
+    }
+
+    /**
+     * 从别处切回来（进程被回收后 restore）不能重放开幕。
+     *
+     * 「回到刚才那一屏」和「重新开一次 App」是两件事：前者用户在看自己的进度，突然来一页
+     * 日签会以为 App 自己重启了。分水岭是 savedInstanceState —— 非空只可能是系统在恢复一个
+     * 已存在的任务。这条必须同时管住两处：日签不演、系统 splash 也不占屏。
+     */
+    @Test
+    fun restoringExistingTask_skipsTheOpeningNight() {
+        val src = source("app/src/main/java/com/tracktosearch/MainActivity.kt")
+        // 判据本身：冷启动为 null，恢复才有值
+        assertThat(src).contains("val restoringExistingTask = savedInstanceState != null")
+        // 日签不演：这条门要出现在 load 之前
+        assertThat(src).contains("!restoringExistingTask")
+        // 系统 splash 也不占屏：恢复时必须优先于「最短在场时长」那条，否则白压 720ms 场记板
+        val restoreBranch = src.indexOf("restoringExistingTask -> !navPlaced")
+        assertThat(restoreBranch).isGreaterThan(0)
+        assertThat(restoreBranch)
+            .isLessThan(src.indexOf("heldMs < MIN_SYSTEM_SPLASH_DURATION_MS -> true"))
     }
 }
