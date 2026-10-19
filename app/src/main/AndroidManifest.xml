@@ -71,10 +71,22 @@
                 tools:node="remove" />
         </provider>
 
+        <!--
+            launchMode 必须 singleTask，不能退回 singleTop。
+            Trakt OAuth 走 Custom Tabs，浏览器页开在本 task 里压在 MainActivity 之上；
+            `tracktosearch://oauth/callback` 回跳时栈顶是浏览器页，singleTop 失效，
+            系统会再起一个 MainActivity 实例（实测 logcat 同一 task 同时挂 3 个）。
+            新实例从零走 onCreate：系统 splash 再来一次、开屏日签再演一遍，用户看到
+            的就是「登录成功后日签又闪一下」。singleTask 把回跳 intent 路由给已有实例
+            （onNewIntent），并清掉上面压着的浏览器页，全应用恒只有这一个实例。
+            本应用只有这一个 Activity，进主页的四条路（Trakt 授权成功、访客模式、
+            豆瓣独立模式、授权静默恢复）都在它内部用 Compose 路由，没有别的 Activity
+            需要留在 task 里，所以这个模式不会牺牲任何栈行为。
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:alwaysRetainTaskState="true"
             android:theme="@style/Theme.App.Starting">
 

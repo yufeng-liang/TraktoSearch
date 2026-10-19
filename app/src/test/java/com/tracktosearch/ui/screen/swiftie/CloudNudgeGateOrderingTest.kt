@@ -101,10 +101,14 @@ class CloudNudgeGateOrderingTest {
     /**
      * 日签「本进程只演一次」的闸门必须挂在进程级，且必须挡住 load。
      *
-     * Trakt OAuth 走 Custom Tabs，浏览器压在本 task 顶上，回跳 intent 到达时栈顶不是
-     * MainActivity，`singleTop` 失效 —— 同进程里会再起一个 MainActivity 实例。新实例的
-     * splashQuoteDone 是全新的 false，只有进程级标记拦得住它。实测 logcat 里同一个 task
-     * 同时挂着三个 MainActivity。删掉这道门，用户登录成功后日签会再闪一遍。
+     * 触发源是「同进程里出现第二个 MainActivity 实例」：新实例的 splashQuoteDone 是全新的
+     * false，只有进程级标记拦得住它。当初这条路径由 Trakt OAuth 打通（Custom Tabs 的浏览器
+     * 页压在本 task 顶上，回跳时 `singleTop` 失效 —— 实测 logcat 同一个 task 同时挂着三个
+     * MainActivity）。那个实例堆叠已由清单 `launchMode="singleTask"` 从根上修掉，回跳改走
+     * `onNewIntent`。
+     *
+     * 但闸门不能跟着删：Activity 仍会因配置变更（切语言、日夜模式）被重建，重建后局部状态
+     * 一样归零。它是第二层，不是第一层的补丁。删掉这道门，这些路径上日签都会再闪一遍。
      */
     @Test
     fun splashQuote_playsAtMostOncePerProcess() {

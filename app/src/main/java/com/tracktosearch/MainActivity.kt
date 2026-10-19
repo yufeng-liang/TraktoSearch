@@ -104,11 +104,15 @@ object SplashStartup {
      * 本进程里开屏日签是否已经演过。**跨 Activity 实例有效，进程一换就归零。**
      *
      * stampJob 每次 onCreate 都会重跑，而「今天演没演过」相关的门（splashQuote、splashQuoteDone）
-     * 全是 onCreate 局部变量，新实例一建就归零。Trakt OAuth 走 Custom Tabs：浏览器被压在本
-     * task 顶上，回跳 intent 到达时栈顶不是 MainActivity，`singleTop` 失效，系统会再起一个
-     * MainActivity 实例（logcat 里同一个 task 能同时挂着两三个）。新实例照旧 load 台词、
-     * 而此刻 isFirstShowToday() 已是 false，于是日签以短促档再演一遍 —— 用户看到的「激活/登录
+     * 全是 onCreate 局部变量，新实例一建就归零。当初的触发源是 Trakt OAuth：Custom Tabs 的
+     * 浏览器页被压在本 task 顶上，回跳 intent 到达时栈顶不是 MainActivity，`singleTop` 失效，
+     * 系统再起一个 MainActivity 实例（logcat 里同一个 task 同时挂着三个）。新实例照旧 load 台词、
+     * 此刻 isFirstShowToday() 已是 false，于是日签以短促档再演一遍 —— 用户看到的「激活/登录
      * 成功后日签又闪一遍」就是这个，不是路由问题。
+     *
+     * 那个实例堆积已经由清单里的 `launchMode="singleTask"` 从根上修掉（回跳改走 onNewIntent）。
+     * 这道闸门留着当第二层：Activity 仍可能因配置变更（切语言、日夜模式）被重建，重建后
+     * 局部状态一样归零，闸门照样拦得住。
      *
      * 所以这条闸门必须挂在进程级：stampJob 选中台词那一刻置 true，之后的实例连 load 都不做，
      * splashQuote 保持 null，[quoteOverlayGone] 当场放行。
@@ -334,9 +338,10 @@ class MainActivity : AppCompatActivity() {
             val splashQuoteEnabled = StartupTrace.measure("local.splash_quote") {
                 splashQuoteStorage.preloadAndGetValue()
             }
-            // 进程级闸门：本进程已经演过一次就不再 load。Trakt OAuth 回跳会新起一个
-            // MainActivity 实例（浏览器压在本 task 顶上，singleTop 失效），新实例的
-            // splashQuoteDone 是全新的 false；没有这道闸门就会以短促档再演一遍。
+            // 进程级闸门：本进程已经演过一次就不再 load。新 Activity 实例的 splashQuoteDone
+            // 是全新的 false，没有这道闸门就会以短促档再演一遍。最初的触发源是 OAuth 回跳
+            // 新建实例（已由清单 singleTask 修掉），但配置变更（切语言、日夜模式）一样会重建
+            // Activity，这道闸门作为第二层留着。
             if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess) {
                 splashQuote = StartupTrace.measure("splash_quote.load") {
                     splashQuoteLoader.load(language)
