@@ -99,6 +99,25 @@ object SplashStartup {
      * 每次 onCreate 都会重跑 stampJob，所以 Activity 被重建也不会把它永久锁死。
      */
     val quoteOverlayGone = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /**
+     * 本进程里开屏日签是否已经演过。**跨 Activity 实例有效，进程一换就归零。**
+     *
+     * stampJob 每次 onCreate 都会重跑，而「今天演没演过」相关的门（splashQuote、splashQuoteDone）
+     * 全是 onCreate 局部变量，新实例一建就归零。Trakt OAuth 走 Custom Tabs：浏览器被压在本
+     * task 顶上，回跳 intent 到达时栈顶不是 MainActivity，`singleTop` 失效，系统会再起一个
+     * MainActivity 实例（logcat 里同一个 task 能同时挂着两三个）。新实例照旧 load 台词、
+     * 而此刻 isFirstShowToday() 已是 false，于是日签以短促档再演一遍 —— 用户看到的「激活/登录
+     * 成功后日签又闪一遍」就是这个，不是路由问题。
+     *
+     * 所以这条闸门必须挂在进程级：stampJob 选中台词那一刻置 true，之后的实例连 load 都不做，
+     * splashQuote 保持 null，[quoteOverlayGone] 当场放行。
+     *
+     * 故意不做持久化：同日冷启动仍要放短促档，那是 SplashQuoteOverlay 里
+     * `instant = !isFirstToday` 的既定行为，不能被这条闸门顺手删掉。
+     */
+    @Volatile
+    var quotePlayedInProcess: Boolean = false
 }
 
 /** 负责在 MainActivity 与 AppNavigation 之间传递深链路 */
@@ -315,9 +334,17 @@ class MainActivity : AppCompatActivity() {
             val splashQuoteEnabled = StartupTrace.measure("local.splash_quote") {
                 splashQuoteStorage.preloadAndGetValue()
             }
-            if (splashQuoteEnabled) {
+            // 进程级闸门：本进程已经演过一次就不再 load。Trakt OAuth 回跳会新起一个
+            // MainActivity 实例（浏览器压在本 task 顶上，singleTop 失效），新实例的
+            // splashQuoteDone 是全新的 false；没有这道闸门就会以短促档再演一遍。
+            if (splashQuoteEnabled && !SplashStartup.quotePlayedInProcess) {
                 splashQuote = StartupTrace.measure("splash_quote.load") {
                     splashQuoteLoader.load(language)
+                }
+                // 选中台词那一刻就记下「本进程演过了」：置位与赋值同一帧，中间不让出主线程。
+                // 放在 load 之后而不是 onFinished，是为了日签正在演时被新实例顶掉也不再重演。
+                if (splashQuote != null) {
+                    SplashStartup.quotePlayedInProcess = true
                 }
             }
             // 只有真的拿到台词（连同海报）才算日签能上屏。开关关着、或者海报没就绪，
