@@ -5,6 +5,13 @@
 // 本文件只搬 prompt 文本与规则数据，模板占位符结构与 TS 保持一致。
 package com.tracktosearch.data.ai.prompt
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.Json
 
 /** 学习单元契约版本（对应 TS 的 KNOWLEDGE_UNIT_VERSION）。 */
@@ -103,6 +110,7 @@ val LOCALE_LANGUAGE_NAMES: Map<String, String> = mapOf(
  * 每日知识单元（对应 TS 的 KnowledgeUnit）。
  * Kotlin 侧只承载 prompt 序列化所需字段，校验逻辑由编排层实现。
  */
+@Serializable
 data class DailyKnowledgeUnit(
     val unitId: String,
     val version: Int,
@@ -129,6 +137,7 @@ data class DailyKnowledgeUnit(
 )
 
 /** 关联媒体（mediaType 只能 movie 或 show）。 */
+@Serializable
 data class DailyRelatedMedia(
     val title: String,
     val mediaType: String,
@@ -139,6 +148,7 @@ data class DailyRelatedMedia(
 )
 
 /** 来源三件套。 */
+@Serializable
 data class DailyKnowledgeSource(
     val name: String,
     val url: String,
@@ -146,6 +156,7 @@ data class DailyKnowledgeSource(
 )
 
 /** 随堂小题。 */
+@Serializable
 data class DailyCheckQuestion(
     val prompt: String,
     val options: List<DailyCheckOption>,
@@ -154,12 +165,14 @@ data class DailyCheckQuestion(
 )
 
 /** 小题选项。 */
+@Serializable
 data class DailyCheckOption(
     val id: String,
     val text: String,
 )
 
 /** 已看影视输入（对应 TS 的 DailyKnowledgeMovieInput）。 */
+@Serializable
 data class DailyKnowledgeMovieInput(
     val title: String,
     val mediaType: String,
@@ -173,6 +186,7 @@ data class DailyKnowledgeMovieInput(
 )
 
 /** 最近几天已出过的今日知识（避免连续多天锁定同一部片/同一概念）。 */
+@Serializable
 data class DailyRecentUsage(
     val day: String,
     val concept: String,
@@ -181,6 +195,7 @@ data class DailyRecentUsage(
 )
 
 /** LLM 消息（role + content），与服务端 MimoMessage 结构一致。 */
+@Serializable
 data class AiMessage(
     val role: String,
     val content: String,
@@ -190,24 +205,29 @@ private val dailyPromptJson = Json { encodeDefaults = false; ignoreUnknownKeys =
 
 /** 影片输入序列化摘要（对应 TS 的 knowledgeMovieDigest）：只带展示字段与证据。 */
 private fun knowledgeMovieDigest(movies: List<DailyKnowledgeMovieInput>): String {
-    val list = movies.map { movie ->
-        buildMap<String, Any?> {
-            put("title", movie.title)
-            put("mediaType", movie.mediaType)
-            put("year", movie.year)
-            put("genres", movie.genres ?: emptyList())
-            put("mediaIds", buildMap<String, Any?> {
-                movie.traktId?.let { put("traktId", it) }
-                movie.tmdbId?.let { put("tmdbId", it) }
-                movie.imdbId?.let { put("imdbId", it) }
-                movie.doubanId?.let { put("doubanId", it) }
+    // 对拍 TS JSON.stringify(movies.map({title, mediaType, year ?? null, genres ?? [], mediaIds, evidence ?? []}))：
+    // year 为 null 时字段必须显式输出 null；mediaIds 只带实际存在的 id 键。
+    return buildJsonArray {
+        movies.forEach { movie ->
+            add(buildJsonObject {
+                put("title", movie.title)
+                put("mediaType", movie.mediaType)
+                put("year", movie.year?.let { JsonPrimitive(it) } ?: JsonNull)
+                put("genres", buildJsonArray {
+                    (movie.genres ?: emptyList()).forEach { add(JsonPrimitive(it)) }
+                })
+                put("mediaIds", buildJsonObject {
+                    movie.traktId?.let { put("traktId", it) }
+                    movie.tmdbId?.let { put("tmdbId", it) }
+                    movie.imdbId?.let { put("imdbId", it) }
+                    movie.doubanId?.let { put("doubanId", it) }
+                })
+                put("evidence", buildJsonArray {
+                    (movie.evidence ?: emptyList()).forEach { add(JsonPrimitive(it)) }
+                })
             })
-            put("evidence", movie.evidence ?: emptyList())
         }
-    }
-    return dailyPromptJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(
-        kotlinx.serialization.builtins.serializer<Map<String, Any?>>()
-    ), list)
+    }.toString()
 }
 
 /**

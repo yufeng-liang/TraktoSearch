@@ -245,8 +245,8 @@ class OpenAiCompatibleClient(
                     AiProviderErrorCode.INVALID_RESPONSE,
                     "Missing data array in image response"
                 )
-            val b64 = (data.firstOrNull() as? JsonObject)
-                ?.get("b64_json") as? JsonPrimitive
+            val b64 = ((data.firstOrNull() as? JsonObject)
+                ?.get("b64_json") as? JsonPrimitive)
                 ?.takeIf { it.isString }
                 ?.content
                 ?: throw AiProviderException(

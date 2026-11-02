@@ -140,7 +140,7 @@ fun quizFromUnitsMessages(
         buildJsonObject {
             putJsonArray("units") {
                 units.forEach { unit ->
-                    add(JsonPrimitive(promptJson.encodeToString(DailyKnowledgeUnit.serializer(), unit).let { promptJson.parseToJsonElement(it).jsonObject }))
+                    add(promptJson.encodeToString(DailyKnowledgeUnit.serializer(), unit).let { promptJson.parseToJsonElement(it).jsonObject })
                 }
             }
         }.toString()

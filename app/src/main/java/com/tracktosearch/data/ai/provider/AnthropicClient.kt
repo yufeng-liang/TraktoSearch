@@ -89,11 +89,11 @@ class AnthropicClient(
                 if (data.isBlank()) continue
                 val root = runCatching { lenientJson.parseToJsonElement(data).jsonObject }.getOrNull()
                     ?: continue
-                when (root["type"] as? JsonPrimitive)?.content {
+                when ((root["type"] as? JsonPrimitive)?.content) {
                     // 增量文本块：delta.text 是本次新增的内容
                     EVENT_CONTENT_BLOCK_DELTA -> {
-                        val delta = (root["delta"] as? JsonObject)
-                            ?.get("text") as? JsonPrimitive
+                        val delta = ((root["delta"] as? JsonObject)
+                            ?.get("text") as? JsonPrimitive)
                             ?.takeIf { it.isString }
                             ?.content
                             ?: continue

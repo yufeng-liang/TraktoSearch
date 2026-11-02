@@ -198,9 +198,9 @@ private fun fnv1a32(input: String): Int {
 private fun mix32(value: Int): Int {
     var hash = value
     hash = hash xor hash.ushr(16)
-    hash *= 0x7feb352d
+    hash *= 0x7feb352d.toInt()
     hash = hash xor hash.ushr(15)
-    hash *= 0x846ca68b
+    hash *= 0x846ca68b.toInt()
     hash = hash xor hash.ushr(16)
     return hash
 }

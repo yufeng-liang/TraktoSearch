@@ -359,7 +359,9 @@ data class AiQuizQuestion(
     // Worker 返回一段可读的证据说明，而不是数组；保持 Android/Worker JSON 契约一致。
     val evidenceUsed: String = "",
     // BYOK 本地判分用：short 题关键词，与 DTO 同名透传。
-    val answerKeywords: List<String> = emptyList()
+    val answerKeywords: List<String> = emptyList(),
+    // BYOK 编排链用：题目归属的学习单元 id，与 DTO 同名透传。
+    val unitId: String? = null
 )
 
 @Serializable
@@ -404,7 +406,9 @@ data class AiQuizQuestionDto(
     val evidenceUsed: String = "",
     // BYOK 本地判分需要：short 题判分关键词（服务端 wire 字段；旧缓存缺省为空）。
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val answerKeywords: List<String> = emptyList()
+    val answerKeywords: List<String> = emptyList(),
+    // BYOK 编排链需要：题目归属的学习单元 id（服务端 publicQuiz 本就下发；旧缓存缺省 null）。
+    val unitId: String? = null
 )
 
 @Serializable
@@ -898,7 +902,8 @@ fun AiQuizDto.toDomainOrNull(outerQuota: AiQuotaDto? = null): AiQuiz? {
             concept = question.concept,
             learningTakeaway = question.learningTakeaway,
             evidenceUsed = question.evidenceUsed,
-            answerKeywords = question.answerKeywords
+            answerKeywords = question.answerKeywords,
+            unitId = question.unitId
         )
     }
     return AiQuiz(
