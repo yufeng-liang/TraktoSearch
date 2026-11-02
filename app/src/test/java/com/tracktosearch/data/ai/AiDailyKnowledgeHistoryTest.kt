@@ -3,6 +3,7 @@ package com.tracktosearch.data.ai
 import android.app.Application
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.ai.orchestrate.AiOrchestrator
 import com.tracktosearch.data.repository.TmdbRepository
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -23,7 +24,8 @@ import java.util.UUID
 class AiDailyKnowledgeHistoryTest {
 
     private val context: Context = RuntimeEnvironment.getApplication()
-    private val api = mockk<AiApiService>(relaxed = true)
+    // BYOK：daily 正文走本地编排，历史测试只断言「不走编排」，编排器 mock 即可
+    private val orchestrator = mockk<AiOrchestrator>(relaxed = true)
     private val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
@@ -42,10 +44,11 @@ class AiDailyKnowledgeHistoryTest {
         )
         storage = AiStorage(context, preferences)
         repository = AiRepository(
-            api = api,
+            orchestrator = orchestrator,
             storage = storage,
             json = json,
             tmdbRepository = mockk<TmdbRepository>(relaxed = true),
+            aiProfileRepository = mockk(relaxed = true),
             context = context
         )
     }
@@ -105,7 +108,7 @@ class AiDailyKnowledgeHistoryTest {
         assertThat(history.single().knowledge.title).isEqualTo("首条")
         assertThat(history.single().relatedMedia?.title).isEqualTo("十二怒汉")
         assertThat(repository.readDailyKnowledgeForDate(friendId, date)?.title).isEqualTo("首条")
-        coVerify(exactly = 0) { api.getDailyKnowledge(any()) }
+        coVerify(exactly = 0) { orchestrator.generateDailyStream(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -169,7 +172,7 @@ class AiDailyKnowledgeHistoryTest {
         assertThat(record.knowledge.checkQuestion?.correctOptionIds).containsExactly("a", "b").inOrder()
         assertThat(record.contentFeedback).isEqualTo(AiDailyKnowledgeContentFeedback.TOO_BROAD)
         assertThat(record.difficultyFeedback).isEqualTo(AiQuizDifficulty.HARD)
-        coVerify(exactly = 0) { api.getDailyKnowledge(any()) }
+        coVerify(exactly = 0) { orchestrator.generateDailyStream(any(), any(), any(), any(), any()) }
     }
 
     @Test

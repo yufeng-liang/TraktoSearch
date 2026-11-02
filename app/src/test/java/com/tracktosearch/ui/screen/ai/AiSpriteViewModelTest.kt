@@ -81,15 +81,13 @@ class AiSpriteViewModelTest {
     }
 
     @Test
-    fun submitQuiz_mergesResultQuotaIntoUiState() = runTest {
-        val expectedQuota = quota(sessionUsed = 4, dailyUsed = 21)
-        val result = quizResult(expectedQuota)
+    fun submitQuiz_mergesResultIntoUiState() = runTest {
+        val result = quizResult()
         val viewModel = viewModel()
         viewModel.seedState {
             it.copy(
                 quiz = quiz(),
-                quizStarted = true,
-                quota = quota(sessionUsed = 1, dailyUsed = 2)
+                quizStarted = true
             )
         }
         coEvery { aiRepository.submitQuiz("friend-a", "quiz-1", any()) } returns Result.success(result)
@@ -98,13 +96,12 @@ class AiSpriteViewModelTest {
         viewModel.submitQuiz()
         advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value.quota).isEqualTo(expectedQuota)
+        assertThat(viewModel.uiState.value.quizResult).isEqualTo(result)
     }
 
     @Test
-    fun loadDaily_mergesDailyQuotaIntoUiState() = runTest {
-        val expectedQuota = quota(sessionUsed = 5, dailyUsed = 22)
-        val daily = dailyKnowledge(expectedQuota)
+    fun loadDaily_mergesDailyIntoUiState() = runTest {
+        val daily = dailyKnowledge()
         val viewModel = viewModel()
         coEvery { aiRepository.readDailyKnowledgeHistory("friend-a") } returns emptyList()
         stubDailyStream(daily)
@@ -113,7 +110,6 @@ class AiSpriteViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.dailyKnowledge).isEqualTo(daily)
-        assertThat(viewModel.uiState.value.quota).isEqualTo(expectedQuota)
     }
 
     @Test
@@ -129,10 +125,10 @@ class AiSpriteViewModelTest {
         assertThat(viewModel.uiState.value.activeFeature).isEqualTo(AiFeature.QUIZ)
         assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
         assertThat(viewModel.uiState.value.isLoading).isFalse()
-        coVerify(exactly = 0) { aiRepository.getGreeting(any(), any(), any()) }
-        coVerify(exactly = 0) { aiRepository.getTaste(any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getGreeting(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getTaste(any(), any(), any(), any()) }
         // 离线时连静默预生成也不能发出去
-        coVerify(exactly = 0) { aiRepository.getQuizStream(any(), any(), any()) }
+        coVerify(exactly = 0) { aiRepository.getQuizStream(any(), any(), any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any(), any()) }
         coVerify(exactly = 0) { traktRepository.getAllShowHistory(any(), any()) }
     }
@@ -251,7 +247,7 @@ class AiSpriteViewModelTest {
         )
         coEvery {
             aiRepository.getDailyStream(any(), any(), any(), capture(localeSlot))
-        } returns flowOf(AiDailyStreamEvent.Completed(dailyKnowledge()))
+        } answers { flowOf(AiDailyStreamEvent.Completed(dailyKnowledge())) }
 
         viewModel.openFeature(AiFeature.DAILY)
         advanceUntilIdle()
@@ -342,7 +338,7 @@ class AiSpriteViewModelTest {
         assertThat(state.dailyQuestionSelectedOptionId).isEqualTo("b")
         assertThat(state.dailyKnowledgeFeedback).isEqualTo(AiDailyKnowledgeContentFeedback.TOO_BROAD)
         assertThat(state.dailyKnowledgeDifficultyFeedback).isEqualTo(AiQuizDifficulty.JUST_RIGHT)
-        coVerify(exactly = 0) { aiRepository.submitQuizDifficulty(any(), any()) }
+        coVerify(exactly = 0) { aiRepository.submitQuizDifficulty(any(), any(), any()) }
     }
 
     @Test
@@ -370,17 +366,17 @@ class AiSpriteViewModelTest {
             )
         }
         coEvery {
-            aiRepository.getGreeting("friend-a", "tomo", forceRefresh = true)
+            aiRepository.getGreeting("friend-a", "tomo", nickname = "朋友", forceRefresh = true)
         } returns Result.success(greeting())
 
         viewModel.refreshFeature()
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            aiRepository.getGreeting("friend-a", "tomo", forceRefresh = true)
+            aiRepository.getGreeting("friend-a", "tomo", nickname = "朋友", forceRefresh = true)
         }
         coVerify(exactly = 0) {
-            aiRepository.getGreeting("friend-a", "usagi", forceRefresh = true)
+            aiRepository.getGreeting("friend-a", "usagi", nickname = "朋友", forceRefresh = true)
         }
     }
 
@@ -389,7 +385,7 @@ class AiSpriteViewModelTest {
         val requestStarted = CompletableDeferred<Unit>()
         val requestCancelled = CompletableDeferred<Unit>()
         val viewModel = viewModel()
-        coEvery { aiRepository.getGreeting("friend-a", "usagi", false) } coAnswers {
+        coEvery { aiRepository.getGreeting("friend-a", "usagi", "朋友", false) } coAnswers {
             requestStarted.complete(Unit)
             try {
                 awaitCancellation()
@@ -418,7 +414,7 @@ class AiSpriteViewModelTest {
         val newRequestStarted = CompletableDeferred<Unit>()
         val releaseNewRequest = CompletableDeferred<Unit>()
         val viewModel = viewModel()
-        coEvery { aiRepository.getGreeting("friend-a", "usagi", false) } coAnswers {
+        coEvery { aiRepository.getGreeting("friend-a", "usagi", "朋友", false) } coAnswers {
             withContext(NonCancellable) { releaseOldRequest.await() }
             Result.success(greeting())
         }
@@ -453,7 +449,7 @@ class AiSpriteViewModelTest {
         val authState = MutableStateFlow(AuthState.AUTHORIZED)
         val requestStarted = CompletableDeferred<Unit>()
         val viewModel = viewModel(authState)
-        coEvery { aiRepository.getGreeting("friend-a", "usagi", false) } coAnswers {
+        coEvery { aiRepository.getGreeting("friend-a", "usagi", "朋友", false) } coAnswers {
             requestStarted.complete(Unit)
             awaitCancellation()
         }
@@ -479,7 +475,7 @@ class AiSpriteViewModelTest {
         val requestStarted = CompletableDeferred<Unit>()
         val requestCancelled = CompletableDeferred<Unit>()
         val viewModel = viewModel(authState)
-        coEvery { aiRepository.getGreeting("friend-a", "tomo", false) } coAnswers {
+        coEvery { aiRepository.getGreeting("friend-a", "tomo", "朋友", false) } coAnswers {
             requestStarted.complete(Unit)
             try {
                 awaitCancellation()
@@ -493,14 +489,13 @@ class AiSpriteViewModelTest {
                 activatedCharacterId = "tomo",
                 activationState = AiActivationState.SUCCESS,
                 activationMessage = "activated",
-                quota = quota(sessionUsed = 3, dailyUsed = 8),
                 activeFeature = AiFeature.GREETING,
                 greeting = greeting(),
                 taste = AiTasteAnalysis("吐槽", "画像", emptyList(), emptyList()),
                 quiz = quiz(),
-                quizResult = quizResult(quota()),
-                quizHistory = AiQuizHistory(bestScore = 90, lastResult = quizResult(quota())),
-                dailyKnowledge = dailyKnowledge(quota())
+                quizResult = quizResult(),
+                quizHistory = AiQuizHistory(bestScore = 90, lastResult = quizResult()),
+                dailyKnowledge = dailyKnowledge()
             )
         }
 
@@ -523,7 +518,6 @@ class AiSpriteViewModelTest {
         assertThat(state.quizResult).isNull()
         assertThat(state.quizHistory).isNull()
         assertThat(state.dailyKnowledge).isNull()
-        assertThat(state.quota).isNull()
         assertThat(state.activationState).isEqualTo(AiActivationState.IDLE)
         assertThat(state.activationMessage).isNull()
         assertThat(state.selectedCharacterId).isEqualTo("usagi")
@@ -540,8 +534,8 @@ class AiSpriteViewModelTest {
                 greeting = greeting(),
                 taste = AiTasteAnalysis("吐槽", "画像", emptyList(), emptyList()),
                 quiz = quiz(),
-                quizResult = quizResult(quota()),
-                dailyKnowledge = dailyKnowledge(quota())
+                quizResult = quizResult(),
+                dailyKnowledge = dailyKnowledge()
             )
         }
 
@@ -763,7 +757,7 @@ class AiSpriteViewModelTest {
 
         assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
         assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
-        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+        coVerify(exactly = 0) { aiRepository.saveActivatedCharacterId(any(), any()) }
         // 宽限窗口过后收尾只发生一次，次数不会被补第二刀
         advanceUntilIdle()
         assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
@@ -776,13 +770,9 @@ class AiSpriteViewModelTest {
         )
         val viewModel = viewModel(voiceCapture = voiceCapture)
         viewModel.seedVoiceReadyState()
-        val requests = mutableListOf<com.tracktosearch.data.ai.AiActivateRequest>()
-        val releaseServer = CompletableDeferred<Unit>()
-        coEvery { aiRepository.activate("friend-a", capture(requests)) } coAnswers {
-            releaseServer.await()
-            Result.success(activation(audio = audio()))
-        }
-        coEvery { aiRepository.getGreeting(any(), any(), any()) } returns Result.success(greeting())
+        // BYOK：激活纯本地匹配（AiActivationNormalizer），命中即成功；ACK 语音走 playTts
+        coEvery { aiRepository.getGreeting(any(), any(), any(), any()) } returns Result.success(greeting())
+        coEvery { aiRepository.playTts(any(), any()) } returns Result.success(audio())
         // audioEvents 是 replay = 0 的 SharedFlow，没订阅者时 emit 会被静默丢弃
         val ack = async { viewModel.audioEvents.first() }
         runCurrent()
@@ -790,15 +780,9 @@ class AiSpriteViewModelTest {
         viewModel.onActivatePressStart()
         runCurrent()
 
-        // 命中即收尾，不等松手
-        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.VERIFYING)
-        releaseServer.complete(Unit)
+        // BYOK：本地匹配命中即收尾（VERIFYING 只是瞬态），直接推进到终态断言
         advanceUntilIdle()
 
-        // 本地命中后走服务端文字激活：不上传音频、无 ASR，spokenName 用角色标准名
-        assertThat(requests).hasSize(1)
-        assertThat(requests.single().audioDataUrl).isNull()
-        assertThat(requests.single().spokenName).isEqualTo("usagi")
         val state = viewModel.uiState.value
         assertThat(state.activationState).isEqualTo(AiActivationState.SUCCESS)
         assertThat(state.activatedCharacterId).isEqualTo("usagi")
@@ -829,7 +813,7 @@ class AiSpriteViewModelTest {
         // 与旧服务端行为一致：喊了别的角色名按未匹配处理，只针对所选角色激活
         assertThat(viewModel.uiState.value.errorCode).isEqualTo("ACTIVATION_NOT_MATCHED")
         assertThat(viewModel.uiState.value.activationAttempt).isEqualTo(1)
-        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+        coVerify(exactly = 0) { aiRepository.saveActivatedCharacterId(any(), any()) }
     }
 
     @Test
@@ -846,7 +830,7 @@ class AiSpriteViewModelTest {
         assertThat(state.errorCode).isEqualTo("AUDIO_UNAVAILABLE")
         assertThat(state.activationState).isEqualTo(AiActivationState.FAILED)
         assertThat(state.activationAttempt).isEqualTo(0)
-        coVerify(exactly = 0) { aiRepository.activate(any(), any()) }
+        coVerify(exactly = 0) { aiRepository.saveActivatedCharacterId(any(), any()) }
     }
 
     @Test
@@ -885,12 +869,9 @@ class AiSpriteViewModelTest {
         val voiceCapture = FakeVoiceCapture(listOf(AiVoiceCaptureEvent.Level(0.05f)))
         val viewModel = viewModel(voiceCapture = voiceCapture)
         viewModel.seedVoiceReadyState()
-        val releaseServer = CompletableDeferred<Unit>()
-        coEvery { aiRepository.activate("friend-a", any()) } coAnswers {
-            releaseServer.await()
-            Result.success(activation())
-        }
-        coEvery { aiRepository.getGreeting(any(), any(), any()) } returns Result.success(greeting())
+        // BYOK：本地匹配，不再有服务端往返；ACK 语音打 playTts 桩
+        coEvery { aiRepository.getGreeting(any(), any(), any(), any()) } returns Result.success(greeting())
+        coEvery { aiRepository.playTts(any(), any()) } returns Result.success(audio())
 
         viewModel.onActivatePressStart()
         runCurrent()
@@ -901,10 +882,7 @@ class AiSpriteViewModelTest {
         testScheduler.advanceTimeBy(100)
         runCurrent()
         voiceCapture.push(AiVoiceCaptureEvent.Matched("usagi"))
-        runCurrent()
-
-        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.VERIFYING)
-        releaseServer.complete(Unit)
+        // BYOK：命中即本地匹配并完成，不再经过 VERIFYING 等服务端的中转态
         advanceUntilIdle()
 
         // 排在后面的那次宽限收尾必须是空操作，不能把成功覆盖成 ACTIVATION_NOT_MATCHED
@@ -912,7 +890,7 @@ class AiSpriteViewModelTest {
         assertThat(state.activationState).isEqualTo(AiActivationState.SUCCESS)
         assertThat(state.activatedCharacterId).isEqualTo("usagi")
         assertThat(state.errorCode).isNull()
-        coVerify(exactly = 1) { aiRepository.activate("friend-a", any()) }
+        coVerify(exactly = 1) { aiRepository.saveActivatedCharacterId("friend-a", "usagi") }
     }
 
     @Test
@@ -943,8 +921,8 @@ class AiSpriteViewModelTest {
         )
         val viewModel = viewModel(voiceCapture = voiceCapture)
         viewModel.seedVoiceReadyState()
-        coEvery { aiRepository.activate("friend-a", any()) } returns Result.success(activation())
-        coEvery { aiRepository.getGreeting(any(), any(), any()) } returns Result.success(greeting())
+        coEvery { aiRepository.getGreeting(any(), any(), any(), any()) } returns Result.success(greeting())
+        coEvery { aiRepository.playTts(any(), any()) } returns Result.success(audio())
 
         viewModel.onActivatePressStart()
         advanceUntilIdle()
@@ -1002,31 +980,23 @@ class AiSpriteViewModelTest {
     }
 
     @Test
-    fun lateActivationResult_cannotReplaceOfflineState() = runTest {
+    fun activationByText_localMatchSucceedsDespiteLaterOffline() = runTest {
+        // BYOK：文字激活是同步本地匹配，结果即时落地；随后网络掉线只影响后续联网功能
         val networkStatus = MutableStateFlow(ConnectivityObserver.NetworkStatus.ONLINE)
-        val result = CompletableDeferred<Result<com.tracktosearch.data.ai.AiActivation>>()
         val viewModel = viewModel(networkStatus = networkStatus)
         viewModel.seedVoiceReadyState()
-        coEvery { aiRepository.activate("friend-a", any()) } coAnswers {
-            withContext(NonCancellable) { result.await() }
-        }
+        // relaxed mock 对 Result 值类无法自洽实例化，ACK 语音必须显式打桩
+        coEvery { aiRepository.playTts(any(), any()) } returns Result.success(audio())
 
         viewModel.activateByText("usagi")
-        runCurrent()
-        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.VERIFYING)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.SUCCESS)
+        assertThat(viewModel.uiState.value.activatedCharacterId).isEqualTo("usagi")
 
         networkStatus.value = ConnectivityObserver.NetworkStatus.OFFLINE
         runCurrent()
-        assertThat(viewModel.uiState.value.networkStatus)
-            .isEqualTo(ConnectivityObserver.NetworkStatus.OFFLINE)
-        assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
-
-        result.complete(Result.success(activation()))
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.activatedCharacterId).isNull()
-        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.IDLE)
-        assertThat(viewModel.uiState.value.errorCode).isEqualTo(AI_OFFLINE_ERROR_CODE)
+        // 掉线不能把已成功的激活态抹掉
+        assertThat(viewModel.uiState.value.activationState).isEqualTo(AiActivationState.SUCCESS)
     }
 
     @Test
@@ -1101,51 +1071,16 @@ class AiSpriteViewModelTest {
         assertThat(viewModel.uiState.value.activatedCharacterId).isEqualTo("usagi")
     }
 
-    @Test
-    fun restoreActivation_backfillsQuotaFromDailySnapshot() = runTest {
-        val viewModel = viewModel()
-        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
-        coEvery { aiRepository.readQuotaSnapshotDailyUsed("friend-a") } returns 23
 
-        viewModel.restoreActivation()
-        advanceUntilIdle()
 
-        // 重启后没有现值额度，靠当日快照补回「今日 23/80」，本轮计数随会话重置显示 0
-        val quota = viewModel.uiState.value.quota
-        assertThat(quota?.dailyUsed).isEqualTo(23)
-        assertThat(quota?.dailyLimit).isEqualTo(80)
-        assertThat(quota?.sessionUsed).isEqualTo(0)
-    }
-
-    @Test
-    fun restoreActivation_keepsQuotaUnavailableWhenSnapshotMissing() = runTest {
-        val viewModel = viewModel()
-        coEvery { aiRepository.readActivatedCharacterId("friend-a") } returns "hachiware"
-        coEvery { aiRepository.readQuotaSnapshotDailyUsed("friend-a") } returns null
-
-        viewModel.restoreActivation()
-        advanceUntilIdle()
-
-        // 跨日或从未用过功能：没有快照就维持「额度暂不可用」，不能凭空造一个 0/80
-        assertThat(viewModel.uiState.value.quota).isNull()
-    }
-
-    @Test
-    fun quotaChange_persistsDailySnapshotForNextLaunch() = runTest {
-        val viewModel = viewModel()
-        viewModel.seedState { it.copy(quota = quota(sessionUsed = 2, dailyUsed = 31)) }
-        advanceUntilIdle()
-
-        // 额度一旦刷新就落盘，重启后恢复激活态才能把它读回来
-        coVerify(atLeast = 1) { aiRepository.saveQuotaSnapshot("friend-a", 31) }
-    }
 
     @Test
     fun activationSuccessPersistsCharacterForLaterProcesses() = runTest {
         val viewModel = viewModel()
         viewModel.seedVoiceReadyState()
-        coEvery { aiRepository.activate(any(), any()) } returns Result.success(activation())
-
+        // relaxed mock 对 Result 值类无法自洽实例化，ACK 语音必须显式打桩
+        coEvery { aiRepository.playTts(any(), any()) } returns Result.success(audio())
+        // BYOK：文字激活本地匹配，直接断言落盘
         viewModel.activateByText("usagi")
         advanceUntilIdle()
 
@@ -1172,7 +1107,7 @@ class AiSpriteViewModelTest {
         // 桩必须返回 flow{}／flowOf，不能用 coAnswers（会被 runBlocking 焊死测试线程）。
         // 进入出题页会先静默预生成，所以捕获到的是 [预生成, 正式出题] 两条。
         coEvery {
-            aiRepository.getQuizStream("friend-a", capture(quizRequests), any())
+            aiRepository.getQuizStream("friend-a", any(), capture(quizRequests), any())
         } returns flowOf(AiQuizStreamEvent.Completed(quiz()))
         val viewModel = viewModel(
             networkStatus = networkStatus,
@@ -1280,7 +1215,7 @@ class AiSpriteViewModelTest {
         val requests = mutableListOf<AiQuizRequest>()
         val viewModel = viewModel()
         stubQuizWatchedHistory()
-        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returns
+        coEvery { aiRepository.getQuizStream("friend-a", any(), capture(requests), any()) } returns
             flowOf(AiQuizStreamEvent.Completed(quiz()))
 
         viewModel.openFeature(AiFeature.QUIZ)
@@ -1313,7 +1248,7 @@ class AiSpriteViewModelTest {
         val release = CompletableDeferred<Unit>()
         val viewModel = viewModel()
         stubQuizWatchedHistory()
-        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returns flow {
+        coEvery { aiRepository.getQuizStream("friend-a", any(), capture(requests), any()) } returns flow {
             release.await()
             emit(AiQuizStreamEvent.Completed(quiz()))
         }
@@ -1341,7 +1276,7 @@ class AiSpriteViewModelTest {
         val requests = mutableListOf<AiQuizRequest>()
         val viewModel = viewModel()
         stubQuizWatchedHistory()
-        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returnsMany listOf(
+        coEvery { aiRepository.getQuizStream("friend-a", any(), capture(requests), any()) } returnsMany listOf(
             flow { throw IllegalStateException("upstream down") },
             flowOf(AiQuizStreamEvent.Completed(quiz()))
         )
@@ -1367,7 +1302,7 @@ class AiSpriteViewModelTest {
         val viewModel = viewModel()
         stubQuizWatchedHistory()
         // 当天该预生成的套都发过了：服务端拒发预生成（用户玩完了当天的量），这不是故障
-        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returns
+        coEvery { aiRepository.getQuizStream("friend-a", any(), capture(requests), any()) } returns
             flowOf(AiQuizStreamEvent.DailySetsDone)
 
         viewModel.openFeature(AiFeature.QUIZ)
@@ -1392,7 +1327,7 @@ class AiSpriteViewModelTest {
         val requests = mutableListOf<AiQuizRequest>()
         val viewModel = viewModel()
         stubQuizWatchedHistory()
-        coEvery { aiRepository.getQuizStream("friend-a", capture(requests), any()) } returnsMany listOf(
+        coEvery { aiRepository.getQuizStream("friend-a", any(), capture(requests), any()) } returnsMany listOf(
             flowOf(AiQuizStreamEvent.DailySetsDone),
             flowOf(AiQuizStreamEvent.Completed(quiz()))
         )
@@ -1464,7 +1399,7 @@ class AiSpriteViewModelTest {
         savedStateHandle: SavedStateHandle = SavedStateHandle()
     ): AiSpriteViewModel {
         every { authManager.authState } returns authState
-        every { authManager.nickname } returns MutableStateFlow("鏈嬪弸")
+        every { authManager.nickname } returns MutableStateFlow("朋友")
         every { authManager.friendId } returns MutableStateFlow("friend-a")
         every { connectivityObserver.status } returns networkStatus
         every { languageStorage.language } returns language
@@ -1472,6 +1407,9 @@ class AiSpriteViewModelTest {
         // 閿愯瘎闅愮瀹堝崼榛樿鏀捐锛氬凡鍚屾剰璇存槑寮圭獥涓斾笂浼犲紑鍏冲紑鍚?
         coEvery { aiTasteStorage.awaitTasteConsentDecided() } returns true
         coEvery { aiTasteStorage.awaitTasteUploadEnabled() } returns true
+        // relaxed mock 对 Result 值类无法自洽实例化，getOrNull() 会抛——daily/taste 链路会被它打断
+        coEvery { traktRepository.getAllMovieHistory(any(), any()) } returns Result.success(emptyList())
+        coEvery { traktRepository.getAllShowHistory(any(), any()) } returns Result.success(emptyList())
         return AiSpriteViewModel(
             aiRepository,
             authManager,
@@ -1566,23 +1504,31 @@ class AiSpriteViewModelTest {
         audio = audio
     )
 
-    @Suppress("UNCHECKED_CAST")
-    private fun AiSpriteViewModel.seedState(
-        transform: (AiSpriteUiState) -> AiSpriteUiState
-    ) {
-        val field = AiSpriteViewModel::class.java.getDeclaredField("_uiState")
-        field.isAccessible = true
-        val state = field.get(this) as MutableStateFlow<AiSpriteUiState>
-        state.value = transform(state.value)
-    }
 
-    private fun quota(sessionUsed: Int = 1, dailyUsed: Int = 1) = AiQuota(
-        sessionUsed = sessionUsed,
-        sessionLimit = 14,
-        dailyUsed = dailyUsed,
-        dailyLimit = 80,
-        resetAt = null
+
+
+
+
+    private fun quizResult() = AiQuizResult(
+        quizId = "quiz-1",
+        score = 90,
+        totalScore = 100,
+        correctCount = 12,
+        totalQuestions = 13,
+        summary = "不错",
+        dimensionScores = emptyMap(),
+        questionResults = emptyList(),
+        quota = null
     )
+
+    private fun greeting() = AiGreeting(
+        nickname = "朋友",
+        greeting = "你好",
+        nicknameMeaning = "",
+        comment = "",
+        audio = null
+    )
+
 
     private fun quiz() = AiQuiz(
         quizId = "quiz-1",
@@ -1593,17 +1539,6 @@ class AiSpriteViewModelTest {
         totalScore = 100
     )
 
-    private fun quizResult(quota: AiQuota) = AiQuizResult(
-        quizId = "quiz-1",
-        score = 90,
-        totalScore = 100,
-        correctCount = 12,
-        totalQuestions = 13,
-        summary = "不错",
-        dimensionScores = emptyMap(),
-        questionResults = emptyList(),
-        quota = quota
-    )
 
     private fun structuredDailyKnowledge(quota: AiQuota? = null) = AiDailyKnowledge(
         id = "daily-structured",
@@ -1636,6 +1571,7 @@ class AiSpriteViewModelTest {
         )
     )
 
+
     private fun dailyKnowledge(quota: AiQuota? = null) = AiDailyKnowledge(
         id = "daily-1",
         title = "每日知识",
@@ -1648,11 +1584,14 @@ class AiSpriteViewModelTest {
         quota = quota
     )
 
-    private fun greeting() = AiGreeting(
-        nickname = "朋友",
-        greeting = "你好",
-        nicknameMeaning = "",
-        comment = "",
-        audio = null
-    )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun AiSpriteViewModel.seedState(
+        transform: (AiSpriteUiState) -> AiSpriteUiState
+    ) {
+        val field = AiSpriteViewModel::class.java.getDeclaredField("_uiState")
+        field.isAccessible = true
+        val state = field.get(this) as MutableStateFlow<AiSpriteUiState>
+        state.value = transform(state.value)
+    }
 }

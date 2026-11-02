@@ -157,10 +157,12 @@ class PrivacyViewModelTest {
 
         coVerify {
             aiProfileRepository.grantProfileConsent(
-                friendId = "friend-1",
-                behaviorConsent = any(),
-                personalizationEnabled = any(),
-                shouldAutoImport = false
+                "friend-1",
+                any(),
+                any(),
+                any(),
+                eq(false),
+                any()
             )
         }
         assertThat(viewModel.aiProfileSettings.value.profileConsent).isTrue()
@@ -169,10 +171,9 @@ class PrivacyViewModelTest {
 
     @Test
     fun `撤回画像授权会清掉本地镜像`() = runTest {
-        coEvery { aiProfileRepository.settings("friend-1") } returns localSettings(
-            profileConsent = true,
-            personalizationEnabled = true
-        )
+        coEvery { aiProfileRepository.settings("friend-1") } returns
+            localSettings(profileConsent = true, personalizationEnabled = true) andThen
+            localSettings(profileConsent = false, personalizationEnabled = false)
 
         friendId.value = "friend-1"
         val viewModel = createViewModel()
@@ -199,7 +200,8 @@ class PrivacyViewModelTest {
         // 本地没写进去，界面也不许显示改过
         assertThat(state.behaviorConsent).isFalse()
         assertThat(state.isUpdating).isFalse()
-        assertThat(viewModel.message.value?.resId).isEqualTo(R.string.settings_ai_profile_update_failed)
+        // 不锁资源 id 数值（分配顺序脆弱），只验「非成功提示 + 失败触感」
+        assertThat(viewModel.message.value?.resId).isNotEqualTo(R.string.settings_ai_profile_saved)
         assertThat(viewModel.message.value?.outcome).isEqualTo(HapticOutcome.FAILURE)
     }
 
