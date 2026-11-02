@@ -7,9 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
 import com.tracktosearch.data.ai.AiProfileRepository
 import com.tracktosearch.data.ai.AiProfileSettings
-import com.tracktosearch.data.ai.AiProfileSettingsDto
-import com.tracktosearch.data.ai.AiProfileSettingsRequest
-import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.local.AiTasteStorage
 import com.tracktosearch.data.local.CrashLogStorage
@@ -42,8 +39,8 @@ data class PrivacyMessage(
 /**
  * AI 画像开关组的界面状态。
  *
- * [isAvailable] 是「有没有可归属的 friendId」：画像、行为计数与同步批次都按
- * friendId 落在服务端，未登录时整组开关只读。
+ * [isAvailable] 是「有没有可归属的 friendId」：画像与行为计数都按 friendId
+ * 落在本地数据库，未登录时整组开关只读。BYOK 后不再上传服务端，无同步开关。
  */
 @Immutable
 data class AiProfileSettingsState(
@@ -51,9 +48,7 @@ data class AiProfileSettingsState(
     val profileConsent: Boolean = false,
     val behaviorConsent: Boolean = false,
     val personalizationEnabled: Boolean = false,
-    val syncEnabled: Boolean = true,
     val isLoaded: Boolean = false,
-    val isLoading: Boolean = false,
     val isUpdating: Boolean = false
 ) {
     val isAvailable: Boolean get() = !friendId.isNullOrBlank()
@@ -63,9 +58,9 @@ data class AiProfileSettingsState(
  * 「数据与隐私」页 ViewModel。
  *
  * 独立于 SettingsViewModel 自建（设置页原「AI 与隐私」分组与崩溃日志开关行
- * 迁入本页），逻辑与原 SettingsViewModel 中的实现保持一致：
+ * 迁入本页）：
  * - AI taste / 崩溃日志开关：存储层是单例内存镜像，进入页面直接读当前值
- * - AI 画像开关组：按 friendId 隔离，云端写入失败时整体回滚
+ * - AI 画像开关组：按 friendId 隔离；BYOK 后画像只存本地，写入失败时回滚界面状态
  */
 @HiltViewModel
 class PrivacyViewModel @Inject constructor(
@@ -73,7 +68,6 @@ class PrivacyViewModel @Inject constructor(
     private val crashLogStorage: CrashLogStorage,
     private val crashLogUploader: CrashLogUploader,
     private val aiProfileRepository: AiProfileRepository,
-    private val aiRepository: AiRepository,
     private val authManager: AuthManager
 ) : ViewModel() {
 
@@ -86,7 +80,7 @@ class PrivacyViewModel @Inject constructor(
     private val _message = MutableStateFlow<PrivacyMessage?>(null)
     val message: StateFlow<PrivacyMessage?> = _message.asStateFlow()
 
-    private val _aiProfileSettings = MutableStateFlow(AiProfileSettingsState(isLoading = true))
+    private val _aiProfileSettings = MutableStateFlow(AiProfileSettingsState())
     val aiProfileSettings: StateFlow<AiProfileSettingsState> = _aiProfileSettings.asStateFlow()
 
     init {
@@ -119,31 +113,19 @@ class PrivacyViewModel @Inject constructor(
     }
 
     fun setAiProfileConsent(enabled: Boolean) {
-        val current = _aiProfileSettings.value
         val friendId = requireAiFriendId() ?: return
-        val request = AiProfileSettingsRequest(
-            profileConsent = enabled,
-            behaviorConsent = if (enabled) current.behaviorConsent else false,
-            personalizationEnabled = enabled,
-            syncEnabled = current.syncEnabled
-        )
         updateAiProfileSettings(
             friendId = friendId,
-            previous = current,
-            request = request,
             successMessageRes = R.string.settings_ai_profile_saved,
-            localCommit = { id, settings ->
-                if (settings.profileConsent) {
+            commit = {
+                if (enabled) {
                     aiProfileRepository.grantProfileConsent(
-                        friendId = id,
-                        behaviorConsent = settings.behaviorConsent,
-                        personalizationEnabled = settings.personalizationEnabled,
-                        syncEnabled = settings.syncEnabled,
+                        friendId = friendId,
                         shouldAutoImport = false
                     )
                 } else {
                     // 撤回授权等同清画像：本地镜像与行为计数一起作废
-                    aiProfileRepository.clear(id)
+                    aiProfileRepository.clear(friendId)
                 }
             }
         )
@@ -153,18 +135,14 @@ class PrivacyViewModel @Inject constructor(
         val current = _aiProfileSettings.value
         val friendId = requireAiFriendId() ?: return
         if (!current.profileConsent) return
-        val request = AiProfileSettingsRequest(personalizationEnabled = enabled)
         updateAiProfileSettings(
             friendId = friendId,
-            previous = current,
-            request = request,
             successMessageRes = R.string.settings_ai_profile_saved,
-            localCommit = { id, settings ->
+            commit = {
                 aiProfileRepository.grantProfileConsent(
-                    friendId = id,
-                    behaviorConsent = settings.behaviorConsent,
-                    personalizationEnabled = settings.personalizationEnabled,
-                    syncEnabled = settings.syncEnabled,
+                    friendId = friendId,
+                    behaviorConsent = current.behaviorConsent,
+                    personalizationEnabled = enabled,
                     shouldAutoImport = false
                 )
             }
@@ -172,57 +150,20 @@ class PrivacyViewModel @Inject constructor(
     }
 
     fun setAiBehaviorConsent(enabled: Boolean) {
-        val current = _aiProfileSettings.value
         val friendId = requireAiFriendId() ?: return
-        val request = AiProfileSettingsRequest(behaviorConsent = enabled)
         updateAiProfileSettings(
             friendId = friendId,
-            previous = current,
-            request = request,
             successMessageRes = R.string.settings_ai_profile_saved,
-            localCommit = { id, settings ->
-                aiProfileRepository.setBehaviorConsent(id, settings.behaviorConsent)
-            }
-        )
-    }
-
-    fun setAiSyncEnabled(enabled: Boolean) {
-        val current = _aiProfileSettings.value
-        val friendId = requireAiFriendId() ?: return
-        val request = AiProfileSettingsRequest(syncEnabled = enabled)
-        updateAiProfileSettings(
-            friendId = friendId,
-            previous = current,
-            request = request,
-            successMessageRes = R.string.settings_ai_profile_saved,
-            localCommit = { id, settings ->
-                if (settings.profileConsent) {
-                    aiProfileRepository.grantProfileConsent(
-                        friendId = id,
-                        behaviorConsent = settings.behaviorConsent,
-                        personalizationEnabled = settings.personalizationEnabled,
-                        syncEnabled = settings.syncEnabled,
-                        shouldAutoImport = false
-                    )
-                }
-            }
+            commit = { aiProfileRepository.setBehaviorConsent(friendId, enabled) }
         )
     }
 
     fun clearAiProfile() {
-        val current = _aiProfileSettings.value
         val friendId = requireAiFriendId() ?: return
         updateAiProfileSettings(
             friendId = friendId,
-            previous = current,
-            request = AiProfileSettingsRequest(
-                profileConsent = false,
-                behaviorConsent = false,
-                personalizationEnabled = false,
-                syncEnabled = current.syncEnabled
-            ),
             successMessageRes = R.string.settings_ai_profile_clear_success,
-            localCommit = { id, _ -> aiProfileRepository.clear(id) }
+            commit = { aiProfileRepository.clear(friendId) }
         )
     }
 
@@ -232,31 +173,13 @@ class PrivacyViewModel @Inject constructor(
     }
 
     private suspend fun loadAiProfileSettings(friendId: String) {
-        // 先用本地镜像撑住界面（避免开关闪一下默认值），再用云端结果覆盖
+        // BYOK：画像设置只存本地，直接读本地镜像，不再回源服务端
         val local = runCatching { aiProfileRepository.settings(friendId) }.getOrNull()
         _aiProfileSettings.value = local?.toUiState()?.copy(
+            friendId = friendId
+        ) ?: AiProfileSettingsState(
             friendId = friendId,
-            isLoaded = true,
-            isLoading = true,
-            isUpdating = false
-        ) ?: AiProfileSettingsState(friendId = friendId, isLoading = true)
-
-        aiRepository.getProfileSettings(friendId).fold(
-            onSuccess = { settings ->
-                _aiProfileSettings.value = settings.toUiState(friendId)
-            },
-            onFailure = {
-                // 拉不到就停在本地镜像上：至少反映最后一次已知授权状态
-                _aiProfileSettings.value = local?.toUiState()?.copy(
-                    friendId = friendId,
-                    isLoaded = true,
-                    isLoading = false,
-                    isUpdating = false
-                ) ?: AiProfileSettingsState(
-                    friendId = friendId,
-                    isLoaded = true
-                )
-            }
+            isLoaded = true
         )
     }
 
@@ -271,45 +194,38 @@ class PrivacyViewModel @Inject constructor(
         return friendId
     }
 
+    /**
+     * 画像开关统一落盘管线（BYOK 后只有本地）：
+     * 先置 isUpdating 防抖，commit 成功→重新读本地设置刷新 UI+成功提示；
+     * commit 失败→保持切换前的值+失败提示。
+     */
     private fun updateAiProfileSettings(
         friendId: String,
-        previous: AiProfileSettingsState,
-        request: AiProfileSettingsRequest,
         successMessageRes: Int,
-        localCommit: suspend (String, AiProfileSettingsDto) -> Unit
+        commit: suspend () -> Unit
     ) {
+        val previous = _aiProfileSettings.value
         if (previous.isUpdating) return
         _aiProfileSettings.value = previous.copy(isUpdating = true)
         viewModelScope.launch {
-            aiRepository.updateProfileSettings(friendId, request).fold(
-                onSuccess = { settings ->
-                    try {
-                        localCommit(friendId, settings)
-                        _aiProfileSettings.value = settings.toUiState(friendId)
-                        _message.value = PrivacyMessage(
-                            resId = successMessageRes,
-                            outcome = HapticOutcome.SUCCESS
-                        )
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        // 云端已保存时保留云端结果，避免本地失败造成 UI 显示与授权状态相反。
-                        _aiProfileSettings.value = settings.toUiState(friendId)
-                        _message.value = PrivacyMessage(
-                            resId = R.string.settings_ai_profile_update_failed,
-                            outcome = HapticOutcome.FAILURE
-                        )
-                    }
-                },
-                onFailure = {
-                    // 网络失败时不写本地状态，StateFlow 仍保持切换前的值，形成失败回滚。
-                    _aiProfileSettings.value = previous.copy(isUpdating = false)
-                    _message.value = PrivacyMessage(
-                        resId = R.string.settings_ai_profile_update_failed,
-                        outcome = HapticOutcome.FAILURE
-                    )
-                }
-            )
+            try {
+                commit()
+                val settings = runCatching { aiProfileRepository.settings(friendId) }.getOrNull()
+                _aiProfileSettings.value = settings?.toUiState()?.copy(friendId = friendId)
+                    ?: previous.copy(isUpdating = false)
+                _message.value = PrivacyMessage(
+                    resId = successMessageRes,
+                    outcome = HapticOutcome.SUCCESS
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _aiProfileSettings.value = previous.copy(isUpdating = false)
+                _message.value = PrivacyMessage(
+                    resId = R.string.settings_ai_profile_update_failed,
+                    outcome = HapticOutcome.FAILURE
+                )
+            }
         }
     }
 
@@ -318,16 +234,6 @@ class PrivacyViewModel @Inject constructor(
         profileConsent = profileConsent,
         behaviorConsent = behaviorConsent,
         personalizationEnabled = personalizationEnabled,
-        syncEnabled = syncEnabled,
-        isLoaded = true
-    )
-
-    private fun AiProfileSettingsDto.toUiState(friendId: String): AiProfileSettingsState = AiProfileSettingsState(
-        friendId = friendId,
-        profileConsent = profileConsent,
-        behaviorConsent = behaviorConsent,
-        personalizationEnabled = personalizationEnabled,
-        syncEnabled = syncEnabled,
         isLoaded = true
     )
 }

@@ -7,19 +7,22 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
+/**
+ * 画像行为入口单测。
+ *
+ * BYOK 后行为数据只写本地：镜像跟随画像授权，行为明细跟随行为授权，
+ * 不再触发任何上传调度。
+ */
 class AiProfileBehaviorRecorderTest {
 
     private val profileRepository = mockk<AiProfileRepository>()
-    private val syncScheduler = mockk<AiProfileSyncScheduler>(relaxed = true)
     private val authManager = mockk<AuthManager>()
     private val recorder = AiProfileBehaviorRecorder(
         profileRepository = profileRepository,
-        syncScheduler = syncScheduler,
         authManager = authManager
     )
 
@@ -37,15 +40,13 @@ class AiProfileBehaviorRecorderTest {
         assertThat(recorded).isFalse()
         coVerify(exactly = 0) { profileRepository.mirrorMedia(any(), any(), any()) }
         coVerify(exactly = 0) { profileRepository.recordBehavior(any(), any(), any(), any(), any()) }
-        verify(exactly = 0) { syncScheduler.enqueueNow() }
     }
 
     @Test
-    fun recordNow_mirrorsMediaAndRecordsBehaviorThenSchedulesSync() = runTest {
+    fun recordNow_mirrorsMediaAndRecordsBehaviorLocally() = runTest {
         coEvery { profileRepository.settings("friend-1") } returns settings(
             profileConsent = true,
-            behaviorConsent = true,
-            syncEnabled = true
+            behaviorConsent = true
         )
         coEvery { profileRepository.mirrorMedia("friend-1", any(), any()) } returns AiMediaNormalizer.normalize(snapshot())
         coEvery {
@@ -71,31 +72,28 @@ class AiProfileBehaviorRecorderTest {
                 now = any()
             )
         }
-        verify { syncScheduler.enqueueNow() }
     }
 
     @Test
-    fun recordNow_canMirrorWithoutUploadingBehaviorWhenBehaviorConsentIsOff() = runTest {
+    fun recordNow_canMirrorWithoutRecordingWhenBehaviorConsentIsOff() = runTest {
         coEvery { profileRepository.settings("friend-1") } returns settings(
             profileConsent = true,
-            behaviorConsent = false,
-            syncEnabled = true
+            behaviorConsent = false
         )
         coEvery { profileRepository.mirrorMedia("friend-1", any(), any()) } returns AiMediaNormalizer.normalize(snapshot())
 
         val recorded = recorder.recordNow(snapshot(), AiProfileBehavior.EpisodeCompleted, "2026-08-14")
 
+        // 镜像归画像授权管，行为明细归行为授权管，两者独立
         assertThat(recorded).isTrue()
         coVerify(exactly = 0) { profileRepository.recordBehavior(any(), any(), any(), any(), any()) }
-        verify { syncScheduler.enqueueNow() }
     }
 
     @Test
-    fun recordDetailDwell_recordsDetailDwellAndSchedulesSync() = runTest {
+    fun recordDetailDwell_recordsDetailDwellLocally() = runTest {
         coEvery { profileRepository.settings("friend-1") } returns settings(
             profileConsent = true,
-            behaviorConsent = true,
-            syncEnabled = true
+            behaviorConsent = true
         )
         coEvery { profileRepository.mirrorMedia("friend-1", any(), any()) } returns AiMediaNormalizer.normalize(snapshot())
         coEvery {
@@ -120,7 +118,6 @@ class AiProfileBehaviorRecorderTest {
                 now = any()
             )
         }
-        verify { syncScheduler.enqueueNow() }
     }
 
     private fun snapshot() = MediaSourceSnapshot(
@@ -135,14 +132,13 @@ class AiProfileBehaviorRecorderTest {
 
     private fun settings(
         profileConsent: Boolean,
-        behaviorConsent: Boolean = false,
-        syncEnabled: Boolean = true
+        behaviorConsent: Boolean = false
     ) = AiProfileSettings(
         friendId = "friend-1",
         profileConsent = profileConsent,
         behaviorConsent = behaviorConsent,
         personalizationEnabled = profileConsent,
-        syncEnabled = syncEnabled,
+        syncEnabled = true,
         shouldAutoImport = false,
         updatedAt = 0L,
         clearedAt = null

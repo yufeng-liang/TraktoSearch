@@ -211,8 +211,7 @@ fun PrivacyScreen(
                                 onAiTasteChanged = viewModel::setAiTasteEnabled,
                                 onProfileConsentChanged = viewModel::setAiProfileConsent,
                                 onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
-                                onBehaviorConsentChanged = viewModel::setAiBehaviorConsent,
-                                onSyncChanged = viewModel::setAiSyncEnabled
+                                onBehaviorConsentChanged = viewModel::setAiBehaviorConsent
                             )
                         }
                     }
@@ -253,7 +252,7 @@ fun PrivacyScreen(
                                 subtitle = stringResource(R.string.settings_ai_profile_clear_desc),
                                 onClick = { showClearAiProfileDialog = true },
                                 enabled = aiProfileSettings.isAvailable &&
-                                    !aiProfileSettings.isLoading &&
+                                    aiProfileSettings.isLoaded &&
                                     !aiProfileSettings.isUpdating
                             )
                         }
@@ -1268,11 +1267,11 @@ private fun PrivacyActionRow(
 
 /**
  * AI 数据与画像开关组：画像授权是总开关，「个性化分析」缩进挂在它下面；
- * 「行为数据授权」「云端同步」与总开关平级；末行是独立的 AI 功能「锐评看单」
+ * 「行为数据授权」与总开关平级；末行是独立的 AI 功能「锐评看单」
  * 自己的上传开关（同一张卡里代表「哪些数据会交给 AI 服务」）。
  *
- * 顺序按「授权 → 派生功能 → 额外采集 → 传输 → 独立功能」排，任何一次云端写入
- * 期间整组只读。这组开关原本长在设置页的「AI 与隐私」分组里，现由隐私页承载。
+ * BYOK 后画像只存本地不上传，「云端同步」开关已随同步链路拆除。
+ * 任何一次写入期间整组只读。这组开关原本长在设置页的「AI 与隐私」分组里，现由隐私页承载。
  */
 @Composable
 private fun ColumnScope.AiDataSwitchGroup(
@@ -1281,10 +1280,9 @@ private fun ColumnScope.AiDataSwitchGroup(
     onAiTasteChanged: (Boolean) -> Unit,
     onProfileConsentChanged: (Boolean) -> Unit,
     onPersonalizationChanged: (Boolean) -> Unit,
-    onBehaviorConsentChanged: (Boolean) -> Unit,
-    onSyncChanged: (Boolean) -> Unit
+    onBehaviorConsentChanged: (Boolean) -> Unit
 ) {
-    val isBusy = settings.isLoading || settings.isUpdating
+    val isBusy = settings.isUpdating
     val isInitialLoading = !settings.isLoaded
     PrivacySwitchRow(
         icon = Icons.Rounded.Psychology,
@@ -1326,17 +1324,6 @@ private fun ColumnScope.AiDataSwitchGroup(
         subtitle = stringResource(R.string.settings_ai_behavior_consent_desc),
         checked = settings.behaviorConsent,
         onToggle = onBehaviorConsentChanged,
-        enabled = settings.isAvailable && !isBusy,
-        loading = isInitialLoading
-    )
-    GroupDivider()
-    PrivacySwitchRow(
-        icon = Icons.Rounded.CloudSync,
-        iconTint = MaterialTheme.colorScheme.primary,
-        title = stringResource(R.string.settings_ai_cloud_sync),
-        subtitle = stringResource(R.string.settings_ai_cloud_sync_desc),
-        checked = settings.syncEnabled,
-        onToggle = onSyncChanged,
         enabled = settings.isAvailable && !isBusy,
         loading = isInitialLoading
     )

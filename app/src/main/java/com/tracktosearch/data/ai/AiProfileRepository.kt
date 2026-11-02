@@ -20,7 +20,8 @@ import javax.inject.Singleton
 /**
  * 画像本地协调器。
  *
- * 负责本地授权、镜像、日聚合和 outbox；网络同步由 [AiProfileSyncCoordinator] 消费 pending outbox。
+ * 负责本地授权、镜像、日聚合和 outbox。BYOK 后画像不再上传服务端，
+ * outbox 仅作为本批次构建的暂存层保留。
  */
 @Singleton
 class AiProfileRepository @Inject constructor(

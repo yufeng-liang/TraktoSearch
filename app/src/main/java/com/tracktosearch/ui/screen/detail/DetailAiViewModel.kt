@@ -13,11 +13,8 @@ import com.tracktosearch.data.ai.AiMediaIdsDto
 import com.tracktosearch.data.ai.AiProfileBehaviorRecorder
 import com.tracktosearch.data.ai.AiProfileRepository
 import com.tracktosearch.data.ai.AiProfileSettings
-import com.tracktosearch.data.ai.AiProfileSettingsRequest
-import com.tracktosearch.data.ai.AiProfileSyncCoordinator
 import com.tracktosearch.data.ai.AiRepository
 import com.tracktosearch.data.ai.MediaSourceSnapshot
-import com.tracktosearch.data.ai.toDomain
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.repository.WeatherRepository
@@ -54,7 +51,6 @@ data class DetailAiUiState(
     val scene: DetailAiScene = DetailAiScene.UNMARKED,
     val profileConsent: Boolean = false,
     val behaviorConsent: Boolean = false,
-    val syncEnabled: Boolean = false,
     val profileSettingsLoaded: Boolean = false,
     val isAuthorized: Boolean = false,
     val spriteEnabled: Boolean = false,
@@ -77,7 +73,6 @@ data class DetailAiUiState(
 class DetailAiViewModel @Inject constructor(
     private val aiRepository: AiRepository,
     private val aiProfileRepository: AiProfileRepository,
-    private val aiProfileSyncCoordinator: AiProfileSyncCoordinator,
     private val aiProfileBehaviorRecorder: AiProfileBehaviorRecorder,
     private val authManager: AuthManager,
     private val weatherRepository: WeatherRepository
@@ -128,7 +123,6 @@ class DetailAiViewModel @Inject constructor(
             spriteEnabled = _uiState.value.spriteEnabled,
             profileConsent = _uiState.value.profileConsent,
             behaviorConsent = _uiState.value.behaviorConsent,
-            syncEnabled = _uiState.value.syncEnabled,
             profileSettingsLoaded = _uiState.value.profileSettingsLoaded,
             isAuthorized = _uiState.value.isAuthorized
         )
@@ -223,18 +217,10 @@ class DetailAiViewModel @Inject constructor(
         val friendId = authManager.friendId.value?.trim().orEmpty()
         if (friendId.isBlank()) return
         viewModelScope.launch {
-            val local = runCatching {
+            // BYOK：画像授权只写本地，云端设置端点已停用
+            val settings = runCatching {
                 aiProfileRepository.grantProfileConsent(friendId)
             }.getOrNull()
-            val remote = aiRepository.updateProfileSettings(
-                friendId,
-                AiProfileSettingsRequest(
-                    profileConsent = true,
-                    personalizationEnabled = true,
-                    syncEnabled = true
-                )
-            ).getOrNull()
-            val settings = local ?: remote?.toDomain(friendId)
             if (settings != null) applySettings(settings)
             if (settings?.profileConsent == true) {
                 mirrorIfAllowed()
@@ -403,15 +389,14 @@ class DetailAiViewModel @Inject constructor(
                 it.copy(
                     profileConsent = false,
                     behaviorConsent = false,
-                    syncEnabled = false,
                     profileSettingsLoaded = true,
                     isAuthorized = false
                 )
             }
             return
         }
-        val local = runCatching { aiProfileRepository.settings(friendId) }.getOrNull()
-        val settings = local ?: aiRepository.getProfileSettings(friendId).getOrNull()?.toDomain(friendId)
+        // BYOK：画像设置只读本地，不再回源服务端
+        val settings = runCatching { aiProfileRepository.settings(friendId) }.getOrNull()
         if (settings != null) applySettings(settings) else {
             _uiState.update { it.copy(profileSettingsLoaded = true, isAuthorized = true) }
         }
@@ -423,7 +408,6 @@ class DetailAiViewModel @Inject constructor(
             it.copy(
                 profileConsent = settings.profileConsent,
                 behaviorConsent = settings.behaviorConsent,
-                syncEnabled = settings.syncEnabled,
                 profileSettingsLoaded = true,
                 isAuthorized = true
             )
@@ -453,7 +437,6 @@ class DetailAiViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 aiProfileRepository.mirrorMedia(friendId, input.toMediaSourceSnapshot())
-                if (_uiState.value.syncEnabled) aiProfileSyncCoordinator.syncNow(friendId)
             }
         }
     }

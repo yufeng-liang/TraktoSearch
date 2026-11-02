@@ -9,12 +9,12 @@ import javax.inject.Singleton
 /**
  * 应用级画像行为入口。
  *
- * 统一处理授权边界、媒体快照镜像和后台同步调度；记录失败不应影响原有用户操作。
+ * 统一处理授权边界、媒体快照镜像和本地行为记录；记录失败不应影响原有用户操作。
+ * BYOK 后画像不再上传服务端，行为数据仅留在本地喂 prompt。
  */
 @Singleton
 class AiProfileBehaviorRecorder @Inject constructor(
     private val profileRepository: AiProfileRepository,
-    private val syncScheduler: AiProfileSyncScheduler,
     private val authManager: AuthManager
 ) {
 
@@ -48,7 +48,6 @@ class AiProfileBehaviorRecorder @Inject constructor(
             }.getOrDefault(false)
         }
 
-        if (settings.syncEnabled) syncScheduler.enqueueNow()
         return true
     }
 
