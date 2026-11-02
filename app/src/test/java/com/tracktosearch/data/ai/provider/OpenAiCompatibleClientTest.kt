@@ -7,29 +7,28 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * OpenAI 兼容适配器单测：请求形状（URL/头/body）、非流式与流式解析、
  * jsonMode 400 回退重试、TTS/配图端点、错误映射。
+ *
+ * 配图路径在主源码与测试两端都用到 android.util.Base64（android 框架类，
+ * 纯 JVM 单测没有且 testOptions 未开 returnDefaultValues），所以挂 Robolectric。
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class OpenAiCompatibleClientTest {
 
     private lateinit var server: MockWebServer
     private lateinit var client: OpenAiCompatibleClient
 
-    // setUp 里才知道 MockWebServer 的地址，AiResolvedConfig 字段全 val，只能整体重建
-    private var config = AiResolvedConfig(
-        protocol = AiProviderProtocol.OPENAI_COMPATIBLE,
-        baseUrl = "",
-        apiKey = "sk-test",
-        model = "gpt-test"
-    )
-
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
-        config = config.copy(baseUrl = server.url("/v1").toString().trimEnd('/'))
         client = OpenAiCompatibleClient()
     }
 
@@ -37,6 +36,14 @@ class OpenAiCompatibleClientTest {
     fun tearDown() {
         server.shutdown()
     }
+
+    /** AiResolvedConfig 字段全 val，setUp 后才知道端口，只能每个测试整体重建。 */
+    private fun makeConfig(): AiResolvedConfig = AiResolvedConfig(
+        protocol = AiProviderProtocol.OPENAI_COMPATIBLE,
+        baseUrl = server.url("/v1").toString().trimEnd('/'),
+        apiKey = "sk-test",
+        model = "gpt-test"
+    )
 
     private fun chatResponse(content: String) = MockResponse()
         .setResponseCode(200)
@@ -53,7 +60,7 @@ class OpenAiCompatibleClientTest {
 
         val response = client.complete(
             AiChatRequest(system = "sys", user = "user text", temperature = 0.5, maxOutputTokens = 100),
-            config
+            makeConfig()
         )
 
         assertThat(response.text).isEqualTo("hello")
@@ -76,7 +83,7 @@ class OpenAiCompatibleClientTest {
     fun complete_jsonModeAddsResponseFormat() = runTest {
         server.enqueue(chatResponse("{}"))
 
-        client.complete(AiChatRequest(system = "s", user = "u", jsonMode = true), config)
+        client.complete(AiChatRequest(system = "s", user = "u", jsonMode = true), makeConfig())
 
         val body = server.takeRequest().body.readUtf8()
         assertThat(body).contains("\"response_format\":{\"type\":\"json_object\"}")
@@ -94,7 +101,7 @@ class OpenAiCompatibleClientTest {
 
         val response = client.complete(
             AiChatRequest(system = "s", user = "u", jsonMode = true),
-            config
+            makeConfig()
         )
 
         assertThat(response.text).isEqualTo("{\"a\":1}")
@@ -123,7 +130,7 @@ class OpenAiCompatibleClientTest {
         )
 
         val chunks = mutableListOf<AiStreamChunk>()
-        client.stream(AiChatRequest(system = "s", user = "u"), config).collect { chunks.add(it) }
+        client.stream(AiChatRequest(system = "s", user = "u"), makeConfig()).collect { chunks.add(it) }
 
         val deltas = chunks.filterIsInstance<AiStreamChunk.Delta>()
         assertThat(deltas.map { it.text }).containsExactly("你", "好", "呀").inOrder()
@@ -142,14 +149,12 @@ class OpenAiCompatibleClientTest {
         )
 
         val error = runCatching {
-            client.complete(AiChatRequest(system = "s", user = "u"), config)
-        }.exceptionOrNull()
+            client.complete(AiChatRequest(system = "s", user = "u"), makeConfig())
+        }.exceptionOrNull() as AiProviderException
 
-        assertThat(error).isInstanceOf(AiProviderException::class.java)
-        val providerError = error as AiProviderException
-        assertThat(providerError.code).isEqualTo(AiProviderErrorCode.PROVIDER_AUTH)
-        assertThat(providerError.httpStatus).isEqualTo(401)
-        assertThat(providerError.message).isEqualTo("Incorrect API key")
+        assertThat(error.code).isEqualTo(AiProviderErrorCode.PROVIDER_AUTH)
+        assertThat(error.httpStatus).isEqualTo(401)
+        assertThat(error.message).isEqualTo("Incorrect API key")
     }
 
     @Test
@@ -161,7 +166,7 @@ class OpenAiCompatibleClientTest {
         )
 
         val error = runCatching {
-            client.complete(AiChatRequest(system = "s", user = "u"), config)
+            client.complete(AiChatRequest(system = "s", user = "u"), makeConfig())
         }.exceptionOrNull() as AiProviderException
 
         assertThat(error.code).isEqualTo(AiProviderErrorCode.RATE_LIMITED)
@@ -177,7 +182,7 @@ class OpenAiCompatibleClientTest {
         )
 
         val error = runCatching {
-            client.complete(AiChatRequest(system = "s", user = "u"), config)
+            client.complete(AiChatRequest(system = "s", user = "u"), makeConfig())
         }.exceptionOrNull() as AiProviderException
 
         assertThat(error.code).isEqualTo(AiProviderErrorCode.SERVER)
@@ -194,7 +199,7 @@ class OpenAiCompatibleClientTest {
                 .setBody(okio.Buffer().write(audioBytes))
         )
 
-        val result = client.synthesizeSpeech(AiTtsRequest(text = "你好", voice = "alloy"), config)
+        val result = client.synthesizeSpeech(AiTtsRequest(text = "你好", voice = "alloy"), makeConfig())
 
         assertThat(result).isEqualTo(audioBytes)
         val request = server.takeRequest()
@@ -219,7 +224,7 @@ class OpenAiCompatibleClientTest {
 
         val result = client.generateImage(
             AiImageRequest(prompt = "a cat", size = "1024x1024"),
-            config
+            makeConfig()
         )
 
         assertThat(result).isEqualTo(rawBytes)
@@ -230,5 +235,21 @@ class OpenAiCompatibleClientTest {
         assertThat(body).contains("\"prompt\":\"a cat\"")
         assertThat(body).contains("\"size\":\"1024x1024\"")
         assertThat(body).contains("\"response_format\":\"b64_json\"")
+    }
+
+    @Test
+    fun generateImage_missingB64ThrowsInvalidResponse() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"created":1,"data":[{}]}""")
+        )
+
+        val error = runCatching {
+            client.generateImage(AiImageRequest(prompt = "p"), makeConfig())
+        }.exceptionOrNull() as AiProviderException
+
+        assertThat(error.code).isEqualTo(AiProviderErrorCode.INVALID_RESPONSE)
     }
 }
