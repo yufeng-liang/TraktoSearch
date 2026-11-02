@@ -977,17 +977,21 @@ fun TraktSearchScreen(
             ) {
                 val scrollScope = rememberCoroutineScope()
                 val interactionSource = remember { MutableInteractionSource() }
+                // haze 2.1 起 HazeBlurStyle 改为按身份比较，未 remember 会每次重组重建模糊效果
+                val scrollToTopHazeStyle = remember(hazeSurface) {
+                    HazeBlurStyle {
+                        backgroundColor(hazeSurface.copy(alpha = 0.6f))
+                        blurRadius(20.dp)
+                        noiseFactor(0f)
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .size(58.dp)
                         .clip(CircleShape)
                         .appVisualEffect(
                             input = HazeInput.Sources(hazeState),
-                            hazeStyle = HazeBlurStyle {
-                                backgroundColor(hazeSurface.copy(alpha = 0.6f))
-                                blurRadius(20.dp)
-                                noiseFactor(0f)
-                            },
+                            hazeStyle = scrollToTopHazeStyle,
                             glassRole = GlassSurfaceRole.CircularControl,
                             glassShape = RoundedCornerShape(50),
                             glassTint = hazeSurface.copy(alpha = 0.6f),

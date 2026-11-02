@@ -11,7 +11,12 @@ pluginManagement {
         // 因此主源必须覆盖全部构件。官方主站在本网络对部分构件返回 403，主源用阿里云；
         // 腾讯云/官方作冗余。若镜像漏构件（如阿里云缺 haze -android RC 的 aar，已预铺缓存），
         // 从有该构件的源下载后预铺进 Gradle 缓存即可。
-        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven {
+            url = uri("https://maven.aliyun.com/repository/central")
+            // dev.chrisbanes.haze 在阿里云镜像同步滞后（2.1.0 缺 haze-blur-android / haze-blur-materials-android 的 aar），
+            // 而 Gradle 对模块绑定「第一个提供元数据的仓库」后不会跨仓库补构件，故该 group 直接走腾讯云/官方源。
+            content { excludeGroup("dev.chrisbanes.haze") }
+        }
         maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
         maven { url = uri("https://repo.maven.apache.org/maven2/") }
         gradlePluginPortal()
@@ -29,7 +34,12 @@ dependencyResolutionManagement {
         // 因此主源必须覆盖全部构件。官方主站在本网络对部分构件返回 403，主源用阿里云；
         // 腾讯云/官方作冗余。若镜像漏构件（如阿里云缺 haze -android RC 的 aar，已预铺缓存），
         // 从有该构件的源下载后预铺进 Gradle 缓存即可。
-        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven {
+            url = uri("https://maven.aliyun.com/repository/central")
+            // dev.chrisbanes.haze 在阿里云镜像同步滞后（2.1.0 缺 haze-blur-android / haze-blur-materials-android 的 aar），
+            // 而 Gradle 对模块绑定「第一个提供元数据的仓库」后不会跨仓库补构件，故该 group 直接走腾讯云/官方源。
+            content { excludeGroup("dev.chrisbanes.haze") }
+        }
         maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
         maven { url = uri("https://repo.maven.apache.org/maven2/") }
         maven { url = uri("https://jitpack.io") }
