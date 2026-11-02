@@ -1787,7 +1787,7 @@ Config:
     <string name="settings_ai_group_title">AI &amp; Privacy</string>
     <string name="settings_ai_taste_subtitle">When enabled, using this feature uploads your latest 60 watched titles (name, year, rating, watched date) to this app\'s AI service, used only to generate the roast</string>
     <string name="ai_taste_consent_title">Your watchlist will be uploaded</string>
-    <string name="ai_taste_consent_message">Generating the roast sends your latest 60 watched titles (name, year, rating, watched date) to this app\'s AI service. You can turn this off anytime in Settings → AI &amp; Privacy; when off, nothing is sent.</string>
+    <string name="ai_taste_consent_message">AI features send your latest 60 watched titles (name, year, rating, watched date) to the AI provider you configured yourself. You can turn this off anytime in Settings → AI &amp; Privacy; when off, nothing is sent.</string>
     <string name="ai_taste_consent_agree">Agree and continue</string>
     <string name="ai_taste_consent_decline">Not now</string>
     <string name="ai_taste_disabled_message">%1$s is turned off in Settings. Turn it on to use it.</string>
@@ -2010,9 +2010,9 @@ Config:
     <string name="ai_daily_media_image_description">Related film image</string>
     <string name="help_ai_sprite">AI Sprite</string>
     <string name="help_ai_sprite_b2">Choose a character and say its name once. The app does not keep listening; after up to five voice attempts, or when the microphone is unavailable, type the name instead.</string>
-    <string name="help_ai_sprite_b3">AI uses the nickname on your authorized account and your watched history.</string>
+    <string name="help_ai_sprite_b3">AI uses the linked account nickname and your watch history; requests go directly to the provider you configured in AI provider settings.</string>
     <string name="help_ai_sprite_b4">Features include nickname welcome, watchlist roast, film quiz, and today’s film knowledge. The quiz picks 7 titles from your watched list and prepares the day’s questions ahead of time, so it needs at least 7 watched titles.</string>
-    <string name="help_ai_sprite_b5">AI requests use a daily quota, and refreshing a feature spends one more. Offline, new requests are unavailable but cached content remains readable.</string>
+    <string name="help_ai_sprite_b5">AI usage counts against your own provider quota, and the app no longer limits it; offline you cannot start new requests, but cached content stays viewable.</string>
     <string name="help_ai_sprite_b7">Quiz answers survive leaving the round. Discarding the round and incomplete submission ask for confirmation; difficulty feedback helps tune later rounds.</string>
     <string name="help_ai_sprite_b8">Today’s film knowledge cites only public general knowledge and verifiable source links. Illustrations are learning aids without real people or film stills, and a backup entry is labelled when AI is unavailable.</string>
     <!-- Main screen background glow -->
@@ -2170,7 +2170,7 @@ Config:
     <string name="privacy_location_grant">Grant again</string>
     <string name="privacy_location_manage">System settings</string>
     <string name="privacy_section_statement">Privacy</string>
-    <string name="privacy_statement_intro">TraktoSearch has no ads or analytics SDKs. Watch history, lists and progress are processed on your device first. A request leaves the device only when a feature needs it, such as sign-in, sync, title lookup, resource search, AI roast, weather, crash reporting or feedback.</string>
+    <string name="privacy_statement_intro">TraktoSearch has no ads or analytics SDKs. Watch history, lists and progress are processed on your device first. A request leaves the device only when a feature needs it, such as sign-in, sync, title lookup, resource search, AI roast, weather, crash reporting or feedback. AI requests go directly to the provider you configured.</string>
     <string name="privacy_local_title">Stays on your device</string>
     <string name="privacy_local_b1">Sign-in credentials and tokens, encrypted at rest</string>
     <string name="privacy_local_b2">Search and browse history, watch history</string>
@@ -2180,7 +2180,7 @@ Config:
     <string name="privacy_network_b2">Lookups: TMDB / Douban / OMDb requests</string>
     <string name="privacy_network_b3">Resource search: only the title keywords needed for the search</string>
     <string name="privacy_network_b4">Weather: only after you tap the cloud and grant approximate location; city-level data is sent to the weather service, not linked to your account, and not stored by the app</string>
-    <string name="privacy_network_b5">AI roast: after first-use confirmation, the latest 60 watched records are sent to this app\'s AI service; turn it off with the switch above</string>
+    <string name="privacy_network_b5">AI features: requests go directly to your configured provider and include the latest 60 watched records; turn it off anytime with the switch above</string>
     <string name="privacy_network_b6">Crash logs: off by default; when enabled, necessary stack, OS and app-version details upload on the next launch</string>
     <string name="privacy_network_b7">Feedback: only the content and contact details you submit, plus the system version needed to handle it</string>
     <string name="privacy_network_b8">Activation: Android ID is used for device binding, not advertising tracking</string>
@@ -2266,17 +2266,17 @@ Config:
     <string name="settings_ai_profile_clear">Clear local AI profile</string>
     <string name="settings_ai_profile_clear_desc">Delete local profile data and turn off AI profile permissions.</string>
     <string name="settings_ai_profile_clear_confirm_title">Clear local AI profile?</string>
-    <string name="settings_ai_profile_clear_confirm_message">This deletes local taste, media and behavior data, and turns off profile permissions. It does not delete data already stored on the server.</string>
+    <string name="settings_ai_profile_clear_confirm_message">This deletes local taste, media and behavior data, and turns off profile permissions. Profile data lives only on this device and cannot be recovered once deleted.</string>
     <string name="settings_ai_profile_clear_action">Clear</string>
     <string name="settings_ai_profile_saved">AI profile settings saved</string>
     <string name="settings_ai_profile_clear_success">Local AI profile cleared</string>
     <string name="settings_ai_profile_update_failed">Could not update AI profile settings. Your previous settings were restored.</string>
     <string name="help_ai_profile">AI Profile &amp; Privacy</string>
-    <string name="help_ai_profile_b1">The profile can use watched and watchlist titles, ratings, short reviews, genres and other media details to understand your taste.</string>
+    <string name="help_ai_profile_b1">The profile stays on this device: it may use watched titles, watchlist, ratings, comments and genres to understand your taste.</string>
     <string name="help_ai_profile_b2">Optional behavior data is aggregated by day: detail dwell buckets, search clicks, episode starts/completions and playback progress buckets.</string>
     <string name="help_ai_profile_b3">Detail-page analysis uses only a coarse weather label. Coordinates, city names and location identifiers are not sent to AI.</string>
-    <string name="help_ai_profile_b4">Profile, personalization, behavior collection and cloud sync are separate controls. Behavior collection is off by default. The switches live under Settings → Data &amp; privacy.</string>
-    <string name="help_ai_profile_b5">Clearing the profile deletes local taste, media, behavior and pending sync data, then turns off local permissions. It does not delete existing server data.</string>
+    <string name="help_ai_profile_b4">Profile, personalization and behavior collection can be controlled separately; behavior collection is off by default. Profile data is never uploaded, and switches live in Settings → Data &amp; Privacy.</string>
+    <string name="help_ai_profile_b5">Clearing the profile deletes local taste, media and behavior data and turns off local permissions; the profile has no server copy.</string>
     <string name="detail_ai_title">AI Assistant</string>
     <string name="detail_ai_close">Close AI assistant</string>
     <string name="detail_ai_login_message">Sign in to let the AI assistant use your profile for personalized detail analysis.</string>

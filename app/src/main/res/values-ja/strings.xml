@@ -1791,7 +1791,7 @@
     <string name="settings_ai_group_title">AI とプライバシー</string>
     <string name="settings_ai_taste_subtitle">有効にすると、この機能の利用時に直近 60 件の視聴記録（タイトル、年、評価、視聴日）を本アプリの AI サービスへ送信します。レビュー生成のみに使用します</string>
     <string name="ai_taste_consent_title">視聴リストがアップロードされます</string>
-    <string name="ai_taste_consent_message">レビュー生成には、直近 60 件の視聴記録（タイトル、年、評価、視聴日）を本アプリの AI サービスへ送信することが必要です。「設定 → AI とプライバシー」でいつでもオフにでき、オフ中は送信されません。</string>
+    <string name="ai_taste_consent_message">AI 機能では、直近 60 件の視聴記録（タイトル、年、評価、視聴日）をあなた自身が設定した AI プロバイダーへ送信します。「設定 → AI とプライバシー」でいつでもオフにでき、オフ中は送信されません。</string>
     <string name="ai_taste_consent_agree">同意して続行</string>
     <string name="ai_taste_consent_decline">今は使わない</string>
     <string name="ai_taste_disabled_message">%1$s は設定でオフになっています。オンにすると利用できます。</string>
@@ -2014,9 +2014,9 @@
     <string name="ai_daily_media_image_description">関連する映像画像</string>
     <string name="help_ai_sprite">AI スプライト</string>
     <string name="help_ai_sprite_b2">キャラクター名を一度呼んで起動し、その後は常時聞き取りません。音声は最大 5 回まで試せ、失敗時やマイク不可時は名前を入力できます。</string>
-    <string name="help_ai_sprite_b3">AI は認証済みアカウントのニックネームと視聴履歴を利用します。</string>
+    <string name="help_ai_sprite_b3">AI は連携アカウントのニックネームと視聴履歴を使います。リクエストは AI プロバイダー設定で指定したプロバイダーへ直接送られます。</string>
     <string name="help_ai_sprite_b4">ニックネーム歓迎、視聴リスト批評、映画クイズ、今日の映像知識を利用できます。クイズは視聴済みから 7 本を選び、その日の問題を事前に用意するため、視聴済み 7 本以上が必要です。</string>
-    <string name="help_ai_sprite_b5">AI リクエストには日次上限があり、機能の更新でも 1 回消費します。オフラインでは新規リクエスト不可ですが、キャッシュは読めます。</string>
+    <string name="help_ai_sprite_b5">AI の利用量はあなたのプロバイダーの残量に依存し、アプリ内での制限はありません。オフラインでは新しいリクエストを開始できませんが、キャッシュ済みの内容は閲覧できます。</string>
     <string name="help_ai_sprite_b7">クイズを離れても回答は保持されます。ラウンドの中断と未回答のままの提出は確認され、難易度の感想は次回以降の調整に使われます。</string>
     <string name="help_ai_sprite_b8">今日の映像知識は公開の一般知識と確認できる出典リンクのみを引用します。イラストは理解の補助で、実在の人物や劇中カットは含みません。AI 生成が使えないときは予備の内容として表示します。</string>
 <!-- メイン画面の背景グロー -->
@@ -2174,7 +2174,7 @@
     <string name="privacy_location_grant">再許可</string>
     <string name="privacy_location_manage">システム設定</string>
     <string name="privacy_section_statement">プライバシー</string>
-    <string name="privacy_statement_intro">TraktoSearch は広告 SDK や分析 SDK を組み込みません。視聴履歴、リスト、進捗はまず端末で処理されます。ログイン、同期、作品情報、リソース検索、AI 評論、天気、クラッシュ報告、フィードバックなど、機能に必要な場合だけ通信します。</string>
+    <string name="privacy_statement_intro">TraktoSearch は広告 SDK や分析 SDK を組み込みません。視聴履歴、リスト、進捗はまず端末で処理されます。ログイン、同期、作品情報、リソース検索、AI 評論、天気、クラッシュ報告、フィードバックなど、機能に必要な場合だけ通信します。AI 機能のリクエストは、あなたが設定したプロバイダーへ直接送られます。</string>
     <string name="privacy_local_title">端末内に留まるもの</string>
     <string name="privacy_local_b1">ログイン資格情報とトークン（保存時に暗号化）</string>
     <string name="privacy_local_b2">検索・閲覧履歴、視聴履歴</string>
@@ -2184,7 +2184,7 @@
     <string name="privacy_network_b2">情報照会：TMDB/豆瓣/OMDb へのリクエスト</string>
     <string name="privacy_network_b3">リソース検索：検索に必要な作品キーワードのみ</string>
     <string name="privacy_network_b4">天気：雲をタップしておおよその位置を許可した場合だけ、市区町村レベルの位置を天気サービスへ送信します。アカウントとは結び付けず、アプリには保存しません</string>
-    <string name="privacy_network_b5">AI 評論：初回確認後、最新 60 件の視聴記録を本アプリの AI サービスへ送信します。上のスイッチで停止できます</string>
+    <string name="privacy_network_b5">AI 機能：リクエストは設定したプロバイダーへ直接送られ、直近 60 件の視聴記録を含みます。上のスイッチでいつでも停止できます</string>
     <string name="privacy_network_b6">クラッシュログ：初期状態はオフ。オンにすると次回起動時に必要なスタック、OS、アプリバージョンを送信します</string>
     <string name="privacy_network_b7">フィードバック：入力した内容と連絡先、対応に必要なシステム情報のみ送信します</string>
     <string name="privacy_network_b8">アクティベーション：端末紐付けのため Android ID を使用し、広告追跡には使いません</string>
@@ -2270,17 +2270,17 @@
     <string name="settings_ai_profile_clear">ローカル AI プロフィールを消去</string>
     <string name="settings_ai_profile_clear_desc">ローカルのプロフィールデータを削除し、AI プロフィールの許可をオフにします。</string>
     <string name="settings_ai_profile_clear_confirm_title">ローカル AI プロフィールを消去しますか？</string>
-    <string name="settings_ai_profile_clear_confirm_message">ローカルの好み、作品、行動データを削除し、プロフィールの許可をオフにします。サーバーに保存済みのデータは削除しません。</string>
+    <string name="settings_ai_profile_clear_confirm_message">ローカルの好み、作品、行動データを削除し、プロフィールの許可をオフにします。プロフィールデータは端末内のみに保存されており、削除すると元に戻せません。</string>
     <string name="settings_ai_profile_clear_action">消去</string>
     <string name="settings_ai_profile_saved">AI プロフィール設定を保存しました</string>
     <string name="settings_ai_profile_clear_success">ローカル AI プロフィールを消去しました</string>
     <string name="settings_ai_profile_update_failed">AI プロフィール設定を更新できませんでした。以前の設定に戻しました。</string>
     <string name="help_ai_profile">AI プロフィールとプライバシー</string>
-    <string name="help_ai_profile_b1">視聴済み、観たい作品、評価、短評、ジャンルなどの情報を使って好みを把握します。</string>
+    <string name="help_ai_profile_b1">プロフィールは端末内にのみ保存されます。視聴済み・見たい・評価・コメント・ジャンルなどの情報を使って好みを理解します。</string>
     <string name="help_ai_profile_b2">任意の行動データは日次集計されます。詳細ページの滞在、検索クリック、エピソード開始/完了、再生進捗が含まれます。</string>
     <string name="help_ai_profile_b3">詳細ページの分析には粗い天気ラベルだけを使い、座標、都市名、位置識別子は AI に送りません。</string>
-    <string name="help_ai_profile_b4">プロフィール、パーソナライズ、行動データ、クラウド同期は個別に制御できます。行動データは初期状態でオフです。スイッチは「設定 → データとプライバシー」にあります。</string>
-    <string name="help_ai_profile_b5">プロフィールを消去すると、ローカルの好み、作品、行動、未同期データを削除し、許可をオフにします。サーバー上の既存データは削除しません。</string>
+    <string name="help_ai_profile_b4">プロフィール・パーソナライズ・行動データ収集はそれぞれ個別に制御でき、行動収集は既定でオフです。プロフィールはサーバーへアップロードされません。スイッチは「設定 → データとプライバシー」にあります。</string>
+    <string name="help_ai_profile_b5">プロフィールを消去すると、端末内の好み・作品・行動データが削除され、ローカルの許可がオフになります。サーバーにコピーはありません。</string>
     <string name="detail_ai_title">AI アシスタント</string>
     <string name="detail_ai_close">AI アシスタントを閉じる</string>
     <string name="detail_ai_login_message">ログインすると、AI アシスタントがあなたのプロフィールを使って作品を分析できます。</string>

@@ -1779,7 +1779,7 @@
     <string name="settings_ai_group_title">AI 与隐私</string>
     <string name="settings_ai_taste_subtitle">开启后，使用该功能会上传最近 60 条观看记录（标题、年份、评分、观看时间）给本应用的 AI 服务，仅用于生成锐评</string>
     <string name="ai_taste_consent_title">锐评需要上传观看记录</string>
-    <string name="ai_taste_consent_message">生成锐评需要将你最近 60 条观看记录（标题、年份、评分、观看时间）发送给本应用的 AI 服务。可随时在「设置 → AI 与隐私」中关闭，关闭后不会发送。</string>
+    <string name="ai_taste_consent_message">锐评与 AI 功能会把你最近 60 条观看记录（标题、年份、评分、观看时间）发送给你自己配置的 AI 服务商。可在「设置 → AI 与隐私」随时关闭，关闭后不会发送。</string>
     <string name="ai_taste_consent_agree">同意并继续</string>
     <string name="ai_taste_consent_decline">暂不使用</string>
     <string name="ai_taste_disabled_message">「%1$s」已在设置中关闭，开启后才能使用。</string>
@@ -2002,9 +2002,9 @@
     <string name="ai_daily_media_image_description">影视关联图片</string>
     <string name="help_ai_sprite">AI 精灵</string>
     <string name="help_ai_sprite_b2">选好角色后喊一次名字激活，之后不会持续监听；语音最多尝试 5 次，失败或麦克风不可用时可改为输入角色名。</string>
-    <string name="help_ai_sprite_b3">AI 会使用授权账号的昵称和你的已看历史。</string>
+    <string name="help_ai_sprite_b3">AI 会使用授权账号的昵称和你的已看历史；请求直接发往你在 AI 服务商设置里配置的服务商。</string>
     <string name="help_ai_sprite_b4">功能包括昵称欢迎、看单锐评、影视闯关和今日影视知识；闯关会从已看影视里挑 7 部、并按天提前备好题目，因此需至少 7 部已看影视。</string>
-    <string name="help_ai_sprite_b5">AI 请求有每日配额，刷新功能会再消耗一次；离线时不能发起新请求，但仍可查看缓存内容。</string>
+    <string name="help_ai_sprite_b5">AI 请求用量取决于你自己的服务商额度，应用内不再限额；离线时不能发起新请求，但仍可查看缓存内容。</string>
     <string name="help_ai_sprite_b7">离开闯关会保留答案；放弃本轮和未答完提交前会确认，难度反馈会用于调整后续题目。</string>
     <string name="help_ai_sprite_b8">今日影视知识只引用公开通识与可核验的来源链接；插图仅辅助理解，不含真人或剧照；AI 生成暂时不可用时会标注为备用内容。</string>
 
@@ -2163,7 +2163,7 @@
     <string name="privacy_location_grant">重新申请</string>
     <string name="privacy_location_manage">系统设置</string>
     <string name="privacy_section_statement">隐私说明</string>
-    <string name="privacy_statement_intro">TraktoSearch 不接入广告或分析 SDK。观影记录、片单和进度先在手机本地处理；只有功能确实需要时，请求才会离开设备，例如登录、同步、查询影视资料、搜索资源、AI 锐评、天气、崩溃上报或意见反馈。</string>
+    <string name="privacy_statement_intro">TraktoSearch 不接入广告或分析 SDK。观影记录、片单和进度先在手机本地处理；只有功能确实需要时，请求才会离开设备，例如登录、同步、查询影视资料、搜索资源、AI 锐评、天气、崩溃上报或意见反馈。AI 功能的请求会直接发往你自己配置的服务商。</string>
     <string name="privacy_local_title">留在设备上的</string>
     <string name="privacy_local_b1">登录凭据与令牌：静态加密保存</string>
     <string name="privacy_local_b2">搜索与浏览历史、观影记录</string>
@@ -2173,7 +2173,7 @@
     <string name="privacy_network_b2">查资料：TMDB / 豆瓣 / OMDb 请求</string>
     <string name="privacy_network_b3">搜索资源：只发送完成搜索所需的影视关键词</string>
     <string name="privacy_network_b4">天气：仅在你点击云朵并授权大致位置后，才把城市级位置发送给天气服务查询；应用不将其与账号绑定，也不保存位置</string>
-    <string name="privacy_network_b5">AI 锐评：首次使用需确认，仅发送最近 60 条观看记录；关闭上方开关后不再发送</string>
+    <string name="privacy_network_b5">AI 功能：请求直接发往你配置的服务商，会带上最近 60 条观看记录；可随时用上方开关关闭</string>
     <string name="privacy_network_b6">崩溃日志：默认关闭；开启后仅在下次启动上传必要的堆栈、系统版本与 App 版本</string>
     <string name="privacy_network_b7">意见反馈：仅发送你主动填写的内容和联系方式，以及处理反馈所需的系统版本</string>
     <string name="privacy_network_b8">激活授权：仅上报 Android ID 用于设备绑定，不用于广告追踪</string>
@@ -2259,17 +2259,17 @@
     <string name="settings_ai_profile_clear">清除本地 AI 画像</string>
     <string name="settings_ai_profile_clear_desc">删除本地画像数据并关闭 AI 画像授权。</string>
     <string name="settings_ai_profile_clear_confirm_title">清除本地 AI 画像？</string>
-    <string name="settings_ai_profile_clear_confirm_message">这会删除本地口味、影视和行为数据，并关闭画像授权；不会删除服务器上已经保存的数据。</string>
+    <string name="settings_ai_profile_clear_confirm_message">这会删除本地口味、影视和行为数据，并关闭画像授权；画像数据仅保存在本机，删除后无法恢复。</string>
     <string name="settings_ai_profile_clear_action">清除</string>
     <string name="settings_ai_profile_saved">AI 画像设置已保存</string>
     <string name="settings_ai_profile_clear_success">本地 AI 画像已清除</string>
     <string name="settings_ai_profile_update_failed">AI 画像设置更新失败，已恢复之前的设置。</string>
     <string name="help_ai_profile">AI 画像与隐私</string>
-    <string name="help_ai_profile_b1">画像可使用已看、想看、评分、短评、类型等影视信息，帮助理解你的口味。</string>
+    <string name="help_ai_profile_b1">画像只保存在本机：可使用已看、想看、评分、短评、类型等影视信息，帮助理解你的口味。</string>
     <string name="help_ai_profile_b2">可选行为数据按日聚合，包括详情停留桶、搜索点击、单集开始/完成次数和播放进度桶。</string>
     <string name="help_ai_profile_b3">详情页分析只使用粗粒度天气标签，不会向 AI 发送坐标、城市名称或位置标识。</string>
-    <string name="help_ai_profile_b4">画像、个性化、行为采集和云端同步可以分别控制；行为采集默认关闭。开关在「设置 → 数据与隐私」里。</string>
-    <string name="help_ai_profile_b5">清除画像会删除本地口味、影视、行为和待同步数据，并关闭本地授权；不会删除服务器已有数据。</string>
+    <string name="help_ai_profile_b4">画像、个性化与行为采集可以分别控制；行为采集默认关闭。画像数据不上传服务器，开关在「设置 → 数据与隐私」里。</string>
+    <string name="help_ai_profile_b5">清除画像会删除本机的口味、影视和行为数据，并关闭本地授权；画像没有服务器副本。</string>
     <string name="detail_ai_title">AI 助手</string>
     <string name="detail_ai_close">关闭 AI 助手</string>
     <string name="detail_ai_login_message">登录后，AI 助手才能使用你的画像分析这部影视是否适合你。</string>

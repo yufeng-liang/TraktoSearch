@@ -1791,7 +1791,7 @@
     <string name="settings_ai_group_title">AI &amp; 개인정보</string>
     <string name="settings_ai_taste_subtitle">사용하면 이 기능 이용 시 최근 60개의 시청 기록(제목, 연도, 평점, 시청일)을 이 앱의 AI 서비스로 전송하며, 날평 생성에만 사용합니다</string>
     <string name="ai_taste_consent_title">시청 목록이 업로드됩니다</string>
-    <string name="ai_taste_consent_message">날평 생성을 위해서는 최근 60개의 시청 기록(제목, 연도, 평점, 시청일)을 이 앱의 AI 서비스로 보내야 합니다. \'설정 → AI &amp; 개인정보\'에서 언제든 끌 수 있으며, 꺼진 동안에는 전송되지 않습니다.</string>
+    <string name="ai_taste_consent_message">AI 기능은 최근 60개의 시청 기록(제목, 연도, 평점, 시청일)을 사용자가 직접 설정한 AI 공급자로 보냅니다. '설정 → AI &amp; 개인정보'에서 언제든 끌 수 있으며, 꺼진 동안에는 전송되지 않습니다.</string>
     <string name="ai_taste_consent_agree">동의하고 계속</string>
     <string name="ai_taste_consent_decline">나중에</string>
     <string name="ai_taste_disabled_message">%1$s(이)가 설정에서 꺼져 있습니다. 켜면 사용할 수 있습니다.</string>
@@ -2014,9 +2014,9 @@
     <string name="ai_daily_media_image_description">관련 영상 이미지</string>
     <string name="help_ai_sprite">AI 스프라이트</string>
     <string name="help_ai_sprite_b2">캐릭터 이름을 한 번 말해 활성화하고 이후 계속 듣지 않습니다. 음성은 최대 5회까지 시도하며, 실패하거나 마이크를 쓸 수 없으면 이름을 입력할 수 있습니다.</string>
-    <string name="help_ai_sprite_b3">AI는 인증된 계정의 닉네임과 시청 기록을 사용합니다.</string>
+    <string name="help_ai_sprite_b3">AI는 연동 계정의 닉네임과 시청 기록을 사용하며, 요청은 AI 공급자 설정에서 구성한 공급자로 직접 전송됩니다.</string>
     <string name="help_ai_sprite_b4">닉네임 인사, 시청 목록 평론, 영화 퀴즈, 오늘의 영상 지식을 제공합니다. 퀴즈는 시청 목록에서 7편을 골라 하루치 문제를 미리 준비하므로 시청 완료 7편 이상이 필요합니다.</string>
-    <string name="help_ai_sprite_b5">AI 요청에는 일일 한도가 있고 기능 새로 고침도 한 번 소모합니다. 오프라인에서는 새 요청을 할 수 없지만 캐시된 내용은 볼 수 있습니다.</string>
+    <string name="help_ai_sprite_b5">AI 사용량은 사용자의 공급자 잔여량에 따라 달라지며 앱 내 제한은 없습니다. 오프라인에서는 새 요청을 시작할 수 없지만 캐시된 내용은 볼 수 있습니다.</string>
     <string name="help_ai_sprite_b7">퀴즈를 나가도 답변은 유지됩니다. 라운드 포기와 미완료 제출 전에 확인하며, 난이도 의견은 이후 문제 조정에 사용됩니다.</string>
     <string name="help_ai_sprite_b8">오늘의 영상 지식은 공개된 일반 지식과 확인 가능한 출처 링크만 인용합니다. 삽화는 이해를 돕기 위한 것으로 실제 인물이나 영화 장면은 담지 않으며, AI 생성이 불가할 때는 예비 콘텐츠로 표시합니다.</string>
 <!-- 메인 화면 배경 글로우 -->
@@ -2174,7 +2174,7 @@
     <string name="privacy_location_grant">다시 허용</string>
     <string name="privacy_location_manage">시스템 설정</string>
     <string name="privacy_section_statement">개인정보</string>
-    <string name="privacy_statement_intro">TraktoSearch는 광고·분석 SDK를 통합하지 않습니다. 시청 기록, 리스트와 진행도는 먼저 기기에서 처리됩니다. 로그인, 동기화, 작품 정보, 리소스 검색, AI 평론, 날씨, 크래시 보고 또는 피드백처럼 기능에 필요한 경우에만 네트워크 요청을 보냅니다.</string>
+    <string name="privacy_statement_intro">TraktoSearch는 광고·분석 SDK를 통합하지 않습니다. 시청 기록, 리스트와 진행도는 먼저 기기에서 처리됩니다. 로그인, 동기화, 작품 정보, 리소스 검색, AI 평론, 날씨, 크래시 보고 또는 피드백처럼 기능에 필요한 경우에만 네트워크 요청을 보냅니다. AI 기능 요청은 사용자가 설정한 공급자로 직접 전송됩니다.</string>
     <string name="privacy_local_title">기기에 남는 데이터</string>
     <string name="privacy_local_b1">로그인 자격 증명과 토큰(저장 시 암호화)</string>
     <string name="privacy_local_b2">검색·열람 기록, 시청 기록</string>
@@ -2184,7 +2184,7 @@
     <string name="privacy_network_b2">정보 조회: TMDB/Douban/OMDb 요청</string>
     <string name="privacy_network_b3">리소스 검색: 검색에 필요한 작품 키워드만 전송</string>
     <string name="privacy_network_b4">날씨: 구름을 탭하고 대략적인 위치를 허용한 경우에만 도시 수준 위치를 날씨 서비스로 보냅니다. 계정과 연결하지 않으며 앱에 저장하지 않습니다</string>
-    <string name="privacy_network_b5">AI 평론: 최초 확인 후 최근 60개의 시청 기록을 이 앱의 AI 서비스로 보냅니다. 위 스위치로 끌 수 있습니다</string>
+    <string name="privacy_network_b5">AI 기능: 요청은 설정한 공급자로 직접 전송되며 최근 60개의 시청 기록을 포함합니다. 위 스위치로 언제든 끌 수 있습니다</string>
     <string name="privacy_network_b6">크래시 로그: 기본적으로 꺼져 있으며, 켜면 다음 실행 시 필요한 스택·OS·앱 버전 정보를 업로드합니다</string>
     <string name="privacy_network_b7">피드백: 입력한 내용과 연락처, 처리에 필요한 시스템 정보만 전송합니다</string>
     <string name="privacy_network_b8">활성화: 기기 연결에 Android ID를 사용하며 광고 추적에는 사용하지 않습니다</string>
@@ -2270,17 +2270,17 @@
     <string name="settings_ai_profile_clear">로컬 AI 프로필 삭제</string>
     <string name="settings_ai_profile_clear_desc">로컬 프로필 데이터를 삭제하고 AI 프로필 권한을 끕니다.</string>
     <string name="settings_ai_profile_clear_confirm_title">로컬 AI 프로필을 삭제할까요?</string>
-    <string name="settings_ai_profile_clear_confirm_message">로컬 취향, 작품 및 행동 데이터를 삭제하고 프로필 권한을 끕니다. 서버에 이미 저장된 데이터는 삭제하지 않습니다.</string>
+    <string name="settings_ai_profile_clear_confirm_message">로컬 취향, 작품 및 행동 데이터를 삭제하고 프로필 권한을 끕니다. 프로필 데이터는 이 기기에만 저장되며 삭제하면 복구할 수 없습니다.</string>
     <string name="settings_ai_profile_clear_action">삭제</string>
     <string name="settings_ai_profile_saved">AI 프로필 설정이 저장되었습니다</string>
     <string name="settings_ai_profile_clear_success">로컬 AI 프로필을 삭제했습니다</string>
     <string name="settings_ai_profile_update_failed">AI 프로필 설정을 업데이트하지 못했습니다. 이전 설정으로 복원했습니다.</string>
     <string name="help_ai_profile">AI 프로필 및 개인정보</string>
-    <string name="help_ai_profile_b1">시청 완료, 보고 싶은 작품, 평점, 짧은 리뷰, 장르 등의 정보로 취향을 파악합니다.</string>
+    <string name="help_ai_profile_b1">프로필은 이 기기에만 저장됩니다. 시청함, 보고 싶은 작품, 평점, 코멘트, 장르 정보를 사용해 취향을 파악합니다.</string>
     <string name="help_ai_profile_b2">선택적 행동 데이터는 일별 집계됩니다. 상세 페이지 체류, 검색 클릭, 에피소드 시작/완료와 재생 진행이 포함됩니다.</string>
     <string name="help_ai_profile_b3">상세 페이지 분석에는 거친 날씨 라벨만 사용하며 좌표, 도시명 또는 위치 식별자를 AI에 보내지 않습니다.</string>
-    <string name="help_ai_profile_b4">프로필, 개인화, 행동 수집과 클라우드 동기화를 각각 제어할 수 있습니다. 행동 수집은 기본적으로 꺼져 있습니다. 스위치는 [설정 → 데이터 및 개인정보]에 있습니다.</string>
-    <string name="help_ai_profile_b5">프로필을 삭제하면 로컬 취향, 작품, 행동 및 대기 중인 동기화 데이터를 삭제하고 권한을 끕니다. 서버의 기존 데이터는 삭제하지 않습니다.</string>
+    <string name="help_ai_profile_b4">프로필, 개인화, 행동 수집은 각각 제어할 수 있으며 행동 수집은 기본적으로 꺼져 있습니다. 프로필 데이터는 서버로 업로드되지 않습니다. 스위치는 '설정 → 데이터 및 개인정보'에 있습니다.</string>
+    <string name="help_ai_profile_b5">프로필을 지우면 기기의 취향, 작품, 행동 데이터가 삭제되고 로컬 권한이 꺼집니다. 서버 사본은 없습니다.</string>
     <string name="detail_ai_title">AI 어시스턴트</string>
     <string name="detail_ai_close">AI 어시스턴트 닫기</string>
     <string name="detail_ai_login_message">로그인하면 AI 어시스턴트가 내 프로필을 사용해 이 작품을 분석할 수 있습니다.</string>
