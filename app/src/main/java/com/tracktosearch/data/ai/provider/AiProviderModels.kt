@@ -47,8 +47,9 @@ data class AiProviderConfig(
     /** 是否语音/配图专用 Provider。 */
     val isMediaProvider: Boolean = false
 ) {
+    // 配置完整与否只看 baseUrl/model（id 为 GLOBAL_ID 时允许 model 留空走默认）；Key 单独存 AiProviderKeyStore，永不回填本类
     val isConfigured: Boolean
-        get() = baseUrl.isNotBlank() && model.isNotBlank() && id != GLOBAL_ID || apiKey.isNotBlank()
+        get() = baseUrl.isNotBlank() && model.isNotBlank()
 
     companion object {
         const val GLOBAL_ID = "global"
