@@ -143,7 +143,8 @@ fun AiFeatureScreen(
     onPlayAudio: (AiAudio) -> Unit,
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit,
-    onRecommendationClick: ((AiRecommendation) -> Unit)? = null
+    onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
+    onOpenProviderSettings: (() -> Unit)? = null
 ) {
     val sceneRevision = when (feature) {
         AiFeature.TASTE -> state.tasteRevision
@@ -258,21 +259,6 @@ fun AiFeatureScreen(
                 ),
                 windowInsets = TopAppBarDefaults.windowInsets,
                 actions = {
-                    // 刷新是最主要的配额消耗入口，把当日+本会话用量摆在按钮旁边
-                    state.quota?.let { quota ->
-                        Text(
-                            text = stringResource(
-                                R.string.ai_quota_full,
-                                quota.dailyUsed,
-                                quota.dailyLimit,
-                                quota.sessionUsed,
-                                quota.sessionLimit
-                            ),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
                     IconButton(
                         onClick = {
                             // 图标按钮给轻一档。点下去可能是弹确认框、可能是直接刷新，
@@ -418,7 +404,8 @@ fun AiFeatureScreen(
                 if (!offlineUi && state.errorCode != null) {
                     FeatureError(
                         errorCode = state.errorCode,
-                        onRetry = onRefresh
+                        onRetry = onRefresh,
+                        onOpenProviderSettings = onOpenProviderSettings
                     )
                 }
             }
@@ -2254,14 +2241,27 @@ private fun FeatureUnavailable() {
  * 离线状态在调用方提前渲染 [FeatureUnavailable]，不进入这里，确保底层文案可见。
  */
 @Composable
-private fun FeatureError(errorCode: String, onRetry: () -> Unit) {
-    AppErrorState(
-        message = stringResource(aiErrorMessageRes(errorCode)),
-        onRetry = onRetry,
-        variant = AppErrorVariant.Overlay,
-        retryable = aiErrorIsRetryable(errorCode),
-        retryLabel = stringResource(R.string.ai_feature_retry)
-    )
+private fun FeatureError(
+    errorCode: String,
+    onRetry: () -> Unit,
+    onOpenProviderSettings: (() -> Unit)? = null
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        AppErrorState(
+            message = stringResource(aiErrorMessageRes(errorCode)),
+            onRetry = onRetry,
+            variant = AppErrorVariant.Overlay,
+            retryable = aiErrorIsRetryable(errorCode),
+            retryLabel = stringResource(R.string.ai_feature_retry)
+        )
+        // BYOK：配置类错误直接给「前往配置」出口，别让用户对着报错猜
+        if (errorCode == com.tracktosearch.data.ai.AiErrorCode.PROVIDER_INVALID.name && onOpenProviderSettings != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            TextButton(onClick = onOpenProviderSettings) {
+                Text(stringResource(R.string.ai_provider_go_configure))
+            }
+        }
+    }
 }
 
 @Composable

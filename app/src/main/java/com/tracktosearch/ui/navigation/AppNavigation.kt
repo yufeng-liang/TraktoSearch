@@ -116,6 +116,7 @@ import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.ai.AI_DOUBAN_NAV_PREFIX
+import com.tracktosearch.ui.screen.ai.AiProviderSettingsScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
@@ -193,6 +194,9 @@ object Routes {
     const val SEARCH_SOURCES = "searchSources"
     const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
     const val PRIVACY = "privacy"
+
+    /** BYOK：AI 服务商配置（全局/语音配图 Provider、按功能覆盖模型、偏好开关） */
+    const val AI_PROVIDER_SETTINGS = "aiProviderSettings"
 
     /** 每日台词：开屏台词开关 + 日签日历，设置页外观分组的二级页 */
     const val SPLASH_QUOTE = "splashQuote"
@@ -1042,6 +1046,9 @@ fun AppNavigation(
                                         navController.navigate(Routes.DOUBAN_SPIDER_TEST)
                                     }
                                 },
+                                onNavigateToProviderSettings = {
+                                    navController.navigate(Routes.AI_PROVIDER_SETTINGS)
+                                },
                                 onFeedbackClick = {
                                     navController.navigate(Routes.FEEDBACK)
                                 },
@@ -1365,6 +1372,15 @@ fun AppNavigation(
                 composable(Routes.PRIVACY) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         PrivacyScreen(
+                            onBack = { navController.popBackStack() },
+                            onNavigateToProviderSettings = { navController.navigate(Routes.AI_PROVIDER_SETTINGS) }
+                        )
+                    }
+                }
+
+                composable(Routes.AI_PROVIDER_SETTINGS) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        AiProviderSettingsScreen(
                             onBack = { navController.popBackStack() }
                         )
                     }

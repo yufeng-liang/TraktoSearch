@@ -92,6 +92,10 @@ fun aiErrorMessageRes(errorCode: String?): Int = when (errorCode) {
     "INVALID_RESPONSE" -> R.string.ai_error_invalid_response
     "NETWORK" -> R.string.ai_error_network
     "SERVER" -> R.string.ai_error_server
+    // BYOK 提供商配置错误：给出「去检查配置」的明确指向，而不是泛化的请求失败
+    "PROVIDER_INVALID" -> R.string.ai_error_provider_invalid
+    "PROVIDER_NO_TTS" -> R.string.ai_error_provider_no_tts
+    "PROVIDER_NO_IMAGE" -> R.string.ai_error_provider_no_image
     else -> R.string.ai_error
 }
 
@@ -113,7 +117,11 @@ fun aiErrorIsRetryable(errorCode: String?): Boolean = when (errorCode) {
     "CHARACTER_UNAVAILABLE",
     "ACTIVATION_UNAVAILABLE",
     "ACTIVATION_RETRY_LIMIT",
-    "ACTIVATION_REQUIRED" -> false
+    "ACTIVATION_REQUIRED",
+    // 配置类错误重试无意义：Key 没填/接口不支持，要用户先去配置页改
+    "PROVIDER_INVALID",
+    "PROVIDER_NO_TTS",
+    "PROVIDER_NO_IMAGE" -> false
     else -> true
 }
 

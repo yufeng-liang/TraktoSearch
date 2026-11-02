@@ -224,6 +224,7 @@ fun MainScreen(
     onDoubanResync: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},
+    onNavigateToProviderSettings: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
     onMessagesClick: () -> Unit = {},
     onSearchSourcesClick: () -> Unit = {},
@@ -252,6 +253,11 @@ fun MainScreen(
         aiSpriteCenterVisible = false
         selectedTab = 3
         scope.launch { pagerState.scrollToPage(3) }
+    }
+    // BYOK：AI 报「提供商未配置」时直接跳 Provider 配置页（导航路由，非页签）
+    val onAiOpenProviderSettings: () -> Unit = {
+        aiSpriteCenterVisible = false
+        onNavigateToProviderSettings()
     }
     val context = LocalContext.current
 
@@ -678,6 +684,7 @@ fun MainScreen(
                                         },
                                         onNavigateToLogin = onNavigateToLogin,
                                         onOpenSettings = onAiOpenSettings,
+                                        onOpenProviderSettings = onAiOpenProviderSettings,
                                         onRecommendationClick = onAiRecommendationClick,
                                         viewModel = viewModel,
                                         inlineMode = true,
@@ -699,6 +706,7 @@ fun MainScreen(
                                 onSpiderTest = onSpiderTest,
                                 onMovieClick = onMovieClick,
                                 onOpenSettings = onAiOpenSettings,
+                                onOpenProviderSettings = onAiOpenProviderSettings,
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
                                 modifier = Modifier.fillMaxSize(),

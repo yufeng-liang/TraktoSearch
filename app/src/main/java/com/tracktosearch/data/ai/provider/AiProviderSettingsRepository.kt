@@ -72,4 +72,75 @@ class AiProviderSettingsRepository(
             config = config
         )
     }
+
+    /** 指定 Provider 是否已存有 API Key（配置页「Key 已保存」角标用）。 */
+    fun hasKey(id: String): Boolean = keyStore.getKey(id).isNotBlank()
+
+    /**
+     * 用界面当前输入拼一条测试配置（不落盘）：Key 覆盖为空时回退已存 Key。
+     * 任一要素缺失抛 [AiProviderErrorCode.PROVIDER_INVALID]，UI 提示补全后再测。
+     */
+    suspend fun buildTestConfig(
+        providerId: String,
+        protocol: AiProviderProtocol,
+        baseUrl: String,
+        model: String,
+        apiKeyOverride: String?
+    ): AiResolvedConfig {
+        val normalizedId = if (providerId == AiProviderConfig.MEDIA_ID) AiProviderConfig.MEDIA_ID else AiProviderConfig.GLOBAL_ID
+        val effectiveProtocol =
+            if (normalizedId == AiProviderConfig.MEDIA_ID) AiProviderProtocol.OPENAI_COMPATIBLE else protocol
+        val apiKey = apiKeyOverride?.takeIf { it.isNotBlank() } ?: keyStore.getKey(normalizedId)
+        if (apiKey.isBlank() || baseUrl.isBlank() || model.isBlank()) {
+            throw AiProviderException(
+                code = AiProviderErrorCode.PROVIDER_INVALID,
+                message = "Test config is incomplete"
+            )
+        }
+        return AiResolvedConfig(protocol = effectiveProtocol, baseUrl = baseUrl.trim(), apiKey = apiKey, model = model.trim())
+    }
+
+    /**
+     * 保存一条 Provider 配置。
+     * @param apiKey 非空 = 覆盖 Key 明文；null/空 = 保持原 Key 不变（编辑页不回显明文的约定）。
+     * media 槽协议固定 OPENAI_COMPATIBLE（语音/配图仅支持该协议，见 BYOK 定案）。
+     */
+    suspend fun saveProviderConfig(
+        id: String,
+        protocol: AiProviderProtocol,
+        baseUrl: String,
+        model: String,
+        apiKey: String?
+    ) {
+        val normalizedId = if (id == AiProviderConfig.MEDIA_ID) AiProviderConfig.MEDIA_ID else AiProviderConfig.GLOBAL_ID
+        val effectiveProtocol =
+            if (normalizedId == AiProviderConfig.MEDIA_ID) AiProviderProtocol.OPENAI_COMPATIBLE else protocol
+        settingsStore.update { current ->
+            val base = if (normalizedId == AiProviderConfig.MEDIA_ID) current.media else current.global
+            val updated = base.copy(protocol = effectiveProtocol, baseUrl = baseUrl.trim(), model = model.trim())
+            if (normalizedId == AiProviderConfig.MEDIA_ID) current.copy(media = updated) else current.copy(global = updated)
+        }
+        if (!apiKey.isNullOrBlank()) {
+            keyStore.setKey(normalizedId, apiKey.trim())
+        }
+    }
+
+    /** 按功能位覆盖模型（空串 = 恢复用全局模型）。 */
+    suspend fun saveModelOverride(slot: AiFeatureSlot, model: String) {
+        settingsStore.update { current ->
+            val overrides = current.modelOverrides.toMutableMap()
+            if (model.isBlank()) overrides.remove(slot.name) else overrides[slot.name] = model.trim()
+            current.copy(modelOverrides = overrides)
+        }
+    }
+
+    /** 音色跟随角色开关。 */
+    suspend fun setVoiceFollowCharacter(enabled: Boolean) {
+        settingsStore.update { it.copy(voiceFollowCharacter = enabled) }
+    }
+
+    /** 出题预生成开关。 */
+    suspend fun setQuizPregenerateEnabled(enabled: Boolean) {
+        settingsStore.update { it.copy(quizPregenerateEnabled = enabled) }
+    }
 }

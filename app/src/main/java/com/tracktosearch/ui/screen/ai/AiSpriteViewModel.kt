@@ -134,7 +134,6 @@ data class AiSpriteUiState(
     val voiceCancelArmed: Boolean = false,
     val textActivationAttempt: Int = 0,
     val activationMessage: String? = null,
-    val quota: com.tracktosearch.data.ai.AiQuota? = null,
     val isLoading: Boolean = false,
     val loadingFeature: AiFeature? = null,
     val activeFeature: AiFeature? = null,
@@ -665,7 +664,6 @@ class AiSpriteViewModel @Inject constructor(
                 voiceCancelArmed = false,
                 textActivationAttempt = 0,
                 activationMessage = null,
-                quota = null,
                 isLoading = false,
                 loadingFeature = null,
                 activeFeature = null,
@@ -1330,8 +1328,7 @@ class AiSpriteViewModel @Inject constructor(
                     it.copy(
                         isLoading = false,
                         quizResult = result,
-                        quizResultRevision = it.quizResultRevision + 1L,
-                        quota = result.quota ?: it.quota
+                        quizResultRevision = it.quizResultRevision + 1L
                     )
                 }
                 // 保存最近/最高成绩与错题（离线可浏览闯关历史）
@@ -1839,7 +1836,7 @@ class AiSpriteViewModel @Inject constructor(
                 .onSuccess { greeting ->
                     if (!canContinueAiRequest(requestId)) return@onSuccess
                     updateIfCurrentRequest(requestId) {
-                        it.copy(greeting = greeting, quota = greeting.quota ?: it.quota)
+                        it.copy(greeting = greeting)
                     }
                     greeting.audio?.let { audio ->
                         if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
@@ -1864,8 +1861,7 @@ class AiSpriteViewModel @Inject constructor(
                 updateIfCurrentRequest(requestId) {
                     it.copy(
                         taste = taste,
-                        tasteRevision = it.tasteRevision + 1L,
-                        quota = taste.quota ?: it.quota
+                        tasteRevision = it.tasteRevision + 1L
                     )
                 }
             }
@@ -2074,7 +2070,6 @@ class AiSpriteViewModel @Inject constructor(
                 quizIndex = 0,
                 quizAnswers = emptyMap(),
                 quizResult = null,
-                quota = quiz.quota ?: it.quota,
                 quizStage = null,
                 quizStageChars = 0,
                 quizStageExpectedChars = 0,
@@ -2190,8 +2185,7 @@ class AiSpriteViewModel @Inject constructor(
                                 dailyMediaImageUrl = null,
                                 dailyStage = null,
                                 dailyStageChars = 0,
-                                dailyStageExpectedChars = 0,
-                                quota = daily.quota ?: state.quota
+                                dailyStageExpectedChars = 0
                             )
                         }
                         onDailyKnowledgeContentSet(daily, requestId, history)
@@ -2210,8 +2204,7 @@ class AiSpriteViewModel @Inject constructor(
         dailyKnowledgeChangeCount = changeCount,
         dailyQuestionSelectedOptionId = record.questionResult?.selectedOptionIds?.firstOrNull(),
         dailyKnowledgeFeedback = record.contentFeedback,
-        dailyKnowledgeDifficultyFeedback = record.difficultyFeedback,
-        quota = record.knowledge.quota ?: state.quota
+        dailyKnowledgeDifficultyFeedback = record.difficultyFeedback
     )
 
     /** 内容落地后的插图/剧照/历史联动；requestId 失效后不写任何状态。 */

@@ -255,6 +255,7 @@ fun SearchScreen(
     onNavigateToLogin: (() -> Unit)? = null,
     // AI 锐评弹窗「去设置」回调：未提供时按钮无跳转（仅收起弹窗）
     onOpenSettings: () -> Unit = {},
+    onOpenProviderSettings: () -> Unit = {},
     onRecommendationClick: ((AiRecommendation) -> Unit)? = null,
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
@@ -1030,6 +1031,7 @@ fun SearchScreen(
             },
             onNavigateToLogin = { onNavigateToLogin?.invoke() },
             onOpenSettings = onOpenSettings,
+            onOpenProviderSettings = onOpenProviderSettings,
             onMovieClick = onMovieClick,
             onShowClick = onShowClick,
             onRecommendationClick = onRecommendationClick,

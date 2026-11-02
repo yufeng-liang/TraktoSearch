@@ -141,6 +141,7 @@ fun AiSpriteCenter(
     onDismiss: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenProviderSettings: () -> Unit = {},
     onMovieClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onShowClick: (Int, Int, String, String, Double, Boolean, Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     onRecommendationClick: ((com.tracktosearch.data.ai.AiRecommendation) -> Unit)? = null,
@@ -222,7 +223,8 @@ fun AiSpriteCenter(
                 onPlayAudio = { audioPlayer.play(it) },
                 onMovieClick = onMovieClick,
                 onShowClick = onShowClick,
-                onRecommendationClick = onRecommendationClick
+                onRecommendationClick = onRecommendationClick,
+                onOpenProviderSettings = onOpenProviderSettings
             )
         } else {
             SpriteCenterHome(
@@ -581,19 +583,6 @@ private fun ActivatedStatusPanel(state: AiSpriteUiState, character: AiCharacter)
                     text = stringResource(R.string.ai_sprite_activated_hint),
                     style = MaterialTheme.typography.bodySmall
                 )
-                state.quota?.let { quota ->
-                    Text(
-                        stringResource(
-                            R.string.ai_sprite_quota,
-                            quota.dailyUsed,
-                            quota.dailyLimit,
-                            quota.sessionUsed,
-                            quota.sessionLimit
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
             }
         }
     }
@@ -1058,14 +1047,6 @@ private fun ActivationPanel(
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
-        state.quota?.let { quota ->
-            Text(
-                stringResource(R.string.ai_sprite_quota, quota.dailyUsed, quota.dailyLimit, quota.sessionUsed, quota.sessionLimit),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
     }
 
     if (textDialogVisible) {
@@ -1277,12 +1258,6 @@ private fun ActivatedCompactHeader(
                     Icon(Icons.Rounded.CheckCircle, null, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
                     Text(stringResource(R.string.ai_sprite_activated_status, character.name), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                Text(
-                    state.quota?.let { q -> stringResource(R.string.ai_sprite_quota, q.dailyUsed, q.dailyLimit, q.sessionUsed, q.sessionLimit) }
-                        ?: stringResource(R.string.ai_sprite_quota_unavailable),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             IconButton(
                 onClick = onReplayAudition,

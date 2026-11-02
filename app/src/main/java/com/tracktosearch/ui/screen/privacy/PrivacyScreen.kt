@@ -45,6 +45,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BugReport
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Public
@@ -135,6 +137,7 @@ private const val RIGHTS_URL = "https://tracktosearch.pages.dev/rights.html"
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
+    onNavigateToProviderSettings: () -> Unit = {},
     viewModel: PrivacyViewModel = hiltViewModel()
 ) {
     val hazeState = remember { HazeState() }
@@ -212,6 +215,14 @@ fun PrivacyScreen(
                                 onProfileConsentChanged = viewModel::setAiProfileConsent,
                                 onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
                                 onBehaviorConsentChanged = viewModel::setAiBehaviorConsent
+                            )
+                            // BYOK：服务商配置入口挂在 AI 数据卡尾部，AI 相关设置集中一处
+                            GroupDivider()
+                            PrivacyNavigateRow(
+                                icon = Icons.Rounded.Key,
+                                title = stringResource(R.string.ai_provider_settings_title),
+                                subtitle = stringResource(R.string.ai_provider_global_desc),
+                                onClick = onNavigateToProviderSettings
                             )
                         }
                     }
@@ -534,6 +545,63 @@ private fun PrivacySwitchRow(
             enabled = enabled && !loading,
             onCheckedChange = { haptics.toggle(it); onToggle(it) },
             colors = appSwitchColors()
+        )
+    }
+}
+
+/**
+ * 纯导航行（无开关）：图标 + 标题/副标题 + 尾部箭头，用于跳二级配置页。
+ * BYOK：AI 服务商配置入口复用本组件。
+ */
+@Composable
+private fun PrivacyNavigateRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    val isDark = isAppDarkTheme()
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .hapticClickable(semantic = HapticSemantic.LIGHT_TAP) { onClick() }
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(
+                    color = settingsIconContainerColor(isDark),
+                    shape = RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            Icons.AutoMirrored.Rounded.ArrowForwardIos,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
         )
     }
 }
