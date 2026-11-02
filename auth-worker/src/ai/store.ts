@@ -37,6 +37,13 @@ interface TtsRateLimitRow {
 
 export const AI_SESSION_LIMIT = 14;
 export const AI_DAILY_LIMIT = 80;
+// 旧版关停节奏第一步：发版 4.2.0 当天把旧版配额砍半（响应形状不变，只改数值）。
+// 置 false 即恢复原配额；正式关停由 handler.ts 的 AI_SERVICE_SUNSET_DATE 闸门接管。
+const AI_QUOTA_HALVED = true;
+
+// 砍半后的生效值：向下取整保证不会超过原上限（奇数原值也安全）。
+export const EFFECTIVE_SESSION_LIMIT = AI_QUOTA_HALVED ? Math.floor(AI_SESSION_LIMIT / 2) : AI_SESSION_LIMIT;
+export const EFFECTIVE_DAILY_LIMIT = AI_QUOTA_HALVED ? Math.floor(AI_DAILY_LIMIT / 2) : AI_DAILY_LIMIT;
 export const AI_TTS_REQUEST_LIMIT = 20;
 export const AI_TTS_MISS_LIMIT = 5;
 export const AI_TTS_RATE_WINDOW_SECONDS = 10 * 60;
@@ -146,14 +153,14 @@ export async function reserveAiQuota(
         const sameSession = current?.sessionId === sessionId;
         const sessionCount = sameSession ? (current?.sessionCount || 0) + 1 : 1;
         const dailyCount = (current?.dailyCount || 0) + 1;
-        if (dailyCount > AI_DAILY_LIMIT) {
+        if (dailyCount > EFFECTIVE_DAILY_LIMIT) {
             throw new AppError('AI_DAILY_QUOTA_EXCEEDED', 'Daily AI quota exceeded', 429);
         }
-        if (sameSession && sessionCount > AI_SESSION_LIMIT) {
+        if (sameSession && sessionCount > EFFECTIVE_SESSION_LIMIT) {
             throw new AppError('AI_SESSION_QUOTA_EXCEEDED', 'AI session quota exceeded', 429);
         }
         env.AI_TEST_QUOTA.set(key, { sessionId, sessionCount, dailyCount });
-        return { sessionCount, dailyCount, sessionLimit: AI_SESSION_LIMIT, dailyLimit: AI_DAILY_LIMIT };
+        return { sessionCount, dailyCount, sessionLimit: EFFECTIVE_SESSION_LIMIT, dailyLimit: EFFECTIVE_DAILY_LIMIT };
     }
 
     if (!env.DB) throw new AppError('AI_STORAGE_ERROR', 'AI storage is unavailable', 503);
@@ -172,8 +179,8 @@ export async function reserveAiQuota(
                 END,
                 daily_count = ai_usage.daily_count + 1,
                 updated_at = excluded.updated_at
-            WHERE ai_usage.daily_count < 80
-              AND (ai_usage.session_id <> excluded.session_id OR ai_usage.session_count < 14)
+            WHERE ai_usage.daily_count < ${EFFECTIVE_DAILY_LIMIT}
+              AND (ai_usage.session_id <> excluded.session_id OR ai_usage.session_count < ${EFFECTIVE_SESSION_LIMIT})
         `).bind(friendId, deviceId, usageDay, sessionId, now()).run();
         if (typeof result.meta?.changes === 'number' && result.meta.changes === 0) {
             const existing = await env.DB.prepare(`
@@ -181,7 +188,7 @@ export async function reserveAiQuota(
                 FROM ai_usage
                 WHERE friend_id = ? AND usage_day = ?
             `).bind(friendId, usageDay).first<D1QuotaRow>();
-            if (existing?.daily_count === AI_DAILY_LIMIT) {
+            if (existing?.daily_count === EFFECTIVE_DAILY_LIMIT) {
                 throw new AppError('AI_DAILY_QUOTA_EXCEEDED', 'Daily AI quota exceeded', 429);
             }
             throw new AppError('AI_SESSION_QUOTA_EXCEEDED', 'AI session quota exceeded', 429);
@@ -194,8 +201,8 @@ export async function reserveAiQuota(
         return {
             sessionCount: usage?.session_count || 1,
             dailyCount: usage?.daily_count || 1,
-            sessionLimit: AI_SESSION_LIMIT,
-            dailyLimit: AI_DAILY_LIMIT,
+            sessionLimit: EFFECTIVE_SESSION_LIMIT,
+            dailyLimit: EFFECTIVE_DAILY_LIMIT,
         };
     } catch (error) {
         if (error instanceof AppError) throw error;

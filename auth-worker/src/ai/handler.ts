@@ -84,6 +84,8 @@ import {
 } from './daily-illustration.ts';
 import {
     cacheKeyDigest,
+    EFFECTIVE_DAILY_LIMIT,
+    EFFECTIVE_SESSION_LIMIT,
     getFriendNickname,
     readAiCache,
     reserveAiQuota,
@@ -348,6 +350,34 @@ interface LlmRequestContext {
     requestId: string;
 }
 
+// AI 服务关停日期（UTC，ISO 日期）。占位值 2027-02-01：正式发布 4.2.0 后改为「发版日 + 90 天」。
+// 到达该日期后所有依赖服务端 LLM 的端点直接回 410，不再进入任何 LLM 调用。
+const AI_SERVICE_SUNSET_DATE = '2027-02-01';
+
+function isAiServiceSunset(now: Date = new Date()): boolean {
+    // 与配额的 usageDay 同口径：toISOString() 取 UTC 日期，避免部署机时区影响判定。
+    return now.toISOString().slice(0, 10) >= AI_SERVICE_SUNSET_DATE;
+}
+
+// 关停后的 410 响应体：serverCode 必须落在旧版 AiErrorMapper 的已知映射里
+// （app/.../AiRepository.kt:67-85，removePrefix("AI_") 后 when 匹配）。
+// 选 AI_DAILY_QUOTA_EXCEEDED 而不是自造 AI_SERVICE_STOPPED：后者会落进 else 分支，
+// 按 httpCode 410 回退成 INVALID_REQUEST（「请求无效」+ 可重试），语义完全不对；
+// QUOTA_EXCEEDED 在旧版 UI 显示配额文案且 aiErrorIsRetryable=false，不出现重试按钮，
+// 最接近「服务已停」的呈现。message 写明原因，供新版/日志透传排查。
+// body 与 errorResponse（util/errors.ts:94）同形 {code, message, requestId}，
+// 旧版 requirePayload 只解析这三个字段；多带 success:false 也不影响解析，按同形不加。
+function aiServiceStoppedResponse(requestId: string): Response {
+    return new Response(JSON.stringify({
+        code: 'AI_DAILY_QUOTA_EXCEEDED',
+        message: 'AI 服务已停止，请升级新版 App',
+        requestId,
+    }), {
+        status: 410,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+}
+
 export async function handleAiApi(
     request: Request,
     env: AiEnvironment,
@@ -358,11 +388,24 @@ export async function handleAiApi(
 ): Promise<Response> {
     const audioOrigin = resolveAudioPublicBaseUrl(request, env);
 
+    // 关停闸门：用「豁免名单」而不是「拦截名单」——豁免的是 BYOK 定案里新版 App
+    // 仍走服务端的非 AI 端点（角色目录、激活、画像读写），其余 /api/ai/* 一律 410。
+    // 注意 tts 不豁免：新版 TTS 走用户自带 Provider + 系统 TTS，服务端 TTS 只有旧版在用，
+    // 随网关一起停；音频/插图的短期 URL（/api/ai/audio/:token 等）在 index.ts 直接路由，
+    // 不经过本函数，已生成的音频仍可播放。
+    const isSunsetExemptRoute = path === '/api/ai/characters'
+        || path === '/api/ai/activate'
+        || path.startsWith('/api/ai/profile');
+    if (!isSunsetExemptRoute && isAiServiceSunset()) {
+        return aiServiceStoppedResponse(requestId);
+    }
+
     if (path === '/api/ai/characters' && request.method === 'GET') {
         return successResponse({
             characters: await characterCatalog(env),
-            sessionLimit: 14,
-            dailyLimit: 80,
+            // 与 store.ts 的生效配额保持同源：砍半期间客户端同步看到砍半后的上限。
+            sessionLimit: EFFECTIVE_SESSION_LIMIT,
+            dailyLimit: EFFECTIVE_DAILY_LIMIT,
         }, requestId);
     }
 
