@@ -1,5 +1,6 @@
 package com.tracktosearch.data.ai.orchestrate
 
+import javax.inject.Inject
 import com.tracktosearch.data.ai.AiDailyCheckQuestion
 import com.tracktosearch.data.ai.AiDailyIllustration
 import com.tracktosearch.data.ai.AiDailyKnowledge
@@ -185,7 +186,8 @@ private val NOISE_NICKNAME_REGEX = Regex("^[\\d\\W_]+$")
  * quiz 槽位内部的降级题（fallbackQuestionForSlot）保留——它是槽位管线维持
  * 「13 题 = 10 单选 + 2 多选 + 1 简答」不变量的内部逻辑。
  */
-class AiOrchestrator(
+// BYOK：构造函数注入，由 Hilt 装配（DI 在 AiProviderModule 提供 settingsRepository）。
+class AiOrchestrator @Inject constructor(
     private val settingsRepository: AiProviderSettingsRepository,
 ) {
 

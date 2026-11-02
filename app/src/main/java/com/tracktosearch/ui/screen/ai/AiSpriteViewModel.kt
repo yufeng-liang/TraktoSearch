@@ -4,12 +4,15 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tracktosearch.data.ai.AiActivateRequest
+import com.tracktosearch.data.ai.AiActivationNormalizer
 import com.tracktosearch.data.ai.AiAudio
 import com.tracktosearch.data.ai.AiCharacter
 import com.tracktosearch.data.ai.AiCharacterCatalog
 import com.tracktosearch.data.ai.AiErrorCode
 import com.tracktosearch.data.ai.AiGreeting
+import com.tracktosearch.data.ai.AiTtsRequest
+import com.tracktosearch.data.ai.AiTtsScene
+import com.tracktosearch.data.ai.prompt.AiCharacters
 import com.tracktosearch.data.ai.AiQuota
 import com.tracktosearch.data.ai.AiQuiz
 import com.tracktosearch.data.ai.AiQuizAnswer
@@ -315,25 +318,6 @@ class AiSpriteViewModel @Inject constructor(
 
     init {
         observeConnectivityState()
-        observeQuotaSnapshot()
-    }
-
-    /**
-     * 额度变化时把当日用量落盘：服务端没有独立额度查询接口，重启后恢复激活态
-     * 只能靠这份快照把「今日 x/80」补回来。按 distinct dailyUsed 去重，避免每次刷新都写。
-     */
-    private fun observeQuotaSnapshot() {
-        viewModelScope.launch(ioDispatcher) {
-            _uiState
-                .map { it.quota?.dailyUsed }
-                .distinctUntilChanged()
-                .collect { dailyUsed ->
-                    if (dailyUsed == null) return@collect
-                    val friendId = authManager.friendId.value.orEmpty()
-                    if (friendId.isBlank()) return@collect
-                    aiRepository.saveQuotaSnapshot(friendId, dailyUsed)
-                }
-        }
     }
 
     /**
@@ -549,9 +533,6 @@ class AiSpriteViewModel @Inject constructor(
             val restored = aiRepository.readActivatedCharacterId(friendId) ?: return@launch
             if (!canReadPrivateState(friendId, generation)) return@launch
             if (_uiState.value.characters.none { it.id == restored }) return@launch
-            // 额度只随各功能响应顺带返回，重启后没有现值；读当日快照把「今日 x/80」补回来，
-            // 本轮计数随会话重置故显示 0，跨日快照不命中则维持「额度暂不可用」
-            val snapshotDailyUsed = aiRepository.readQuotaSnapshotDailyUsed(friendId)
             var restoredSelected = false
             _uiState.update { state ->
                 // 本次会话里已经激活过就不覆盖，避免落盘的旧值顶掉刚激活的角色
@@ -561,16 +542,7 @@ class AiSpriteViewModel @Inject constructor(
                     state.copy(
                         activatedCharacterId = restored,
                         selectedCharacterId = restored,
-                        activationState = AiActivationState.SUCCESS,
-                        quota = state.quota ?: snapshotDailyUsed?.let { dailyUsed ->
-                            AiQuota(
-                                sessionUsed = 0,
-                                sessionLimit = 14,
-                                dailyUsed = dailyUsed,
-                                dailyLimit = 80,
-                                resetAt = null
-                            )
-                        }
+                        activationState = AiActivationState.SUCCESS
                     )
                 }
             }
@@ -1007,38 +979,40 @@ class AiSpriteViewModel @Inject constructor(
     }
 
     /**
-     * 本地命中后走服务端文字激活：换取角色 ACK 语音与配额记录，
-     * spokenName 是角色标准名，服务端 matchesActivationName 必然命中。
+     * 语音命中后本地完成激活（BYOK：不再请求服务端）。
+     * spokenName 是角色标准激活词，本地 matchesActivationName 必然命中。
      *
-     * 激活请求也纳入请求代际：断网/切页后即使旧协程迟到返回，也不能把 OFFLINE
-     * 状态覆盖成 SERVER，更不能把已关闭页面的结果写回当前精灵中心。
+     * 激活仍纳入请求代际：断网/切页后即使旧协程迟到返回，也不能把 OFFLINE
+     * 状态覆盖成 SUCCESS，更不能把已关闭页面的结果写回当前精灵中心。
      */
     private suspend fun submitVoiceActivation(character: AiCharacter, requestId: Long) {
         if (!canContinueAiRequest(requestId)) return
-        val result = aiRepository.activate(
-            friendId = authManager.friendId.value.orEmpty(),
-            request = AiActivateRequest(
-                characterId = character.id,
-                spokenName = character.activationWord,
-                sessionId = spriteSessionId
-            )
-        )
+        finishActivationLocally(character, character.activationWord, requestId)
+    }
+
+    /**
+     * BYOK 激活统一收口：本地用 AiActivationNormalizer 做同音归并匹配。
+     * 命中即成功——写激活角色、展示 ACK 文案、播 ACK 语音（走 TTS Provider，
+     * 未配置 Provider 或合成失败都静默跳过，文字结果已在 UI 展示，语音只是加分项）。
+     */
+    private suspend fun finishActivationLocally(
+        character: AiCharacter,
+        spokenName: String,
+        requestId: Long
+    ) {
+        val activated = AiActivationNormalizer.matches(character, spokenName)
         if (!canContinueAiRequest(requestId)) return
-        result.onSuccess { activation ->
-            if (!canContinueAiRequest(requestId)) return@onSuccess
+        if (activated) {
             updateIfCurrentRequest(requestId) {
                 it.copy(
-                    activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
-                    activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
-                    activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
-                    quota = activation.quota ?: it.quota,
-                    errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
+                    activatedCharacterId = character.id,
+                    activationState = AiActivationState.SUCCESS,
+                    activationMessage = activationPhraseFor(character),
+                    errorCode = null
                 )
             }
-            activation.audio?.let { audio ->
-                if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
-            }
-            if (activation.activated && requestGeneration == requestId) {
+            emitActivationAckAudio(character, requestId)
+            if (requestGeneration == requestId) {
                 // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
                 aiRepository.saveActivatedCharacterId(
                     authManager.friendId.value.orEmpty(),
@@ -1046,15 +1020,28 @@ class AiSpriteViewModel @Inject constructor(
                 )
                 if (requestGeneration == requestId) loadGreeting(character.id)
             }
-        }.onFailure { error ->
-            if (requestGeneration != requestId) return@onFailure
+        } else {
             updateIfCurrentRequest(requestId) {
                 it.copy(
                     activationState = AiActivationState.FAILED,
-                    errorCode = requestErrorCode(error)
+                    errorCode = "ACTIVATION_NOT_MATCHED"
                 )
             }
         }
+    }
+
+    /** 激活成功文案取 prompt 层角色档案的 activationPhrase（与服务端 ACK 同源）。 */
+    private fun activationPhraseFor(character: AiCharacter): String? =
+        AiCharacters.findCharacter(character.id)?.activationPhrase?.takeIf { it.isNotBlank() }
+
+    /** 激活 ACK 语音：合成失败不影响激活结果，静默跳过。 */
+    private suspend fun emitActivationAckAudio(character: AiCharacter, requestId: Long) {
+        val phrase = activationPhraseFor(character) ?: return
+        val audio = aiRepository.playTts(
+            authManager.friendId.value.orEmpty(),
+            AiTtsRequest(characterId = character.id, text = phrase, scene = AiTtsScene.ACTIVATION_ACK)
+        ).getOrNull() ?: return
+        if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
     }
 
     /** 麦克风权限被拒绝或设备没有录音源：语音这条路当场判死，文字入口本来就常驻。 */
@@ -1111,46 +1098,8 @@ class AiSpriteViewModel @Inject constructor(
                 )
             }
             if (requestGeneration != requestId) return@launch
-            val result = aiRepository.activate(
-                authManager.friendId.value.orEmpty(),
-                AiActivateRequest(
-                    characterId = character.id,
-                    spokenName = typedName,
-                    sessionId = spriteSessionId
-                )
-            )
-            if (!canContinueAiRequest(requestId)) return@launch
-            result.onSuccess { activation ->
-                if (!canContinueAiRequest(requestId)) return@onSuccess
-                updateIfCurrentRequest(requestId) {
-                    it.copy(
-                        activatedCharacterId = if (activation.activated) character.id else it.activatedCharacterId,
-                        activationState = if (activation.activated) AiActivationState.SUCCESS else AiActivationState.FAILED,
-                        activationMessage = activation.activationPhrase.takeIf { activation.activated && it.isNotBlank() },
-                        quota = activation.quota ?: it.quota,
-                        errorCode = if (activation.activated) null else "ACTIVATION_NOT_MATCHED"
-                    )
-                }
-                activation.audio?.let { audio ->
-                    if (canContinueAiRequest(requestId)) _audioEvents.emit(audio)
-                }
-                if (activation.activated && requestGeneration == requestId) {
-                    // 落盘激活态：跨进程重启和详情页这类无激活入口的页面都要认这个角色
-                    aiRepository.saveActivatedCharacterId(
-                        authManager.friendId.value.orEmpty(),
-                        character.id
-                    )
-                    if (requestGeneration == requestId) loadGreeting(character.id)
-                }
-            }.onFailure { error ->
-                if (requestGeneration != requestId) return@onFailure
-                updateIfCurrentRequest(requestId) {
-                    it.copy(
-                        activationState = AiActivationState.FAILED,
-                        errorCode = requestErrorCode(error)
-                    )
-                }
-            }
+            // BYOK：文字激活同样本地匹配，不再请求服务端
+            finishActivationLocally(character, typedName, requestId)
         }
     }
 
@@ -1448,7 +1397,8 @@ class AiSpriteViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            aiRepository.submitQuizDifficulty(quizId, difficulty)
+            // 难度反馈只记本地（喂下次出题的难度提示），BYOK 后不再上传服务端
+            aiRepository.submitQuizDifficulty(authManager.friendId.value.orEmpty(), quizId, difficulty)
         }
     }
 
@@ -1638,7 +1588,8 @@ class AiSpriteViewModel @Inject constructor(
                 var dailySetsDone = false
                 aiRepository.getQuizStream(
                     friendId,
-                    quizStreamRequest(enriched, day, prefetch = true),
+                    nickname = authManager.nickname.value.orEmpty(),
+                    request = quizStreamRequest(enriched, day, prefetch = true),
                     forceRefresh = false
                 ).collect { event ->
                     if (!stillCurrent()) return@collect
@@ -1879,7 +1830,12 @@ class AiSpriteViewModel @Inject constructor(
 
     private fun loadGreeting(characterId: String, forceRefresh: Boolean = false) {
         runFeature(AiFeature.GREETING) { requestId ->
-            aiRepository.getGreeting(authManager.friendId.value.orEmpty(), characterId, forceRefresh)
+            aiRepository.getGreeting(
+                authManager.friendId.value.orEmpty(),
+                characterId,
+                nickname = authManager.nickname.value.orEmpty(),
+                forceRefresh = forceRefresh
+            )
                 .onSuccess { greeting ->
                     if (!canContinueAiRequest(requestId)) return@onSuccess
                     updateIfCurrentRequest(requestId) {
@@ -1901,7 +1857,8 @@ class AiSpriteViewModel @Inject constructor(
             aiRepository.getTaste(
                 authManager.friendId.value.orEmpty(),
                 com.tracktosearch.data.ai.AiTasteRequest(watched = watched, forceRefresh = forceRefresh),
-                forceRefresh
+                nickname = authManager.nickname.value.orEmpty(),
+                forceRefresh = forceRefresh
             ).onSuccess { taste ->
                 if (!canContinueAiRequest(requestId)) return@onSuccess
                 updateIfCurrentRequest(requestId) {
@@ -2090,8 +2047,9 @@ class AiSpriteViewModel @Inject constructor(
             // 等待页因此能显示「提炼单元 → 逐题生成」的真实阶段与进度，而不是干转圈。
             aiRepository.getQuizStream(
                 authManager.friendId.value.orEmpty(),
-                quizStreamRequest(enrichedWatched, day, prefetch = false),
-                forceRefresh
+                nickname = authManager.nickname.value.orEmpty(),
+                request = quizStreamRequest(enrichedWatched, day, prefetch = false),
+                forceRefresh = forceRefresh
             ).collect { event ->
                 if (event is com.tracktosearch.data.ai.AiQuizStreamEvent.Completed) {
                     if (canContinueAiRequest(requestId)) applyQuiz(event.quiz)

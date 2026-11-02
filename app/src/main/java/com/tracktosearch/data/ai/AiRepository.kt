@@ -1,11 +1,33 @@
 package com.tracktosearch.data.ai
 
 import android.content.Context
+import android.util.Base64
 import com.tracktosearch.R
+import com.tracktosearch.data.ai.orchestrate.AiOrchestrator
+import com.tracktosearch.data.ai.orchestrate.AiQuizScoring
+import com.tracktosearch.data.ai.prompt.AiCharacters
+import com.tracktosearch.data.ai.prompt.DailyKnowledgeUnit
+import com.tracktosearch.data.ai.prompt.DailyRecentUsage
+import com.tracktosearch.data.ai.prompt.DetailProfile
+import com.tracktosearch.data.ai.prompt.ProfileMediaItem
+import com.tracktosearch.data.ai.prompt.TtsScene
+import com.tracktosearch.data.ai.prompt.deriveBankQuizId
+import com.tracktosearch.data.ai.provider.AiProviderErrorCode
+import com.tracktosearch.data.ai.provider.AiProviderException
+import com.tracktosearch.data.local.db.AiProfileMediaEntity
 import com.tracktosearch.data.remote.tmdb.dto.TmdbMultiSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterConstants
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Locale
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -15,29 +37,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.io.IOException
-import java.security.MessageDigest
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZoneOffset
-import java.util.Locale
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.math.abs
-import retrofit2.Response
 
-private val AI_SUCCESS_CODES = setOf("SUCCESS", "OK", "200")
-
-// 服务端响应里可能带新字段：这里的解码统一走宽松 Json，避免每次调用都新建实例（JSON_FORMAT_REDUNDANT）
+// 服务端兼容字段已随 AiApiService 拆除；解码仍统一走宽松 Json，避免每次调用新建实例。
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
 enum class AiErrorCode {
@@ -50,7 +55,11 @@ enum class AiErrorCode {
     INVALID_RESPONSE,
     NETWORK,
     SERVER,
-    UNKNOWN
+    UNKNOWN,
+    // BYOK 新增：用户 Provider 配置缺失/不支持对应能力（TTS、配图）。
+    PROVIDER_INVALID,
+    PROVIDER_NO_TTS,
+    PROVIDER_NO_IMAGE
 }
 
 class AiApiException(
@@ -74,6 +83,10 @@ object AiErrorMapper {
             "INVALID_ACTION", "NOT_FOUND" -> AiErrorCode.INVALID_REQUEST
             "SERVER", "UPSTREAM_ERROR" -> AiErrorCode.SERVER
             "EMPTY_RESPONSE", "INVALID_RESPONSE" -> AiErrorCode.INVALID_RESPONSE
+            // BYOK：Provider 层错误码直映（编排器抛出的 AiProviderException 带 serverCode=code.name）。
+            "PROVIDER_INVALID" -> AiErrorCode.PROVIDER_INVALID
+            "PROVIDER_NO_TTS" -> AiErrorCode.PROVIDER_NO_TTS
+            "PROVIDER_NO_IMAGE" -> AiErrorCode.PROVIDER_NO_IMAGE
             else -> when {
                 httpCode == 401 || httpCode == 403 -> AiErrorCode.UNAUTHORIZED
                 httpCode == 429 -> AiErrorCode.RATE_LIMITED
@@ -97,69 +110,37 @@ object AiErrorMapper {
     private fun String?.normalized(): String = this.orEmpty().trim().uppercase(Locale.ROOT)
 }
 
+/**
+ * BYOK AI 仓库：所有 LLM/语音/配图调用走用户自配 Provider，经 [AiOrchestrator] 本地编排完成。
+ *
+ * 相对旧网关版的变化：
+ * - 无 AiApiService：greeting/taste/quiz/daily/detail/rank/tts/image 全部本地编排；
+ * - 角色目录、激活判断、判分（quiz submit / quiz feedback）全部本地；
+ * - 配额与额度概念消失，配额快照方法删除；
+ * - 缓存结构（AiStorage + 域模型 JSON）保持不变，旧缓存依旧可读。
+ */
 @Singleton
 class AiRepository @Inject constructor(
-    private val api: AiApiService,
+    private val orchestrator: AiOrchestrator,
     private val storage: AiStorage,
     private val json: Json,
     private val tmdbRepository: TmdbRepository,
+    private val aiProfileRepository: AiProfileRepository,
     // 补齐推荐的 reason 模板文案需要按当前语言生成后随缓存一起落盘
     @ApplicationContext private val context: Context
 ) {
 
     suspend fun listCharacters(): Result<List<AiCharacter>> = runApi {
-        api.listCharacters().requirePayload().data.characters.map { it.toDomain() }
-    }
-
-    suspend fun getProfileSettings(friendId: String): Result<AiProfileSettingsDto> = runForFriend(friendId) {
-        api.getProfileSettings().requirePayload().data
-    }
-
-    suspend fun updateProfileSettings(
-        friendId: String,
-        request: AiProfileSettingsRequest
-    ): Result<AiProfileSettingsDto> = runForFriend(friendId) {
-        api.updateProfileSettings(request).requirePayload().data
-    }
-
-    suspend fun syncProfile(
-        friendId: String,
-        batch: AiProfileSyncBatch
-    ): Result<AiProfileSyncResultDto> = runForFriend(friendId) {
-        api.syncProfile(batch).requirePayload().data
-    }
-
-    suspend fun activate(
-        friendId: String,
-        characterId: String,
-        spokenName: String
-    ): Result<AiActivation> = activate(
-        friendId,
-        AiActivateRequest(characterId = characterId, spokenName = spokenName)
-    )
-
-    suspend fun activate(
-        friendId: String,
-        request: AiActivateRequest
-    ): Result<AiActivation> = runForFriend(friendId) {
-        val normalized = AiActivationNormalizer.normalize(request.spokenName)
-        if (request.audioDataUrl.isNullOrBlank() && normalized.isBlank()) {
-            throw AiErrorMapper.exception("INVALID_REQUEST", "Activation name must not be blank", 400)
-        }
-        val requestWithSession = request.copy(
-            spokenName = normalized,
-            sessionId = sessionIdFor(friendId, request.sessionId)
-        )
-        val payload = api.activate(requestWithSession).requirePayload()
-        payload.data.toDomain(payload.quota)
+        // BYOK：角色目录打进 App（7 角色全量可用，激活门槛已去除），不再请求服务端。
+        AiCharacterCatalog.all.map { it.copy(isAvailable = true) }
     }
 
     suspend fun getGreeting(
         friendId: String,
         characterId: String,
+        nickname: String,
         forceRefresh: Boolean = false
     ): Result<AiGreeting> {
-        val sessionId = sessionIdFor(friendId)
         return cachedRequest(
             friendId = friendId,
             feature = AiCacheFeature.GREETING,
@@ -167,28 +148,20 @@ class AiRepository @Inject constructor(
             // 问候按角色区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存
             suffix = characterId,
             serializer = AiGreeting.serializer(),
-            isCacheValid = ::isUsableGreetingCache,
+            isCacheValid = ::isUsableGreetingCache
         ) {
-            val payload = api.getGreeting(
-                AiGreetingRequest(
-                    characterId = characterId,
-                    includeAudio = true,
-                    forceRefresh = forceRefresh,
-                    sessionId = sessionId
-                )
-            ).requirePayload()
-            payload.data.toDomain(payload.quota)
-        }
+            orchestrator.generateGreeting(characterId, nickname)
+        }.recoverWithFallback { fallbackGreeting(characterId, nickname) }
     }
 
     suspend fun getTaste(
         friendId: String,
         request: AiTasteRequest,
+        nickname: String,
         forceRefresh: Boolean = false
     ): Result<AiTasteAnalysis> {
         val watched = request.watched.take(MAX_WATCHED_ITEMS)
         val refresh = forceRefresh || request.forceRefresh
-        val sessionId = sessionIdFor(friendId, request.sessionId)
         val watchedDigest = watchedDigest(watched)
         return cachedRequest(
             friendId = friendId,
@@ -199,21 +172,33 @@ class AiRepository @Inject constructor(
             suffix = "$TASTE_CACHE_VERSION|$watchedDigest",
             serializer = AiTasteAnalysis.serializer()
         ) {
-            val payload = api.getTaste(
-                request.copy(
-                    watched = watched,
-                    forceRefresh = refresh,
-                    sessionId = sessionId
-                )
-            ).requirePayload()
-            verifyAndFillTasteRecommendations(payload.data.toDomain(payload.quota), watched)
-        }
+            verifyAndFillTasteRecommendations(
+                orchestrator.analyzeTaste(nickname, watched),
+                watched
+            )
+        }.recoverWithFallback { fallbackTaste(nickname, watched) }
     }
+
+    /**
+     * BYOK 兜底：仅当失败属于「模型输出被校验拒绝/上游异常」时退回本地文案；
+     * 配置缺失（PROVIDER_INVALID）、无授权、网络问题照常上抛引导用户处理。
+     * 兜底不写缓存，下次 forceRefresh 有机会重新生成而不是永远定格兜底内容。
+     */
+    private fun <T> Result<T>.recoverWithFallback(fallback: () -> T): Result<T> = fold(
+        onSuccess = { this },
+        onFailure = { error ->
+            if (error is AiApiException && error.errorCode in FALLBACK_ELIGIBLE_CODES) {
+                Result.success(fallback())
+            } else {
+                this
+            }
+        }
+    )
 
     // ========== 口味推荐 TMDB 核验与补齐 ==========
 
     /**
-     * 对服务端口味推荐做 TMDB 核验：
+     * 对本地编排的口味推荐做 TMDB 核验：
      * - 逐条用 searchMulti 反查真实条目（标题全等 + 年份 ±1 + 类型一致），命中才保留，
      *   并回填 tmdbId/posterPath；未命中丢弃，避免渲染虚构条目；
      * - 有效条数不足 [TASTE_MIN_RECOMMENDATIONS] 时按已看列表最高频类型用 Discover 补齐；
@@ -373,45 +358,57 @@ class AiRepository @Inject constructor(
 
     suspend fun getQuiz(
         friendId: String,
+        nickname: String,
         request: AiQuizRequest = AiQuizRequest(),
         forceRefresh: Boolean = false
     ): Result<AiQuiz> {
         val watched = request.watched.take(MAX_WATCHED_ITEMS)
-        val refresh = forceRefresh
-        val sessionId = sessionIdFor(friendId, request.sessionId)
         val date = request.date ?: currentCacheDate()
         return cachedRequest(
             friendId = friendId,
             feature = AiCacheFeature.QUIZ,
-            forceRefresh = refresh,
-            // 缓存 key 带会话 ID：每次进入精灵中心会话都拿新题包，避免重做上一局"开卷考"
-            suffix = quizCacheSuffix(sessionId, date, request.excludedQuizIds, watched),
+            forceRefresh = forceRefresh,
+            // 缓存 key 带日期 + 排除集 + 片单摘要：同一天内预生成与正式出题共用一键（命中即秒开）。
+            suffix = quizCacheSuffix(date, request.excludedQuizIds, watched),
             serializer = AiQuiz.serializer()
         ) {
-            val payload = api.getQuiz(
-                request.copy(watched = watched, sessionId = sessionId, date = date)
-            ).requirePayload()
-            val quiz = payload.data.toDomainOrNull(payload.quota)
-            if (quiz == null || !quiz.isThirteenQuestionStructure) {
-                throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz must contain 13 valid questions", 200)
-            }
-            quiz
+            generateQuizOnce(friendId, nickname, date, request.excludedQuizIds, watched)
         }
     }
 
+    /** 一次性生成 13 题题包（编排器内部已有槽位兜底，失败直接抛）。 */
+    private suspend fun generateQuizOnce(
+        friendId: String,
+        nickname: String,
+        date: String,
+        excludedQuizIds: List<String>,
+        watched: List<AiWatchedTitleDto>
+    ): AiQuiz {
+        val quizId = deriveBankQuizId(friendId, date, excludedQuizIds.size)
+        val orchestrated = orchestrator.generateQuiz(
+            nickname = nickname,
+            watched = watched,
+            quizId = quizId,
+            difficultyHint = quizDifficultyHint(friendId)
+        )
+        val quiz = orchestrated.quiz
+        if (!quiz.isThirteenQuestionStructure) {
+            throw AiErrorMapper.exception(
+                "INVALID_RESPONSE",
+                "Quiz must contain 13 valid questions",
+                200
+            )
+        }
+        return quiz
+    }
+
     /**
-     * 流式出题（POST /api/ai/quiz/stream，NDJSON 逐行事件）。
-     *
-     * 两阶段实测 280~420s，单次请求会被 OkHttp 90s 读超时掐断；流式下服务端每 10s 至少写
-     * 一行（真实进度或心跳），因此连接可以一直保持，等待页也能显示真实阶段。
-     * 命中本地缓存时不打网络，直接以 [AiQuizStreamEvent.Completed] 收尾。
-     *
-     * request.prefetch=true 是静默预生成：服务端不扣额度、不计已玩套数，只为把当天这一套
-     * 提前备好。预生成与正式出题共用同一份请求参数（日期/套序号/片单都一样），所以正式请求
-     * 必然命中服务端题库、秒回；预生成本身不写本地镜像（见下方 write 处的原因）。
+     * BYOK 出题流式编排：阶段事件（单元槽/题槽进度）由编排器直接发，
+     * 完成事件校验 13 题结构后写入本地缓存（预生成与正式请求共用缓存，预生成结果同样落盘）。
      */
     fun getQuizStream(
         friendId: String,
+        nickname: String,
         request: AiQuizRequest = AiQuizRequest(),
         forceRefresh: Boolean = false
     ): Flow<AiQuizStreamEvent> = flow {
@@ -419,104 +416,82 @@ class AiRepository @Inject constructor(
             throw AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400)
         }
         val watched = request.watched.take(MAX_WATCHED_ITEMS)
-        val sessionId = sessionIdFor(friendId, request.sessionId)
         val date = request.date ?: currentCacheDate()
-        val suffix = quizCacheSuffix(sessionId, date, request.excludedQuizIds, watched)
+        val suffix = quizCacheSuffix(date, request.excludedQuizIds, watched)
         if (!forceRefresh) {
-            readCachedWithFallback(friendId, AiCacheFeature.QUIZ, AiQuiz.serializer(), suffix, null)
+            readCached(friendId, AiCacheFeature.QUIZ, AiQuiz.serializer(), suffix)
                 ?.takeIf { it.isThirteenQuestionStructure }
                 ?.let {
                     emit(AiQuizStreamEvent.Completed(it))
                     return@flow
                 }
         }
-        val response = api.getQuizStream(
-            request.copy(watched = watched, sessionId = sessionId, date = date)
-        )
-        val body = response.body()
-        if (!response.isSuccessful || body == null) {
-            throw AiErrorMapper.exception(
-                serverCode = runCatching {
-                    lenientJson
-                        .decodeFromString(AiErrorDto.serializer(), response.errorBody()?.string().orEmpty())
-                        .code
-                }.getOrNull() ?: "HTTP_${response.code()}",
-                message = "Quiz stream failed with HTTP ${response.code()}",
-                httpCode = response.code()
-            )
-        }
-        var completed: AiQuiz? = null
-        var dailySetsDone = false
-        body.use { responseBody ->
-            val source = responseBody.source()
-            while (true) {
-                val line = source.readUtf8Line() ?: break
-                if (line.isBlank()) continue
-                val event = parseQuizStreamEvent(line) ?: continue
-                when (event) {
-                    is AiQuizStreamEvent.Completed -> completed = event.quiz
-                    AiQuizStreamEvent.DailySetsDone -> dailySetsDone = true
-                    else -> Unit
+        val quizId = deriveBankQuizId(friendId, date, request.excludedQuizIds.size)
+        orchestrator.generateQuizStream(
+            nickname = nickname,
+            watched = watched,
+            quizId = quizId,
+            difficultyHint = quizDifficultyHint(friendId)
+        ).collect { event ->
+            if (event is AiQuizStreamEvent.Completed) {
+                val quiz = event.quiz
+                if (!quiz.isThirteenQuestionStructure) {
+                    throw AiErrorMapper.exception(
+                        "INVALID_RESPONSE",
+                        "Quiz must contain 13 valid questions",
+                        200
+                    )
                 }
-                emit(event)
+                runCatching {
+                    storage.write(
+                        friendId,
+                        AiCacheFeature.QUIZ,
+                        json.encodeToString(AiQuiz.serializer(), quiz),
+                        suffix
+                    )
+                }
             }
-        }
-        // 拒发预生成是完整答复（当天该发的套都发过了），不是「流被截断」：此时没有题包是正常的。
-        // 漏了这一步，拒发事件会先被收下、再被下面这个兜底异常推翻，界面又回到「没备好」。
-        if (completed == null && !dailySetsDone) {
-            throw AiErrorMapper.exception("EMPTY_RESPONSE", "Quiz stream ended without a result", 200)
-        }
-        val quiz = completed
-        // 预生成不写本地镜像：镜像一旦存在，正式出题就会被本地缓存直接满足、不再发请求，
-        // 而服务端要靠那次请求把「当天这一套」记为已玩（quizbank:used 的 usedSets）——
-        // 漏记会让下一套题的序号原地不动，又抽回同一套题。预生成只负责把服务端题库暖热。
-        if (quiz != null && !request.prefetch) {
-            storage.write(friendId, AiCacheFeature.QUIZ, json.encodeToString(AiQuiz.serializer(), quiz), suffix)
+            emit(event)
         }
     }.flowOn(Dispatchers.IO)
 
-    suspend fun submitQuiz(
-        friendId: String,
-        request: AiSubmitQuizRequest
-    ): Result<AiQuizResult> = runForFriend(friendId) {
-        val sessionId = sessionIdFor(friendId, request.sessionId)
-        val payload = api.submitQuiz(request.copy(sessionId = sessionId)).requirePayload()
-        payload.data.toDomain(payload.quota)
-    }
-
+    /**
+     * BYOK 本地判分：分值/判对规则照搬服务端 scoreQuiz（scoringVersion=2）。
+     * correctAnswerTextById 来自题包自带的 correctAnswer（编排链已写进题目本体）。
+     */
     suspend fun submitQuiz(
         friendId: String,
         quizId: String,
         answers: List<AiQuizAnswer>
+    ): Result<AiQuizResult> = runForFriend(friendId) {
+        val quiz = readCachedQuizById(friendId, quizId)
+            ?: throw AiErrorMapper.exception(
+                "INVALID_REQUEST",
+                "Quiz not found locally: $quizId",
+                400
+            )
+        scoreQuizLocally(quiz, answers)
+    }
+
+    suspend fun submitQuiz(
+        friendId: String,
+        request: AiSubmitQuizRequest
     ): Result<AiQuizResult> = submitQuiz(
         friendId,
-        AiSubmitQuizRequest(
-            quizId = quizId,
-            answers = answers.map { AiQuizAnswerDto(it.questionId, it.selectedOptionIds, it.textAnswer) },
-            sessionId = sessionIdFor(friendId)
-        )
+        request.quizId,
+        request.answers.map {
+            AiQuizAnswer(questionId = it.questionId, selectedOptionIds = it.selectedOptionIds, textAnswer = it.textAnswer)
+        }
     )
 
-    /**
-     * 出分页难度反馈（POST /api/ai/quiz/feedback）。
-     *
-     * 一次性调用，不走 cachedRequest；失败完全静默——反馈是锦上添花，
-     * 网络/解析/服务端任何异常都按成功处理，绝不打扰用户。
-     * 鉴权由 AiApiService 的 AuthInterceptor 统一注入，与其他 /api/ai 系列接口一致。
-     */
+    /** 难度反馈只记本地（喂下次出题的难度提示），不再上传服务端。 */
     suspend fun submitQuizDifficulty(
+        friendId: String,
         quizId: String,
         difficulty: AiQuizDifficulty
-    ): Result<Unit> = try {
-        api.submitQuizFeedback(
-            AiQuizFeedbackRequest(quizId = quizId, difficulty = difficulty.wireValue)
-        ).requirePayload()
-        Result.success(Unit)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        // 吞掉一切失败：反馈发不出去也不影响用户离开出分页
-        Result.success(Unit)
+    ): Result<Unit> = runForFriend(friendId) {
+        recordQuizDifficultyFeedback(friendId, quizId, difficulty)
+        Unit
     }
 
     suspend fun getDailyKnowledge(
@@ -535,7 +510,6 @@ class AiRepository @Inject constructor(
                 )
             )
         }
-        val sessionId = sessionIdFor(friendId)
         return cachedRequest(
             friendId = friendId,
             feature = AiCacheFeature.DAILY_KNOWLEDGE,
@@ -549,22 +523,46 @@ class AiRepository @Inject constructor(
             },
             serializer = AiDailyKnowledge.serializer()
         ) {
-            val payload = api.getDailyKnowledge(
-                AiDailyRequest(
-                    sessionId = sessionId,
-                    forceRefresh = forceRefresh,
-                    watched = watched.take(MAX_WATCHED_ITEMS),
-                    locale = normalizedLocale
-                )
-            ).requirePayload()
-            payload.data.toDomain(payload.quota)
+            generateDailyKnowledge(friendId, watched.take(MAX_WATCHED_ITEMS), normalizedLocale)
         }
     }
 
+    /** 一次性生成今日知识（候选 + 审校两段都在编排器内部），插图落 cacheDir。 */
+    private suspend fun generateDailyKnowledge(
+        friendId: String,
+        watched: List<AiWatchedTitleDto>,
+        locale: String
+    ): AiDailyKnowledge {
+        val day = currentDailyKnowledgeDate().toString()
+        val recentUsage = readDailyKnowledgeHistory(friendId)
+            .take(DAILY_RECENT_USAGE_WINDOW)
+            .map { record ->
+                DailyRecentUsage(
+                    day = record.shownDate,
+                    concept = record.concept.orEmpty(),
+                    subject = record.subject.orEmpty(),
+                    mediaTitle = record.relatedMedia?.title
+                )
+            }
+        var completed: AiDailyKnowledge? = null
+        orchestrator.generateDailyStream(
+            day = day,
+            locale = locale,
+            watched = watched,
+            recentUsage = recentUsage,
+            illustrationSaver = dailyIllustrationSaver(day)
+        ).collect { event ->
+            if (event is AiDailyStreamEvent.Completed) {
+                completed = event.daily
+            }
+        }
+        return completed
+            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "Daily stream ended without a result", 200)
+    }
+
     /**
-     * 概念插图静默刷新：绕过本地缓存读，直接向 Worker 拿同一天的缓存响应。
-     * 服务端每次响应都按 D1 状态重新装配插图并新签短期 URL，所以这里必须走网络，
-     * 但 forceRefresh=false 保证不会生成新内容、不消耗换题额度外的配额。
+     * 概念插图静默刷新：BYOK 插图是本地文件（file://），不存在签名过期问题，
+     * 缓存命中即返回；未命中（比如被清理）重新走一次编排，forceRefresh=false 不重复生成新概念。
      */
     suspend fun refreshDailyKnowledge(
         friendId: String,
@@ -574,54 +572,29 @@ class AiRepository @Inject constructor(
         val normalizedLocale = locale.trim()
         if (normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) {
             return Result.failure(
-                AiErrorMapper.exception("INVALID_REQUEST", "Unsupported daily knowledge locale: $normalizedLocale", 400)
+                AiErrorMapper.exception(
+                    "INVALID_REQUEST",
+                    "Unsupported daily knowledge locale: $normalizedLocale",
+                    400
+                )
             )
         }
-        if (friendId.trim().isEmpty()) {
-            return Result.failure(AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400))
-        }
-        return try {
-            val payload = api.getDailyKnowledge(
-                AiDailyRequest(
-                    sessionId = sessionIdFor(friendId),
-                    forceRefresh = false,
-                    watched = watched.take(MAX_WATCHED_ITEMS),
-                    locale = normalizedLocale
-                )
-            ).requirePayload()
-            val knowledge = payload.data.toDomain(payload.quota)
-            runCatching {
-                storage.write(
-                    friendId,
-                    AiCacheFeature.DAILY_KNOWLEDGE,
-                    json.encodeToString(AiDailyKnowledge.serializer(), knowledge),
-                    dailyCacheSuffix(normalizedLocale, watched.take(MAX_WATCHED_ITEMS))
-                )
-            }
-            Result.success(knowledge)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(if (e is AiApiException) e else AiErrorMapper.fromThrowable(e))
-        }
+        readCachedWithFallback(
+            friendId,
+            AiCacheFeature.DAILY_KNOWLEDGE,
+            AiDailyKnowledge.serializer(),
+            dailyCacheSuffix(normalizedLocale, watched),
+            if (normalizedLocale == AiDailyKnowledgeContract.DEFAULT_LOCALE) legacyDailyCacheSuffix(watched) else null
+        )?.let { return Result.success(it) }
+        return getDailyKnowledge(friendId, forceRefresh = false, watched = watched, locale = normalizedLocale)
     }
 
-    /**
-     * 流式今日知识：服务端按 candidate → review 两段推送 NDJSON 事件（阶段/进度/心跳/结果）。
-     *
-     * 与出题流式同一套协议与读取方式：@Streaming + 逐行读，边读边 emit，
-     * 让加载页显示真实阶段与生成量而不是干转圈；命中本地当天缓存时直接 emit Completed（秒开，不打网络）。
-     * 服务端生成失败会给确定性兜底内容（同样是 result 事件），所以客户端不会出现空白卡。
-     */
     fun getDailyStream(
         friendId: String,
         forceRefresh: Boolean = false,
         watched: List<AiWatchedTitleDto> = emptyList(),
         locale: String = AiDailyKnowledgeContract.DEFAULT_LOCALE
     ): Flow<AiDailyStreamEvent> = flow {
-        if (friendId.trim().isEmpty()) {
-            throw AiErrorMapper.exception("INVALID_REQUEST", "friendId must not be blank", 400)
-        }
         val normalizedLocale = locale.trim()
         if (normalizedLocale !in AiDailyKnowledgeContract.SUPPORTED_LOCALES) {
             throw AiErrorMapper.exception(
@@ -632,73 +605,54 @@ class AiRepository @Inject constructor(
         }
         val trimmedWatched = watched.take(MAX_WATCHED_ITEMS)
         val suffix = dailyCacheSuffix(normalizedLocale, trimmedWatched)
-        // zh-CN 是旧缓存的真实语言：新键未命中时读旧日期键，避免升级当天强制重新请求。
-        val fallbackSuffix = if (normalizedLocale == AiDailyKnowledgeContract.DEFAULT_LOCALE) {
-            legacyDailyCacheSuffix(trimmedWatched)
-        } else {
-            null
-        }
         if (!forceRefresh) {
             readCachedWithFallback(
                 friendId,
                 AiCacheFeature.DAILY_KNOWLEDGE,
                 AiDailyKnowledge.serializer(),
                 suffix,
-                fallbackSuffix
+                if (normalizedLocale == AiDailyKnowledgeContract.DEFAULT_LOCALE) {
+                    legacyDailyCacheSuffix(trimmedWatched)
+                } else {
+                    null
+                }
             )?.let {
                 emit(AiDailyStreamEvent.Completed(it))
                 return@flow
             }
         }
-        val response = api.getDailyKnowledgeStream(
-            AiDailyRequest(
-                sessionId = sessionIdFor(friendId),
-                forceRefresh = forceRefresh,
-                watched = trimmedWatched,
-                locale = normalizedLocale
-            )
-        )
-        val body = response.body()
-        if (!response.isSuccessful || body == null) {
-            throw AiErrorMapper.exception(
-                serverCode = runCatching {
-                    lenientJson
-                        .decodeFromString(AiErrorDto.serializer(), response.errorBody()?.string().orEmpty())
-                        .code
-                }.getOrNull() ?: "HTTP_${response.code()}",
-                message = "Daily stream failed with HTTP ${response.code()}",
-                httpCode = response.code()
-            )
-        }
-        var completed: AiDailyKnowledge? = null
-        body.use { responseBody ->
-            val source = responseBody.source()
-            while (true) {
-                val line = source.readUtf8Line() ?: break
-                if (line.isBlank()) continue
-                val event = parseDailyStreamEvent(line) ?: continue
-                if (event is AiDailyStreamEvent.Completed) completed = event.daily
-                emit(event)
+        val day = currentDailyKnowledgeDate().toString()
+        val recentUsage = readDailyKnowledgeHistory(friendId)
+            .take(DAILY_RECENT_USAGE_WINDOW)
+            .map { record ->
+                DailyRecentUsage(
+                    day = record.shownDate,
+                    concept = record.concept.orEmpty(),
+                    subject = record.subject.orEmpty(),
+                    mediaTitle = record.relatedMedia?.title
+                )
             }
-        }
-        val daily = completed
-            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "Daily stream ended without a result", 200)
-        runCatching {
-            storage.write(
-                friendId,
-                AiCacheFeature.DAILY_KNOWLEDGE,
-                json.encodeToString(AiDailyKnowledge.serializer(), daily),
-                suffix
-            )
+        orchestrator.generateDailyStream(
+            day = day,
+            locale = normalizedLocale,
+            watched = trimmedWatched,
+            recentUsage = recentUsage,
+            illustrationSaver = dailyIllustrationSaver(day)
+        ).collect { event ->
+            if (event is AiDailyStreamEvent.Completed) {
+                runCatching {
+                    storage.write(
+                        friendId,
+                        AiCacheFeature.DAILY_KNOWLEDGE,
+                        json.encodeToString(AiDailyKnowledge.serializer(), event.daily),
+                        suffix
+                    )
+                }
+            }
+            emit(event)
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * 记录一条真正展示过的今日知识。
-     *
-     * 只有 UI 确认内容已经渲染后才调用；这里不把“网络请求成功”偷换成“用户看过”。
-     * 同一 locale、同一天、同一学习单元重复展示时首条记录生效，不覆盖正文和小题，保证当天回看稳定。
-     */
     suspend fun markDailyKnowledgeShown(
         friendId: String,
         knowledge: AiDailyKnowledge,
@@ -856,8 +810,8 @@ class AiRepository @Inject constructor(
     /**
      * 读取上次激活的角色 ID。
      *
-     * 激活态只放在内存里的话，杀进程或被系统回收后就没了，用户得重新喊一次名字、
-     * 再花一次配额和一次 TTS；详情页那种没有激活入口的页面则永远拿不到激活态。
+     * 激活态只放在内存里的话，杀进程或被系统回收后就没了，用户得重新喊一次名字；
+     * 详情页那种没有激活入口的页面则永远拿不到激活态。
      */
     suspend fun readActivatedCharacterId(friendId: String): String? = runCatching {
         storage.read(friendId, AiCacheFeature.ACTIVATION)?.trim()?.takeIf { it.isNotEmpty() }
@@ -868,31 +822,6 @@ class AiRepository @Inject constructor(
         if (normalized.isEmpty()) return
         runCatching { storage.write(friendId, AiCacheFeature.ACTIVATION, normalized) }
     }
-
-    /**
-     * 读取当日额度用量快照（dailyUsed），按 UTC 日隔离。
-     * 服务端没有独立额度查询接口，重启后恢复激活态时靠它把「今日 x/80」显示出来。
-     */
-    suspend fun readQuotaSnapshotDailyUsed(friendId: String): Int? = runCatching {
-        val raw = storage.read(friendId, AiCacheFeature.QUOTA_SNAPSHOT, quotaSnapshotDay())
-            ?: return@runCatching null
-        lenientJson.decodeFromString<AiQuotaSnapshotDto>(raw).dailyUsed
-    }.getOrNull()
-
-    /** 把最近一次响应里的额度用量落到当日快照，供重启后恢复显示。 */
-    suspend fun saveQuotaSnapshot(friendId: String, dailyUsed: Int) {
-        runCatching {
-            storage.write(
-                friendId,
-                AiCacheFeature.QUOTA_SNAPSHOT,
-                Json.encodeToString(AiQuotaSnapshotDto(dailyUsed)),
-                quotaSnapshotDay()
-            )
-        }
-    }
-
-    /** 快照按 UTC 日分键：与网关 usage_day（同样取 UTC 日历日）的复位边界一致，跨日自然不命中。 */
-    private fun quotaSnapshotDay(): String = LocalDate.now(ZoneOffset.UTC).toString()
 
     /** 昵称变化后清除当前精灵的旧点评，避免昵称原文与解析结果错配。 */
     suspend fun clearGreetingCache(friendId: String, characterId: String) {
@@ -920,17 +849,15 @@ class AiRepository @Inject constructor(
         friendId: String,
         request: AiTtsRequest
     ): Result<AiAudio> {
-        val sessionId = sessionIdFor(friendId, request.sessionId)
         return cachedRequest(
-        friendId = friendId,
-        feature = AiCacheFeature.TTS,
-        forceRefresh = false,
-        suffix = request.cacheSuffix(),
-        serializer = AiAudio.serializer(),
-        isCacheValid = ::isUsableTtsCache,
-    ) {
-            val payload = api.playTts(request.copy(sessionId = sessionId)).requirePayload()
-            payload.data.toDomain(payload.quota)
+            friendId = friendId,
+            feature = AiCacheFeature.TTS,
+            forceRefresh = false,
+            suffix = request.cacheSuffix(),
+            serializer = AiAudio.serializer(),
+            isCacheValid = ::isUsableTtsCache
+        ) {
+            synthesizeTtsAudio(request)
         }
     }
 
@@ -943,8 +870,33 @@ class AiRepository @Inject constructor(
 
     /** 访客角色试听：不读写 friendId、授权状态或本地 AI 缓存。 */
     suspend fun playGuestTts(request: AiTtsRequest): Result<AiAudio> = runApi {
-        val payload = api.playTts(request).requirePayload()
-        payload.data.toDomain(payload.quota)
+        synthesizeTtsAudio(request)
+    }
+
+    /** BYOK 语音合成：Provider 返回 MP3 字节，包成 data URL 进现有缓存结构。 */
+    private suspend fun synthesizeTtsAudio(request: AiTtsRequest): AiAudio {
+        val bytes = orchestrator.synthesizeTts(
+            characterId = request.characterId,
+            text = request.text,
+            scene = request.scene.toPromptScene()
+        )
+        return AiAudio(
+            audioDataUrl = "data:audio/mpeg;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP),
+            audioUrl = null,
+            audioUrlExpiresAt = null,
+            mimeType = "audio/mpeg",
+            durationMs = null,
+            cacheKey = request.cacheSuffix(),
+            // transcript 与服务端同语义：剥掉口头禅，只保留正文（音频里才有口头禅）
+            transcript = orchestrator.stripCatchphraseFromTranscript(request.characterId, request.text)
+        )
+    }
+
+    /** 域场景枚举 → 编排层场景枚举（缺省按 GREETING，与服务端 readTtsScene 回退一致）。 */
+    private fun AiTtsScene?.toPromptScene(): TtsScene = when (this) {
+        AiTtsScene.AUDITION -> TtsScene.AUDITION
+        AiTtsScene.ACTIVATION_ACK -> TtsScene.ACTIVATION_ACK
+        AiTtsScene.GREETING, null -> TtsScene.GREETING
     }
 
     /**
@@ -972,28 +924,244 @@ class AiRepository @Inject constructor(
             feature = AiCacheFeature.DETAIL_ANALYSIS,
             forceRefresh = forceRefresh,
             suffix = cacheSuffix,
-            serializer = AiDetailAnalysisDto.serializer()
+            serializer = AiDetailAnalysis.serializer()
         ) {
-            val payload = api.analyzeDetail(
-                request.copy(
-                    forceRefresh = forceRefresh,
-                    sessionId = sessionIdFor(friendId, request.sessionId)
-                )
-            ).requirePayload()
-            payload.data.copy(quota = payload.quota)
-        }.map { it.toDomain() }
+            val profileBundle = buildDetailProfile(friendId)
+            orchestrator.analyzeDetail(
+                media = request.media,
+                scene = request.scene,
+                environment = request.environment,
+                profile = profileBundle.profile,
+                profileVersion = profileBundle.version,
+                forceRefresh = forceRefresh
+            )
+        }
     }
 
-    /** 相关推荐排序：候选只来自客户端已加载的推荐列表，服务端不引入新片，因此不做缓存。 */
+    /** 相关推荐排序：候选只来自客户端已加载的推荐列表，编排器不引入新片，因此不做缓存。 */
     suspend fun rankDetailRecommendations(
         friendId: String,
         request: AiRecommendationsRankRequest
     ): Result<List<AiDetailRecommendation>> = runForFriend(friendId) {
-        val payload = api.rankRecommendations(
-            request.copy(sessionId = sessionIdFor(friendId, request.sessionId))
-        ).requirePayload()
-        payload.data.toDomain(payload.quota)
+        val profileBundle = buildDetailProfile(friendId)
+        orchestrator.rankDetailRecommendations(
+            currentMedia = request.currentMedia,
+            // 候选 DTO 只有基础字段：overview/演职员/评分位补空，排序只用画像与类型信息。
+            candidates = request.candidates.map { recommendation ->
+                AiDetailMediaDto(
+                    mediaKey = recommendation.mediaKey,
+                    mediaType = recommendation.mediaType,
+                    title = recommendation.title,
+                    year = recommendation.year,
+                    genres = recommendation.genres,
+                    overview = null,
+                    directors = emptyList(),
+                    cast = emptyList(),
+                    publicRating = null,
+                    mediaIds = recommendation.mediaIds,
+                    userRating = null,
+                    userComment = null
+                )
+            },
+            profile = profileBundle.profile,
+            profileVersion = profileBundle.version
+        )
     }
+
+    // ========== BYOK 本地画像读取与判分辅助 ==========
+
+    private data class DetailProfileBundle(
+        val profile: DetailProfile,
+        val version: Long
+    )
+
+    /** 从本地画像镜像构建 detail/rank 用的用户画像（标题非空、最多 80 条）。 */
+    private suspend fun buildDetailProfile(friendId: String): DetailProfileBundle {
+        val media = aiProfileRepository.readProfileMedia(friendId)
+        val items = media.asSequence()
+            .filter { it.title.isNotBlank() }
+            .map { entity ->
+                ProfileMediaItem(
+                    title = entity.title.trim(),
+                    mediaType = if (entity.mediaType.equals("show", ignoreCase = true)) "show" else "movie",
+                    genres = parseStoredGenres(entity.genresJson),
+                    year = entity.year
+                )
+            }
+            .take(DETAIL_PROFILE_MAX_ITEMS)
+            .toList()
+        return DetailProfileBundle(
+            profile = DetailProfile(media = items),
+            version = media.maxOfOrNull { it.updatedAt } ?: 0L
+        )
+    }
+
+    private fun parseStoredGenres(raw: String): List<String> = runCatching {
+        lenientJson.decodeFromString(ListSerializer(String.serializer()), raw)
+    }.getOrNull().orEmpty()
+
+    /** 从本地缓存找题包（按 quizId），找不到说明缓存被清，判分无从谈起。 */
+    private suspend fun readCachedQuizById(friendId: String, quizId: String): AiQuiz? {
+        for (suffix in storage.readSuffixes(friendId, AiCacheFeature.QUIZ)) {
+            val quiz = readCached(friendId, AiCacheFeature.QUIZ, AiQuiz.serializer(), suffix) ?: continue
+            if (quiz.quizId == quizId) return quiz
+        }
+        return null
+    }
+
+    /** 本地判分（scoringVersion=2），short 题标准答案文本来自题包 correctAnswer。 */
+    private fun scoreQuizLocally(quiz: AiQuiz, answers: List<AiQuizAnswer>): AiQuizResult {
+        val correctAnswerTextById = quiz.questions
+            .mapNotNull { question -> question.correctAnswer?.let { question.id to it } }
+            .toMap()
+        return AiQuizScoring.scoreQuiz(
+            quiz = quiz,
+            answers = answers,
+            scoringVersion = AiQuizScoring.SCORING_VERSION,
+            correctAnswerTextById = correctAnswerTextById
+        )
+    }
+
+    // ========== quiz 难度反馈（本地） ==========
+
+    /** quiz 难度反馈本地存储（喂下次出题的难度提示），只保留最近 [QUIZ_DIFFICULTY_FEEDBACK_CAP] 条。 */
+    @kotlinx.serialization.Serializable
+    private data class QuizDifficultyFeedbackEntry(
+        val quizId: String,
+        val difficulty: String,
+        val at: Long
+    )
+
+    private suspend fun recordQuizDifficultyFeedback(
+        friendId: String,
+        quizId: String,
+        difficulty: AiQuizDifficulty
+    ) {
+        runCatching {
+            val previous = readQuizDifficultyFeedback(friendId)
+            val entry = QuizDifficultyFeedbackEntry(
+                quizId = quizId,
+                difficulty = difficulty.wireValue,
+                at = System.currentTimeMillis()
+            )
+            val updated = (previous + entry).takeLast(QUIZ_DIFFICULTY_FEEDBACK_CAP)
+            storage.write(
+                friendId,
+                AiCacheFeature.QUIZ_RESULT,
+                json.encodeToString(
+                    ListSerializer(QuizDifficultyFeedbackEntry.serializer()),
+                    updated
+                ),
+                QUIZ_DIFFICULTY_FEEDBACK_SUFFIX
+            )
+        }
+    }
+
+    private suspend fun readQuizDifficultyFeedback(friendId: String): List<QuizDifficultyFeedbackEntry> =
+        runCatching {
+            storage.read(friendId, AiCacheFeature.QUIZ_RESULT, QUIZ_DIFFICULTY_FEEDBACK_SUFFIX)
+                ?.let { raw ->
+                    json.decodeFromJsonElement(
+                        ListSerializer(QuizDifficultyFeedbackEntry.serializer()),
+                        json.parseToJsonElement(raw)
+                    )
+                }
+        }.getOrNull().orEmpty()
+
+    /**
+     * 出题难度提示（对拍服务端 readQuizDifficultyHint）：最近 5 条难度反馈里
+     * hard≥3 提示放简单、easy≥3 提示加难，都没有则不传提示。
+     */
+    private suspend fun quizDifficultyHint(friendId: String): String? {
+        val recent = readQuizDifficultyFeedback(friendId).takeLast(QUIZ_DIFFICULTY_FEEDBACK_WINDOW)
+        if (recent.size < QUIZ_DIFFICULTY_FEEDBACK_WINDOW) return null
+        val hardCount = recent.count { it.difficulty == AiQuizDifficulty.HARD.wireValue }
+        val easyCount = recent.count { it.difficulty == AiQuizDifficulty.EASY.wireValue }
+        return when {
+            hardCount >= QUIZ_DIFFICULTY_HINT_THRESHOLD -> QUIZ_DIFFICULTY_HARD_HINT
+            easyCount >= QUIZ_DIFFICULTY_HINT_THRESHOLD -> QUIZ_DIFFICULTY_EASY_HINT
+            else -> null
+        }
+    }
+
+    // ========== greeting/taste 本地兜底（对拍服务端 fallback 文案） ==========
+
+    /**
+     * 允许本地兜底的错误码：模型输出校验失败/上游异常/限流时退兜底文案；
+     * 配置缺失、鉴权失败、断网必须如实报错，让用户去配置页修。
+     */
+    private val FALLBACK_ELIGIBLE_CODES = setOf(
+        AiErrorCode.INVALID_RESPONSE,
+        AiErrorCode.SERVER,
+        AiErrorCode.RATE_LIMITED,
+        AiErrorCode.UNKNOWN
+    )
+
+    private fun fallbackNameSignals(nickname: String): List<AiNameSignal> {
+        val normalized = nickname.trim()
+        if (normalized.isEmpty() || normalized.all { it.isDigit() || !it.isLetterOrDigit() } || normalized.length < 2) {
+            return emptyList()
+        }
+        return listOf(
+            AiNameSignal(
+                text = normalized,
+                interpretation = "直接引用昵称原文；仅凭这组文字，无法可靠推断更多个人信息。"
+            )
+        )
+    }
+
+    private fun fallbackNicknameSignature(nickname: String): String {
+        val normalized = nickname.trim()
+        return if (normalized.isEmpty() || normalized.all { it.isDigit() || !it.isLetterOrDigit() } || normalized.length < 2) {
+            "这个昵称提供的文字线索有限，真正的观影选择比名字更能说明你的口味。"
+        } else {
+            "这个昵称像一个有记忆点的标记；更具体的个性，留给你的片单来说明。"
+        }
+    }
+
+    private fun fallbackGreeting(characterId: String, nickname: String): AiGreeting {
+        val persona = AiCharacters.findCharacter(characterId)
+        val characterName = persona?.name ?: "你的观影精灵"
+        val catchphrase = persona?.greetingCatchphrase.orEmpty()
+        val greeting = listOfNotNull(
+            "${nickname}，我是${characterName}。",
+            catchphrase.takeIf { it.isNotBlank() }
+        ).joinToString("")
+        return AiGreeting(
+            nickname = nickname,
+            greeting = greeting,
+            spokenText = greeting,
+            nicknameMeaning = "“${nickname}”的文字联想有限，我先不替它编造隐藏寓意。",
+            comment = "真正能让人记住你的，还是你挑片时留下的细节。",
+            audio = null,
+            quota = null,
+            nameSignals = fallbackNameSignals(nickname),
+            nicknameSignature = fallbackNicknameSignature(nickname)
+        )
+    }
+
+    private fun fallbackTasteEvidence(watched: List<AiWatchedTitleDto>): List<AiTasteEvidence> =
+        watched.take(TASTE_FALLBACK_EVIDENCE_COUNT).map { item ->
+            AiTasteEvidence(
+                title = item.title,
+                signal = "出现在你的已看记录中。",
+                inference = "它只是样本的一部分，单凭这一部不能代表稳定偏好。",
+                confidence = "low"
+            )
+        }
+
+    private fun fallbackTaste(nickname: String, watched: List<AiWatchedTitleDto>): AiTasteAnalysis = AiTasteAnalysis(
+        roast = "${nickname}的片单像一条有方向感的散步路线：看似随意，其实总在寻找一点余韵。",
+        tasteProfile = "${nickname}的片单暂时显示出对故事余韵和人物选择的兴趣，但样本仍需要更多作品来确认。",
+        highlights = emptyList(),
+        recommendations = emptyList(),
+        quota = null,
+        profileKeywords = listOf("重视故事余韵", "关注人物选择", "喜欢留白"),
+        profileSentence = "${nickname}的片单暂时显示出对故事余韵和人物选择的兴趣，但样本仍需要更多作品来确认。",
+        evidence = fallbackTasteEvidence(watched)
+    )
+
+    // ========== 底层：错误包装与缓存 ==========
 
     private suspend fun <T> runForFriend(friendId: String, block: suspend () -> T): Result<T> {
         if (friendId.trim().isEmpty()) {
@@ -1009,6 +1177,10 @@ class AiRepository @Inject constructor(
             throw e
         } catch (e: AiApiException) {
             Result.failure(e)
+        } catch (e: AiProviderException) {
+            // 编排器/适配器抛出的 Provider 异常统一映射成 AiApiException，
+            // 否则会落到下面的兜底分支被吞成 UNKNOWN。
+            Result.failure(e.toAiApiException())
         } catch (e: IOException) {
             Result.failure(AiErrorMapper.fromThrowable(e))
         } catch (e: kotlinx.serialization.SerializationException) {
@@ -1018,6 +1190,25 @@ class AiRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    /** Provider 错误码 → 客户端错误码（PROVIDER_AUTH 映射 UNAUTHORIZED，UI 走「检查登录」提示之外的专属文案）。 */
+    private fun AiProviderException.toAiApiException(): AiApiException = AiApiException(
+        errorCode = when (code) {
+            AiProviderErrorCode.PROVIDER_INVALID -> AiErrorCode.PROVIDER_INVALID
+            AiProviderErrorCode.PROVIDER_NO_TTS -> AiErrorCode.PROVIDER_NO_TTS
+            AiProviderErrorCode.PROVIDER_NO_IMAGE -> AiErrorCode.PROVIDER_NO_IMAGE
+            AiProviderErrorCode.PROVIDER_AUTH -> AiErrorCode.UNAUTHORIZED
+            AiProviderErrorCode.RATE_LIMITED -> AiErrorCode.RATE_LIMITED
+            AiProviderErrorCode.INVALID_REQUEST -> AiErrorCode.INVALID_REQUEST
+            AiProviderErrorCode.INVALID_RESPONSE -> AiErrorCode.INVALID_RESPONSE
+            AiProviderErrorCode.NETWORK -> AiErrorCode.NETWORK
+            AiProviderErrorCode.SERVER -> AiErrorCode.SERVER
+            AiProviderErrorCode.UNKNOWN -> AiErrorCode.UNKNOWN
+        },
+        serverCode = code.name,
+        httpCode = httpStatus ?: 0,
+        message = message ?: code.name
+    )
 
     private suspend fun <T> cachedRequest(
         friendId: String,
@@ -1049,7 +1240,12 @@ class AiRepository @Inject constructor(
                     ?.takeIf(isCacheValid)
                     ?.let { return Result.success(it) }
             }
-            Result.failure(if (e is AiApiException) e else AiErrorMapper.fromThrowable(e))
+            val apiError = when (e) {
+                is AiApiException -> e
+                is AiProviderException -> e.toAiApiException()
+                else -> AiErrorMapper.fromThrowable(e)
+            }
+            Result.failure(apiError)
         }
     }
 
@@ -1097,38 +1293,25 @@ class AiRepository @Inject constructor(
             .joinToString("") { "%02x".format(it) }
     }
 
-    private val spriteSessions = ConcurrentHashMap<String, String>()
-
     /** 本地历史是读改写存储，串行化避免并发追加时互相覆盖。 */
     private val dailyKnowledgeHistoryMutex = Mutex()
-
-    private fun sessionIdFor(friendId: String, requestedSessionId: String? = null): String {
-        val requested = requestedSessionId?.trim()
-        if (!requested.isNullOrBlank() && requested !in DEFAULT_SESSION_IDS) {
-            spriteSessions[friendId] = requested
-            return requested
-        }
-        return spriteSessions[friendId] ?: "sprite-${UUID.randomUUID()}".also { generated ->
-            spriteSessions[friendId] = generated
-        }
-    }
 
     private fun watchedDigest(watched: List<AiWatchedTitleDto>): String =
         jsonForCacheKeys.encodeToString(ListSerializer(AiWatchedTitleDto.serializer()), watched).sha256Hex()
 
     /**
-     * 出题本地缓存键：会话 + 日期 + 已排除套 + 片单摘要。
+     * 出题本地缓存键：日期 + 已排除套 + 片单摘要。
      *
      * 带日期是为了让「当天那一套」逐日隔离：同一天内预生成与正式出题共用一键（命中即秒开），
      * 跨天必然失效 —— 否则进程长期驻留时会拿昨天的题当今天的。
+     * BYOK 不再有服务端会话概念，会话位固定为 "byok"。
      */
     private fun quizCacheSuffix(
-        sessionId: String,
         date: String,
         excludedQuizIds: List<String>,
         watched: List<AiWatchedTitleDto>
     ): String = listOf(
-        sessionId,
+        QUIZ_CACHE_SESSION_ID,
         date,
         excludedQuizIds.sorted().joinToString(","),
         watchedDigest(watched)
@@ -1150,6 +1333,19 @@ class AiRepository @Inject constructor(
     private fun currentDailyKnowledgeDate(): LocalDate = LocalDate.now(BEIJING_ZONE)
 
     private fun currentCacheDate(): String = currentDailyKnowledgeDate().toString()
+
+    /** 今日知识插图落盘（编排器把 Provider 返回的字节交给这里，返回 file:// 可展示路径）。 */
+    private fun dailyIllustrationSaver(
+        day: String
+    ): suspend (DailyKnowledgeUnit, ByteArray) -> String? = { _, bytes ->
+        runCatching {
+            val directory = File(context.cacheDir, DAILY_ILLUSTRATION_DIR)
+            if (!directory.exists()) directory.mkdirs()
+            val file = File(directory, "$day.png")
+            file.writeBytes(bytes)
+            file.absolutePath
+        }.getOrNull()
+    }
 
     private suspend fun readDailyKnowledgeHistoryContainer(
         friendId: String
@@ -1302,7 +1498,29 @@ class AiRepository @Inject constructor(
         /** 补齐时参考的已看最高频类型个数（1-2 个，逐个尝试直到补满） */
         const val TASTE_FALLBACK_GENRES = 2
 
-        val DEFAULT_SESSION_IDS = setOf("activation", "greeting", "taste", "quiz", "daily", "default")
+        /** 兜底证据条数与画像镜像构建上限 */
+        const val TASTE_FALLBACK_EVIDENCE_COUNT = 5
+        const val DETAIL_PROFILE_MAX_ITEMS = 80
+
+        /** BYOK 出题不再有服务端会话，缓存键会话位固定。 */
+        const val QUIZ_CACHE_SESSION_ID = "byok"
+
+        /** quiz 难度反馈存储（QUIZ_RESULT 特性 + 独立后缀，不与成绩历史冲突） */
+        const val QUIZ_DIFFICULTY_FEEDBACK_SUFFIX = "difficulty_feedback"
+        const val QUIZ_DIFFICULTY_FEEDBACK_CAP = 10
+        const val QUIZ_DIFFICULTY_FEEDBACK_WINDOW = 5
+        const val QUIZ_DIFFICULTY_HINT_THRESHOLD = 3
+
+        /** 与服务端 readQuizDifficultyHint 相同的两段提示文案 */
+        const val QUIZ_DIFFICULTY_HARD_HINT =
+            "用户反馈近期题目偏难：本轮以主流影片的主线情节为主，减少冷门细节题，让题目更容易被答对。"
+        const val QUIZ_DIFFICULTY_EASY_HINT =
+            "用户反馈近期题目偏简单：本轮适当增加需要细看才能记住的情节细节题，保持挑战性。"
+
+        /** 今日知识「最近已出，必须避开」窗口与插图落盘目录 */
+        const val DAILY_RECENT_USAGE_WINDOW = 5
+        const val DAILY_ILLUSTRATION_DIR = "ai_illustration"
+
         val jsonForCacheKeys = Json { encodeDefaults = true }
 
         /**
@@ -1351,151 +1569,4 @@ class AiRepository @Inject constructor(
             "western" to 37
         )
     }
-}
-
-private data class AiResponsePayload<T>(
-    val data: T,
-    val quota: AiQuotaDto?
-)
-
-/**
- * 解析 /api/ai/quiz/stream 的一行 NDJSON。
- * 结构不符的行返回 null（跳过），服务端 error 事件折算成统一的 AI 异常。
- */
-private fun parseQuizStreamEvent(line: String): AiQuizStreamEvent? {
-    val root = runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
-    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return null
-    return when (type) {
-        "stage" -> {
-            val stage = quizStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
-            val status = when (root["status"]?.jsonPrimitive?.contentOrNull) {
-                "start" -> AiQuizStageStatus.START
-                "done" -> AiQuizStageStatus.DONE
-                else -> return null
-            }
-            AiQuizStreamEvent.Stage(
-                stage = stage,
-                status = status,
-                expectedChars = root["expectedChars"]?.jsonPrimitive?.intOrNull ?: 0
-            )
-        }
-        "progress" -> {
-            val stage = quizStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
-            AiQuizStreamEvent.Progress(stage, root["chars"]?.jsonPrimitive?.intOrNull ?: 0)
-        }
-        "ping" -> AiQuizStreamEvent.Ping
-        "result" -> {
-            val quizElement = root["quiz"] ?: return null
-            val dto = runCatching {
-                lenientJson.decodeFromJsonElement(AiQuizDto.serializer(), quizElement)
-            }.getOrNull() ?: return null
-            val quiz = dto.toDomainOrNull(root["quota"]?.let { quota ->
-                runCatching {
-                    lenientJson.decodeFromJsonElement(AiQuotaDto.serializer(), quota)
-                }.getOrNull()
-            }) ?: throw AiErrorMapper.exception("INVALID_RESPONSE", "Quiz stream result is invalid", 200)
-            AiQuizStreamEvent.Completed(quiz)
-        }
-        "error" -> {
-            // 「当天该预生成的套都发过了」是常态而非故障：正式请求仍会按需生成，
-            // 交给 ViewModel 换一句实话（今天的题已玩完），其余错误码照旧抛出去。
-            val code = root["code"]?.jsonPrimitive?.contentOrNull
-            if (code == QUIZ_PREWARM_DAILY_SETS_DONE) {
-                AiQuizStreamEvent.DailySetsDone
-            } else {
-                throw AiErrorMapper.exception(
-                    serverCode = code,
-                    message = root["message"]?.jsonPrimitive?.contentOrNull ?: "Quiz stream failed",
-                    httpCode = 200
-                )
-            }
-        }
-        else -> null
-    }
-}
-
-private fun quizStageOf(raw: String?): AiQuizStage? = when (raw) {
-    "units" -> AiQuizStage.UNITS
-    "review" -> AiQuizStage.REVIEW
-    else -> null
-}
-
-/**
- * 解析 /api/ai/daily/stream 的一行 NDJSON。
- * 结构不符的行返回 null（跳过），服务端 error 事件折算成统一的 AI 异常。
- */
-private fun parseDailyStreamEvent(line: String): AiDailyStreamEvent? {
-    val root = runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
-    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return null
-    return when (type) {
-        "stage" -> {
-            val stage = dailyStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
-            val status = when (root["status"]?.jsonPrimitive?.contentOrNull) {
-                "start" -> AiDailyStageStatus.START
-                "done" -> AiDailyStageStatus.DONE
-                else -> return null
-            }
-            AiDailyStreamEvent.Stage(
-                stage = stage,
-                status = status,
-                expectedChars = root["expectedChars"]?.jsonPrimitive?.intOrNull ?: 0
-            )
-        }
-        "progress" -> {
-            val stage = dailyStageOf(root["stage"]?.jsonPrimitive?.contentOrNull) ?: return null
-            AiDailyStreamEvent.Progress(stage, root["chars"]?.jsonPrimitive?.intOrNull ?: 0)
-        }
-        "ping" -> AiDailyStreamEvent.Ping
-        "result" -> {
-            val dailyElement = root["daily"] ?: return null
-            val dto = runCatching {
-                lenientJson
-                    .decodeFromJsonElement(AiDailyKnowledgeDto.serializer(), dailyElement)
-            }.getOrNull() ?: return null
-            val quota = root["quota"]?.let {
-                runCatching {
-                    lenientJson
-                        .decodeFromJsonElement(AiQuotaDto.serializer(), it)
-                }.getOrNull()
-            }
-            AiDailyStreamEvent.Completed(dto.toDomain(quota))
-        }
-        "error" -> throw AiErrorMapper.exception(
-            serverCode = root["code"]?.jsonPrimitive?.contentOrNull,
-            message = root["message"]?.jsonPrimitive?.contentOrNull ?: "Daily stream failed",
-            httpCode = 200
-        )
-        else -> null
-    }
-}
-
-private fun dailyStageOf(raw: String?): AiDailyStage? = when (raw) {
-    "candidate" -> AiDailyStage.CANDIDATE
-    "review" -> AiDailyStage.REVIEW
-    else -> null
-}
-
-private fun <T> Response<AiApiResponse<T>>.requirePayload(): AiResponsePayload<T> {
-    val envelope = body()
-    val errorEnvelope = envelope ?: errorBody()?.string()?.let { raw ->
-        runCatching {
-            lenientJson.decodeFromString(AiErrorDto.serializer(), raw)
-        }.getOrNull()
-    }
-    val code = envelope?.code ?: (errorEnvelope as? AiErrorDto)?.code
-    if (!isSuccessful || code == null || code.uppercase(Locale.ROOT) !in AI_SUCCESS_CODES) {
-        throw AiErrorMapper.exception(
-            serverCode = code ?: "HTTP_${code()}",
-            message = (envelope?.message ?: (errorEnvelope as? AiErrorDto)?.message)
-                ?.takeIf { it.isNotBlank() } ?: "HTTP ${code()}",
-            httpCode = code()
-        )
-    }
-    val successEnvelope = envelope
-        ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code())
-    return AiResponsePayload(
-        data = successEnvelope.data
-            ?: throw AiErrorMapper.exception("EMPTY_RESPONSE", "AI response data is empty", code()),
-        quota = successEnvelope.quota
-    )
 }

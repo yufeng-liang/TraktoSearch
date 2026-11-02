@@ -32,6 +32,13 @@ class AiProfileRepository @Inject constructor(
     suspend fun settings(friendId: String): AiProfileSettings? =
         requireFriendId(friendId).let { dao.getSettings(it)?.toModel() }
 
+    /**
+     * BYOK：读取画像镜像媒体（updatedAt 降序），供 detail 分析/rank 排序构建用户画像。
+     * 只做纯本地读取，不上传、不写 outbox。
+     */
+    suspend fun readProfileMedia(friendId: String): List<AiProfileMediaEntity> =
+        requireFriendId(friendId).let { dao.getMedia(it) }
+
     suspend fun grantProfileConsent(
         friendId: String,
         behaviorConsent: Boolean = false,

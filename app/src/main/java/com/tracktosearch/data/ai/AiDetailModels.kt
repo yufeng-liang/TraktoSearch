@@ -105,6 +105,8 @@ enum class AiDetailWatchTiming {
     }
 }
 
+// BYOK：本地编排产出后要整体进加密缓存，改为可序列化（AiQuota 已 @Serializable，枚举走内置序列化）。
+@Serializable
 data class AiDetailAnalysis(
     val scene: String,
     val interestLevel: AiDetailInterestLevel,

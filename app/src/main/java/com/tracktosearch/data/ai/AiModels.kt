@@ -360,6 +360,10 @@ data class AiQuizQuestion(
     val evidenceUsed: String = "",
     // BYOK 本地判分用：short 题关键词，与 DTO 同名透传。
     val answerKeywords: List<String> = emptyList(),
+    // BYOK 本地判分用：single/multiple/short 的标准答案文本（多选为逗号连接的选项 id）。
+    // 编排链直接落进缓存 JSON，正式判分与旧缓存回放都能零损取到。
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val correctAnswer: String? = null,
     // BYOK 编排链用：题目归属的学习单元 id，与 DTO 同名透传。
     val unitId: String? = null
 )

@@ -747,6 +747,11 @@ object AiOrchestrateValidate {
             learningTakeaway = learningTakeaway,
             evidenceUsed = evidenceUsed,
             answerKeywords = answerKeywords,
+            // 判分依据随题目一起落缓存（多选为 null，靠 correctOptionIds 判分）。
+            correctAnswer = when (type) {
+                AiQuizQuestionType.MULTIPLE -> null
+                else -> correctAnswers.firstOrNull()
+            },
             unitId = unitId,
         )
         return OrchestratedQuestion(
@@ -1131,7 +1136,8 @@ object AiOrchestrateValidate {
             AiQuizQuestionType.SHORT ->
                 "记录里的“" + evidence + "”是本题的直接依据，结论只应限定在它能支持的范围里。"
         }
-        return OrchestratedQuestion(question2, correctAnswer)
+        // 判分依据同时写进题目本体（缓存判分零损）与 OrchestratedQuestion。
+        return OrchestratedQuestion(question2.copy(correctAnswer = correctAnswer), correctAnswer)
     }
 
     // ------------------------------------------------------------------

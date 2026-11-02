@@ -120,6 +120,22 @@ class AiStorage private constructor(
         }
     }
 
+    /**
+     * 枚举某用户某特性下的全部缓存后缀（含 null = 无后缀主键）。
+     * BYOK 判分需要按 quizId 回查题包，而缓存键是摘要不是业务 id，只能逐键反查。
+     */
+    suspend fun readSuffixes(friendId: String, feature: AiCacheFeature): List<String?> {
+        val normalizedFriendId = friendId.trim()
+        if (normalizedFriendId.isEmpty()) return emptyList()
+        return withSecurePreferences { preferences ->
+            val encodedFriendId = AiStorageKey.encodeFriendId(normalizedFriendId)
+            val prefix = "ai_v${AiStorageKey.SCHEMA_VERSION}_${feature.wireName}_$encodedFriendId"
+            preferences.all.keys
+                .filter { key -> key == prefix || key.startsWith("${prefix}_") }
+                .map { key -> key.removePrefix(prefix).removePrefix("_").takeIf { it.isNotEmpty() } }
+        }
+    }
+
     suspend fun clearFriend(friendId: String) {
         val normalizedFriendId = friendId.trim()
         if (normalizedFriendId.isEmpty()) return

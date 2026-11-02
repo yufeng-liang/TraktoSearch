@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
-import com.tracktosearch.data.ai.AiApiService
 import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.douban.DoubanRexxarApiService
@@ -710,36 +709,7 @@ object NetworkModule {
         return retrofit.create(com.tracktosearch.data.remote.feedback.FeedbackApiService::class.java)
     }
 
-    @Provides
-    @Singleton
-    fun provideAiApiService(
-        baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor,
-        authInterceptor: AuthInterceptor,
-        json: Json
-    ): AiApiService {
-        val client = baseClient.newBuilder()
-            // 出题/每日知识走两段顺序 LLM 生成，首包可达数十秒；10s 读超时真机必现 SocketTimeout
-            .readTimeout(90, TimeUnit.SECONDS)
-            .callTimeout(110, TimeUnit.SECONDS)
-            .addInterceptor(authInterceptor)
-            .addInterceptor(Interceptor { chain ->
-                chain.proceed(
-                    chain.request().newBuilder()
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("User-Agent", USER_AGENT)
-                        .build()
-                )
-            })
-            .addInterceptor(loggingInterceptor)
-            .build()
-        return Retrofit.Builder()
-            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/ai/")
-            .client(client)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(AiApiService::class.java)
-    }
+    // BYOK：AI 不再经网关（AiApiService 已随编排层切换拆除），Retrofit 仅供其余服务使用。
 }
 
 /**
