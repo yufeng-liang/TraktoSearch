@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
@@ -289,6 +290,9 @@ fun MainScreen(
             ConnectivityObserverEntryPoint::class.java
         ).connectivityObserver()
     }
+    // 网络状态：底部导航头像与离线横幅共用（提前收集，导航行要用到）
+    val networkStatus by connectivityObserver.status.collectAsState()
+    val isNetworkOnline = networkStatus == ConnectivityObserver.NetworkStatus.ONLINE
     val density = LocalDensity.current
 
     // 用户头像：登录后从对应来源获取
@@ -896,7 +900,8 @@ fun MainScreen(
                         // - trakt 模式：TraktRepository 缓存资料
                         val avatarUrl = if (index == 2 && isLoggedIn) {
                             if (isDoubanMode) {
-                                doubanProfile?.avatarUrl
+                                // 空串也要当没有头像，否则会走图片分支并显示成空白
+                                doubanProfile?.avatarUrl?.takeIf { it.isNotBlank() }
                             } else {
                                 traktProfile?.images?.avatar?.full?.takeIf { it.isNotBlank() }
                             }
@@ -908,6 +913,7 @@ fun MainScreen(
                             weight = 1f,
                             avatarUrl = avatarUrl,
                             badgeCount = if (index == 3) unreadCount else 0,
+                            isOnline = isNetworkOnline,
                             interactionSource = tabInteractionSources[index],
                             onClick = {
                                 if (selectedTab != index) {
@@ -951,7 +957,6 @@ fun MainScreen(
 
             // 全局离线横幅：网络断开时给一条常驻提示，说明看到的是本地缓存。
             // 注意：这里只提示状态，不弹 Toast，避免与启动期的离线提示重复打扰。
-            val networkStatus by connectivityObserver.status.collectAsState()
             val offlineBannerBottom = WindowInsets.navigationBars
                 .asPaddingValues()
                 .calculateBottomPadding() + 78.dp
@@ -1097,6 +1102,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     onClick: () -> Unit,
     avatarUrl: String? = null,
     badgeCount: Int = 0,
+    isOnline: Boolean = true,
     interactionSource: MutableInteractionSource,
     onPositioned: (Rect) -> Unit = {}
 ) {
@@ -1187,15 +1193,46 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
         verticalArrangement = Arrangement.Center
     ) {
         if (avatarUrl != null) {
-            // 登录后"我的"tab 显示用户头像
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
-                contentDescription = stringResource(labelRes),
+            // 登录后"我的"tab 显示用户头像。
+            // Coil 请求失败后不会自行重试：离线启动、图片 CDN 抖动时 tab 会一直空着（图标也没有）。
+            // 因此（1）底下先画图标兜底，图片没加载出来时不会留白；
+            //     （2）失败后按 1s / 2s / 4s / 8s 退避最多重试 4 次；
+            //     （3）网络恢复时再补一次，避免离线期间发起的失败请求一直挂到进程结束。
+            var avatarAttempt by remember(avatarUrl) { mutableIntStateOf(0) }
+            val retryScope = rememberCoroutineScope()
+            LaunchedEffect(isOnline) {
+                if (isOnline && avatarAttempt > 0) avatarAttempt++
+            }
+            Box(
                 modifier = Modifier
                     .size(24.dp)
                     .offset(y = 0.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
+                    .clip(RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = selectedColor,
+                    modifier = Modifier.size(24.dp)
+                )
+                // key 变化时重建子组合，触发一次全新的图片请求
+                key(avatarAttempt) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
+                        contentDescription = stringResource(labelRes),
+                        onState = { state ->
+                            if (state is AsyncImagePainter.State.Error && avatarAttempt < 4) {
+                                retryScope.launch {
+                                    delay(1000L shl avatarAttempt)
+                                    avatarAttempt++
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         } else {
             BadgedBox(badge = { if (badgeCount > 0) { Badge { Text(if (badgeCount > 99) "99+" else badgeCount.toString()) } } }) {
                 Box(
