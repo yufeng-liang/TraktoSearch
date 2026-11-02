@@ -65,8 +65,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 71
-        versionName = "4.1.4"
+        versionCode = 72
+        versionName = "4.2.0"
 
         // sherpa-onnx 全 ABI 太重：只保留 arm64-v8a（覆盖全部主流真机），
         // 模拟器（x86_64）与老 32 位设备不再可装
@@ -144,9 +144,8 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // 正式包隐藏全部 AI 功能入口（精灵中心、详情页助手、隐私页 AI 开关、帮助页 AI 章节）。
-            // 关掉的是 UI 入口与描述，数据层与 worker 链路原样保留，随时删掉本行即可恢复。
-            buildConfigField("Boolean", "AI_FEATURES_ENABLED", "false")
+            // BYOK 后 AI 功能全量放开：LLM 走用户自配 Provider，服务端只保留兼容旧版的端点。
+            // defaultConfig 已设 true，无需再按构建类型覆盖。
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
