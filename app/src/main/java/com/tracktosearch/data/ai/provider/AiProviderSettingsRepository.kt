@@ -40,12 +40,19 @@ class AiProviderSettingsRepository(
     /**
      * 按功能位推导一次调用该用的完整配置（protocol / baseUrl / Key / model）。
      * 未配置（Key 为空或 baseUrl/model 空）抛 [AiProviderErrorCode.PROVIDER_INVALID]。
+     *
+     * 半配置回退：语音/图片服务商只填了地址、没填 Key 时回退到全局服务商。
+     * 否则用户「配了一半」反而比不配更糟——不配还能跟随全局，配一半直接报错。
+     * 回退时模型也改用全局主模型，避免拿媒体服务商的模型名去请求全局地址。
      */
     suspend fun resolve(slot: AiFeatureSlot): AiResolvedConfig {
         val settings = currentSettings()
-        val provider = settings.providerFor(slot)
+        val configured = settings.providerFor(slot)
+        val fellBackToGlobal = configured.id != AiProviderConfig.GLOBAL_ID &&
+            keyStore.getKey(configured.id).isBlank()
+        val provider = if (fellBackToGlobal) settings.global else configured
         val apiKey = keyStore.getKey(provider.id)
-        val model = settings.modelFor(slot)
+        val model = if (fellBackToGlobal) settings.global.model else settings.modelFor(slot)
         if (apiKey.isBlank() || provider.baseUrl.isBlank() || model.isBlank()) {
             throw AiProviderException(
                 code = AiProviderErrorCode.PROVIDER_INVALID,
@@ -54,7 +61,7 @@ class AiProviderSettingsRepository(
         }
         return AiResolvedConfig(
             protocol = provider.protocol,
-            baseUrl = provider.baseUrl.trim(),
+            baseUrl = AiProviderUrl.normalizeBaseUrl(provider.baseUrl),
             apiKey = apiKey,
             model = model
         )
@@ -204,7 +211,8 @@ class AiProviderSettingsRepository(
                 normalizedId,
                 base.copy(
                     protocol = effectiveProtocol,
-                    baseUrl = baseUrl.trim(),
+                    // 落盘时就剥掉用户多贴的端点路径，下次进页面显示的就是干净地址
+                    baseUrl = AiProviderUrl.normalizeBaseUrl(baseUrl),
                     model = model.trim()
                 )
             )
@@ -299,7 +307,7 @@ class AiProviderSettingsRepository(
         }
         return AiResolvedConfig(
             protocol = effectiveProtocol,
-            baseUrl = baseUrl.trim(),
+            baseUrl = AiProviderUrl.normalizeBaseUrl(baseUrl),
             apiKey = apiKey,
             model = model.trim()
         )

@@ -44,9 +44,18 @@ object AiProviderErrorMapper {
             status in 500..599 -> AiProviderErrorCode.SERVER
             else -> AiProviderErrorCode.UNKNOWN
         }
+        val raw = extractErrorMessage(body) ?: "HTTP $status"
+        // 404 绝大多数是地址填多了：用户从文档复制了完整端点，我们再加一次路径就 404，
+        // 而服务端只会回 "Not Found"，看不出问题在哪。这里补一句可执行的提示。
+        val message = if (status == 404) {
+            "$raw (check the base URL: it should stop at the version segment, " +
+                "without /chat/completions or /models)"
+        } else {
+            raw
+        }
         return AiProviderException(
             code = code,
-            message = extractErrorMessage(body) ?: "HTTP $status",
+            message = message,
             httpStatus = status
         )
     }
