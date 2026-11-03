@@ -1,22 +1,23 @@
 // 来源：auth-worker/src/ai/detail-handler.ts（514 行，只移植 prompt 构造段 ~347-369 与其依赖类型 24-79）。
 // 详情页两条 AI 链路的 messages 构造：无剧透详情解读 + 候选排序。
 // 校验、normalize、applyModelOrder、缓存与路由是服务端 IO/业务层，不移植。
+//
+// 序列化口径：TS 侧全部用 JSON.stringify，键集恒定（null / 空数组也照样输出）。
+// 因此这里不用 kotlinx 的 encodeToString（encodeDefaults=false 会把 null 字段与空列表整键省略，
+// 模型看到的 MEDIA/PROFILE 结构与线上不一致），改为 buildJsonObject 显式写全每个键。
 package com.tracktosearch.data.ai.prompt
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.JsonPrimitive
-
-private val detailJson = Json { encodeDefaults = false; ignoreUnknownKeys = true }
 
 /**
- * 详情页媒体条目（对应 TS 的 DetailMedia）。字段顺序与 TS 一致，序列化输出逐字段对齐。
+ * 详情页媒体条目（对应 TS 的 DetailMedia，detail-handler.ts:34-43）。
+ * 字段顺序与 TS 一致，序列化输出逐字段对齐（见 detailMediaJson）。
  */
 @Serializable
 data class DetailMedia(
@@ -33,7 +34,7 @@ data class DetailMedia(
 )
 
 /**
- * 粗粒度环境信息（对应 TS 的 DetailEnvironmentInput）。
+ * 粗粒度环境信息（对应 TS 的 DetailEnvironmentInput，detail-handler.ts:45-51）。
  * 输入层已拒绝 city/经纬度/rawEvents/spoiler 等字段，App 端只允许构造成这里的形状。
  */
 @Serializable
@@ -53,7 +54,7 @@ data class DetailRequestInput(
     val forceRefresh: Boolean = false,
 )
 
-/** 排序器候选（对应 TS 的 Candidate）。 */
+/** 排序器候选（对应 TS 的 Candidate，detail-handler.ts:65-71）。 */
 @Serializable
 data class DetailCandidate(
     val mediaKey: String,
@@ -64,20 +65,94 @@ data class DetailCandidate(
     val mediaIds: Map<String, String>,
 )
 
-/** 画像里的已看条目（对应 profile.media 的元素，字段取排序/推荐用到的那几个）。 */
+/**
+ * 画像里的已看/想看条目（对应 TS 的 ProfileMediaView，profile-store.ts:65-78，共 11 字段）。
+ *
+ * 可空字段表示「本地当前拿不到该值」：序列化时写成 null，而不是编一个 false——
+ * 编出来的 watchlist=false / watched=false 会让排序器拿到与事实相反的信号，
+ * 比缺字段更糟。等编排层把 AiProfileMediaEntity 的
+ * mediaKey/isWatched/isWatchlist/userRating/userComment/mediaIds 一并传进来即可自动补齐，
+ * 本文件无需再改。
+ */
 @Serializable
 data class ProfileMediaItem(
+    /** 画像条目的稳定主键（tmdb:xxx / trakt:xxx）；本地实体有 mediaKey，暂未透传时为 null。 */
+    val mediaKey: String? = null,
     val title: String,
     val mediaType: String = "movie",
-    val genres: List<String> = emptyList(),
-    /** 画像条目可选年份等扩展字段，进 prompt 时按需带上 */
     val year: Int? = null,
+    val posterUrl: String? = null,
+    val genres: List<String> = emptyList(),
+    val mediaIds: Map<String, String> = emptyMap(),
+    /** 是否在待看清单。 */
+    val watchlist: Boolean? = null,
+    /** 是否已看。 */
+    val watched: Boolean? = null,
+    /** 用户自己的评分（对应 TS rating；本地来自 AiProfileMediaEntity.userRating）。 */
+    val rating: Double? = null,
+    /** 是否写过短评（对应 TS commentPresent；本地来自 userComment 非空判断）。 */
+    val commentPresent: Boolean? = null,
 )
 
 /** 画像切片：prompt 里只取 media 前 80 条（对应 profile.media.slice(0, 80)）。 */
 data class DetailProfile(
     val media: List<ProfileMediaItem> = emptyList(),
 )
+
+/** mediaIds 对象序列化（TS 里是可选的四个 id 键，无值时是空对象）。 */
+private fun idMapJson(ids: Map<String, String>) = buildJsonObject {
+    ids.forEach { (key, value) -> put(key, value) }
+}
+
+/**
+ * DetailMedia 的 JSON：字段集与顺序逐字对拍 TS 的 JSON.stringify(input.media)。
+ * year/overview/publicRating 为 null、directors/cast/genres 为空数组时也照样写出键，
+ * 与服务端下发到模型的结构完全一致。
+ */
+private fun detailMediaJson(media: DetailMedia) = buildJsonObject {
+    put("mediaKey", media.mediaKey)
+    put("mediaType", media.mediaType)
+    put("title", media.title)
+    put("year", media.year?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("genres", buildJsonArray { media.genres.forEach { add(JsonPrimitive(it)) } })
+    put("overview", media.overview?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("directors", buildJsonArray { media.directors.forEach { add(JsonPrimitive(it)) } })
+    put("cast", buildJsonArray { media.cast.forEach { add(JsonPrimitive(it)) } })
+    put("publicRating", media.publicRating?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("mediaIds", idMapJson(media.mediaIds))
+}
+
+/** DetailEnvironmentInput 的 JSON（weatherTag 为 null 时也写 "weatherTag":null）。 */
+private fun detailEnvironmentJson(environment: DetailEnvironmentInput) = buildJsonObject {
+    put("localDate", environment.localDate)
+    put("weekday", environment.weekday)
+    put("timeOfDay", environment.timeOfDay)
+    put("season", environment.season)
+    put("weatherTag", environment.weatherTag?.let { JsonPrimitive(it) } ?: JsonNull)
+}
+
+/**
+ * 画像条目的 JSON：11 个键恒定输出，顺序与 TS ProfileMediaView 一致。
+ * 本地拿不到的值为 null（表示未知），不要在这里补默认 false。
+ */
+private fun profileMediaJson(item: ProfileMediaItem) = buildJsonObject {
+    put("mediaKey", item.mediaKey?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("mediaType", item.mediaType)
+    put("title", item.title)
+    put("year", item.year?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("posterUrl", item.posterUrl?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("genres", buildJsonArray { item.genres.forEach { add(JsonPrimitive(it)) } })
+    put("mediaIds", idMapJson(item.mediaIds))
+    put("watchlist", item.watchlist?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("watched", item.watched?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("rating", item.rating?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("commentPresent", item.commentPresent?.let { JsonPrimitive(it) } ?: JsonNull)
+}
+
+/** 画像数组 JSON（前 80 条，对应 profile.media.slice(0, 80)）。 */
+private fun profileMediaArrayJson(profile: DetailProfile) = buildJsonArray {
+    profile.media.take(80).forEach { add(profileMediaJson(it)) }
+}
 
 /**
  * 无剧透影视助理 messages（对应 TS 的 detailMessages，detail-handler.ts:347-355）。
@@ -86,21 +161,10 @@ fun detailMessages(
     input: DetailRequestInput,
     profile: DetailProfile,
 ): List<AiMessage> {
-    val mediaJson = detailJson.encodeToString(DetailMedia.serializer(), input.media)
-    val environmentJson = input.environment
-        ?.let { detailJson.encodeToString(DetailEnvironmentInput.serializer(), it) } ?: "null"
-    val profileJson = detailJson.encodeToString(
-        buildJsonArray {
-            profile.media.take(80).forEach { item ->
-                add(buildJsonObject {
-                    put("title", item.title)
-                    put("mediaType", item.mediaType)
-                    put("year", JsonPrimitive(item.year)) // TS JSON.stringify 对 null 输出 "year":null，字段必须保留
-                    putJsonArray("genres") { item.genres.forEach { add(JsonPrimitive(it)) } }
-                })
-            }
-        },
-    )
+    val mediaJson = detailMediaJson(input.media).toString()
+    // TS 对 null 的 environment 输出字面量 null
+    val environmentJson = input.environment?.let { detailEnvironmentJson(it).toString() } ?: "null"
+    val profileJson = profileMediaArrayJson(profile).toString()
     return listOf(
         AiMessage(
             role = "system",
@@ -121,34 +185,22 @@ fun recommendationMessages(
     candidates: List<DetailCandidate>,
     profile: DetailProfile,
 ): List<AiMessage> {
-    val candidatesJson = detailJson.encodeToString(
-        buildJsonArray {
-            candidates.forEach { candidate ->
-                add(buildJsonObject {
+    val candidatesJson = buildJsonArray {
+        candidates.forEach { candidate ->
+            add(
+                buildJsonObject {
                     put("mediaKey", candidate.mediaKey)
                     put("mediaType", candidate.mediaType)
                     put("title", candidate.title)
-                    put("year", JsonPrimitive(candidate.year)) // TS JSON.stringify 对 null 输出 "year":null，字段必须保留
-                    putJsonArray("genres") { candidate.genres.forEach { add(JsonPrimitive(it)) } }
-                    put("mediaIds", buildJsonObject {
-                        candidate.mediaIds.forEach { (key, value) -> put(key, value) }
-                    })
-                })
-            }
-        },
-    )
-    val profileJson = detailJson.encodeToString(
-        buildJsonArray {
-            profile.media.take(80).forEach { item ->
-                add(buildJsonObject {
-                    put("title", item.title)
-                    put("mediaType", item.mediaType)
-                    put("year", JsonPrimitive(item.year)) // TS JSON.stringify 对 null 输出 "year":null，字段必须保留
-                    putJsonArray("genres") { item.genres.forEach { add(JsonPrimitive(it)) } }
-                })
-            }
-        },
-    )
+                    // TS JSON.stringify 对 null 输出 "year":null，字段必须保留
+                    put("year", candidate.year?.let { JsonPrimitive(it) } ?: JsonNull)
+                    put("genres", buildJsonArray { candidate.genres.forEach { add(JsonPrimitive(it)) } })
+                    put("mediaIds", idMapJson(candidate.mediaIds))
+                },
+            )
+        }
+    }.toString()
+    val profileJson = profileMediaArrayJson(profile).toString()
     return listOf(
         AiMessage(
             role = "system",

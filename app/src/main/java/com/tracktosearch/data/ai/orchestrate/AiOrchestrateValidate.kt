@@ -620,7 +620,10 @@ object AiOrchestrateValidate {
                     is JsonPrimitive -> {
                         val text = element.contentOrNull?.trim().orEmpty()
                         AiQuizOption(
-                            id = "a" + ('a' + optionIndex),
+                            // 对拍 handler.ts:3347 String.fromCharCode(97 + optionIndex)：产出 a/b/c/d。
+                            // 旧实现写成 "a" + ('a' + optionIndex)，得到 aa/ab/ac/ad，
+                            // 模型给 correctAnswer="a" 时匹配不上 optionIds，整题被判废降级成模板题。
+                            id = ('a' + optionIndex).toString(),
                             text = AiOrchestrateJson.stripTrailingSentencePunctuation(text).take(240),
                         )
                     }
