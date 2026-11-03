@@ -877,7 +877,7 @@ class AiRepository @Inject constructor(
             friendId = friendId,
             feature = AiCacheFeature.TTS,
             forceRefresh = false,
-            suffix = request.cacheSuffix(providerCacheTag(AiFeatureSlot.TTS)),
+            suffix = ttsCacheSuffix(request),
             serializer = AiAudio.serializer(),
             isCacheValid = ::isUsableTtsCache
         ) {
@@ -910,7 +910,7 @@ class AiRepository @Inject constructor(
             audioUrlExpiresAt = null,
             mimeType = "audio/mpeg",
             durationMs = null,
-            cacheKey = request.cacheSuffix(providerCacheTag(AiFeatureSlot.TTS)),
+            cacheKey = ttsCacheSuffix(request),
             // transcript 与服务端同语义：剥掉口头禅，只保留正文（音频里才有口头禅）
             transcript = orchestrator.stripCatchphraseFromTranscript(request.characterId, request.text)
         )
@@ -1323,7 +1323,18 @@ class AiRepository @Inject constructor(
         return runCatching { json.decodeFromJsonElement(serializer, json.parseToJsonElement(raw)) }.getOrNull()
     }
 
-    private fun AiTtsRequest.cacheSuffix(providerTag: String = ""): String {
+    /**
+     * TTS 缓存键：角色 + 场景 + 文本 + 服务商标签 + 音色标签。
+     *
+     * 音色必须进键：用户切换「音色跟随角色」或换自定义音色后，
+     * 只按内容取键会继续命中旧音频，听起来像配置根本没生效。
+     */
+    private suspend fun ttsCacheSuffix(request: AiTtsRequest): String {
+        val voice = runCatching { orchestrator.resolveTtsVoice(request.characterId) }.getOrDefault("")
+        return request.cacheSuffix(providerCacheTag(AiFeatureSlot.TTS), voice)
+    }
+
+    private fun AiTtsRequest.cacheSuffix(providerTag: String = "", voiceTag: String = ""): String {
         // 32 位 hashCode 会碰撞且跨 JVM 不稳定，可能把不同文本/角色的音频串给错误请求；
         // 改用 SHA-256 hex 作缓存键。providerTag 把当前语音服务商与模型并入键：
         // 换服务商/换音色后旧音频不再命中，否则「改了配置还是老声音」。
@@ -1333,6 +1344,7 @@ class AiRepository @Inject constructor(
             add(scene?.name.orEmpty())
             add(text)
             if (providerTag.isNotEmpty()) add(providerTag)
+            if (voiceTag.isNotEmpty()) add(voiceTag)
         }.joinToString("|").sha256Hex()
     }
 

@@ -1766,6 +1766,23 @@ class AiOrchestrator @Inject constructor(
     // ------------------------------------------------------------------
 
     /**
+     * 解析本次朗读实际会用的音色。
+     *
+     * 抽成公开方法是因为缓存键也要它：`AiRepository` 的 TTS 缓存只按「角色+场景+文本+服务商」
+     * 区分，用户切换「音色跟随角色」或换自定义音色后仍会命中旧音频，听起来像配置没生效。
+     */
+    suspend fun resolveTtsVoice(
+        characterId: String,
+        voiceFollowCharacter: Boolean? = null,
+        customVoice: String? = null,
+    ): String {
+        val follow = voiceFollowCharacter ?: settingsRepository.currentSettings().voiceFollowCharacter
+        return customVoice?.takeIf { it.isNotBlank() }
+            ?: (if (follow) TTS_VOICE_BY_CHARACTER[characterId] else null)
+            ?: TTS_DEFAULT_VOICE
+    }
+
+    /**
      * 角色语音合成：长度闸 500 → 口头禅按场景注入 → 走媒体 Provider（对拍 handleTts）。
      * 失败直接上抛（服务端 synthesizeOptionalAudio 的静默吞错由调用方决定）。
      */
@@ -1783,10 +1800,7 @@ class AiOrchestrator @Inject constructor(
             ?: throw AiOrchestrateError.invalidRequest("Unknown character: $characterId")
         val spokenText = injectCatchphraseForScene(character, text, scene)
         val config = settingsRepository.resolve(AiFeatureSlot.TTS)
-        val follow = voiceFollowCharacter ?: settingsRepository.currentSettings().voiceFollowCharacter
-        val voice = customVoice?.takeIf { it.isNotBlank() }
-            ?: (if (follow) TTS_VOICE_BY_CHARACTER[characterId] else null)
-            ?: TTS_DEFAULT_VOICE
+        val voice = resolveTtsVoice(characterId, voiceFollowCharacter, customVoice)
         return AiProviderClientFactory.create(config.protocol)
             .synthesizeSpeech(AiTtsRequest(text = spokenText, voice = voice), config)
     }
