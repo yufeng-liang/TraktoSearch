@@ -200,7 +200,7 @@ fun PrivacyScreen(
                     PrivacySummaryCard()
                 }
 
-                // 区块 A：AI 数据与画像（授权 → 派生功能 → 采集 → 传输 → 独立 AI 功能）
+                // 区块 A：AI 数据与画像（服务商配置 → 授权 → 派生功能 → 采集 → 传输 → 独立 AI 功能）
                 // release 编译期关掉 AI 后整块不渲染：开关与描述都属于「涉及到 AI 的」入口
                 if (aiFeaturesEnabled) {
                     item {
@@ -208,6 +208,16 @@ fun PrivacyScreen(
                             title = stringResource(R.string.privacy_section_ai_data),
                             hazeState = hazeState
                         ) {
+                            // BYOK：服务商配置是 AI 相关设置的第一入口——
+                            // 没配好服务商，下面的画像/锐评开关都没有实际作用，所以排最前
+                            PrivacyNavigateRow(
+                                icon = Icons.Rounded.Key,
+                                title = stringResource(R.string.ai_provider_settings_title),
+                                // 入口小字说明这页能做什么（BYOK v2 文案）
+                                subtitle = stringResource(R.string.ai_provider_entry_desc),
+                                onClick = onNavigateToProviderSettings
+                            )
+                            GroupDivider()
                             AiDataSwitchGroup(
                                 settings = aiProfileSettings,
                                 aiTasteEnabled = aiTasteEnabled,
@@ -215,14 +225,6 @@ fun PrivacyScreen(
                                 onProfileConsentChanged = viewModel::setAiProfileConsent,
                                 onPersonalizationChanged = viewModel::setAiPersonalizationEnabled,
                                 onBehaviorConsentChanged = viewModel::setAiBehaviorConsent
-                            )
-                            // BYOK：服务商配置入口挂在 AI 数据卡尾部，AI 相关设置集中一处
-                            GroupDivider()
-                            PrivacyNavigateRow(
-                                icon = Icons.Rounded.Key,
-                                title = stringResource(R.string.ai_provider_settings_title),
-                                subtitle = stringResource(R.string.ai_provider_global_desc),
-                                onClick = onNavigateToProviderSettings
                             )
                         }
                     }
