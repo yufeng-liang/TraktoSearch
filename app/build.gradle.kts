@@ -96,8 +96,9 @@ android {
             "OPEN_SOURCE_VERSION_CATALOG_BASE64",
             "\"$openSourceVersionCatalogBase64\""
         )
-        // AI 功能总开关：默认开启（debug 与三个 preview 包照常可见），release 构建类型里关掉。
-        // 编译期常量，UI 侧 if (BuildConfig.AI_FEATURES_ENABLED) 即可让 R8 在 release 整段剔除；
+        // AI 功能总开关：BYOK 之后恒为 true（release 也开启）——AI 能力全部由用户自配 Provider 提供，
+        // 不再消耗服务端额度，没有「按构建类型关闭」的理由（原来 release 在这里覆盖成 false，已删除）。
+        // 编译期常量，仍是唯一开关：要灰度/紧急下线就改这里重新打包，R8 会把 UI 整段剔除；
         // 所有能打开 AI 界面的入口都走这个开关，见 ui/screen/ai/AiFeatureAccess.kt。
         buildConfigField("Boolean", "AI_FEATURES_ENABLED", "true")
         // 已迁移到 auth-worker Secrets 的密钥（不再编译进 APK）：

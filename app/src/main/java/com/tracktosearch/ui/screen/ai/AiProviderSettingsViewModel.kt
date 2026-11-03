@@ -12,6 +12,7 @@ import com.tracktosearch.data.ai.provider.AiProviderSettings
 import com.tracktosearch.data.ai.provider.AiProviderSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 单个服务商的界面态：拉目录、逐个模型探测、保存反馈。
@@ -64,7 +66,11 @@ class AiProviderSettingsViewModel @Inject constructor(
     }
 
     private suspend fun refreshKeyState() {
-        _withKey.value = AiProviderConfig.ALL_IDS.filterTo(mutableSetOf()) { repository.hasKey(it) }
+        // Key 存在 EncryptedSharedPreferences 里，读取要过 Keystore 解密：放到 IO 线程，
+        // 别在 Compose 首帧的主线程上做（配置页一进来就会调一次）。
+        _withKey.value = withContext(Dispatchers.IO) {
+            AiProviderConfig.ALL_IDS.filterTo(mutableSetOf()) { repository.hasKey(it) }
+        }
     }
 
     fun statusOf(providerId: String): ProviderUiStatus =
@@ -178,6 +184,20 @@ class AiProviderSettingsViewModel @Inject constructor(
         viewModelScope.launch { repository.saveModelOverride(slot, model) }
     }
 
+    /** 清除该服务商的 Key 与模型配置；界面必须先二次确认再调用。 */
+    fun clearProviderKey(providerId: String) {
+        val id = AiProviderConfig.normalizeId(providerId)
+        updateStatus(id) { it.copy(saved = false, saveError = null, probes = emptyMap()) }
+        viewModelScope.launch {
+            runCatching { repository.clearProviderKey(id) }
+                .onSuccess { refreshKeyState() }
+                .onFailure { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    updateStatus(id) { it.copy(saveError = describe(error)) }
+                }
+        }
+    }
+
     fun setVoiceFollowCharacter(enabled: Boolean) {
         viewModelScope.launch { repository.setVoiceFollowCharacter(enabled) }
     }
@@ -189,6 +209,11 @@ class AiProviderSettingsViewModel @Inject constructor(
     /** 清掉某服务商的探测结果（重新拉目录后旧结果就过期了）。 */
     fun clearProbes(providerId: String) {
         updateStatus(AiProviderConfig.normalizeId(providerId)) { it.copy(probes = emptyMap()) }
+    }
+
+    /** 用户又改了地址/协议：让上一次的「已保存」提示失效，别让人误以为新改动已生效。 */
+    fun clearSaveFeedback(providerId: String) {
+        updateStatus(AiProviderConfig.normalizeId(providerId)) { it.copy(saved = false) }
     }
 
     private fun updateStatus(providerId: String, transform: (ProviderUiStatus) -> ProviderUiStatus) {

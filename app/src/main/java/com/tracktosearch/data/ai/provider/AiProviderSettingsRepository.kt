@@ -224,6 +224,31 @@ class AiProviderSettingsRepository(
         }
     }
 
+    /**
+     * 清除某个服务商的 API Key。
+     *
+     * Key 只能写不能读回，所以「换一个 Key」可以直接覆盖，但「删掉 Key」必须有显式入口：
+     * 删 Key 同时清掉该服务商的模型目录/勾选/主模型，避免留下「有模型却没有凭据」的半配置态。
+     */
+    suspend fun clearProviderKey(id: String) {
+        val normalizedId = AiProviderConfig.normalizeId(id)
+        keyStore.setKey(normalizedId, "")
+        settingsStore.update { current ->
+            val base = current.provider(normalizedId)
+            val cleared = base.copy(
+                model = "",
+                availableModels = emptyList(),
+                enabledModels = emptyList()
+            )
+            val overrides = if (normalizedId == AiProviderConfig.GLOBAL_ID) {
+                emptyMap()
+            } else {
+                current.modelOverrides
+            }
+            current.withProvider(normalizedId, cleared).copy(modelOverrides = overrides)
+        }
+    }
+
     /** 音色跟随角色开关。 */
     suspend fun setVoiceFollowCharacter(enabled: Boolean) {
         settingsStore.update { it.copy(voiceFollowCharacter = enabled) }
@@ -238,7 +263,7 @@ class AiProviderSettingsRepository(
      * 用界面当前输入拼一条临时配置（不落盘）；Key 覆盖为空时回退已存 Key。
      * 任一要素缺失抛 [AiProviderErrorCode.PROVIDER_INVALID]。
      */
-    suspend fun buildTestConfig(
+    private suspend fun buildTestConfig(
         providerId: String,
         protocol: AiProviderProtocol,
         baseUrl: String,
@@ -246,16 +271,6 @@ class AiProviderSettingsRepository(
         apiKeyOverride: String?
     ): AiResolvedConfig =
         buildConfig(AiProviderConfig.normalizeId(providerId), protocol, baseUrl, model, apiKeyOverride)
-
-    /** 测试连接：发一句 "ping"，要求对端回 "pong"（配置页主模型的快速自检）。 */
-    suspend fun testConnection(config: AiResolvedConfig): AiChatResponse =
-        AiProviderClientFactory.create(config.protocol).complete(
-            request = AiChatRequest(
-                system = "You are a connectivity test.",
-                user = "Reply with the single word: pong"
-            ),
-            config = config
-        )
 
     /** 组装内存配置：协议按服务商能力收敛，Key 覆盖优先，最后校验完整性。 */
     private suspend fun buildConfig(

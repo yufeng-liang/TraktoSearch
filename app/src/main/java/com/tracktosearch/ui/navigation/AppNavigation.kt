@@ -1157,6 +1157,11 @@ fun AppNavigation(
                                 backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
                                 navController.popBackStack()
                             },
+                            // BYOK：从搜索结果页进的 AI 报「提供商未配置」时也要能一步跳到配置页，
+                            // 不然用户只能退回设置里自己翻（两个 AI 入口共用同一条路由）。
+                            onOpenProviderSettings = {
+                                navController.navigate(Routes.AI_PROVIDER_SETTINGS)
+                            },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navigateAiLegacyMediaClick(navController, "movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                             },
@@ -1314,6 +1319,10 @@ fun AppNavigation(
                             onBack = {
                                 backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
                                 navController.popBackStack()
+                            },
+                            // BYOK：「提供商未配置」时从这条路由也能直达配置页
+                            onOpenProviderSettings = {
+                                navController.navigate(Routes.AI_PROVIDER_SETTINGS)
                             },
                             onItemClick = { type, traktId, tmdbId, title, imdbId, traktRating ->
                                 val routeType = when (type) {

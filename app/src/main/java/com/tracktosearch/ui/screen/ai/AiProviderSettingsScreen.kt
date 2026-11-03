@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,14 +49,21 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -69,7 +77,12 @@ import com.tracktosearch.data.ai.provider.AiModelProbe
 import com.tracktosearch.data.ai.provider.AiProviderConfig
 import com.tracktosearch.data.ai.provider.AiProviderProtocol
 import com.tracktosearch.data.ai.provider.AiProviderSettings
+import com.tracktosearch.ui.component.AppAlertDialog
+import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.SubPageTopBar
+
+/** 模型目录每页展示条数：中转站目录常有几百条，一次渲染全部会明显掉帧。 */
+private const val MODEL_PAGE_SIZE = 20
 
 /**
  * BYOK 服务商配置页（v2）。
@@ -109,6 +122,7 @@ fun AiProviderSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
         ) {
@@ -284,17 +298,28 @@ private fun ProviderCard(
     val initialProtocol = if (allowProtocolChoice) provider.protocol else AiProviderProtocol.OPENAI_COMPATIBLE
     var protocol by rememberSaveable(providerId, initialProtocol.name) { mutableStateOf(initialProtocol) }
     var baseUrl by rememberSaveable(providerId, provider.baseUrl) { mutableStateOf(provider.baseUrl) }
-    var apiKey by rememberSaveable(providerId) { mutableStateOf("") }
-    var showAllModels by rememberSaveable(providerId) { mutableStateOf(false) }
+    // API Key 用普通 remember：明文不该被写进 Activity savedInstanceState（旋转/进程被杀后恢复）
+    var apiKey by remember(providerId) { mutableStateOf("") }
+    // 清除 Key 是破坏性操作，先弹确认再执行
+    var showClearKeyConfirm by remember { mutableStateOf(false) }
     val hasKey = hasStoredKey
     val models = provider.availableModels
-    // 默认只展示已勾选/主模型 + 前几个，模型多的中转站不至于一屏全是列表
-    val visibleModels = remember(models, provider.enabledModels, provider.model, showAllModels) {
-        if (showAllModels) {
-            models
-        } else {
-            (models.filter { it in provider.enabledModels || it == provider.model } + models.take(6)).distinct()
-        }
+    // Key 一旦进 Keystore（保存成功或拉取成功都会落盘），就把编辑框里的明文清掉
+    LaunchedEffect(hasKey) {
+        if (hasKey) apiKey = ""
+    }
+    // 用户改动地址/协议后，「已保存」提示立即失效，避免误以为新改动已生效
+    // （不监听 apiKey：保存成功会主动清空它，否则刚提示「已保存」就被自己清掉）
+    LaunchedEffect(baseUrl, protocol) {
+        if (status.saved) viewModel.clearSaveFeedback(providerId)
+    }
+    // 模型目录按需分页展开：中转站动辄几百个模型，一次性塞进 Column 会明显掉帧
+    // （本页外层是 verticalScroll，内部不能嵌 LazyColumn），所以每次多露一页。
+    var visibleModelCount by rememberSaveable(providerId) { mutableIntStateOf(MODEL_PAGE_SIZE) }
+    // 已勾选/主模型始终置顶显示，其余按目录顺序补足当前页数
+    val visibleModels = remember(models, provider.enabledModels, provider.model, visibleModelCount) {
+        val pinned = models.filter { it in provider.enabledModels || it == provider.model }
+        (pinned + models.take(visibleModelCount)).distinct()
     }
 
     Surface(
@@ -373,7 +398,10 @@ private fun ProviderCard(
             ) {
                 FilledTonalButton(
                     onClick = { viewModel.fetchModels(providerId, protocol, baseUrl, apiKey) },
-                    enabled = !status.fetchingModels && baseUrl.isNotBlank(),
+                    // 拉目录要带鉴权：没有 Key（新填的或已存的）时必然 401，
+                    // 直接置灰比让用户点了再吃一条英文错误好。
+                    enabled = !status.fetchingModels && baseUrl.isNotBlank() &&
+                        (apiKey.isNotBlank() || hasStoredKey),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
@@ -421,7 +449,8 @@ private fun ProviderCard(
             }
             status.saveError?.let { error ->
                 Text(
-                    text = error.take(120),
+                    // 前缀说明「这一步失败了」，后半段保留原始错误便于排查（多为基址/Key 类的英文提示）
+                    text = stringResource(R.string.ai_provider_save_failed, error.take(120)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error
                 )
@@ -432,6 +461,19 @@ private fun ProviderCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+            // 已存 Key 时给一个显式删除入口：Key 只能写不能读回，没有这个按钮就只能覆盖
+            if (hasStoredKey) {
+                TextButton(
+                    onClick = { showClearKeyConfirm = true },
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.ai_provider_clear_key),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
             probeWarning?.let { warning ->
                 Text(
@@ -457,22 +499,25 @@ private fun ProviderCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f)
                     )
-                    // 测试全部：逐个串行探测，结果直接显示在每行模型右侧
-                    TextButton(
-                        onClick = {
-                            viewModel.probeModels(
-                                providerId = providerId,
-                                protocol = protocol,
-                                baseUrl = baseUrl,
-                                models = models,
-                                apiKey = apiKey
-                            )
-                        },
-                        enabled = status.probingModels.isEmpty() && baseUrl.isNotBlank()
-                    ) {
-                        Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.ai_provider_probe_all))
+                    // 测试全部：逐个串行探测，结果直接显示在每行模型右侧。
+                    // 图片服务商每探测一次就真生成一张图（花用户额度），只留单行测试，不给「全部」入口。
+                    if (providerId != AiProviderConfig.IMAGE_ID) {
+                        TextButton(
+                            onClick = {
+                                viewModel.probeModels(
+                                    providerId = providerId,
+                                    protocol = protocol,
+                                    baseUrl = baseUrl,
+                                    models = models,
+                                    apiKey = apiKey
+                                )
+                            },
+                            enabled = status.probingModels.isEmpty() && baseUrl.isNotBlank()
+                        ) {
+                            Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.ai_provider_probe_all))
+                        }
                     }
                 }
                 Text(
@@ -500,17 +545,17 @@ private fun ProviderCard(
                         }
                     )
                 }
-                // 模型多时先露前几个，其余按需展开
-                if (models.size > visibleModels.size) {
+                // 模型多时按页展开
+                if (visibleModels.size < models.size) {
                     TextButton(
-                        onClick = { showAllModels = true },
+                        onClick = { visibleModelCount += MODEL_PAGE_SIZE },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.ai_provider_show_all_models, models.size))
+                        Text(stringResource(R.string.ai_provider_show_all_models, models.size - visibleModels.size))
                     }
-                } else if (showAllModels) {
+                } else if (visibleModelCount > MODEL_PAGE_SIZE) {
                     TextButton(
-                        onClick = { showAllModels = false },
+                        onClick = { visibleModelCount = MODEL_PAGE_SIZE },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(stringResource(R.string.ai_provider_show_less_models))
@@ -518,6 +563,27 @@ private fun ProviderCard(
                 }
             }
         }
+    }
+
+    if (showClearKeyConfirm) {
+        AppAlertDialog(
+            onDismissRequest = { showClearKeyConfirm = false },
+            title = stringResource(R.string.ai_provider_clear_key_title),
+            message = stringResource(R.string.ai_provider_clear_key_message),
+            confirm = DialogAction(
+                label = stringResource(R.string.ai_provider_clear_key_confirm),
+                onClick = {
+                    showClearKeyConfirm = false
+                    baseUrl = ""
+                    apiKey = ""
+                    viewModel.clearProviderKey(providerId)
+                }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = { showClearKeyConfirm = false }
+            )
+        )
     }
 }
 
@@ -536,7 +602,11 @@ private fun ModelRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSetPrimary)
+            // 整行点击 = 设为主模型：给读屏一句明确标签，否则只会念出模型名，用户不知道点了会发生什么
+            .clickable(
+                onClickLabel = stringResource(R.string.ai_provider_set_primary_action),
+                onClick = onSetPrimary
+            )
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -714,8 +784,9 @@ private fun SlotModelRow(
         Box(modifier = Modifier.weight(1f)) {
             OutlinedTextField(
                 value = if (followPrimary) {
+                    // 还没有主模型时不能谎称「跟随主模型」，直接说明未设置
                     if (primaryModel.isBlank()) {
-                        stringResource(R.string.ai_provider_follow_global)
+                        stringResource(R.string.ai_provider_model_unset)
                     } else {
                         stringResource(R.string.ai_provider_follow_primary, primaryModel)
                     }
@@ -736,6 +807,12 @@ private fun SlotModelRow(
             Box(
                 modifier = Modifier
                     .matchParentSize()
+                    // 覆盖层是唯一的点击目标，但没有文字：补语义标签与下拉角色，
+                    // 否则读屏只能念出一个空的可点区域
+                    .semantics {
+                        role = Role.DropdownList
+                        contentDescription = label
+                    }
                     .clickable { expanded = true }
             )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -789,6 +866,8 @@ private fun SwitchRow(title: String, description: String, checked: Boolean, onCh
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 整行可点：只让 Switch 可点会让点击区域只有 32dp 见方，读屏也只聚焦到开关本身
+            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -800,7 +879,8 @@ private fun SwitchRow(title: String, description: String, checked: Boolean, onCh
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        // 点击事件由整行 toggleable 接管；Switch 置 null 避免同一手势触发两次
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
