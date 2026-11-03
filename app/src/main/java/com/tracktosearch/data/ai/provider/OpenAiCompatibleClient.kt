@@ -263,6 +263,44 @@ class OpenAiCompatibleClient(
         }
     }
 
+    // ---------- 模型目录 ----------
+
+    /**
+     * GET {baseUrl}/models：OpenAI 官方与绝大多数兼容中转站都支持，
+     * 返回 {"data":[{"id":"gpt-4o-mini",...}]}；按 id 字典序排列便于界面查找。
+     */
+    override suspend fun listModels(config: AiResolvedConfig): List<AiModelInfo> {
+        val url = "${config.baseUrl.trimEnd('/')}/models"
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer ${config.apiKey}")
+            .get()
+            .build()
+        val response = runCatching { client.newCall(request).execute() }
+            .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        response.use { resp ->
+            val bodyText = resp.body?.string()
+                ?: throw AiProviderException(AiProviderErrorCode.INVALID_RESPONSE, "Empty model list body")
+            if (!resp.isSuccessful) {
+                throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
+            }
+            val root = parseObject(bodyText, AiProviderErrorCode.INVALID_RESPONSE)
+            val array = root["data"] as? JsonArray
+                ?: root["models"] as? JsonArray
+                ?: throw AiProviderException(
+                    AiProviderErrorCode.INVALID_RESPONSE,
+                    "No model list in response"
+                )
+            return array.mapNotNull { element ->
+                val item = element as? JsonObject ?: return@mapNotNull null
+                val id = AiProviderErrorMapper.stringField(item, "id")
+                    ?: AiProviderErrorMapper.stringField(item, "name")
+                    ?: return@mapNotNull null
+                AiModelInfo(id = id, displayName = AiProviderErrorMapper.stringField(item, "display_name"))
+            }.distinctBy { it.id }.sortedBy { it.id }
+        }
+    }
+
     // ---------- 公共执行 ----------
 
     /** POST JSON 并返回响应；网络层失败统一转 NETWORK 异常。 */

@@ -187,6 +187,42 @@ class AnthropicClient(
         )
     }
 
+    // ---------- 模型目录 ----------
+
+    /**
+     * GET {baseUrl}/v1/models：返回 {"data":[{"id":"claude-sonnet-4-...","display_name":"..."}]}。
+     * 需要 x-api-key + anthropic-version 两个头，与聊天端点一致。
+     */
+    override suspend fun listModels(config: AiResolvedConfig): List<AiModelInfo> {
+        val url = "${config.baseUrl.trimEnd('/')}/v1/models"
+        val request = Request.Builder()
+            .url(url)
+            .header("x-api-key", config.apiKey)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .get()
+            .build()
+        val response = runCatching { client.newCall(request).execute() }
+            .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        response.use { resp ->
+            val bodyText = resp.body?.string()
+                ?: throw AiProviderException(AiProviderErrorCode.INVALID_RESPONSE, "Empty model list body")
+            if (!resp.isSuccessful) {
+                throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
+            }
+            val root = parseObject(bodyText)
+            val array = root["data"] as? JsonArray
+                ?: throw AiProviderException(
+                    AiProviderErrorCode.INVALID_RESPONSE,
+                    "No model list in response"
+                )
+            return array.mapNotNull { element ->
+                val item = element as? JsonObject ?: return@mapNotNull null
+                val id = AiProviderErrorMapper.stringField(item, "id") ?: return@mapNotNull null
+                AiModelInfo(id = id, displayName = AiProviderErrorMapper.stringField(item, "display_name"))
+            }.distinctBy { it.id }.sortedBy { it.id }
+        }
+    }
+
     // ---------- 公共执行 ----------
 
     private fun executeRequest(url: String, payload: String, config: AiResolvedConfig): Response {

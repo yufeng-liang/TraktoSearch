@@ -178,6 +178,40 @@ class GeminiClient(
         return reason.content
     }
 
+    // ---------- 模型目录 ----------
+
+    /**
+     * GET {baseUrl}/v1beta/models?key=...：返回 {"models":[{"name":"models/gemini-2.0-flash",...}]}，
+     * 这里的 name 带 "models/" 前缀，剥掉后才是请求里要用的模型名。
+     */
+    override suspend fun listModels(config: AiResolvedConfig): List<AiModelInfo> {
+        val url = "${config.baseUrl.trimEnd('/')}/v1beta/models?key=${config.apiKey}"
+        val request = Request.Builder().url(url).get().build()
+        val response = runCatching { client.newCall(request).execute() }
+            .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        response.use { resp ->
+            val bodyText = resp.body?.string()
+                ?: throw AiProviderException(AiProviderErrorCode.INVALID_RESPONSE, "Empty model list body")
+            if (!resp.isSuccessful) {
+                throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
+            }
+            val root = parseObject(bodyText)
+            val array = root["models"] as? JsonArray
+                ?: throw AiProviderException(
+                    AiProviderErrorCode.INVALID_RESPONSE,
+                    "No model list in response"
+                )
+            return array.mapNotNull { element ->
+                val item = element as? JsonObject ?: return@mapNotNull null
+                val name = AiProviderErrorMapper.stringField(item, "name") ?: return@mapNotNull null
+                AiModelInfo(
+                    id = name.removePrefix("models/"),
+                    displayName = AiProviderErrorMapper.stringField(item, "displayName")
+                )
+            }.distinctBy { it.id }.sortedBy { it.id }
+        }
+    }
+
     // ---------- 不支持的能力 ----------
 
     override suspend fun synthesizeSpeech(

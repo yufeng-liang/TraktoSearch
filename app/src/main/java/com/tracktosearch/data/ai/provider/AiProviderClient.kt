@@ -25,7 +25,19 @@ interface AiProviderClient {
 
     /** 文生图（OpenAI 兼容 images/generations，b64_json）；不支持时抛 PROVIDER_NO_IMAGE。 */
     suspend fun generateImage(request: AiImageRequest, config: AiResolvedConfig): ByteArray
+
+    /**
+     * 拉取服务商模型目录（OpenAI 兼容 /models、Gemini /v1beta/models、Anthropic /v1/models）。
+     * 配置页用它替代手输模型名；失败抛 [AiProviderException]（401/网络等原样上抛）。
+     */
+    suspend fun listModels(config: AiResolvedConfig): List<AiModelInfo>
 }
+
+/** 模型目录条目：id 用于请求，displayName 仅用于界面展示更友好的名字。 */
+data class AiModelInfo(
+    val id: String,
+    val displayName: String? = null
+)
 
 /** 一次聊天补全请求（文本对话，messages 按序拼接）。 */
 data class AiChatRequest(

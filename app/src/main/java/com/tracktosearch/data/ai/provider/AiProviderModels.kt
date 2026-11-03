@@ -1,25 +1,34 @@
 package com.tracktosearch.data.ai.provider
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
  * BYOK 改造的共享契约（第一部分）：Provider 配置模型。
  *
- * 这是所有 BYOK 子任务的共同地基，字段名一经定案不得擅改；
- * 协议适配器、配置存储、Repository 切换、配置页 UI 都以本文件为准。
+ * 配置结构（v2）：
+ * - 文本服务商（global）：聊天类功能的默认来源，可拉取模型目录并勾选多个模型，
+ *   再按功能位分配不同模型；
+ * - 语音服务商（tts）：朗读专用，独立地址/Key/模型，未配置时朗读回退系统 TTS；
+ * - 图片生成服务商（image）：每日一图插图专用，独立地址/Key/模型，未配置则不生成插图。
+ *
+ * 三家都只存 baseUrl / model / 模型目录缓存，Key 明文单独走 AiProviderKeyStore。
  */
 
-/** 支持的聊天补全协议。语音/配图 Provider 固定走 [OPENAI_COMPATIBLE]。 */
+/** 支持的协议。语音合成与图片生成只支持 OpenAI 兼容接口。 */
 enum class AiProviderProtocol {
-    /** OpenAI 兼容：POST {baseUrl}/chat/completions，SSE 流式。 */
+    /** OpenAI 兼容：POST {baseUrl}/chat/completions，SSE 流式；/models 拉目录。 */
     OPENAI_COMPATIBLE,
 
     /** Gemini 原生：POST {baseUrl}/v1beta/models/{model}:generateContent / :streamGenerateContent。 */
     GEMINI,
 
     /** Anthropic 原生：POST {baseUrl}/v1/messages，SSE 流式。 */
-    ANTHROPIC
+    ANTHROPIC;
+
+    companion object {
+        /** 语音/图片服务商可选的协议集合（BYOK 定案：仅 OpenAI 兼容）。 */
+        val MEDIA_CAPABLE: Set<AiProviderProtocol> = setOf(OPENAI_COMPATIBLE)
+    }
 }
 
 /** BYOK 中可单独覆盖模型的功能位。 */
@@ -31,29 +40,59 @@ enum class AiFeatureSlot {
     DETAIL,
     RANK,
     TTS,
-    DAILY_IMAGE
+    DAILY_IMAGE;
+
+    /** 文本生成类功能位：模型从文本服务商的模型池里按功能分配。 */
+    val isChatModel: Boolean
+        get() = this != TTS && this != DAILY_IMAGE
+
+    companion object {
+        /** 可按功能分配模型的槽位（顺序即界面展示顺序）。 */
+        val CHAT_SLOTS: List<AiFeatureSlot> = entries.filter { it.isChatModel }
+    }
 }
 
-/** 一个用户配置的 Provider（全局默认或语音/配图专用）。 */
+/** 一个用户配置的服务商（文本 / 语音 / 图片生成）。 */
 @Serializable
 data class AiProviderConfig(
-    /** 稳定标识：全局默认固定 [GLOBAL_ID]；语音/配图 Provider 固定 [MEDIA_ID]。 */
+    /** 稳定标识：[GLOBAL_ID] / [TTS_ID] / [IMAGE_ID]。 */
     val id: String = GLOBAL_ID,
     val name: String = "",
     val protocol: AiProviderProtocol = AiProviderProtocol.OPENAI_COMPATIBLE,
     /** 形如 https://api.openai.com/v1 或 https://generativelanguage.googleapis.com 的根地址。 */
     val baseUrl: String = "",
+    /** 主模型：文本服务商=默认聊天模型；语音=朗读模型；图片=生成模型。 */
     val model: String = "",
-    /** 是否语音/配图专用 Provider。 */
-    val isMediaProvider: Boolean = false
+    /** 上次从服务商拉到的模型目录（落盘缓存，进页面先展示，可手动刷新）。 */
+    val availableModels: List<String> = emptyList(),
+    /** 用户勾选启用的模型；文本服务商可勾多个再按功能分配，语音/图片通常只勾一个。 */
+    val enabledModels: List<String> = emptyList()
 ) {
-    // 配置完整与否只看 baseUrl/model（id 为 GLOBAL_ID 时允许 model 留空走默认）；Key 单独存 AiProviderKeyStore，永不回填本类
+    // 配置完整与否只看 baseUrl/model；Key 单独存 AiProviderKeyStore，永不回填本类
     val isConfigured: Boolean
         get() = baseUrl.isNotBlank() && model.isNotBlank()
 
+    /** 有地址就能拉模型目录（Key 由调用方从 KeyStore 补）。 */
+    val canFetchModels: Boolean
+        get() = baseUrl.isNotBlank()
+
+    /**
+     * 可供分配/选择的模型池：用户勾选过就用勾选的，没勾过就用目录全量
+     *（首次拉取后直接可分配，不必先逐个勾选）。
+     */
+    val modelPool: List<String>
+        get() = enabledModels.ifEmpty { availableModels }
+
     companion object {
         const val GLOBAL_ID = "global"
-        const val MEDIA_ID = "media"
+        const val TTS_ID = "tts"
+        const val IMAGE_ID = "image"
+
+        /** 全部服务商 id（顺序即界面展示顺序：文本 → 语音 → 图片）。 */
+        val ALL_IDS: List<String> = listOf(GLOBAL_ID, TTS_ID, IMAGE_ID)
+
+        /** 未知 id 一律归到文本服务商，避免脏数据把配置写丢。 */
+        fun normalizeId(id: String): String = if (id in ALL_IDS) id else GLOBAL_ID
     }
 }
 
@@ -64,27 +103,56 @@ data class AiProviderConfig(
  */
 data class AiProviderSecret(val apiKey: String = "")
 
-/** 全局默认 + 按功能覆盖模型 的完整设置（不含 Key 明文）。 */
+/** 三个服务商配置 + 按功能分配模型 + 偏好开关（不含 Key 明文）。 */
 @Serializable
 data class AiProviderSettings(
-    /** 语音/配图 Provider 不配置时跟随全局（isMediaProvider=false 表示未启用独立配置）。 */
+    /** 文本服务商：聊天类功能的默认来源。 */
     val global: AiProviderConfig = AiProviderConfig(id = AiProviderConfig.GLOBAL_ID),
-    val media: AiProviderConfig = AiProviderConfig(id = AiProviderConfig.MEDIA_ID, isMediaProvider = true),
-    /** 功能位 → 覆盖模型名；空串表示用全局默认模型。 */
+    /** 语音服务商（可选）：未配置时朗读回退系统 TTS。 */
+    val tts: AiProviderConfig = AiProviderConfig(id = AiProviderConfig.TTS_ID),
+    /** 图片生成服务商（可选）：未配置时不生成每日一图插图。 */
+    val image: AiProviderConfig = AiProviderConfig(id = AiProviderConfig.IMAGE_ID),
+    /** 文本功能位 → 指定模型；空表示用文本服务商的主模型。 */
     val modelOverrides: Map<String, String> = emptyMap(),
     /** 音色跟随角色开关（TTS 用）。 */
     val voiceFollowCharacter: Boolean = true,
     /** quiz 后台预生成开关，默认开。 */
     val quizPregenerateEnabled: Boolean = true
 ) {
-    /** 解析某功能位应使用的模型：覆盖优先，回退全局模型。 */
-    fun modelFor(slot: AiFeatureSlot): String =
-        modelOverrides[slot.name]?.takeIf { it.isNotBlank() } ?: global.model
+    /** 按 id 取某个服务商配置。 */
+    fun provider(id: String): AiProviderConfig = when (AiProviderConfig.normalizeId(id)) {
+        AiProviderConfig.TTS_ID -> tts
+        AiProviderConfig.IMAGE_ID -> image
+        else -> global
+    }
 
-    /** 某功能位是否走独立语音/配图 Provider（仅 TTS/DAILY_IMAGE 有意义）。 */
-    fun usesMediaProvider(slot: AiFeatureSlot): Boolean =
-        (slot == AiFeatureSlot.TTS || slot == AiFeatureSlot.DAILY_IMAGE) &&
-            media.isConfigured
+    /** 按 id 替换某个服务商配置。 */
+    fun withProvider(id: String, config: AiProviderConfig): AiProviderSettings =
+        when (AiProviderConfig.normalizeId(id)) {
+            AiProviderConfig.TTS_ID -> copy(tts = config)
+            AiProviderConfig.IMAGE_ID -> copy(image = config)
+            else -> copy(global = config)
+        }
+
+    /**
+     * 某功能位实际使用的服务商：语音/图片未配置时回退文本服务商
+     *（回退后大概率因模型不匹配而失败，由上层按「朗读不可用/无配图」降级）。
+     */
+    fun providerFor(slot: AiFeatureSlot): AiProviderConfig = when (slot) {
+        AiFeatureSlot.TTS -> tts.takeIf { it.isConfigured } ?: global
+        AiFeatureSlot.DAILY_IMAGE -> image.takeIf { it.isConfigured } ?: global
+        else -> global
+    }
+
+    /** 某功能位应使用的模型：文本类按功能分配优先，语音/图片用各自服务商模型。 */
+    fun modelFor(slot: AiFeatureSlot): String = when (slot) {
+        AiFeatureSlot.TTS -> tts.model.takeIf { it.isNotBlank() } ?: global.model
+        AiFeatureSlot.DAILY_IMAGE -> image.model.takeIf { it.isNotBlank() } ?: global.model
+        else -> modelOverrides[slot.name]?.takeIf { it.isNotBlank() } ?: global.model
+    }
+
+    /** 某功能位是否已具备可调用条件（语音/图片为可选增强，不影响整体可用）。 */
+    fun isSlotConfigured(slot: AiFeatureSlot): Boolean = providerFor(slot).isConfigured
 }
 
 /** BYOK 专用错误码；与 AiErrorCode 并列使用，HTTP 状态映射见 AiProviderErrorMapper。 */
