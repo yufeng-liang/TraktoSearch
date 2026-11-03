@@ -101,13 +101,17 @@ fun bankSeed(friendId: String, date: String, setIndex: Int): String =
     "$friendId:$date:$setIndex"
 
 /**
- * 当天第 N 套题库的 quizId：形如 `bank-{date}-{setIndex}-{hash8}`。
+ * 当天某一套题库的 quizId：形如 `bank-{date}-{hash8}`。
+ *
+ * [identity] 由调用方给出「这一套」的完整身份（排除过的 quizId 全量 + 片单摘要），
+ * **不要只传套序号**：上游把最近 id 截断到 3 个，只用序号会让同一天第 5 套起 id 重复；
+ * 而判分是按 quizId 反查缓存的，id 重复就会判到别的套上（分数/正确答案全错且无感知）。
  *
  * 稳定、可复算、不同套不同 id：hash8 取种子（含 friendId）的 32 位稳定哈希，
  * 所以不同用户即使同一天同一套序号，quizId 也不同 —— 它只用于定位缓存，不承载权限。
  */
-fun deriveBankQuizId(friendId: String, date: String, setIndex: Int): String =
-    "bank-$date-$setIndex-" + digest8(bankSeed(friendId, date, setIndex))
+fun deriveBankQuizId(friendId: String, date: String, identity: String): String =
+    "bank-$date-" + digest8("$friendId:$date:$identity")
 
 /**
  * 预算判定：attempts 达到 setsPerDay*2 就不再生成（避免异常客户端刷爆额度）。

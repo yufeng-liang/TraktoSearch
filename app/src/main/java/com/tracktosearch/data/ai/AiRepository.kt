@@ -14,6 +14,8 @@ import com.tracktosearch.data.ai.prompt.TtsScene
 import com.tracktosearch.data.ai.prompt.deriveBankQuizId
 import com.tracktosearch.data.ai.provider.AiProviderErrorCode
 import com.tracktosearch.data.ai.provider.AiProviderException
+import com.tracktosearch.data.ai.provider.AiProviderSettingsRepository
+import com.tracktosearch.data.ai.provider.AiFeatureSlot
 import com.tracktosearch.data.local.db.AiProfileMediaEntity
 import com.tracktosearch.data.remote.tmdb.dto.TmdbMultiSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
@@ -35,6 +37,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -126,6 +129,7 @@ class AiRepository @Inject constructor(
     private val json: Json,
     private val tmdbRepository: TmdbRepository,
     private val aiProfileRepository: AiProfileRepository,
+    private val providerSettings: AiProviderSettingsRepository,
     // 补齐推荐的 reason 模板文案需要按当前语言生成后随缓存一起落盘
     @ApplicationContext private val context: Context
 ) {
@@ -145,8 +149,13 @@ class AiRepository @Inject constructor(
             friendId = friendId,
             feature = AiCacheFeature.GREETING,
             forceRefresh = forceRefresh,
-            // 问候按角色区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存
-            suffix = characterId,
+            // 问候按角色 + 当前服务商/模型区分缓存：缺 characterId 时第二个角色的问候会命中第一个角色的缓存；
+            // 换了 Provider（尤其换了模型）后人格口吻完全不同，不能继续回放旧缓存。
+            // providerCacheTag 为空（还没配好服务商）时不追加，保持与旧版同形的一个键段。
+            suffix = listOfNotNull(
+                characterId,
+                providerCacheTag(AiFeatureSlot.GREETING).takeIf { it.isNotEmpty() },
+            ).joinToString("|"),
             serializer = AiGreeting.serializer(),
             isCacheValid = ::isUsableGreetingCache
         ) {
@@ -376,6 +385,21 @@ class AiRepository @Inject constructor(
         }
     }
 
+    /**
+     * 第 [excludedQuizIds] 套的 identity：参与 quizId 哈希。
+     *
+     * 只用「排除个数」不够：上游把最近 id 截到 3 个，第 5 套起个数恒为 3，同一天多套会撞同一个 id。
+     * 这里把排除集合全量与片单摘要一起纳入，保证「不同套 → 不同 quizId」，
+     * 判分反查缓存时不会命中另一套的题包。
+     */
+    private fun quizSetIdentity(
+        excludedQuizIds: List<String>,
+        watched: List<AiWatchedTitleDto>
+    ): String = listOf(
+        excludedQuizIds.sorted().joinToString(","),
+        watchedDigest(watched)
+    ).joinToString("|")
+
     /** 一次性生成 13 题题包（编排器内部已有槽位兜底，失败直接抛）。 */
     private suspend fun generateQuizOnce(
         friendId: String,
@@ -384,7 +408,7 @@ class AiRepository @Inject constructor(
         excludedQuizIds: List<String>,
         watched: List<AiWatchedTitleDto>
     ): AiQuiz {
-        val quizId = deriveBankQuizId(friendId, date, excludedQuizIds.size)
+        val quizId = deriveBankQuizId(friendId, date, quizSetIdentity(excludedQuizIds, watched))
         val orchestrated = orchestrator.generateQuiz(
             nickname = nickname,
             watched = watched,
@@ -426,7 +450,7 @@ class AiRepository @Inject constructor(
                     return@flow
                 }
         }
-        val quizId = deriveBankQuizId(friendId, date, request.excludedQuizIds.size)
+        val quizId = deriveBankQuizId(friendId, date, quizSetIdentity(request.excludedQuizIds, watched))
         orchestrator.generateQuizStream(
             nickname = nickname,
             watched = watched,
@@ -853,7 +877,7 @@ class AiRepository @Inject constructor(
             friendId = friendId,
             feature = AiCacheFeature.TTS,
             forceRefresh = false,
-            suffix = request.cacheSuffix(),
+            suffix = request.cacheSuffix(providerCacheTag(AiFeatureSlot.TTS)),
             serializer = AiAudio.serializer(),
             isCacheValid = ::isUsableTtsCache
         ) {
@@ -886,7 +910,7 @@ class AiRepository @Inject constructor(
             audioUrlExpiresAt = null,
             mimeType = "audio/mpeg",
             durationMs = null,
-            cacheKey = request.cacheSuffix(),
+            cacheKey = request.cacheSuffix(providerCacheTag(AiFeatureSlot.TTS)),
             // transcript 与服务端同语义：剥掉口头禅，只保留正文（音频里才有口头禅）
             transcript = orchestrator.stripCatchphraseFromTranscript(request.characterId, request.text)
         )
@@ -985,7 +1009,20 @@ class AiRepository @Inject constructor(
                     title = entity.title.trim(),
                     mediaType = if (entity.mediaType.equals("show", ignoreCase = true)) "show" else "movie",
                     genres = parseStoredGenres(entity.genresJson),
-                    year = entity.year
+                    year = entity.year,
+                    // 画像条目的完整信号：排序器要靠「已看/想看/评分/评论」决定推荐取舍，
+                    // 只传标题会让同名片与重拍片无法区分（服务端 ProfileMediaView 同样 11 字段）。
+                    mediaKey = entity.mediaKey,
+                    mediaIds = buildMap {
+                        entity.tmdbId?.let { put("tmdb", it.toString()) }
+                        entity.traktId?.let { put("trakt", it.toString()) }
+                        entity.imdbId?.takeIf { it.isNotBlank() }?.let { put("imdb", it) }
+                        entity.doubanId?.takeIf { it.isNotBlank() }?.let { put("douban", it) }
+                    },
+                    watchlist = entity.isWatchlist,
+                    watched = entity.isWatched,
+                    rating = entity.userRating,
+                    commentPresent = !entity.userComment.isNullOrBlank()
                 )
             }
             .take(DETAIL_PROFILE_MAX_ITEMS)
@@ -1172,7 +1209,10 @@ class AiRepository @Inject constructor(
 
     private suspend fun <T> runApi(block: suspend () -> T): Result<T> {
         return try {
-            Result.success(block())
+            // 统一在 IO 线程执行：内部既有静态网络调用（已各自包 IO），也有
+            // EncryptedSharedPreferences 的整份解密（缓存读写）。放主线程会在
+            // 配置页/首屏进入时卡帧，且 Keystore 解密在 ANR 阈值内不稳定。
+            Result.success(withContext(Dispatchers.IO) { block() })
         } catch (e: CancellationException) {
             throw e
         } catch (e: AiApiException) {
@@ -1230,7 +1270,9 @@ class AiRepository @Inject constructor(
         }
         return try {
             val value = block()
-            storage.write(friendId, feature, json.encodeToString(serializer, value), suffix)
+            // 缓存写入失败不能连累这次请求：模型已经生成完、额度也已经花掉，
+            // 因为落盘异常（keystore 重置、磁盘满）把成功结果变成错误返回是最糟的结果。
+            runCatching { storage.write(friendId, feature, json.encodeToString(serializer, value), suffix) }
             Result.success(value)
         } catch (e: CancellationException) {
             throw e
@@ -1281,11 +1323,32 @@ class AiRepository @Inject constructor(
         return runCatching { json.decodeFromJsonElement(serializer, json.parseToJsonElement(raw)) }.getOrNull()
     }
 
-    private fun AiTtsRequest.cacheSuffix(): String {
+    private fun AiTtsRequest.cacheSuffix(providerTag: String = ""): String {
         // 32 位 hashCode 会碰撞且跨 JVM 不稳定，可能把不同文本/角色的音频串给错误请求；
-        // 改用 SHA-256 hex 作缓存键。
-        return listOf(characterId, scene?.name.orEmpty(), text).joinToString("|").sha256Hex()
+        // 改用 SHA-256 hex 作缓存键。providerTag 把当前语音服务商与模型并入键：
+        // 换服务商/换音色后旧音频不再命中，否则「改了配置还是老声音」。
+        // 未配置时 tag 为空且不参与拼接，键形状与旧版一致，老缓存继续可用。
+        return buildList {
+            add(characterId)
+            add(scene?.name.orEmpty())
+            add(text)
+            if (providerTag.isNotEmpty()) add(providerTag)
+        }.joinToString("|").sha256Hex()
     }
+
+    /**
+     * 当前 Provider 的缓存标签（baseUrl + 模型）。
+     *
+     * 只用于区分「换了服务商/模型」之后的缓存失效，不含 Key 明文；
+     * 取不到配置（未填写）时返回空串，让缓存退回按内容区分的老行为。
+     */
+    private suspend fun providerCacheTag(slot: AiFeatureSlot): String = runCatching {
+        val config = providerSettings.resolve(slot)
+        val base = config.baseUrl.trimEnd('/')
+        // resolve 在未配置时会抛，但测试替身/半配置状态可能给出空字段：
+        // 这时拼出来的 "@" 毫无区分度，只会让同一份缓存永远失配，直接当无标签处理。
+        if (base.isBlank() || config.model.isBlank()) "" else "$base@${config.model}"
+    }.getOrDefault("")
 
     private fun String.sha256Hex(): String {
         return MessageDigest.getInstance("SHA-256")

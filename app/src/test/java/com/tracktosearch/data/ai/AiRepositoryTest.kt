@@ -6,6 +6,7 @@ import com.tracktosearch.data.ai.orchestrate.AiOrchestrator
 import com.tracktosearch.data.ai.orchestrate.AiQuizScoring
 import com.tracktosearch.data.ai.provider.AiProviderErrorCode
 import com.tracktosearch.data.ai.provider.AiProviderException
+import com.tracktosearch.data.ai.provider.AiProviderSettingsRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import android.util.Base64
 import io.mockk.coEvery
@@ -42,6 +43,8 @@ class AiRepositoryTest {
         json,
         mockk<TmdbRepository>(relaxed = true),
         mockk<AiProfileRepository>(relaxed = true),
+        // 缓存键的 Provider 标签：未配置时内部 runCatching 兜底成空串，relaxed mock 正好
+        mockk<AiProviderSettingsRepository>(relaxed = true),
         mockk<Context>(relaxed = true)
     )
 

@@ -49,6 +49,7 @@ class AiDailyKnowledgeHistoryTest {
             json = json,
             tmdbRepository = mockk<TmdbRepository>(relaxed = true),
             aiProfileRepository = mockk(relaxed = true),
+            providerSettings = mockk(relaxed = true),
             context = context
         )
     }
