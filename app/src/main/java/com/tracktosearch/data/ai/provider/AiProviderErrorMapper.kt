@@ -79,6 +79,24 @@ object AiProviderErrorMapper {
     }
 
     /**
+     * 判断错误体是否指向「该模型不接受当前输出长度参数」。
+     *
+     * OpenAI 的 o 系列与 gpt-5 起改用 `max_completion_tokens`，仍带 `max_tokens` 会返回 400 +
+     * `Unsupported parameter: 'max_tokens' is not supported with this model.`；
+     * 反向也有中转站只认 `max_tokens`。两种参数名都要能命中，交给调用方去掉该字段重发一次。
+     */
+    fun mentionsMaxTokensRejection(body: String?): Boolean {
+        if (body.isNullOrBlank()) return false
+        val lower = body.lowercase()
+        if (!lower.contains("max_tokens") && !lower.contains("max_completion_tokens")) return false
+        return lower.contains("unsupported") ||
+            lower.contains("not supported") ||
+            lower.contains("不支持") ||
+            lower.contains("unknown parameter") ||
+            lower.contains("unrecognized")
+    }
+
+    /**
      * 从错误体提取可读 message。
      * 依次尝试 OpenAI/Gemini/Anthropic 三种风格（其实共用 "error"."message" 一条路径），
      * 失败则截取原始 body 前 200 字符兜底。

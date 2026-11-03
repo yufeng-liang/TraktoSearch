@@ -27,6 +27,12 @@ class AiProviderClientFactoryTest {
     }
 
     @Test
+    fun `create returns OpenAiResponsesClient for OPENAI_RESPONSES`() {
+        val client = AiProviderClientFactory.create(AiProviderProtocol.OPENAI_RESPONSES)
+        assertThat(client).isInstanceOf(OpenAiResponsesClient::class.java)
+    }
+
+    @Test
     fun `create reuses same instance per protocol`() {
         val first = AiProviderClientFactory.create(AiProviderProtocol.GEMINI)
         val second = AiProviderClientFactory.create(AiProviderProtocol.GEMINI)

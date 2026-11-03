@@ -1,5 +1,6 @@
 package com.tracktosearch.data.ai.provider
 
+import android.app.Application
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -19,7 +20,9 @@ import org.robolectric.annotation.Config
  * 纯 JVM 单测没有且 testOptions 未开 returnDefaultValues），所以挂 Robolectric。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// application 必须显式指定：不写默认会加载真 App 类（TraktSearchApp → Hilt → sqlcipher），
+// 本机没有 sqlcipher 原生库会让整类 UnsatisfiedLinkError；这里只用到 android.util.Base64。
+@Config(sdk = [33], application = Application::class)
 class OpenAiCompatibleClientTest {
 
     private lateinit var server: MockWebServer
@@ -97,7 +100,8 @@ class OpenAiCompatibleClientTest {
                 .setResponseCode(400)
                 .setBody("""{"error":{"message":"response_format not supported"}}""")
         )
-        server.enqueue(chatResponse("{\"a\":1}"))
+        // 响应体是 JSON 字符串，content 里的引号必须再转义一层，否则 MockWebServer 返回的就是坏 JSON
+        server.enqueue(chatResponse("""{\"a\":1}"""))
 
         val response = client.complete(
             AiChatRequest(system = "s", user = "u", jsonMode = true),

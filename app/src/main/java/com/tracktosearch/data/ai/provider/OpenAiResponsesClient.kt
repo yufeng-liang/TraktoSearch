@@ -1,9 +1,12 @@
 package com.tracktosearch.data.ai.provider
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.job
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -115,10 +118,18 @@ class OpenAiResponsesClient(
             if (!resp.isSuccessful) {
                 throw AiProviderErrorMapper.fromHttpStatus(resp.code, body.string())
             }
+            // 协程被取消（用户退出页面）时立刻断开 socket，否则流式读会一直挂着
+            currentCoroutineContext().job.invokeOnCompletion { resp.close() }
             val source = body.source()
             val collected = StringBuilder()
+            // response.completed 才是正常收尾；读不到它说明流被截断，不能当作完成
+            var sawTerminal = false
             while (true) {
-                val line = source.readUtf8Line() ?: break
+                val line = try {
+                    source.readUtf8Line()
+                } catch (error: java.io.IOException) {
+                    throw AiProviderErrorMapper.fromNetworkError(error)
+                } ?: break
                 // SSE 规范：data: 前缀 + 可选空格；空行是事件分隔符，直接跳过
                 if (line.isBlank()) continue
                 if (!line.startsWith(SSE_DATA_PREFIX)) continue
@@ -135,13 +146,22 @@ class OpenAiResponsesClient(
                         }
                     }
                     // 正常终态：后面的 usage 之类事件不需要，直接结束
-                    EVENT_COMPLETED -> break
+                    EVENT_COMPLETED -> {
+                        sawTerminal = true
+                        break
+                    }
                     // 协议层失败事件：message 优先取 response.error.message，其次 error.message，
                     // 都没有就把原始 JSON 片段截断带回，便于排查
                     EVENT_FAILED, EVENT_ERROR -> throw streamFailure(event, data)
                     // 其他事件（created / in_progress / content_part.added 等）忽略
                     else -> continue
                 }
+            }
+            if (collected.isEmpty()) {
+                throw AiProviderException(
+                    AiProviderErrorCode.INVALID_RESPONSE,
+                    if (sawTerminal) "Stream finished without any content" else "Stream closed before any data"
+                )
             }
             emit(AiStreamChunk.Done(collected.toString()))
         }
@@ -276,20 +296,27 @@ class OpenAiResponsesClient(
 
     // ---------- 公共执行 ----------
 
-    /** POST JSON 并返回响应；网络层失败统一转 NETWORK 异常。 */
-    private fun executeRequest(url: String, payload: String, config: AiResolvedConfig): Response {
+    /**
+     * POST JSON 并返回响应；网络层失败统一转 NETWORK 异常。
+     *
+     * 切到 IO 线程执行：调用方可能跑在 Main.immediate 上（配置页拉目录/探测），
+     * 在这里兜住比要求每个调用方自觉更可靠。
+     */
+    private suspend fun executeRequest(url: String, payload: String, config: AiResolvedConfig): Response {
         val request = Request.Builder()
             .url(url)
             .header("Authorization", "Bearer ${config.apiKey}")
             .header("Content-Type", "application/json")
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
-        return runCatching { client.newCall(request).execute() }
-            .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        return withContext(Dispatchers.IO) {
+            runCatching { client.newCall(request).execute() }
+                .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        }
     }
 
     /** 一次性读完状态码与响应体（非流式路径用，避免 Response 被提前关闭）。 */
-    private fun postForText(url: String, payload: String, config: AiResolvedConfig): HttpExchange {
+    private suspend fun postForText(url: String, payload: String, config: AiResolvedConfig): HttpExchange {
         val response = executeRequest(url, payload, config)
         return response.use { resp ->
             val bodyText = resp.body?.string()
@@ -328,11 +355,15 @@ class OpenAiResponsesClient(
         private const val OUTPUT_MESSAGE_TYPE = "message"
         private const val OUTPUT_TEXT_TYPE = "output_text"
 
-        /** 独立使用时的默认客户端：connect 15s / read 90s / call 120s（两段式生成留足时间）。 */
+        /**
+         * 独立使用时的默认客户端：connect 15s / read 90s，**不设 callTimeout**。
+         * callTimeout 是整个调用（含流式读取）的硬上限，会给长流式生成砍半途；
+         * read 超时已经能拦住「没有数据继续来」的卡死情况。
+         */
         fun buildDefaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(java.time.Duration.ofMillis(15_000))
             .readTimeout(java.time.Duration.ofMillis(90_000))
-            .callTimeout(java.time.Duration.ofMillis(120_000))
+            .callTimeout(java.time.Duration.ZERO)
             .build()
     }
 }

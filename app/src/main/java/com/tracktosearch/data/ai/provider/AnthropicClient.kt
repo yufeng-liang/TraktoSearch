@@ -1,9 +1,12 @@
 package com.tracktosearch.data.ai.provider
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.job
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -104,10 +107,18 @@ class AnthropicClient(
             if (!resp.isSuccessful) {
                 throw AiProviderErrorMapper.fromHttpStatus(resp.code, body.string())
             }
+            // 协程被取消（用户退出页面）时立刻断开 socket，否则流式读会一直挂着
+            currentCoroutineContext().job.invokeOnCompletion { resp.close() }
             val source = body.source()
             val collected = StringBuilder()
+            // message_stop 才是正常收尾；读不到它说明流被截断，不能当作完成
+            var sawTerminal = false
             while (true) {
-                val line = source.readUtf8Line() ?: break
+                val line = try {
+                    source.readUtf8Line()
+                } catch (error: java.io.IOException) {
+                    throw AiProviderErrorMapper.fromNetworkError(error)
+                } ?: break
                 if (line.isBlank()) continue
                 // Anthropic SSE 是 event: + data: 双行结构，只处理 data: 行即可
                 if (!line.startsWith(SSE_DATA_PREFIX)) continue
@@ -129,9 +140,18 @@ class AnthropicClient(
                         }
                     }
                     // message_stop：官方规定的流终止事件
-                    EVENT_MESSAGE_STOP -> break
+                    EVENT_MESSAGE_STOP -> {
+                        sawTerminal = true
+                        break
+                    }
                     else -> Unit
                 }
+            }
+            if (collected.isEmpty()) {
+                throw AiProviderException(
+                    AiProviderErrorCode.INVALID_RESPONSE,
+                    if (sawTerminal) "Stream finished without any content" else "Stream closed before any data"
+                )
             }
             emit(AiStreamChunk.Done(collected.toString()))
         }
@@ -255,7 +275,13 @@ class AnthropicClient(
 
     // ---------- 公共执行 ----------
 
-    private fun executeRequest(url: String, payload: String, config: AiResolvedConfig): Response {
+    /**
+     * POST JSON 并返回响应；网络层失败统一转 NETWORK 异常。
+     *
+     * 切到 IO 线程执行：调用方可能跑在 Main.immediate 上（配置页拉目录/探测），
+     * 在这里兜住比要求每个调用方自觉更可靠。
+     */
+    private suspend fun executeRequest(url: String, payload: String, config: AiResolvedConfig): Response {
         val request = Request.Builder()
             .url(url)
             .header("x-api-key", config.apiKey)
@@ -263,8 +289,10 @@ class AnthropicClient(
             .header("Content-Type", "application/json")
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
-        return runCatching { client.newCall(request).execute() }
-            .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        return withContext(Dispatchers.IO) {
+            runCatching { client.newCall(request).execute() }
+                .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
+        }
     }
 
     private fun parseObject(text: String): JsonObject =
