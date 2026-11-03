@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -200,15 +201,18 @@ class GeminiClient(
 
     private fun buildUrl(config: AiResolvedConfig, streaming: Boolean): String {
         val action = if (streaming) "streamGenerateContent" else "generateContent"
-        // 流式必须带 alt=sse，否则 Gemini 返回整段 JSON 数组而不是 SSE 事件流
-        val suffix = if (streaming) "?alt=sse&key=" else "?key="
-        return "${config.baseUrl.trimEnd('/')}/v1beta/models/${config.model}:$action" +
-            "$suffix${config.apiKey}"
+        // 流式必须带 alt=sse，否则 Gemini 返回整段 JSON 数组而不是 SSE 事件流。
+        // Key 不放 URL：走 x-goog-api-key 头，避免被代理/日志/崩溃报告把凭据带走。
+        val suffix = if (streaming) "?alt=sse" else ""
+        return "${config.baseUrl.trimEnd('/')}/v1beta/models/${config.model}:$action$suffix"
     }
 
     /**
      * 取 candidates[0].content.parts[*].text 拼接。
      * 多个 part 是正常的（模型可能拆段输出），全部顺序拼接。
+     *
+     * 跳过 `thought: true` 的分片：开思考的模型会把推理过程也放进 parts，
+     * 混进正文会让下游的 JSON 解析直接失败（且推理内容本就不该出现在结果里）。
      */
     private fun JsonObject.candidatesJoinedText(): String? {
         val candidates = this["candidates"] as? JsonArray ?: return null
@@ -216,8 +220,10 @@ class GeminiClient(
         val content = first["content"] as? JsonObject ?: return null
         val parts = content["parts"] as? JsonArray ?: return null
         val texts = parts.mapNotNull { part ->
-            (part as? JsonObject)?.get("text") as? JsonPrimitive
-        }.filter { it.isString }
+            val obj = part as? JsonObject ?: return@mapNotNull null
+            if ((obj["thought"] as? JsonPrimitive)?.booleanOrNull == true) return@mapNotNull null
+            (obj["text"] as? JsonPrimitive)?.takeIf { it.isString }
+        }
         if (texts.isEmpty()) return null
         return texts.joinToString("") { it.content }
     }
@@ -233,12 +239,17 @@ class GeminiClient(
     // ---------- 模型目录 ----------
 
     /**
-     * GET {baseUrl}/v1beta/models?key=...：返回 {"models":[{"name":"models/gemini-2.0-flash",...}]}，
+     * GET {baseUrl}/v1beta/models：返回 {"models":[{"name":"models/gemini-2.0-flash",...}]}，
      * 这里的 name 带 "models/" 前缀，剥掉后才是请求里要用的模型名。
+     * Key 走 x-goog-api-key 头（理由见 executeRequest）。
      */
     override suspend fun listModels(config: AiResolvedConfig): List<AiModelInfo> {
-        val url = "${config.baseUrl.trimEnd('/')}/v1beta/models?key=${config.apiKey}"
-        val request = Request.Builder().url(url).get().build()
+        val url = "${config.baseUrl.trimEnd('/')}/v1beta/models"
+        val request = Request.Builder()
+            .url(url)
+            .header("x-goog-api-key", config.apiKey)
+            .get()
+            .build()
         val response = runCatching { client.newCall(request).execute() }
             .getOrElse { error -> throw AiProviderErrorMapper.fromNetworkError(error) }
         response.use { resp ->
@@ -298,6 +309,9 @@ class GeminiClient(
         val request = Request.Builder()
             .url(url)
             .header("Content-Type", "application/json")
+            // Gemini 的 Key 走请求头（官方 REST 支持 x-goog-api-key）；
+            // 拼在 ?key= 里会进 URL，被代理、日志或崩溃上报带走。
+            .header("x-goog-api-key", config.apiKey)
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
         return withContext(Dispatchers.IO) {

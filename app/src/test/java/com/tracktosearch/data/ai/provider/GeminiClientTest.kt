@@ -63,9 +63,10 @@ class GeminiClientTest {
         assertThat(response.model).isEqualTo("gemini-test")
         val request = server.takeRequest()
         assertThat(request.method).isEqualTo("POST")
-        // 非流式：v1beta/models/{model}:generateContent?key=
+        // 非流式：v1beta/models/{model}:generateContent，Key 走请求头而不是 URL
         assertThat(request.path)
-            .isEqualTo("/v1beta/models/gemini-test:generateContent?key=gemini-key")
+            .isEqualTo("/v1beta/models/gemini-test:generateContent")
+        assertThat(request.getHeader("x-goog-api-key")).isEqualTo("gemini-key")
         val body = request.body.readUtf8()
         assertThat(body).contains("\"system_instruction\":{\"parts\":[{\"text\":\"be nice\"}]}")
         assertThat(body).contains("\"role\":\"user\"")
@@ -106,9 +107,11 @@ class GeminiClientTest {
         assertThat(deltas.map { it.text }).containsExactly("早", "安", "!").inOrder()
         val done = chunks.filterIsInstance<AiStreamChunk.Done>().single()
         assertThat(done.fullText).isEqualTo("早安!")
-        // 流式必须走 :streamGenerateContent?alt=sse&key=
-        assertThat(server.takeRequest().path)
-            .isEqualTo("/v1beta/models/gemini-test:streamGenerateContent?alt=sse&key=gemini-key")
+        // 流式必须走 :streamGenerateContent?alt=sse（Key 在请求头）
+        val streamRequest = server.takeRequest()
+        assertThat(streamRequest.path)
+            .isEqualTo("/v1beta/models/gemini-test:streamGenerateContent?alt=sse")
+        assertThat(streamRequest.getHeader("x-goog-api-key")).isEqualTo("gemini-key")
     }
 
     @Test
@@ -131,6 +134,49 @@ class GeminiClientTest {
         assertThat(chunks.filterIsInstance<AiStreamChunk.Delta>().map { it.text })
             .containsExactly("ok")
         assertThat(chunks.filterIsInstance<AiStreamChunk.Done>().single().fullText).isEqualTo("ok")
+    }
+
+    @Test
+    fun complete_skipsThoughtParts() = runTest {
+        // 开思考的模型会把推理过程也放进 parts（thought: true），
+        // 拼进正文会让下游 JSON 解析直接失败，必须跳过
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """{"candidates":[{"content":{"parts":[
+                       |{"text":"让我想想…","thought":true},
+                       |{"text":"{\"a\":1}"}
+                       |],"role":"model"},"finishReason":"STOP"}]}""".trimMargin()
+                )
+        )
+
+        val response = client.complete(AiChatRequest(system = "s", user = "u"), config)
+
+        assertThat(response.text).isEqualTo("""{"a":1}""")
+    }
+
+    @Test
+    fun listModels_usesHeaderKeyAndStripsPrefix() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """{"models":[
+                       |{"name":"models/gemini-2.0-flash","displayName":"Gemini 2.0 Flash"},
+                       |{"name":"models/text-embedding-004"}
+                       |]}""".trimMargin()
+                )
+        )
+
+        val models = client.listModels(config)
+
+        assertThat(models.map { it.id }).containsExactly("gemini-2.0-flash", "text-embedding-004")
+        val request = server.takeRequest()
+        assertThat(request.path).isEqualTo("/v1beta/models")
+        assertThat(request.getHeader("x-goog-api-key")).isEqualTo("gemini-key")
     }
 
     @Test
