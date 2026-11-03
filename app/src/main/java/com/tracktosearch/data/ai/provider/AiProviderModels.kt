@@ -19,6 +19,13 @@ enum class AiProviderProtocol {
     /** OpenAI 兼容：POST {baseUrl}/chat/completions，SSE 流式；/models 拉目录。 */
     OPENAI_COMPATIBLE,
 
+    /**
+     * OpenAI 原生 Responses API：POST {baseUrl}/responses。
+     * 官方推荐的新一代接口，reasoning 模型（o 系列 / gpt-5 起）在上面能力更完整；
+     * 三方中转站目前多只实现 chat/completions，所以两者并存、由用户自行选择。
+     */
+    OPENAI_RESPONSES,
+
     /** Gemini 原生：POST {baseUrl}/v1beta/models/{model}:generateContent / :streamGenerateContent。 */
     GEMINI,
 

@@ -42,9 +42,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -600,32 +597,45 @@ private fun ModelRow(
 private fun ProtocolSegmented(current: AiProviderProtocol, onSelect: (AiProviderProtocol) -> Unit) {
     val options = listOf(
         AiProviderProtocol.OPENAI_COMPATIBLE to stringResource(R.string.ai_provider_protocol_openai),
+        AiProviderProtocol.OPENAI_RESPONSES to stringResource(R.string.ai_provider_protocol_openai_responses),
         AiProviderProtocol.GEMINI to stringResource(R.string.ai_provider_protocol_gemini),
         AiProviderProtocol.ANTHROPIC to stringResource(R.string.ai_provider_protocol_anthropic)
     )
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        options.forEachIndexed { index, (protocol, label) ->
-            SegmentedButton(
-                selected = current == protocol,
-                onClick = { onSelect(protocol) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                colors = SegmentedButtonDefaults.colors(
-                    activeContainerColor = MaterialTheme.colorScheme.primary,
-                    activeContentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                // 三选一在中日韩文案下每条只有三分之一宽：去掉选中勾图标，
-                // 选中态靠实心底色表达，文字才不会被挤到贴边或省略号
-                icon = {},
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
-                label = {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            )
+    val selectedLabel = options.firstOrNull { it.first == current }?.second ?: options.first().second
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = selectedLabel,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.ai_provider_protocol_label)) },
+            trailingIcon = {
+                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+            }
+        )
+        // 覆盖层负责点击：readOnly 输入框本身不接收焦点，避免弹软键盘
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable { expanded = true }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (protocol, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        onSelect(protocol)
+                    },
+                    trailingIcon = {
+                        if (protocol == current) {
+                            Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                        }
+                    }
+                )
+            }
         }
     }
 }

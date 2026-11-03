@@ -2317,8 +2317,10 @@
     <string name="ai_provider_not_configured">아직 공급자가 구성되지 않았습니다. 아래 주소·모델·API 키를 입력하면 모든 AI 기능을 사용할 수 있습니다. 키는 이 기기에만 암호화 저장됩니다.</string>
     <string name="ai_provider_global_section">기본 공급자</string>
     <string name="ai_provider_protocol_openai">OpenAI 호환</string>
+    <string name="ai_provider_protocol_openai_responses">OpenAI Responses</string>
     <string name="ai_provider_protocol_gemini">Gemini</string>
     <string name="ai_provider_protocol_anthropic">Anthropic</string>
+    <string name="ai_provider_protocol_label">프로토콜</string>
     <string name="ai_provider_protocol_openai_only">음성과 이미지 생성은 OpenAI 호환 API만 지원합니다.</string>
     <string name="ai_provider_base_url">API 주소</string>
     <string name="ai_provider_base_url_hint">예 https://api.example.com/v1</string>

@@ -2306,8 +2306,10 @@
     <string name="ai_provider_not_configured">还没有配置服务商：填好下方地址、模型和 API Key 即可使用全部 AI 功能。Key 只加密保存在本机。</string>
     <string name="ai_provider_global_section">全局服务商</string>
     <string name="ai_provider_protocol_openai">OpenAI 兼容</string>
+    <string name="ai_provider_protocol_openai_responses">OpenAI Responses</string>
     <string name="ai_provider_protocol_gemini">Gemini</string>
     <string name="ai_provider_protocol_anthropic">Anthropic</string>
+    <string name="ai_provider_protocol_label">协议</string>
     <string name="ai_provider_protocol_openai_only">语音与图片生成仅支持 OpenAI 兼容接口。</string>
     <string name="ai_provider_base_url">API 地址</string>
     <string name="ai_provider_base_url_hint">例如 https://api.example.com/v1</string>

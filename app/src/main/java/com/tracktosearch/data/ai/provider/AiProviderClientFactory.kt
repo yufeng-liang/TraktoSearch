@@ -18,6 +18,7 @@ object AiProviderClientFactory {
         clients.getOrPut(protocol) {
             when (protocol) {
                 AiProviderProtocol.OPENAI_COMPATIBLE -> OpenAiCompatibleClient()
+                AiProviderProtocol.OPENAI_RESPONSES -> OpenAiResponsesClient()
                 AiProviderProtocol.GEMINI -> GeminiClient()
                 AiProviderProtocol.ANTHROPIC -> AnthropicClient()
             }

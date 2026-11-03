@@ -2317,8 +2317,10 @@
     <string name="ai_provider_not_configured">プロバイダー未設定：下のアドレス・モデル・API キーを入力すると全 AI 機能が使えます。キーは端末内で暗号化して保存します。</string>
     <string name="ai_provider_global_section">共通プロバイダー</string>
     <string name="ai_provider_protocol_openai">OpenAI 互換</string>
+    <string name="ai_provider_protocol_openai_responses">OpenAI Responses</string>
     <string name="ai_provider_protocol_gemini">Gemini</string>
     <string name="ai_provider_protocol_anthropic">Anthropic</string>
+    <string name="ai_provider_protocol_label">プロトコル</string>
     <string name="ai_provider_protocol_openai_only">音声と画像生成は OpenAI 互換 API のみ対応です。</string>
     <string name="ai_provider_base_url">API アドレス</string>
     <string name="ai_provider_base_url_hint">例 https://api.example.com/v1</string>
