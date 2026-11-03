@@ -39,9 +39,22 @@ class GeminiClient(
 
     // ---------- 聊天 ----------
 
-    override suspend fun complete(request: AiChatRequest, config: AiResolvedConfig): AiChatResponse {
+    override suspend fun complete(request: AiChatRequest, config: AiResolvedConfig): AiChatResponse =
+        completeInternal(request, config, includeTemperature = true)
+
+    /** 非流式补全：400 且错误体指向 temperature 不受支持时，去掉该字段重发一次。 */
+    private suspend fun completeInternal(
+        request: AiChatRequest,
+        config: AiResolvedConfig,
+        includeTemperature: Boolean
+    ): AiChatResponse {
         val url = buildUrl(config, streaming = false)
-        val payload = generateContentPayload(request, config, stream = false)
+        val payload = generateContentPayload(
+            request,
+            config,
+            stream = false,
+            includeTemperature = includeTemperature
+        )
         val response = executeRequest(url, payload, config)
         response.use { resp ->
             val bodyText = resp.body?.string()
@@ -50,6 +63,11 @@ class GeminiClient(
                     "Empty response body"
                 )
             if (!resp.isSuccessful) {
+                if (resp.code == 400 && includeTemperature &&
+                    AiProviderErrorMapper.mentionsTemperature(bodyText)
+                ) {
+                    return completeInternal(request, config, includeTemperature = false)
+                }
                 throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
             }
             val root = parseObject(bodyText)
@@ -67,8 +85,22 @@ class GeminiClient(
 
     override fun stream(request: AiChatRequest, config: AiResolvedConfig): Flow<AiStreamChunk> = flow {
         val url = buildUrl(config, streaming = true)
-        val payload = generateContentPayload(request, config, stream = true)
-        val response = executeRequest(url, payload, config)
+        var response = executeRequest(url, generateContentPayload(request, config, stream = true), config)
+        if (!response.isSuccessful) {
+            val code = response.code
+            val errorBody = response.body?.string().orEmpty()
+            response.close()
+            // reasoning 类模型不接受 temperature：去掉该字段重开一次流（最多一次）
+            if (code == 400 && AiProviderErrorMapper.mentionsTemperature(errorBody)) {
+                response = executeRequest(
+                    url,
+                    generateContentPayload(request, config, stream = true, includeTemperature = false),
+                    config
+                )
+            } else {
+                throw AiProviderErrorMapper.fromHttpStatus(code, errorBody)
+            }
+        }
         response.use { resp ->
             val body = resp.body
                 ?: throw AiProviderException(
@@ -76,8 +108,7 @@ class GeminiClient(
                     "Empty stream body"
                 )
             if (!resp.isSuccessful) {
-                val errorBody = body.string()
-                throw AiProviderErrorMapper.fromHttpStatus(resp.code, errorBody)
+                throw AiProviderErrorMapper.fromHttpStatus(resp.code, body.string())
             }
             val source = body.source()
             val collected = StringBuilder()
@@ -112,7 +143,8 @@ class GeminiClient(
     private fun generateContentPayload(
         request: AiChatRequest,
         config: AiResolvedConfig,
-        @Suppress("UNUSED_PARAMETER") stream: Boolean
+        @Suppress("UNUSED_PARAMETER") stream: Boolean,
+        includeTemperature: Boolean = true
     ): String = buildJsonObject {
         put(
             "system_instruction",
@@ -134,7 +166,10 @@ class GeminiClient(
         put(
             "generationConfig",
             buildJsonObject {
-                put("temperature", request.temperature ?: DEFAULT_TEMPERATURE)
+                // 不支持 temperature 的模型（部分 Gemini 3 预览版）重试时省略该字段
+                if (includeTemperature) {
+                    put("temperature", request.temperature ?: DEFAULT_TEMPERATURE)
+                }
                 put("maxOutputTokens", request.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
                 if (request.jsonMode) {
                     // Gemini 的 JSON 约束：response_mime_type 而不是 response_format

@@ -38,9 +38,17 @@ class AnthropicClient(
 
     // ---------- 聊天 ----------
 
-    override suspend fun complete(request: AiChatRequest, config: AiResolvedConfig): AiChatResponse {
+    override suspend fun complete(request: AiChatRequest, config: AiResolvedConfig): AiChatResponse =
+        completeInternal(request, config, includeTemperature = true)
+
+    /** 非流式补全：400 且错误体指向 temperature 不受支持时，去掉该字段重发一次。 */
+    private suspend fun completeInternal(
+        request: AiChatRequest,
+        config: AiResolvedConfig,
+        includeTemperature: Boolean
+    ): AiChatResponse {
         val url = buildUrl(config.baseUrl)
-        val payload = messagesPayload(request, config, stream = false)
+        val payload = messagesPayload(request, config, stream = false, includeTemperature = includeTemperature)
         val response = executeRequest(url, payload, config)
         response.use { resp ->
             val bodyText = resp.body?.string()
@@ -49,6 +57,11 @@ class AnthropicClient(
                     "Empty response body"
                 )
             if (!resp.isSuccessful) {
+                if (resp.code == 400 && includeTemperature &&
+                    AiProviderErrorMapper.mentionsTemperature(bodyText)
+                ) {
+                    return completeInternal(request, config, includeTemperature = false)
+                }
                 throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
             }
             val root = parseObject(bodyText)
@@ -66,8 +79,22 @@ class AnthropicClient(
 
     override fun stream(request: AiChatRequest, config: AiResolvedConfig): Flow<AiStreamChunk> = flow {
         val url = buildUrl(config.baseUrl)
-        val payload = messagesPayload(request, config, stream = true)
-        val response = executeRequest(url, payload, config)
+        var response = executeRequest(url, messagesPayload(request, config, stream = true), config)
+        if (!response.isSuccessful) {
+            val code = response.code
+            val errorBody = response.body?.string().orEmpty()
+            response.close()
+            // 模型不接受 temperature：去掉该字段重开一次流（最多一次）
+            if (code == 400 && AiProviderErrorMapper.mentionsTemperature(errorBody)) {
+                response = executeRequest(
+                    url,
+                    messagesPayload(request, config, stream = true, includeTemperature = false),
+                    config
+                )
+            } else {
+                throw AiProviderErrorMapper.fromHttpStatus(code, errorBody)
+            }
+        }
         response.use { resp ->
             val body = resp.body
                 ?: throw AiProviderException(
@@ -75,8 +102,7 @@ class AnthropicClient(
                     "Empty stream body"
                 )
             if (!resp.isSuccessful) {
-                val errorBody = body.string()
-                throw AiProviderErrorMapper.fromHttpStatus(resp.code, errorBody)
+                throw AiProviderErrorMapper.fromHttpStatus(resp.code, body.string())
             }
             val source = body.source()
             val collected = StringBuilder()
@@ -119,7 +145,8 @@ class AnthropicClient(
     private fun messagesPayload(
         request: AiChatRequest,
         config: AiResolvedConfig,
-        stream: Boolean
+        stream: Boolean,
+        includeTemperature: Boolean = true
     ): String {
         // jsonMode 时在 system 末尾追加显式 JSON 约束（Anthropic 没有 response_format）
         val system = if (request.jsonMode) {
@@ -131,7 +158,10 @@ class AnthropicClient(
             put("model", config.model)
             put("system", system)
             put("max_tokens", request.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
-            put("temperature", request.temperature ?: DEFAULT_TEMPERATURE)
+            // 部分模型不接受 temperature（如 extended thinking 开启时），重试时省略该字段
+            if (includeTemperature) {
+                put("temperature", request.temperature ?: DEFAULT_TEMPERATURE)
+            }
             put("stream", stream)
             put(
                 "messages",

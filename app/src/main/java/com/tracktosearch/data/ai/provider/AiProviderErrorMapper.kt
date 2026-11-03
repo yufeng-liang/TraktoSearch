@@ -60,6 +60,25 @@ object AiProviderErrorMapper {
         )
 
     /**
+     * 判断错误体是否指向「该模型不接受 temperature 参数」。
+     *
+     * OpenAI 的 o 系列与 gpt-5 起的 reasoning 模型会直接拒绝 temperature，
+     * 返回 400 + `Unsupported parameter: 'temperature' is not supported with this model.`；
+     * 部分中转站措辞略有差异，所以用关键字 + 参数名双重匹配：
+     * 必须同时出现 temperature 与 (unsupported / not supported / 不支持)。
+     */
+    fun mentionsTemperature(body: String?): Boolean {
+        if (body.isNullOrBlank()) return false
+        val lower = body.lowercase()
+        if (!lower.contains("temperature")) return false
+        return lower.contains("unsupported") ||
+            lower.contains("not supported") ||
+            lower.contains("不支持") ||
+            lower.contains("unknown parameter") ||
+            lower.contains("unrecognized")
+    }
+
+    /**
      * 从错误体提取可读 message。
      * 依次尝试 OpenAI/Gemini/Anthropic 三种风格（其实共用 "error"."message" 一条路径），
      * 失败则截取原始 body 前 200 字符兜底。

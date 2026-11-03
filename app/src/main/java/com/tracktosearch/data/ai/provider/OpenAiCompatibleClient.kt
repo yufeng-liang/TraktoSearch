@@ -38,8 +38,21 @@ class OpenAiCompatibleClient(
 
     // ---------- 聊天 ----------
 
-    override suspend fun complete(request: AiChatRequest, config: AiResolvedConfig): AiChatResponse {
-        val payload = chatPayload(request, config, stream = false)
+    override suspend fun complete(request: AiChatRequest, config: AiResolvedConfig): AiChatResponse =
+        completeInternal(request, config, includeTemperature = true, allowJsonFallback = true)
+
+    /**
+     * 非流式补全，带两级降级：
+     * 1. 400 且错误体指向 temperature 不受支持 → 去掉该字段重发（reasoning 模型常见）；
+     * 2. 400 且开了 jsonMode → 退回无 response_format 的纯文本请求（部分兼容端不认该字段）。
+     */
+    private suspend fun completeInternal(
+        request: AiChatRequest,
+        config: AiResolvedConfig,
+        includeTemperature: Boolean,
+        allowJsonFallback: Boolean
+    ): AiChatResponse {
+        val payload = chatPayload(request, config, stream = false, includeTemperature = includeTemperature)
         val response = executeRequest(buildChatUrl(config.baseUrl), payload, config)
         response.use { resp ->
             val bodyText = resp.body?.string()
@@ -48,9 +61,20 @@ class OpenAiCompatibleClient(
                     "Empty response body"
                 )
             if (!resp.isSuccessful) {
+                // 先处理更具体的 temperature，再处理 response_format
+                if (resp.code == 400 && includeTemperature &&
+                    AiProviderErrorMapper.mentionsTemperature(bodyText)
+                ) {
+                    return completeInternal(
+                        request = request,
+                        config = config,
+                        includeTemperature = false,
+                        allowJsonFallback = allowJsonFallback
+                    )
+                }
                 // 400 可能是 response_format 不被兼容端支持：回退重试一次不带该字段的请求
-                if (resp.code == 400 && request.jsonMode) {
-                    return completeWithoutResponseFormat(request, config)
+                if (resp.code == 400 && request.jsonMode && allowJsonFallback) {
+                    return completeWithoutResponseFormat(request, config, includeTemperature)
                 }
                 throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
             }
@@ -74,7 +98,8 @@ class OpenAiCompatibleClient(
      */
     private suspend fun completeWithoutResponseFormat(
         request: AiChatRequest,
-        config: AiResolvedConfig
+        config: AiResolvedConfig,
+        includeTemperature: Boolean
     ): AiChatResponse {
         val retry = AiChatRequest(
             system = request.system + "\n仅输出 JSON，不要输出任何其他文字。",
@@ -83,7 +108,7 @@ class OpenAiCompatibleClient(
             maxOutputTokens = request.maxOutputTokens,
             jsonMode = false
         )
-        val payload = chatPayload(retry, config, stream = false)
+        val payload = chatPayload(retry, config, stream = false, includeTemperature = includeTemperature)
         val response = executeRequest(buildChatUrl(config.baseUrl), payload, config)
         response.use { resp ->
             val bodyText = resp.body?.string()
@@ -92,6 +117,12 @@ class OpenAiCompatibleClient(
                     "Empty response body"
                 )
             if (!resp.isSuccessful) {
+                // 退化成纯文本后仍可能因为 temperature 被拒（reasoning 模型），再降一级
+                if (resp.code == 400 && includeTemperature &&
+                    AiProviderErrorMapper.mentionsTemperature(bodyText)
+                ) {
+                    return completeWithoutResponseFormat(request, config, includeTemperature = false)
+                }
                 throw AiProviderErrorMapper.fromHttpStatus(resp.code, bodyText)
             }
             val root = parseObject(bodyText, AiProviderErrorCode.INVALID_RESPONSE)
@@ -105,8 +136,23 @@ class OpenAiCompatibleClient(
     }
 
     override fun stream(request: AiChatRequest, config: AiResolvedConfig): Flow<AiStreamChunk> = flow {
-        val payload = chatPayload(request, config, stream = true)
-        val response = executeRequest(buildChatUrl(config.baseUrl), payload, config)
+        val url = buildChatUrl(config.baseUrl)
+        var response = executeRequest(url, chatPayload(request, config, stream = true), config)
+        if (!response.isSuccessful) {
+            val code = response.code
+            val errorBody = response.body?.string().orEmpty()
+            response.close()
+            // reasoning 模型不接受 temperature：去掉该字段重开一次流（最多一次）
+            if (code == 400 && AiProviderErrorMapper.mentionsTemperature(errorBody)) {
+                response = executeRequest(
+                    url,
+                    chatPayload(request, config, stream = true, includeTemperature = false),
+                    config
+                )
+            } else {
+                throw AiProviderErrorMapper.fromHttpStatus(code, errorBody)
+            }
+        }
         response.use { resp ->
             val body = resp.body
                 ?: throw AiProviderException(
@@ -114,8 +160,7 @@ class OpenAiCompatibleClient(
                     "Empty stream body"
                 )
             if (!resp.isSuccessful) {
-                val errorBody = body.string()
-                throw AiProviderErrorMapper.fromHttpStatus(resp.code, errorBody)
+                throw AiProviderErrorMapper.fromHttpStatus(resp.code, body.string())
             }
             val source = body.source()
             val collected = StringBuilder()
@@ -147,11 +192,15 @@ class OpenAiCompatibleClient(
     private fun chatPayload(
         request: AiChatRequest,
         config: AiResolvedConfig,
-        stream: Boolean
+        stream: Boolean,
+        includeTemperature: Boolean = true
     ): String = buildJsonObject {
         put("model", config.model)
         put("stream", stream)
-        put("temperature", request.temperature ?: DEFAULT_TEMPERATURE)
+        // reasoning 模型（o 系列 / gpt-5 起）不接受 temperature，重试时整体省略该字段
+        if (includeTemperature) {
+            put("temperature", request.temperature ?: DEFAULT_TEMPERATURE)
+        }
         put("max_tokens", request.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
         put("messages", JsonArray(listOf(systemMessage(request), userMessage(request))))
         if (request.jsonMode) {
