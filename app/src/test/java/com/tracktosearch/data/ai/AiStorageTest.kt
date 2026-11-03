@@ -1,5 +1,6 @@
 package com.tracktosearch.data.ai
 
+import android.app.Application
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -12,7 +13,9 @@ import java.io.File
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// 用裸 Application 而不是清单里的 TraktSearchApp：后者会初始化 Hilt 与 sqlcipher，
+// 本机没有 sqlcipher 的 native 库，整类测试会以 UnsatisfiedLinkError 失败。
+@Config(sdk = [33], application = Application::class)
 class AiStorageTest {
 
     @Test

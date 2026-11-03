@@ -84,6 +84,12 @@ class AiStorage private constructor(
         private const val MIGRATED_KEY = "ai_cache_migrated_v3"
         private const val CURRENT_FRIEND_ID_KEY = "ai_current_friend_id"
         private const val FILE_MARKER_PREFIX = "file:"
+
+        /** 写入时间戳键前缀：`ts:` + 缓存键，只服务于超限淘汰。 */
+        private const val TS_PREFIX = "ts:"
+
+        /** 未单独指定的特性默认保留条数。 */
+        private const val DEFAULT_FEATURE_LIMIT = 30
     }
 
     private val migrationMutex = Mutex()
@@ -104,17 +110,60 @@ class AiStorage private constructor(
     suspend fun write(friendId: String, feature: AiCacheFeature, json: String, suffix: String? = null) {
         require(json.isNotBlank()) { "AI cache JSON must not be blank" }
         withSecurePreferences { preferences ->
+            val key = AiStorageKey.forFriend(friendId, feature, suffix)
             val committed = preferences.edit()
-                .putString(AiStorageKey.forFriend(friendId, feature, suffix), json)
+                .putString(key, json)
+                // 写入时间只用于超限淘汰，读缓存不需要它
+                .putLong(TS_PREFIX + key, System.currentTimeMillis())
                 .commit()
             check(committed) { "Unable to persist encrypted AI cache" }
+            trimFeature(preferences, friendId, feature)
         }
+    }
+
+    /**
+     * 按特性限制缓存条目数，超出时淘汰最久未写入的。
+     *
+     * 为什么需要：TTS 音频是 base64 MP3（单条几百 KB），与普通 JSON 同存一份
+     * EncryptedSharedPreferences，而整份偏好每次读取都要解密——不设上限的话，
+     * 用得越久首屏和朗读越慢，且没有回收路径（用户清缓存才会清空）。
+     * 这里只做「数量 + 最旧优先」，不做精确 LRU：条目数够少时差别可以忽略。
+     */
+    private fun trimFeature(preferences: SharedPreferences, friendId: String, feature: AiCacheFeature) {
+        val limit = featureLimit(feature)
+        val prefix = "ai_v${AiStorageKey.SCHEMA_VERSION}_${feature.wireName}_" +
+            AiStorageKey.encodeFriendId(friendId)
+        val keys = preferences.all.keys.filter { key ->
+            !key.startsWith(TS_PREFIX) && (key == prefix || key.startsWith("${prefix}_"))
+        }
+        if (keys.size <= limit) return
+        val overflow = keys.size - limit
+        val oldest = keys
+            .sortedBy { key -> preferences.getLong(TS_PREFIX + key, 0L) }
+            .take(overflow)
+        val editor = preferences.edit()
+        oldest.forEach { key ->
+            editor.remove(key)
+            editor.remove(TS_PREFIX + key)
+        }
+        editor.commit()
+    }
+
+    private fun featureLimit(feature: AiCacheFeature): Int = when (feature) {
+        // 语音占比最大：按角色 + 场景 + 文本区分，最容易堆
+        AiCacheFeature.TTS -> 24
+        // 详情分析后缀含环境键（日期/时段/天气），同一部片会积累多份
+        AiCacheFeature.DETAIL_ANALYSIS -> 40
+        AiCacheFeature.QUIZ -> 10
+        else -> DEFAULT_FEATURE_LIMIT
     }
 
     suspend fun remove(friendId: String, feature: AiCacheFeature, suffix: String? = null) {
         withSecurePreferences { preferences ->
+            val key = AiStorageKey.forFriend(friendId, feature, suffix)
             val committed = preferences.edit()
-                .remove(AiStorageKey.forFriend(friendId, feature, suffix))
+                .remove(key)
+                .remove(TS_PREFIX + key)
                 .commit()
             check(committed) { "Unable to remove encrypted AI cache" }
         }
@@ -146,7 +195,10 @@ class AiStorage private constructor(
             }
             val editor = preferences.edit()
             preferences.all.keys
-                .filter { key -> prefixes.any { prefix -> key == prefix || key.startsWith("${prefix}_") } }
+                .filter { key ->
+                    val cacheKey = key.removePrefix(TS_PREFIX)
+                    prefixes.any { prefix -> cacheKey == prefix || cacheKey.startsWith("${prefix}_") }
+                }
                 .forEach { key -> editor.remove(key) }
             if (preferences.getString(CURRENT_FRIEND_ID_KEY, null) == normalizedFriendId) {
                 editor.remove(CURRENT_FRIEND_ID_KEY)
