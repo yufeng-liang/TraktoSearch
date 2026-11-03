@@ -350,13 +350,22 @@ interface LlmRequestContext {
     requestId: string;
 }
 
-// AI 服务关停日期（UTC，ISO 日期）。占位值 2027-02-01：正式发布 4.2.0 后改为「发版日 + 90 天」。
+// AI 服务关停日期（UTC，ISO 日期）的兜底值。正式发布 4.2.0 后把它改成「发版日 + 90 天」。
 // 到达该日期后所有依赖服务端 LLM 的端点直接回 410，不再进入任何 LLM 调用。
-const AI_SERVICE_SUNSET_DATE = '2027-02-01';
+// 可用环境变量 AI_SERVICE_SUNSET_DATE 覆盖（wrangler.toml [vars] 或 wrangler secret），
+// 提前/延后关停不必改代码重新发版；覆盖值必须是合法 YYYY-MM-DD，否则回退兜底值
+// （宁可多跑一天，也别因为一个写坏的值把服务立刻关停）。
+const AI_SERVICE_SUNSET_DATE_DEFAULT = '2027-02-01';
+const SUNSET_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function isAiServiceSunset(now: Date = new Date()): boolean {
+function resolveAiServiceSunsetDate(env: AiEnvironment): string {
+    const override = (env as { AI_SERVICE_SUNSET_DATE?: string }).AI_SERVICE_SUNSET_DATE?.trim();
+    return override && SUNSET_DATE_PATTERN.test(override) ? override : AI_SERVICE_SUNSET_DATE_DEFAULT;
+}
+
+function isAiServiceSunset(env: AiEnvironment, now: Date = new Date()): boolean {
     // 与配额的 usageDay 同口径：toISOString() 取 UTC 日期，避免部署机时区影响判定。
-    return now.toISOString().slice(0, 10) >= AI_SERVICE_SUNSET_DATE;
+    return now.toISOString().slice(0, 10) >= resolveAiServiceSunsetDate(env);
 }
 
 // 关停后的 410 响应体：serverCode 必须落在旧版 AiErrorMapper 的已知映射里
@@ -396,7 +405,7 @@ export async function handleAiApi(
     const isSunsetExemptRoute = path === '/api/ai/characters'
         || path === '/api/ai/activate'
         || path.startsWith('/api/ai/profile');
-    if (!isSunsetExemptRoute && isAiServiceSunset()) {
+    if (!isSunsetExemptRoute && isAiServiceSunset(env)) {
         return aiServiceStoppedResponse(requestId);
     }
 

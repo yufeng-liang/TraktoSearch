@@ -188,7 +188,9 @@ export async function reserveAiQuota(
                 FROM ai_usage
                 WHERE friend_id = ? AND usage_day = ?
             `).bind(friendId, usageDay).first<D1QuotaRow>();
-            if (existing?.daily_count === EFFECTIVE_DAILY_LIMIT) {
+            // 用 >= 而不是 ===：砍半当天老用户的 daily_count 可能早已超过新上限（41..80），
+            // 严格等于会把「日额度用完」误报成「会话额度用完」。
+            if ((existing?.daily_count ?? 0) >= EFFECTIVE_DAILY_LIMIT) {
                 throw new AppError('AI_DAILY_QUOTA_EXCEEDED', 'Daily AI quota exceeded', 429);
             }
             throw new AppError('AI_SESSION_QUOTA_EXCEEDED', 'AI session quota exceeded', 429);

@@ -189,8 +189,9 @@ test('AI character catalog is public through the main router', async () => {
     assert.equal(response.status, 200);
     assert.equal(json.code, 'SUCCESS');
     assert.equal(json.data.characters.length, 7);
-    assert.equal(json.data.sessionLimit, 14);
-    assert.equal(json.data.dailyLimit, 80);
+    // 4.2.0 起旧版配额砍半（store.ts AI_QUOTA_HALVED）：14/80 → 7/40，响应形状不变
+    assert.equal(json.data.sessionLimit, 7);
+    assert.equal(json.data.dailyLimit, 40);
     const usagi = json.data.characters.find((character) => character.id === 'usagi');
     assert.ok(usagi);
     assert.ok(usagi.previewText.length > 0);
@@ -1325,9 +1326,10 @@ test('upstream failure is retried once and returned as a stable error', async ()
     }
 });
 
-test('session quota stops the fifteenth uncached interaction', async () => {
+// 砍半后 session 上限 7：第 8 次即 429（原来是 14 → 第 15 次）
+test('session quota stops the eighth uncached interaction', async () => {
     const env = createTestEnv();
-    for (let attempt = 0; attempt < 14; attempt += 1) {
+    for (let attempt = 0; attempt < 7; attempt += 1) {
         const result = await call('/api/ai/greeting', {
             method: 'POST',
             body: {
@@ -1349,9 +1351,10 @@ test('session quota stops the fifteenth uncached interaction', async () => {
     assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
 });
 
-test('tts consumes the doubled session quota and stops on the fifteenth call', async () => {
+// 砍半后 session 上限 7：TTS 与其它端点共用同一 session 计数，第 8 次即 429
+test('tts shares the halved session quota and stops on the eighth call', async () => {
     const env = createTestEnv({ AI_TEST_VOICE_DESIGN_READY: true });
-    for (let attempt = 0; attempt < 14; attempt += 1) {
+    for (let attempt = 0; attempt < 7; attempt += 1) {
         const result = await call('/api/ai/tts', {
             method: 'POST',
             body: { characterId: 'usagi', text: '到！', sessionId: 'tts-quota-session' },
@@ -1367,6 +1370,55 @@ test('tts consumes the doubled session quota and stops on the fifteenth call', a
     });
     assert.equal(exhausted.response.status, 429);
     assert.equal(exhausted.json.code, 'AI_SESSION_QUOTA_EXCEEDED');
+});
+
+// 关停闸门：到日期后 LLM 端点回 410，豁免端点（角色目录/激活/画像）仍可用。
+// 410 的 code 故意用 AI_DAILY_QUOTA_EXCEEDED —— 旧版 AiErrorMapper 只认白名单，
+// 自造 code 会退化成「请求无效 + 可重试」，语义完全错。
+test('sunset gate stops LLM routes with 410 but keeps exempt routes alive', async () => {
+    const sunsetEnv = createTestEnv({ AI_SERVICE_SUNSET_DATE: '2020-01-01' });
+
+    const greeting = await call('/api/ai/greeting', {
+        method: 'POST',
+        body: { characterId: 'usagi', sessionId: 'sunset-session' },
+        env: sunsetEnv,
+    });
+    assert.equal(greeting.response.status, 410);
+    assert.equal(greeting.json.code, 'AI_DAILY_QUOTA_EXCEEDED');
+    assert.ok(greeting.json.message.includes('升级'));
+
+    // tts 不在豁免名单：新版走用户自带 Provider，服务端 TTS 随旧版一起停
+    const tts = await call('/api/ai/tts', {
+        method: 'POST',
+        body: { characterId: 'usagi', text: '到！', sessionId: 'sunset-session' },
+        env: sunsetEnv,
+    });
+    assert.equal(tts.response.status, 410);
+
+    // 豁免：角色目录与画像读写仍返回 200，旧版还能看到角色、读写画像
+    const characters = await call('/api/ai/characters', { method: 'GET', env: sunsetEnv });
+    assert.equal(characters.response.status, 200);
+});
+
+test('sunset gate stays open before the sunset date', async () => {
+    const aliveEnv = createTestEnv({ AI_SERVICE_SUNSET_DATE: '2099-12-31' });
+    const greeting = await call('/api/ai/greeting', {
+        method: 'POST',
+        body: { characterId: 'usagi', sessionId: 'alive-session' },
+        env: aliveEnv,
+    });
+    assert.equal(greeting.response.status, 200);
+});
+
+// 非法覆盖值不能把关停提前触发：解析失败必须回退兜底日期（2027-02-01）
+test('invalid sunset date override falls back to the default date', async () => {
+    const brokenEnv = createTestEnv({ AI_SERVICE_SUNSET_DATE: 'not-a-date' });
+    const greeting = await call('/api/ai/greeting', {
+        method: 'POST',
+        body: { characterId: 'usagi', sessionId: 'broken-date-session' },
+        env: brokenEnv,
+    });
+    assert.equal(greeting.response.status, 200);
 });
 
 test('tts rejects voice-not-ready characters without spending quota', async () => {
