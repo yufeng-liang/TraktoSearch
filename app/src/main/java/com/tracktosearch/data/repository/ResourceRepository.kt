@@ -5,10 +5,12 @@ import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.remote.custom.CustomSearchService
+import com.tracktosearch.data.remote.ataw.AtawApiService
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
+import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
@@ -34,6 +36,9 @@ class ResourceRepository @Inject constructor(
     private val panHubGranularApiService: PanHubApiService,
     private val panHubConfigStorage: PanHubConfigStorage,
     private val zresoApiService: ZresoApiService,
+    @Named("useai") private val useAiApiService: PanSouApiService,
+    private val yunsoApiService: YunsoApiService,
+    private val atawApiService: AtawApiService,
     private val searchSourceStorage: SearchSourceStorage,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService
@@ -44,14 +49,22 @@ class ResourceRepository @Inject constructor(
      * 设置页关闭的源永远不参与搜索。
      */
     private fun storageEnabledSourcesFlow(): Flow<Set<String>> = combine(
-        searchSourceStorage.pansouEnabled,
-        searchSourceStorage.panhubEnabled,
-        searchSourceStorage.zresoEnabled
-    ) { pansou, panhub, zreso ->
+        listOf(
+            searchSourceStorage.pansouEnabled,
+            searchSourceStorage.panhubEnabled,
+            searchSourceStorage.zresoEnabled,
+            searchSourceStorage.useaiEnabled,
+            searchSourceStorage.yunsoEnabled,
+            searchSourceStorage.atawEnabled
+        )
+    ) { flags ->
         buildSet {
-            if (pansou) add(SOURCE_PANSOU)
-            if (panhub) add(SOURCE_PANHUB)
-            if (zreso) add(SOURCE_ZRESO)
+            if (flags[0]) add(SOURCE_PANSOU)
+            if (flags[1]) add(SOURCE_PANHUB)
+            if (flags[2]) add(SOURCE_ZRESO)
+            if (flags[3]) add(SOURCE_USEAI)
+            if (flags[4]) add(SOURCE_YUNSO)
+            if (flags[5]) add(SOURCE_ATAW)
         }
     }
 
@@ -79,14 +92,26 @@ class ResourceRepository @Inject constructor(
         const val SOURCE_PANSOU = "pansou"
         const val SOURCE_PANHUB = "panhub"
         const val SOURCE_ZRESO = "zreso"
-        val ALL_SOURCES = setOf(SOURCE_PANSOU, SOURCE_PANHUB, SOURCE_ZRESO)
+        const val SOURCE_USEAI = "useai"
+        const val SOURCE_YUNSO = "yunso"
+        const val SOURCE_ATAW = "ataw"
+        val ALL_SOURCES = setOf(
+            SOURCE_PANSOU, SOURCE_PANHUB, SOURCE_ZRESO,
+            SOURCE_USEAI, SOURCE_YUNSO, SOURCE_ATAW
+        )
         val ALL_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
             DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
         )
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
+        /** useai 实例聚合 68 个插件，慢关键词实测 11-12 秒，单源超时放宽到 25s */
+        private const val USEAI_TIMEOUT_MS = 25_000L
+        /** 云搜单页上限 ~30 条，并行翻页数 */
+        private const val YUNSO_PAGES = 2
         private val MULTI_SEASON_FULL = Regex("""全\s*季|合集|1[-~]\d+\s*季|第\s*\d+\s*[-~]\s*\d+\s*季""")
         private val MULTI_SEASON_SINGLE = Regex("""第\s*\d+\s*季""")
+        /** 阿涛搜条目里混排的直链（link/description 字段都可能是大段文案） */
+        private val ATAW_URL_REGEX = Regex("""https?://[^\s，。"'<>）)]+""")
     }
 
     private data class KeywordCache(
@@ -201,6 +226,29 @@ class ResourceRepository @Inject constructor(
                 runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
+        if (SOURCE_USEAI in effectiveSources) {
+            sourceList.add(SOURCE_USEAI to async {
+                runCatching {
+                    searchPanSource(
+                        apiService = useAiApiService,
+                        keyword = keyword,
+                        enabledDiskTypes = enabledDiskTypes,
+                        sourceName = SOURCE_USEAI,
+                        timeoutMs = USEAI_TIMEOUT_MS
+                    )
+                }.getOrDefault(emptyList())
+            })
+        }
+        if (SOURCE_YUNSO in effectiveSources) {
+            sourceList.add(SOURCE_YUNSO to async {
+                runCatching { searchYunso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
+        if (SOURCE_ATAW in effectiveSources) {
+            sourceList.add(SOURCE_ATAW to async {
+                runCatching { searchAtaw(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
         // 自定义源
         val customSources = customSearchSourceStorage.sources.first().filter { it.enabled }
         for (source in customSources) {
@@ -291,6 +339,29 @@ class ResourceRepository @Inject constructor(
             if (SOURCE_ZRESO in enabledSources) {
                 deferreds.add(async {
                     runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_USEAI in enabledSources) {
+                deferreds.add(async {
+                    runCatching {
+                        searchPanSource(
+                            apiService = useAiApiService,
+                            keyword = keyword,
+                            enabledDiskTypes = enabledDiskTypes,
+                            sourceName = SOURCE_USEAI,
+                            timeoutMs = USEAI_TIMEOUT_MS
+                        )
+                    }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_YUNSO in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchYunso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_ATAW in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchAtaw(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
                 })
             }
             // 自定义源
@@ -492,14 +563,20 @@ class ResourceRepository @Inject constructor(
         DiskType.OTHER -> ""
     }
 
+    /**
+     * 请求 pansou 同构实例（内置 PanSou / 盘搜 useai 共用）。
+     *
+     * @param timeoutMs 单源超时：默认 8s；useai 实例聚合插件多、慢关键词实测 11-12s，需放宽
+     */
     private suspend fun searchPanSource(
         apiService: PanSouApiService,
         keyword: String,
         enabledDiskTypes: Set<DiskType>,
-        sourceName: String
+        sourceName: String,
+        timeoutMs: Long = 8_000L
     ): List<ResourceItem> {
         return try {
-            val response = withTimeoutOrNull(8_000) {
+            val response = withTimeoutOrNull(timeoutMs) {
                 apiService.search(keyword = keyword, cloudTypes = cloudTypesForPanSou(enabledDiskTypes))
             } ?: return emptyList()
             if (response.code != 0) return emptyList()
@@ -568,6 +645,130 @@ class ResourceRepository @Inject constructor(
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /**
+     * 云搜（yunso.net）：自有 JSON 结构，免鉴权 GET 直连。
+     * 网盘类型优先看 `Scrurlname` 中文名，缺失时按 URL 主机兜底。
+     */
+    private suspend fun searchYunso(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        return try {
+            // 云搜单页只给 30 来条、total 上限 100，翻两页并行拉，结果量翻倍
+            val responses = withTimeoutOrNull(12_000) {
+                coroutineScope {
+                    (1..YUNSO_PAGES).map { page ->
+                        async {
+                            runCatching { yunsoApiService.search(keyword = keyword, page = page) }.getOrNull()
+                        }
+                    }.awaitAll()
+                }
+            } ?: return emptyList()
+            val items = responses.filterNotNull()
+                .filter { it.code == 0 }
+                .flatMap { it.items ?: emptyList() }
+                .distinctBy { it.url }
+            items.mapNotNull { item ->
+                val url = item.url.trim()
+                if (!url.startsWith("http")) return@mapNotNull null
+                val diskType = mapYunsoType(item.cloudName, url)
+                if (diskType !in enabledDiskTypes) return@mapNotNull null
+                ResourceItem(
+                    name = item.name.ifBlank { keyword },
+                    diskType = diskType,
+                    fileSize = "",
+                    fileDate = formatEpochMillisDate(item.addTimeMillis),
+                    fileCount = 1,
+                    url = url,
+                    source = SOURCE_YUNSO
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 阿涛搜（so.ataw.top）：逆向接口，需 `x-miniapp-session` 头（接口层已随机 UUID）。
+     * 一次请求拿跨网盘混合结果，逐条按 links[] 拆成多条直链。
+     */
+    private suspend fun searchAtaw(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        return try {
+            val response = withTimeoutOrNull(15_000) {
+                atawApiService.search(keyword = keyword, pageSize = 50)
+            } ?: return emptyList()
+            response.items.flatMap { item ->
+                // 多数条目 links[] 为空：真实地址在 link 字段（可能是空串或多行）或 description 正文「链接：…」里
+                val candidates = if (item.links.isNotEmpty()) {
+                    item.links.map { link -> link.platform.ifBlank { item.mainPlatform ?: "" } to link.url }
+                } else {
+                    val urls = extractUrls(item.link).ifEmpty { extractUrls(item.description) }
+                    urls.map { url -> (item.mainPlatform ?: "") to url }
+                }
+                // fileCount 为 0 会被 isInvalid 判成失效，至少给 1
+                val fileCount = (item.filePreview?.fileCount ?: 0).coerceAtLeast(1)
+                val fileDate = item.submitTime.take(10)
+                candidates.distinctBy { it.second }.mapNotNull { (platform, url) ->
+                    val cleanUrl = url.trim()
+                    if (!cleanUrl.startsWith("http") && !cleanUrl.startsWith("magnet:")) return@mapNotNull null
+                    val diskType = mapAtawType(platform, cleanUrl)
+                    if (diskType !in enabledDiskTypes) return@mapNotNull null
+                    ResourceItem(
+                        name = item.title.ifBlank { keyword },
+                        diskType = diskType,
+                        fileSize = "",
+                        fileDate = fileDate,
+                        fileCount = fileCount,
+                        url = cleanUrl,
+                        source = SOURCE_ATAW
+                    )
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 从任意文本里抠出 http(s) 链接（阿涛搜的 link/description 常混排文案） */
+    private fun extractUrls(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+        return ATAW_URL_REGEX.findAll(text).map { it.value.trimEnd('.', ',', ';', '，', '。', '、') }.toList()
+    }
+
+    /** 云搜网盘中文名 → DiskType，认不出就看 URL 主机 */
+    private fun mapYunsoType(cloudName: String, url: String): DiskType = when {
+        cloudName.contains("夸克") || url.contains("quark.cn") -> DiskType.QUARK
+        cloudName.contains("百度") || url.contains("pan.baidu.com") -> DiskType.BAIDU
+        cloudName.contains("阿里") || url.contains("aliyundrive.com") ||
+            url.contains("alipan.com") -> DiskType.ALI
+        cloudName.contains("迅雷") || url.contains("xunlei.com") -> DiskType.XUNLEI
+        cloudName.contains("UC") || url.contains("uc.cn") -> DiskType.UC
+        cloudName.contains("115") || url.contains("115.com") -> DiskType.ONEONEFIVE
+        cloudName.contains("磁") || url.startsWith("magnet:") -> DiskType.MAGNET
+        else -> DiskType.OTHER
+    }
+
+    /** 阿涛搜 platform → DiskType，认不出时按 URL 主机兜底 */
+    private fun mapAtawType(platform: String, url: String): DiskType = when (platform.lowercase()) {
+        "quark" -> DiskType.QUARK
+        "baidu" -> DiskType.BAIDU
+        "ali", "aliyun" -> DiskType.ALI
+        "xunlei" -> DiskType.XUNLEI
+        "uc" -> DiskType.UC
+        "115" -> DiskType.ONEONEFIVE
+        "magnet" -> DiskType.MAGNET
+        else -> mapYunsoType("", url)
+    }
+
+    /** 毫秒时间戳字符串 → yyyy-MM-dd；解析不了给空串（列表按无日期展示） */
+    private fun formatEpochMillisDate(raw: String): String {
+        val millis = raw.toLongOrNull() ?: return ""
+        return runCatching {
+            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(millis))
+        }.getOrDefault("")
     }
 
     private fun mapZresoType(type: String): DiskType = when (type.lowercase()) {

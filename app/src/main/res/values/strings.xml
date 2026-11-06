@@ -718,7 +718,7 @@
     <string name="help_dc_douban_desc">Log in to Douban and import wish/watched marks into Watchlist; optionally sync them to Trakt</string>
     <string name="help_dc_cooldown">Cooldown: Douban has anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. A 7-day cooldown after a full crawl reduces request frequency. During cooldown, incremental sync reuses cloud data without re-crawling; you can force sync at your own risk.</string>
     <string name="help_custom_source">Custom Search Sources</string>
-    <string name="help_custom_source_b1">Open Settings → Search Sources to manage PanSou/Panhub/Zreso, custom sources, and templates; Panhub can be configured.</string>
+    <string name="help_custom_source_b1">Open Settings → Search Sources to manage PanSou/PanSearch/Yunso/Atao/Panhub/Zreso, custom sources, and templates; Panhub can be configured.</string>
     <string name="help_custom_source_b2">Requests use {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params.</string>
     <string name="help_custom_source_b3">Add a template directly or use the 3-step wizard: Basic Info → Auto Parse → Confirm.</string>
     <string name="help_custom_source_b4">Auto Parse detects JSONPath list/name/link/disk-type fields and allows manual edits. Failures distinguish unreachable URLs, non-JSON responses, and unrecognized fields.</string>
@@ -1323,6 +1323,12 @@ Config:
     <string name="search_sources_panhub_desc">Panhub API, configurable concurrency &amp; plugins</string>
     <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn resource library, template parsing</string>
+    <string name="search_sources_useai">PanSearch</string>
+    <string name="search_sources_useai_desc">pan.useai.sbs PanSou instance, 60+ plugins aggregated</string>
+    <string name="search_sources_yunso">Yunso</string>
+    <string name="search_sources_yunso_desc">yunso.net disk aggregation search, no key required</string>
+    <string name="search_sources_ataw">Atao</string>
+    <string name="search_sources_ataw_desc">so.ataw.top site search across multiple disks</string>
 <string name="search_sources_manage_entry_subtitle">Built-in &amp; custom sources</string>
     <!-- Template Library -->
     <string name="template_library_title">Add from template</string>
@@ -2221,7 +2227,7 @@ Config:
     <string name="privacy_section_legal">Terms &amp; rights</string>
     <string name="privacy_legal_intro">TraktoSearch is an independently developed Android tool, not a movie platform, cloud drive or content distribution service. Use third-party accounts and returned links within their terms and your local law. This page explains the project\'s boundaries; it is not legal advice.</string>
     <string name="privacy_legal_b1_title">Independent project, not affiliated with third parties</string>
-    <string name="privacy_legal_b1">TraktoSearch is not affiliated with, operated by or officially endorsed by Douban, Trakt, TMDB, OMDb, PanSou, PanHub, ZReso, any cloud-drive service, GitHub or the Chiikawa rights holders. Service names and trademarks identify compatibility targets only; third-party data may be incomplete, inaccurate or unavailable.</string>
+    <string name="privacy_legal_b1">TraktoSearch is not affiliated with, operated by or officially endorsed by Douban, Trakt, TMDB, OMDb, PanSou, PanSearch, Yunso, Atao, PanHub, ZReso, any cloud-drive service, GitHub or the Chiikawa rights holders. Service names and trademarks identify compatibility targets only; third-party data may be incomplete, inaccurate or unavailable.</string>
     <string name="privacy_legal_b2_title">Douban sign-in, scraping and write-back</string>
     <string name="privacy_legal_b2">These actions start only when you request them and remain subject to Douban permissions, access rules, captchas and API changes. Use your own account only. Do not bypass access controls, scrape in bulk, overload services or collect other people\'s data.</string>
     <string name="privacy_legal_b3_title">Resource links and third-party content</string>

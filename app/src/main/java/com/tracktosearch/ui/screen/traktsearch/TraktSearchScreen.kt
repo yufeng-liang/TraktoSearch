@@ -1229,6 +1229,9 @@ private fun DiskSearchContent(
                                             "pansou" -> "PanSou"
                                             "panhub" -> "PanHub"
                                             "zreso" -> "Zreso"
+                                            "useai" -> "盘搜"
+                                            "yunso" -> "云搜"
+                                            "ataw" -> "阿涛搜"
                                             else -> diskState.customSourceNames[source] ?: source
                                         }
                                         FilterChip(

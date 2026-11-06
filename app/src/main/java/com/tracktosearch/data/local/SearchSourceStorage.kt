@@ -35,6 +35,18 @@ class SearchSourceStorage @Inject constructor(
     private val _zresoEnabled = MutableStateFlow(true)
     val zresoEnabled: StateFlow<Boolean> = _zresoEnabled.asStateFlow()
 
+    // 盘搜（pan.useai.sbs）：pansou 同构实例，插件多、结果量大，默认开
+    private val _useaiEnabled = MutableStateFlow(true)
+    val useaiEnabled: StateFlow<Boolean> = _useaiEnabled.asStateFlow()
+
+    // 云搜（yunso.net）：自有 JSON 结构，免鉴权直连，默认开
+    private val _yunsoEnabled = MutableStateFlow(true)
+    val yunsoEnabled: StateFlow<Boolean> = _yunsoEnabled.asStateFlow()
+
+    // 阿涛搜（so.ataw.top）：需要 x-miniapp-session 头，逆向接入，默认开
+    private val _atawEnabled = MutableStateFlow(true)
+    val atawEnabled: StateFlow<Boolean> = _atawEnabled.asStateFlow()
+
     init {
         // 预加载:从 DataStore 读取首值填入 StateFlow,消除 stateIn 默认值跳变
         scope.launch {
@@ -42,6 +54,9 @@ class SearchSourceStorage @Inject constructor(
             _pansouEnabled.value = prefs[KEY_PANSOU] ?: true
             _panhubEnabled.value = prefs[KEY_PANHUB] ?: false
             _zresoEnabled.value = prefs[KEY_ZRESO] ?: true
+            _useaiEnabled.value = prefs[KEY_USEAI] ?: true
+            _yunsoEnabled.value = prefs[KEY_YUNSO] ?: true
+            _atawEnabled.value = prefs[KEY_ATAW] ?: true
         }
     }
 
@@ -66,9 +81,33 @@ class SearchSourceStorage @Inject constructor(
         _zresoEnabled.value = enabled
     }
 
+    suspend fun setUseaiEnabled(enabled: Boolean) {
+        context.searchSourceDataStore.edit { prefs ->
+            prefs[KEY_USEAI] = enabled
+        }
+        _useaiEnabled.value = enabled
+    }
+
+    suspend fun setYunsoEnabled(enabled: Boolean) {
+        context.searchSourceDataStore.edit { prefs ->
+            prefs[KEY_YUNSO] = enabled
+        }
+        _yunsoEnabled.value = enabled
+    }
+
+    suspend fun setAtawEnabled(enabled: Boolean) {
+        context.searchSourceDataStore.edit { prefs ->
+            prefs[KEY_ATAW] = enabled
+        }
+        _atawEnabled.value = enabled
+    }
+
     companion object {
         private val KEY_PANSOU = booleanPreferencesKey("pansou_enabled")
         private val KEY_PANHUB = booleanPreferencesKey("panhub_enabled")
         private val KEY_ZRESO = booleanPreferencesKey("zreso_enabled")
+        private val KEY_USEAI = booleanPreferencesKey("useai_enabled")
+        private val KEY_YUNSO = booleanPreferencesKey("yunso_enabled")
+        private val KEY_ATAW = booleanPreferencesKey("ataw_enabled")
     }
 }

@@ -19,6 +19,8 @@ import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.UpdateManifestApiService
 import com.tracktosearch.data.remote.weather.XiaomiWeatherApi
+import com.tracktosearch.data.remote.ataw.AtawApiService
+import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.data.util.DnsCache
@@ -406,6 +408,118 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(ZresoApiService::class.java)
+    }
+
+    // ---------------------------------------------------------------------
+    // 新增内置换源：盘搜（pan.useai.sbs，pansou 同构）、云搜（yunso.net）、阿涛搜（so.ataw.top）
+    // 三者都是动态搜索结果，不走 OkHttp 缓存（仓储层已有 5 分钟关键词缓存），避免命中旧结果
+    // ---------------------------------------------------------------------
+
+    @Provides
+    @Singleton
+    @Named("useai")
+    fun provideUseAiOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .addHeader("Referer", "https://pan.useai.sbs/")
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            // 该实例聚合 60+ 插件，慢关键词实测要 11-12 秒，超时得给足
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(35, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    @Named("useai")
+    fun provideUseAiApiService(
+        @Named("useai") okHttpClient: OkHttpClient
+    ): PanSouApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://pan.useai.sbs/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(PanSouApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("yunso")
+    fun provideYunsoOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .addHeader("Referer", "https://www.yunso.net/")
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideYunsoApiService(
+        @Named("yunso") okHttpClient: OkHttpClient
+    ): YunsoApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://www.yunso.net/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(YunsoApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("ataw")
+    fun provideAtawOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .addHeader("Referer", "https://so.ataw.top/")
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAtawApiService(
+        @Named("ataw") okHttpClient: OkHttpClient
+    ): AtawApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://so.ataw.top/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(AtawApiService::class.java)
     }
 
     @Provides

@@ -5,6 +5,11 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
+import com.tracktosearch.data.remote.ataw.AtawApiService
+import com.tracktosearch.data.remote.ataw.dto.AtawFilePreview
+import com.tracktosearch.data.remote.ataw.dto.AtawItem
+import com.tracktosearch.data.remote.ataw.dto.AtawLink
+import com.tracktosearch.data.remote.ataw.dto.AtawSearchResponse
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
@@ -14,6 +19,9 @@ import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.pansou.dto.PanSouData
 import com.tracktosearch.data.remote.pansou.dto.PanSouMergedLink
 import com.tracktosearch.data.remote.pansou.dto.PanSouResponse
+import com.tracktosearch.data.remote.yunso.YunsoApiService
+import com.tracktosearch.data.remote.yunso.dto.YunsoItem
+import com.tracktosearch.data.remote.yunso.dto.YunsoResponse
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import com.tracktosearch.data.remote.zreso.dto.ZresoData
 import com.tracktosearch.data.remote.zreso.dto.ZresoLink
@@ -63,6 +71,9 @@ class ResourceRepositoryTest {
     private val panHubGranularApiService = mockk<PanHubApiService>(relaxed = true)
     private val panHubConfigStorage = mockk<PanHubConfigStorage>(relaxed = true)
     private val zresoApiService = mockk<ZresoApiService>(relaxed = true)
+    private val useAiApiService = mockk<PanSouApiService>(relaxed = true)
+    private val yunsoApiService = mockk<YunsoApiService>(relaxed = true)
+    private val atawApiService = mockk<AtawApiService>(relaxed = true)
     private val searchSourceStorage = mockk<SearchSourceStorage>(relaxed = true)
     private val customSearchSourceStorage = mockk<CustomSearchSourceStorage>(relaxed = true)
     private val customSearchService = mockk<CustomSearchService>(relaxed = true)
@@ -74,6 +85,10 @@ class ResourceRepositoryTest {
         every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(true)
         every { searchSourceStorage.panhubEnabled } returns MutableStateFlow(false)
         every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(true)
+        // 默认：新增的三个内置源全关，保持各用例原有期望（只 pansou/zreso 出结果）
+        every { searchSourceStorage.useaiEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.yunsoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.atawEnabled } returns MutableStateFlow(false)
         // 默认无自定义源
         every { customSearchSourceStorage.sources } returns MutableStateFlow(emptyList())
         // 默认 PanHub config（空插件空频道，避免发起请求）
@@ -87,6 +102,9 @@ class ResourceRepositoryTest {
             panHubGranularApiService,
             panHubConfigStorage,
             zresoApiService,
+            useAiApiService,
+            yunsoApiService,
+            atawApiService,
             searchSourceStorage,
             customSearchSourceStorage,
             customSearchService
@@ -846,6 +864,92 @@ class ResourceRepositoryTest {
 
         val result = repository.searchResources("情书")
         assertThat(result.getOrNull()).isEmpty()
+    }
+
+    // ==================== 新增内置源：盘搜 / 云搜 / 阿涛搜 ====================
+
+    @Test
+    fun searchResources_阿涛搜_优先links_其次link_最后description() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.atawEnabled } returns MutableStateFlow(true)
+
+        coEvery { atawApiService.search(any(), any(), any(), any(), any(), any(), any()) } returns
+            AtawSearchResponse(
+                items = listOf(
+                    // links[] 可用
+                    AtawItem(
+                        id = 1, title = "繁花 4K", description = "", link = "",
+                        botBiz = "quark", mainPlatform = "quark", platforms = listOf("quark"),
+                        links = listOf(AtawLink(platform = "quark", url = "https://pan.quark.cn/s/aaa")),
+                        filePreview = AtawFilePreview(fileCount = 96, truncated = false),
+                        submitTime = "2026-09-16T07:06:25.000Z"
+                    ),
+                    // links 空，link 字段带地址
+                    AtawItem(
+                        id = 2, title = "繁花 短剧", description = "", link = "https://pan.quark.cn/s/bbb",
+                        botBiz = "quark", mainPlatform = null, platforms = listOf("quark"),
+                        links = emptyList(), filePreview = null,
+                        submitTime = "2026-05-09T13:35:22.000Z"
+                    ),
+                    // links/link 都空，地址藏在 description 文案里
+                    AtawItem(
+                        id = 3, title = "繁花 合集", description = "描述… 链接：https://pan.quark.cn/s/ccc | 大小：1G",
+                        link = "", botBiz = "quark", mainPlatform = null, platforms = listOf("quark"),
+                        links = emptyList(), filePreview = null,
+                        submitTime = "2026-04-04T09:09:38.000Z"
+                    )
+                ),
+                total = 3,
+                hasMore = false,
+                degraded = false
+            )
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        assertThat(result).hasSize(3)
+        assertThat(result.map { it.url }).containsExactly(
+            "https://pan.quark.cn/s/aaa", "https://pan.quark.cn/s/bbb", "https://pan.quark.cn/s/ccc"
+        )
+        // fileCount 为 null 时兜底 1（否则 isInvalid 会判失效被过滤）
+        assertThat(result.map { it.source }).containsExactly("ataw", "ataw", "ataw")
+        assertThat(result.map { it.diskType })
+            .containsExactly(DiskType.QUARK, DiskType.QUARK, DiskType.QUARK)
+    }
+
+    @Test
+    fun searchResources_云搜_按Scrurlname映射网盘类型且日期格式化() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.yunsoEnabled } returns MutableStateFlow(true)
+
+        coEvery { yunsoApiService.search(any(), any(), any()) } returns YunsoResponse(
+            items = listOf(
+                YunsoItem(
+                    name = "繁花.epub",
+                    url = "https://pan.xunlei.com/s/VP3xmsb5T8TAEDawvjR48nNoA1?pwd=nbia&",
+                    password = "",
+                    addTimeMillis = "1792038112000",
+                    cloudName = "迅雷"
+                ),
+                YunsoItem(
+                    name = "繁花落尽",
+                    url = "https://fast.uc.cn/s/5504d5e9d05e?",
+                    password = "",
+                    addTimeMillis = "1774718341000",
+                    cloudName = "UC"
+                )
+            ),
+            total = 2
+        )
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        assertThat(result).hasSize(2)
+        assertThat(result.map { it.diskType }).containsExactly(DiskType.XUNLEI, DiskType.UC)
+        assertThat(result.map { it.source }).containsExactly("yunso", "yunso")
+        assertThat(result.map { it.fileDate.length }).containsExactly(10, 10)
+        assertThat(result.map { it.fileCount }).containsExactly(1, 1)
     }
 
     // ==================== ResourceItem.isInvalid 辅助测试 ====================

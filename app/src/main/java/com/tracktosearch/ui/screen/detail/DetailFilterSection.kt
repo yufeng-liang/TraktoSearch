@@ -81,6 +81,9 @@ internal fun FilterSection(
                         "pansou" -> "PanSou"
                         "panhub" -> "PanHub"
                         "zreso" -> "Zreso"
+                        "useai" -> "盘搜"
+                        "yunso" -> "云搜"
+                        "ataw" -> "阿涛搜"
                         else -> customSourceNames[source] ?: source
                     }
                     FilterChip(

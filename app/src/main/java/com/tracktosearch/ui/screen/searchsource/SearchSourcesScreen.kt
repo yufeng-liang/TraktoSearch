@@ -115,6 +115,9 @@ fun SearchSourcesScreen(
     val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
     val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
     val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
+    val useaiEnabled by viewModel.useaiEnabled.collectAsStateWithLifecycle()
+    val yunsoEnabled by viewModel.yunsoEnabled.collectAsStateWithLifecycle()
+    val atawEnabled by viewModel.atawEnabled.collectAsStateWithLifecycle()
     val customSources by viewModel.customSources.collectAsStateWithLifecycle()
     val testResults by viewModel.testResults.collectAsStateWithLifecycle()
     // 源测试结果、导入撞冲突时的 reject 都从这一行出
@@ -167,9 +170,15 @@ fun SearchSourcesScreen(
                             pansouEnabled = pansouEnabled,
                             panhubEnabled = panhubEnabled,
                             zresoEnabled = zresoEnabled,
+                            useaiEnabled = useaiEnabled,
+                            yunsoEnabled = yunsoEnabled,
+                            atawEnabled = atawEnabled,
                             onPansouChange = viewModel::setPansouEnabled,
                             onPanhubChange = viewModel::setPanhubEnabled,
                             onZresoChange = viewModel::setZresoEnabled,
+                            onUseaiChange = viewModel::setUseaiEnabled,
+                            onYunsoChange = viewModel::setYunsoEnabled,
+                            onAtawChange = viewModel::setAtawEnabled,
                             onOpenPanHubConfig = { showPanHubConfig = true }
                         )
                     }
@@ -371,15 +380,21 @@ private fun HeaderBar(
     }
 }
 
-/** 内置搜索源分组：PanSou / PanHub / ZReso */
+/** 内置搜索源分组：PanSou / 盘搜 / 云搜 / 阿涛搜 / PanHub / ZReso */
 @Composable
 private fun BuiltinSourcesSection(
     pansouEnabled: Boolean,
     panhubEnabled: Boolean,
     zresoEnabled: Boolean,
+    useaiEnabled: Boolean,
+    yunsoEnabled: Boolean,
+    atawEnabled: Boolean,
     onPansouChange: (Boolean) -> Unit,
     onPanhubChange: (Boolean) -> Unit,
     onZresoChange: (Boolean) -> Unit,
+    onUseaiChange: (Boolean) -> Unit,
+    onYunsoChange: (Boolean) -> Unit,
+    onAtawChange: (Boolean) -> Unit,
     onOpenPanHubConfig: () -> Unit
 ) {
     val haptics = rememberAppHaptics()
@@ -395,6 +410,24 @@ private fun BuiltinSourcesSection(
             subtitle = stringResource(R.string.search_sources_pansou_desc),
             checked = pansouEnabled,
             onCheckedChange = onPansouChange
+        )
+        SourceCardRow(
+            title = stringResource(R.string.search_sources_useai),
+            subtitle = stringResource(R.string.search_sources_useai_desc),
+            checked = useaiEnabled,
+            onCheckedChange = onUseaiChange
+        )
+        SourceCardRow(
+            title = stringResource(R.string.search_sources_yunso),
+            subtitle = stringResource(R.string.search_sources_yunso_desc),
+            checked = yunsoEnabled,
+            onCheckedChange = onYunsoChange
+        )
+        SourceCardRow(
+            title = stringResource(R.string.search_sources_ataw),
+            subtitle = stringResource(R.string.search_sources_ataw_desc),
+            checked = atawEnabled,
+            onCheckedChange = onAtawChange
         )
         SourceCardRow(
             title = stringResource(R.string.search_sources_panhub),

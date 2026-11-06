@@ -41,6 +41,9 @@ class SearchSourcesViewModel @Inject constructor(
     val pansouEnabled: StateFlow<Boolean> = searchSourceStorage.pansouEnabled
     val panhubEnabled: StateFlow<Boolean> = searchSourceStorage.panhubEnabled
     val zresoEnabled: StateFlow<Boolean> = searchSourceStorage.zresoEnabled
+    val useaiEnabled: StateFlow<Boolean> = searchSourceStorage.useaiEnabled
+    val yunsoEnabled: StateFlow<Boolean> = searchSourceStorage.yunsoEnabled
+    val atawEnabled: StateFlow<Boolean> = searchSourceStorage.atawEnabled
     val customSources: StateFlow<List<CustomSearchSource>> = customSearchSourceStorage.sources
     val panHubConfig: StateFlow<PanHubConfig> = panHubConfigStorage.config
 
@@ -58,6 +61,18 @@ class SearchSourcesViewModel @Inject constructor(
 
     fun setZresoEnabled(enabled: Boolean) {
         viewModelScope.launch { searchSourceStorage.setZresoEnabled(enabled) }
+    }
+
+    fun setUseaiEnabled(enabled: Boolean) {
+        viewModelScope.launch { searchSourceStorage.setUseaiEnabled(enabled) }
+    }
+
+    fun setYunsoEnabled(enabled: Boolean) {
+        viewModelScope.launch { searchSourceStorage.setYunsoEnabled(enabled) }
+    }
+
+    fun setAtawEnabled(enabled: Boolean) {
+        viewModelScope.launch { searchSourceStorage.setAtawEnabled(enabled) }
     }
 
     fun setPanHubConcurrency(value: Int) {

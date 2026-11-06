@@ -711,7 +711,7 @@
     <string name="help_dc_douban_desc">登录豆瓣抓取想看/已看标记并显示在 Watchlist；连接 Trakt 后可同步到 Trakt</string>
     <string name="help_dc_cooldown">冷却期：豆瓣有反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。完整爬取后设置 7 天冷却期以降低请求频率。冷却期内增量同步复用云端数据，不再重新爬取；你可以自行承担风险强制同步。</string>
     <string name="help_custom_source">自定义搜索源</string>
-    <string name="help_custom_source_b1">进入设置 → 搜索源管理 PanSou/Panhub/Zreso、自定义源和模板；Panhub 可单独配置。</string>
+    <string name="help_custom_source_b1">进入设置 → 搜索源管理 PanSou/盘搜/云搜/阿涛搜/Panhub/Zreso、自定义源和模板；Panhub 可单独配置。</string>
     <string name="help_custom_source_b2">请求地址格式为 {baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数。</string>
     <string name="help_custom_source_b3">可直接添加模板，或使用三步向导：基本信息 → 自动解析 → 确认。</string>
     <string name="help_custom_source_b4">自动解析会识别 JSONPath 的列表、名称、链接和网盘类型字段，并允许手动调整；失败时会区分地址不可达、返回非 JSON 和字段无法识别。</string>
@@ -1316,6 +1316,12 @@
     <string name="search_sources_panhub_desc">Panhub API，可配置并发与插件</string>
     <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn 资源库，模板解析</string>
+    <string name="search_sources_useai">盘搜</string>
+    <string name="search_sources_useai_desc">pan.useai.sbs 盘搜实例，聚合 60+ 插件</string>
+    <string name="search_sources_yunso">云搜</string>
+    <string name="search_sources_yunso_desc">yunso.net 网盘聚合搜索，免密钥直连</string>
+    <string name="search_sources_ataw">阿涛搜</string>
+    <string name="search_sources_ataw_desc">so.ataw.top 站内搜索，覆盖多家网盘</string>
 <string name="search_sources_manage_entry_subtitle">内置与自定义搜索源</string>
     <!-- 模板库 -->
     <string name="template_library_title">从模板添加</string>
@@ -2214,7 +2220,7 @@
     <string name="privacy_section_legal">使用与权利</string>
     <string name="privacy_legal_intro">TraktoSearch 是独立开发的 Android 工具，不是影视平台、网盘或内容分发服务。使用第三方账号和打开第三方链接时，请遵守其条款与所在地区法律。这里说明项目边界，不构成法律意见。</string>
     <string name="privacy_legal_b1_title">独立项目，不代表第三方</string>
-    <string name="privacy_legal_b1">TraktoSearch 与豆瓣、Trakt、TMDB、OMDb、PanSou、PanHub、ZReso、任何网盘服务、GitHub 及 Chiikawa 权利人没有隶属、运营或官方背书关系；服务名称与商标仅用于说明兼容对象。第三方数据可能不完整、不准确或暂时不可用。</string>
+    <string name="privacy_legal_b1">TraktoSearch 与豆瓣、Trakt、TMDB、OMDb、PanSou、盘搜、云搜、阿涛搜、PanHub、ZReso、任何网盘服务、GitHub 及 Chiikawa 权利人没有隶属、运营或官方背书关系；服务名称与商标仅用于说明兼容对象。第三方数据可能不完整、不准确或暂时不可用。</string>
     <string name="privacy_legal_b2_title">豆瓣登录、抓取与写回</string>
     <string name="privacy_legal_b2">这些操作只在你主动发起后进行，并受豆瓣账号权限、访问策略、验证码与接口变化限制。请只使用自己的账号，不得借本应用绕过访问控制、批量抓取、压垮服务或收集他人数据。</string>
     <string name="privacy_legal_b3_title">资源链接与第三方内容</string>
