@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.screen.searchsource
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Settings
@@ -60,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,6 +106,7 @@ fun SearchSourcesScreen(
     viewModel: SearchSourcesViewModel = hiltViewModel()
 ) {
     val hazeState = remember { HazeState() }
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val hasContentUnderTopBar by remember {
         derivedStateOf {
@@ -179,7 +184,15 @@ fun SearchSourcesScreen(
                             onUseaiChange = viewModel::setUseaiEnabled,
                             onYunsoChange = viewModel::setYunsoEnabled,
                             onAtawChange = viewModel::setAtawEnabled,
-                            onOpenPanHubConfig = { showPanHubConfig = true }
+                            onOpenPanHubConfig = { showPanHubConfig = true },
+                            onOpenZresoVerify = {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://www.zreso.cn/turnstile/challenge?redirect=%2Fsearch")
+                                    )
+                                )
+                            }
                         )
                     }
 
@@ -395,7 +408,8 @@ private fun BuiltinSourcesSection(
     onUseaiChange: (Boolean) -> Unit,
     onYunsoChange: (Boolean) -> Unit,
     onAtawChange: (Boolean) -> Unit,
-    onOpenPanHubConfig: () -> Unit
+    onOpenPanHubConfig: () -> Unit,
+    onOpenZresoVerify: () -> Unit
 ) {
     val haptics = rememberAppHaptics()
     Column(
@@ -456,7 +470,22 @@ private fun BuiltinSourcesSection(
             title = stringResource(R.string.search_sources_zreso),
             subtitle = stringResource(R.string.search_sources_zreso_desc),
             checked = zresoEnabled,
-            onCheckedChange = onZresoChange
+            onCheckedChange = onZresoChange,
+            onClick = onOpenZresoVerify,
+            leadingAction = {
+                IconButton(
+                    onClick = {
+                        haptics.lightTap()
+                        onOpenZresoVerify()
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.OpenInBrowser,
+                        contentDescription = stringResource(R.string.search_sources_zreso_verify),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         )
     }
 }

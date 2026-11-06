@@ -1,5 +1,6 @@
 package com.tracktosearch.data.remote.zreso.dto
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -32,4 +33,14 @@ data class ZresoLink(
     val type: String = "",
     val url: String = "",
     val status: String = ""
+)
+
+/**
+ * zreso 中转链接解析结果：`GET /api/wash?t=<token>` → `{"ok":true,"raw_url":"https://pan.quark.cn/s/..."}`。
+ */
+@Serializable
+data class ZresoWashResponse(
+    val ok: Boolean = false,
+    @SerialName("raw_url") val rawUrl: String = "",
+    val msg: String = ""
 )

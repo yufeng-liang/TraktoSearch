@@ -27,6 +27,7 @@ import com.tracktosearch.data.remote.zreso.dto.ZresoData
 import com.tracktosearch.data.remote.zreso.dto.ZresoLink
 import com.tracktosearch.data.remote.zreso.dto.ZresoResponse
 import com.tracktosearch.data.remote.zreso.dto.ZresoResult
+import com.tracktosearch.data.remote.zreso.dto.ZresoWashResponse
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -477,6 +478,37 @@ class ResourceRepositoryTest {
                 assertThat(items[0].fileDate).isEqualTo(case.expectedDate)
             }
         }
+    }
+
+    @Test
+    fun searchResources_Zreso中转链接解析为真实网盘直链() = runTest {
+        coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(emptyMap())
+        coEvery { zresoApiService.search(any(), any(), any()) } returns ZresoResponse(
+            data = ZresoData(results = listOf(
+                ZresoResult(
+                    title = "繁花",
+                    datetime = "2026-11-07T01:01:26+08:00",
+                    links = listOf(
+                        ZresoLink(
+                            type = "quark",
+                            url = "/api/wash?t=8cfd0b74-415e-44a5-bf9f-3da1f3c20b7a",
+                            status = "normal"
+                        )
+                    )
+                )
+            ))
+        )
+        coEvery { zresoApiService.wash("8cfd0b74-415e-44a5-bf9f-3da1f3c20b7a") } returns ZresoWashResponse(
+            ok = true,
+            rawUrl = "https://pan.quarks.cn/s/abc123"
+        )
+
+        val items = repository.searchResources("繁花").getOrNull()!!
+
+        assertThat(items).hasSize(1)
+        assertThat(items[0].url).isEqualTo("https://pan.quark.cn/s/abc123")
+        assertThat(items[0].source).isEqualTo(ResourceRepository.SOURCE_ZRESO)
+        coVerify(exactly = 1) { zresoApiService.wash("8cfd0b74-415e-44a5-bf9f-3da1f3c20b7a") }
     }
 
     @Test

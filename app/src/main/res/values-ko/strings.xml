@@ -1219,6 +1219,7 @@
     <string name="search_sources_panhub_desc">Panhub API, 동시성 및 플러그인 설정 가능</string>
     <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn 자원 라이브러리, 템플릿 파싱</string>
+    <string name="search_sources_zreso_verify">브라우저에서 zreso 인증 열기</string>
     <string name="search_sources_useai">판서치</string>
     <string name="search_sources_useai_desc">pan.useai.sbs PanSou 인스턴스, 플러그인 60개 이상 집계</string>
     <string name="search_sources_yunso">윤소</string>

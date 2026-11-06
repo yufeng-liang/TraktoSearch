@@ -12,6 +12,8 @@ import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import com.tracktosearch.data.remote.zreso.dto.ZresoLink
+import com.tracktosearch.data.remote.zreso.dto.ZresoResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
+import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -112,11 +115,21 @@ class ResourceRepository @Inject constructor(
         private val MULTI_SEASON_SINGLE = Regex("""第\s*\d+\s*季""")
         /** 阿涛搜条目里混排的直链（link/description 字段都可能是大段文案） */
         private val ATAW_URL_REGEX = Regex("""https?://[^\s，。"'<>）)]+""")
+        private const val ZRESO_BASE_URL = "https://zreso.cn"
+        /** zreso 结果链接形如 /api/wash?t=<uuid>，需再换一次真实网盘直链 */
+        private val ZRESO_WASH_TOKEN_REGEX = Regex("""[?&]t=([^&]+)""")
     }
 
     private data class KeywordCache(
         val items: List<ResourceItem>,
         val timestamp: Long
+    )
+
+    /** zreso 搜索结果里的一条待展开链接 */
+    private data class ZresoCandidate(
+        val result: ZresoResult,
+        val link: ZresoLink,
+        val diskType: DiskType
     )
 
     // 搜索关键词结果缓存，LRU 限制 50 条防内存增长
@@ -127,6 +140,10 @@ class ResourceRepository @Inject constructor(
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, KeywordCache>?): Boolean = size > 50
         }
     )
+
+    /** zreso 熔断截止时间：429/5xx/超时后短路一段时间，避免每次搜索都白等 8 秒 */
+    @Volatile
+    private var zresoCooldownUntil = 0L
 
 
 
@@ -613,38 +630,71 @@ class ResourceRepository @Inject constructor(
     }
 
     private suspend fun searchZreso(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        if (System.currentTimeMillis() < zresoCooldownUntil) return emptyList()
         return try {
             val response = withTimeoutOrNull(8_000) {
                 zresoApiService.search(keyword = keyword, cloud = "")
-            } ?: return emptyList()
+            } ?: run {
+                // 站点无响应：10 分钟内不再重试，避免连续搜索都卡满超时
+                zresoCooldownUntil = System.currentTimeMillis() + 10 * 60_000L
+                return emptyList()
+            }
             val allowedTypes = enabledDiskTypes.map { diskTypeToZreso(it) }.filter { it.isNotEmpty() }.toSet()
-            response.data.results.flatMap { result ->
+            val candidates = response.data.results.flatMap { result ->
                 result.links.mapNotNull { link ->
-                    val fullUrl = if (link.url.startsWith("http")) {
-                        link.url
-                    } else {
-                        "https://zreso.cn${link.url}"
-                    }
                     val diskType = mapZresoType(link.type)
                     val typeStr = diskTypeToZreso(diskType)
                     if (allowedTypes.isNotEmpty() && typeStr !in allowedTypes) {
                         return@mapNotNull null
                     }
-                    ResourceItem(
-                        name = result.title,
-                        diskType = diskType,
-                        fileSize = "",
-                        fileDate = result.datetime.ifBlank { result.date },
-                        fileCount = result.links.size,
-                        status = result.status,
-                        url = fullUrl,
-                        source = SOURCE_ZRESO
-                    )
+                    ZresoCandidate(result, link, diskType)
                 }
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            // zreso 搜索结果只给 /api/wash?t=... 中转地址，需再换一次真实网盘直链。
+            // 并发解析；单条失败保留原地址，不因个别链接失效拖垮整次搜索。
+            val resolvedUrls = coroutineScope {
+                candidates.map { candidate ->
+                    async { resolveZresoLink(candidate.link.url) }
+                }.awaitAll()
+            }
+            candidates.mapIndexed { index, candidate ->
+                ResourceItem(
+                    name = candidate.result.title,
+                    diskType = candidate.diskType,
+                    fileSize = "",
+                    fileDate = candidate.result.datetime.ifBlank { candidate.result.date },
+                    fileCount = candidate.result.links.size,
+                    status = candidate.result.status,
+                    url = resolvedUrls[index],
+                    source = SOURCE_ZRESO
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: HttpException) {
+            // 429=窗口/当日配额耗尽（3 分钟后可能恢复）；5xx=站点故障（10 分钟内先别碰）
+            zresoCooldownUntil = System.currentTimeMillis() +
+                if (e.code() == 429) 3 * 60_000L else 10 * 60_000L
+            emptyList()
+        } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /**
+     * zreso 链接归一化：相对路径补域名；`/api/wash?t=` 中转地址换取真实网盘直链。
+     * wash 接口免 Turnstile，但 token 一次性、有效期短，失败时退回原地址。
+     */
+    private suspend fun resolveZresoLink(rawUrl: String): String {
+        val absoluteUrl = if (rawUrl.startsWith("http")) rawUrl else "$ZRESO_BASE_URL$rawUrl"
+        if (!rawUrl.contains("/api/wash")) return absoluteUrl
+        val token = ZRESO_WASH_TOKEN_REGEX.find(rawUrl)?.groupValues?.getOrNull(1) ?: return absoluteUrl
+        val wash = runCatching {
+            withTimeoutOrNull(4_000) { zresoApiService.wash(token) }
+        }.getOrNull()
+        val rawLink = wash?.takeIf { it.ok }?.rawUrl?.takeIf { it.isNotBlank() } ?: return absoluteUrl
+        // 上游偶尔返回旧域名 pan.quarks.cn，替换成可用的 pan.quark.cn
+        return rawLink.replace("pan.quarks.cn", "pan.quark.cn")
     }
 
     /**

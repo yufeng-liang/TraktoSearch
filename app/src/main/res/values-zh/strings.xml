@@ -1316,6 +1316,7 @@
     <string name="search_sources_panhub_desc">Panhub API，可配置并发与插件</string>
     <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn 资源库，模板解析</string>
+    <string name="search_sources_zreso_verify">在浏览器中完成 zreso 人机验证</string>
     <string name="search_sources_useai">盘搜</string>
     <string name="search_sources_useai_desc">pan.useai.sbs 盘搜实例，聚合 60+ 插件</string>
     <string name="search_sources_yunso">云搜</string>

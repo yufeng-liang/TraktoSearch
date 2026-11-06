@@ -1219,6 +1219,7 @@
     <string name="search_sources_panhub_desc">Panhub API、並列数とプラグインを設定可能</string>
     <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn 資源ライブラリ、テンプレート解析</string>
+    <string name="search_sources_zreso_verify">ブラウザで zreso の本人確認を開く</string>
     <string name="search_sources_useai">盤捜</string>
     <string name="search_sources_useai_desc">pan.useai.sbs の PanSou インスタンス、60 以上のプラグインを集約</string>
     <string name="search_sources_yunso">雲捜</string>

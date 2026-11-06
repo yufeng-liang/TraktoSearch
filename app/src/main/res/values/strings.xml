@@ -1323,6 +1323,7 @@ Config:
     <string name="search_sources_panhub_desc">Panhub API, configurable concurrency &amp; plugins</string>
     <string name="search_sources_zreso">Zreso</string>
     <string name="search_sources_zreso_desc">zreso.cn resource library, template parsing</string>
+    <string name="search_sources_zreso_verify">Open zreso human verification in browser</string>
     <string name="search_sources_useai">PanSearch</string>
     <string name="search_sources_useai_desc">pan.useai.sbs PanSou instance, 60+ plugins aggregated</string>
     <string name="search_sources_yunso">Yunso</string>
