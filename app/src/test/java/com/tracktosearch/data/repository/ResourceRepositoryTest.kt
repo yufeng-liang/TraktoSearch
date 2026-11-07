@@ -23,6 +23,7 @@ import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.yunso.dto.YunsoItem
 import com.tracktosearch.data.remote.yunso.dto.YunsoResponse
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import com.tracktosearch.data.remote.zreso.ZresoWebViewVerifier
 import com.tracktosearch.data.remote.zreso.dto.ZresoData
 import com.tracktosearch.data.remote.zreso.dto.ZresoLink
 import com.tracktosearch.data.remote.zreso.dto.ZresoResponse
@@ -38,10 +39,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 
 /**
@@ -72,6 +77,7 @@ class ResourceRepositoryTest {
     private val panHubGranularApiService = mockk<PanHubApiService>(relaxed = true)
     private val panHubConfigStorage = mockk<PanHubConfigStorage>(relaxed = true)
     private val zresoApiService = mockk<ZresoApiService>(relaxed = true)
+    private val zresoWebViewVerifier = mockk<ZresoWebViewVerifier>(relaxed = true)
     private val useAiApiService = mockk<PanSouApiService>(relaxed = true)
     private val yunsoApiService = mockk<YunsoApiService>(relaxed = true)
     private val atawApiService = mockk<AtawApiService>(relaxed = true)
@@ -103,6 +109,7 @@ class ResourceRepositoryTest {
             panHubGranularApiService,
             panHubConfigStorage,
             zresoApiService,
+            zresoWebViewVerifier,
             useAiApiService,
             yunsoApiService,
             atawApiService,
@@ -424,9 +431,36 @@ class ResourceRepositoryTest {
         assertThat(repository.searchResources("故障-all").getOrNull()).isEmpty()
     }
 
+    @Test
+    fun searchResources_Zreso遇到429自动过验证后重试() = runTest {
+        val http429 = HttpException(
+            Response.error<Any>(
+                429,
+                "{\"error\":\"TURNSTILE_REQUIRED\"}".toResponseBody("application/json".toMediaType())
+            )
+        )
+        coEvery { zresoApiService.search(any(), any(), any()) } throws http429 andThen ZresoResponse(
+            data = ZresoData(
+                results = listOf(
+                    ZresoResult(
+                        title = "自动验证资源",
+                        datetime = "2024-01-01",
+                        date = "",
+                        links = listOf(
+                            ZresoLink(type = "quark", url = "https://pan.quark.cn/s/auto", status = "")
+                        )
+                    )
+                )
+            )
+        )
+        coEvery { zresoWebViewVerifier.ensureVerified() } returns true
 
+        val items = repository.searchResources("zreso-429-自动验证").getOrNull()!!
 
-
+        assertThat(items.map { it.source }).containsExactly(ResourceRepository.SOURCE_ZRESO)
+        coVerify(exactly = 2) { zresoApiService.search(any(), any(), any()) }
+        coVerify(exactly = 1) { zresoWebViewVerifier.ensureVerified() }
+    }
 
     // ==================== searchResources 类型映射 ====================
 

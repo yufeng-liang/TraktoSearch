@@ -12,6 +12,7 @@ import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import com.tracktosearch.data.remote.zreso.ZresoWebViewVerifier
 import com.tracktosearch.data.remote.zreso.dto.ZresoLink
 import com.tracktosearch.data.remote.zreso.dto.ZresoResult
 import kotlinx.coroutines.CancellationException
@@ -39,6 +40,7 @@ class ResourceRepository @Inject constructor(
     private val panHubGranularApiService: PanHubApiService,
     private val panHubConfigStorage: PanHubConfigStorage,
     private val zresoApiService: ZresoApiService,
+    private val zresoWebViewVerifier: ZresoWebViewVerifier,
     @Named("useai") private val useAiApiService: PanSouApiService,
     private val yunsoApiService: YunsoApiService,
     private val atawApiService: AtawApiService,
@@ -131,6 +133,9 @@ class ResourceRepository @Inject constructor(
         val link: ZresoLink,
         val diskType: DiskType
     )
+
+    /** zreso 请求超时（用于区分普通异常，触发熔断） */
+    private class ZresoTimeoutException : Exception("zreso 请求超时")
 
     // 搜索关键词结果缓存，LRU 限制 50 条防内存增长
     // 搜索结果关键词缓存：synchronized LinkedHashMap(removeEldestEntry)实现并发 LRU
@@ -631,53 +636,82 @@ class ResourceRepository @Inject constructor(
 
     private suspend fun searchZreso(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
         if (System.currentTimeMillis() < zresoCooldownUntil) return emptyList()
-        return try {
-            val response = withTimeoutOrNull(8_000) {
-                zresoApiService.search(keyword = keyword, cloud = "")
-            } ?: run {
-                // 站点无响应：10 分钟内不再重试，避免连续搜索都卡满超时
-                zresoCooldownUntil = System.currentTimeMillis() + 10 * 60_000L
+        val first = runCatching { requestZreso(keyword, enabledDiskTypes) }
+        first.getOrNull()?.let { return it }
+        val error = first.exceptionOrNull() ?: return emptyList()
+        if (error is CancellationException) throw error
+        if (error is HttpException) {
+            val dailyLimit = isZresoDailyLimit(error)
+            // 429（非每日上限）说明 Cap 验证的配额窗口用尽：用隐藏 WebView 自动过一次人机
+            // 验证，再重试一次 /api/search。验证放行按出口 IP 生效，同设备普通 HTTP 请求随即可用。
+            if (error.code() == 429 && !dailyLimit && zresoWebViewVerifier.ensureVerified()) {
+                val retried = runCatching { requestZreso(keyword, enabledDiskTypes) }
+                retried.getOrNull()?.let { return it }
+                val retryError = retried.exceptionOrNull()
+                if (retryError is CancellationException) throw retryError
+                if (retryError is HttpException) {
+                    zresoCooldownUntil = System.currentTimeMillis() +
+                        cooldownForZreso(retryError, isZresoDailyLimit(retryError))
+                }
                 return emptyList()
             }
-            val allowedTypes = enabledDiskTypes.map { diskTypeToZreso(it) }.filter { it.isNotEmpty() }.toSet()
-            val candidates = response.data.results.flatMap { result ->
-                result.links.mapNotNull { link ->
-                    val diskType = mapZresoType(link.type)
-                    val typeStr = diskTypeToZreso(diskType)
-                    if (allowedTypes.isNotEmpty() && typeStr !in allowedTypes) {
-                        return@mapNotNull null
-                    }
-                    ZresoCandidate(result, link, diskType)
+            zresoCooldownUntil = System.currentTimeMillis() + cooldownForZreso(error, dailyLimit)
+        } else if (error is ZresoTimeoutException) {
+            // 站点无响应：10 分钟内不再重试，避免连续搜索都卡满超时
+            zresoCooldownUntil = System.currentTimeMillis() + 10 * 60_000L
+        }
+        return emptyList()
+    }
+
+    /** zreso 429 的冷却时间：每日总次数上限直接停 6 小时；普通窗口配额 3 分钟后可再试。 */
+    private fun cooldownForZreso(error: HttpException, dailyLimit: Boolean): Long = when {
+        error.code() == 429 && dailyLimit -> 6 * 60 * 60_000L
+        error.code() == 429 -> 3 * 60_000L
+        else -> 10 * 60_000L
+    }
+
+    /** 429 响应体里区分「今日获取次数已达上限」和普通窗口配额。 */
+    private fun isZresoDailyLimit(error: HttpException): Boolean = runCatching {
+        error.response()?.errorBody()?.string()?.contains("今日获取次数已达上限") == true
+    }.getOrDefault(false)
+
+    /** zreso 单次请求与结果映射（不含熔断与验证重试逻辑）。 */
+    private suspend fun requestZreso(
+        keyword: String,
+        enabledDiskTypes: Set<DiskType>
+    ): List<ResourceItem> {
+        val response = withTimeoutOrNull(8_000) {
+            zresoApiService.search(keyword = keyword, cloud = "")
+        } ?: throw ZresoTimeoutException()
+        val allowedTypes = enabledDiskTypes.map { diskTypeToZreso(it) }.filter { it.isNotEmpty() }.toSet()
+        val candidates = response.data.results.flatMap { result ->
+            result.links.mapNotNull { link ->
+                val diskType = mapZresoType(link.type)
+                val typeStr = diskTypeToZreso(diskType)
+                if (allowedTypes.isNotEmpty() && typeStr !in allowedTypes) {
+                    return@mapNotNull null
                 }
+                ZresoCandidate(result, link, diskType)
             }
-            // zreso 搜索结果只给 /api/wash?t=... 中转地址，需再换一次真实网盘直链。
-            // 并发解析；单条失败保留原地址，不因个别链接失效拖垮整次搜索。
-            val resolvedUrls = coroutineScope {
-                candidates.map { candidate ->
-                    async { resolveZresoLink(candidate.link.url) }
-                }.awaitAll()
-            }
-            candidates.mapIndexed { index, candidate ->
-                ResourceItem(
-                    name = candidate.result.title,
-                    diskType = candidate.diskType,
-                    fileSize = "",
-                    fileDate = candidate.result.datetime.ifBlank { candidate.result.date },
-                    fileCount = candidate.result.links.size,
-                    status = candidate.result.status,
-                    url = resolvedUrls[index],
-                    source = SOURCE_ZRESO
-                )
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: HttpException) {
-            // 429=窗口/当日配额耗尽（3 分钟后可能恢复）；5xx=站点故障（10 分钟内先别碰）
-            zresoCooldownUntil = System.currentTimeMillis() +
-                if (e.code() == 429) 3 * 60_000L else 10 * 60_000L
-            emptyList()
-        } catch (e: Exception) {
-            emptyList()
+        }
+        // zreso 搜索结果只给 /api/wash?t=... 中转地址，需再换一次真实网盘直链。
+        // 并发解析；单条失败保留原地址，不因个别链接失效拖垮整次搜索。
+        val resolvedUrls = coroutineScope {
+            candidates.map { candidate ->
+                async { resolveZresoLink(candidate.link.url) }
+            }.awaitAll()
+        }
+        return candidates.mapIndexed { index, candidate ->
+            ResourceItem(
+                name = candidate.result.title,
+                diskType = candidate.diskType,
+                fileSize = "",
+                fileDate = candidate.result.datetime.ifBlank { candidate.result.date },
+                fileCount = candidate.result.links.size,
+                status = candidate.result.status,
+                url = resolvedUrls[index],
+                source = SOURCE_ZRESO
+            )
         }
     }
 
