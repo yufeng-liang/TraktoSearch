@@ -17,6 +17,14 @@ import retrofit2.http.Query
  */
 interface AtawApiService {
 
+    companion object {
+        /**
+         * 每个 App 安装固定一个会话标识（不随请求轮换）：
+         * 服务端只验格式，但固定值更像一个稳定客户端，频繁随机值反而易被风控盯上。
+         */
+        val SESSION: String = UUID.randomUUID().toString()
+    }
+
     @GET("api/v1/public/resources/search")
     suspend fun search(
         @Query("q") keyword: String,
@@ -25,6 +33,6 @@ interface AtawApiService {
         @Query("page") page: Int = 1,
         @Query("pageSize") pageSize: Int = 30,
         @Query("botBiz") botBiz: String = "quark",
-        @Header("x-miniapp-session") session: String = UUID.randomUUID().toString()
+        @Header("x-miniapp-session") session: String = SESSION
     ): AtawSearchResponse
 }

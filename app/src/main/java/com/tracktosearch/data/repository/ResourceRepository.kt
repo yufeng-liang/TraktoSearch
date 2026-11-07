@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import javax.inject.Inject
@@ -120,6 +122,8 @@ class ResourceRepository @Inject constructor(
         private const val ZRESO_BASE_URL = "https://zreso.cn"
         /** zreso 结果链接形如 /api/wash?t=<uuid>，需再换一次真实网盘直链 */
         private val ZRESO_WASH_TOKEN_REGEX = Regex("""[?&]t=([^&]+)""")
+        /** wash 解析并发闸门：zreso 对高频 /api/wash 会 429，几十条结果瞬间并发会反噬熔断窗口 */
+        private val washSemaphore = Semaphore(4)
     }
 
     private data class KeywordCache(
@@ -695,10 +699,13 @@ class ResourceRepository @Inject constructor(
             }
         }
         // zreso 搜索结果只给 /api/wash?t=... 中转地址，需再换一次真实网盘直链。
-        // 并发解析；单条失败保留原地址，不因个别链接失效拖垮整次搜索。
+        // 并发解析但限流（zreso 对高频 /api/wash 会 429，反噬熔断窗口）；
+        // 单条失败保留原地址，不因个别链接失效拖垮整次搜索。
         val resolvedUrls = coroutineScope {
             candidates.map { candidate ->
-                async { resolveZresoLink(candidate.link.url) }
+                async {
+                    washSemaphore.withPermit { resolveZresoLink(candidate.link.url) }
+                }
             }.awaitAll()
         }
         return candidates.mapIndexed { index, candidate ->

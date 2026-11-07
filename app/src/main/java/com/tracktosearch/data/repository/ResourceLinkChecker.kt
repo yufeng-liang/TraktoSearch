@@ -69,7 +69,7 @@ class ResourceLinkChecker @Inject constructor(
         return semaphore.withPermit {
             // 排队期间别的卡片可能已经查过同一 url
             cachedStatus(item.url)?.let { return@withPermit it }
-            val service = if (item.source == SOURCE_USEAI) useAiApiService else panSouApiService
+            val service = if (item.source == ResourceRepository.SOURCE_USEAI) useAiApiService else panSouApiService
             val response = withTimeoutOrNull(CHECK_TIMEOUT_MS) {
                 try {
                     service.checkLinks(
@@ -102,8 +102,25 @@ class ResourceLinkChecker @Inject constructor(
                 val expiresAt = result.expiresAt.takeIf { it > System.currentTimeMillis() }
                     ?: (System.currentTimeMillis() + DEFAULT_TTL_MS)
                 cache[item.url] = CacheEntry(status, expiresAt)
+                trimCache()
             }
             status
+        }
+    }
+
+    /**
+     * 缓存有界化：先清过期，仍超限时按 expiresAt 淘汰最早到期的条目，
+     * 避免长会话滚动浏览时 ConcurrentHashMap 无界增长。
+     */
+    private fun trimCache() {
+        if (cache.size <= MAX_CACHE_SIZE) return
+        val now = System.currentTimeMillis()
+        cache.entries.removeIf { it.value.expiresAt <= now }
+        if (cache.size > MAX_CACHE_SIZE) {
+            cache.entries
+                .sortedBy { it.value.expiresAt }
+                .take(cache.size - MAX_CACHE_SIZE)
+                .forEach { cache.remove(it.key) }
         }
     }
 
@@ -118,9 +135,11 @@ class ResourceLinkChecker @Inject constructor(
     }
 
     private companion object {
-        const val SOURCE_USEAI = "useai"
-        val SUPPORTED_SOURCES = setOf("pansou", SOURCE_USEAI)
+        /** 源名与 [ResourceRepository] 常量保持同一出处，避免双处定义漂移 */
+        val SUPPORTED_SOURCES = setOf(ResourceRepository.SOURCE_PANSOU, ResourceRepository.SOURCE_USEAI)
         const val CHECK_TIMEOUT_MS = 12_000L
         const val DEFAULT_TTL_MS = 30 * 60_000L
+        /** URL 级缓存上限，超出按最早到期淘汰 */
+        const val MAX_CACHE_SIZE = 512
     }
 }
