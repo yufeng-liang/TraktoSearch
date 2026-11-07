@@ -588,14 +588,14 @@ class ResourceRepository @Inject constructor(
     /**
      * 请求 pansou 同构实例（内置 PanSou / 盘搜 useai 共用）。
      *
-     * @param timeoutMs 单源超时：默认 8s；useai 实例聚合插件多、慢关键词实测 11-12s，需放宽
+     * @param timeoutMs 单源超时：默认 20s（公共 PanSou 实例高峰期常超过 8s）；useai 聚合插件多，传 25s
      */
     private suspend fun searchPanSource(
         apiService: PanSouApiService,
         keyword: String,
         enabledDiskTypes: Set<DiskType>,
         sourceName: String,
-        timeoutMs: Long = 8_000L
+        timeoutMs: Long = 20_000L
     ): List<ResourceItem> {
         return try {
             val response = withTimeoutOrNull(timeoutMs) {
@@ -804,6 +804,8 @@ class ResourceRepository @Inject constructor(
                         fileSize = "",
                         fileDate = fileDate,
                         fileCount = fileCount,
+                        // 站点侧删除标记 → 卡片「已失效」徽章；空串表示未标记
+                        status = if (item.isDeleted) "deleted" else "",
                         url = cleanUrl,
                         source = SOURCE_ATAW
                     )

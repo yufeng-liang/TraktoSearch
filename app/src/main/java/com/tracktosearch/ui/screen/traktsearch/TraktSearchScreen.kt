@@ -71,6 +71,7 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -546,6 +547,7 @@ fun TraktSearchScreen(
                             }
                         },
                         onRetry = { viewModel.searchDiskInternal(uiState.query) },
+                        onResetFilters = { viewModel.resetDiskFilters() },
                         listState = diskListState,
                         hazeState = hazeState,
                         statusBarHeight = statusBarHeight,
@@ -1080,6 +1082,7 @@ private fun DiskSearchContent(
     onItemClick: (ResourceItem) -> Unit,
     onItemLongClick: (ResourceItem) -> Unit,
     onRetry: () -> Unit = {},
+    onResetFilters: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     hazeState: HazeState = remember { HazeState() },
     statusBarHeight: Dp = 0.dp,
@@ -1144,8 +1147,8 @@ private fun DiskSearchContent(
                 )
             }
         }
-        // 搜索完成但筛选后无结果
-        !diskState.isLoading && filteredResources.isEmpty() && diskState.hasSearched -> {
+        // 搜索完成但一个结果都没有（真正的空结果；筛选导致的空态在列表内展示，保留筛选条可操作）
+        !diskState.isLoading && diskState.resources.isEmpty() && diskState.hasSearched -> {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1295,6 +1298,23 @@ private fun DiskSearchContent(
                                             modifier = Modifier.height(28.dp)
                                         )
                                     }
+                                }
+                            }
+                        }
+                    }
+                    // 筛选后为空：保留吸顶筛选条，用户可以直接取消筛选，而不是掉进没有出口的空白页
+                    if (!diskState.isLoading && filteredResources.isEmpty()) {
+                        item(key = "filtered_empty") {
+                            EmptyStateCard(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                                isDark = isAppDarkTheme(),
+                                icon = Icons.Rounded.Search,
+                                title = stringResource(R.string.search_no_results),
+                                description = stringResource(R.string.search_filter_no_results_desc),
+                                hazeState = hazeState
+                            ) {
+                                TextButton(onClick = onResetFilters) {
+                                    Text(stringResource(R.string.search_clear_filters))
                                 }
                             }
                         }

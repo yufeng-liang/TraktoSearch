@@ -35,7 +35,9 @@ data class AtawItem(
     val mainPlatform: String? = null,
     val platforms: List<String> = emptyList(),
     val links: List<AtawLink> = emptyList(),
-    val filePreview: AtawFilePreview? = null
+    val filePreview: AtawFilePreview? = null,
+    /** 站点侧已删除/失效标记；true 时卡片展示「已失效」徽章。 */
+    val isDeleted: Boolean = false
 )
 
 @Serializable

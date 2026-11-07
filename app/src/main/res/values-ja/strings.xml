@@ -110,6 +110,8 @@
     <string name="notification_new_season_title">新シーズン：%1$s</string>
     <string name="search_loading">検索中…</string>
     <string name="search_no_results">リソースが見つかりません</string>
+    <string name="search_filter_no_results_desc">現在のフィルター条件では結果がありません</string>
+    <string name="search_clear_filters">フィルターをクリア</string>
     <string name="search_empty_hint">キーワードを入力して検索を開始</string>
     <string name="search_clear_input">クリア</string>
     <string name="search_history_title">検索履歴</string>
@@ -487,6 +489,13 @@
     <!-- Resource Item Card -->
     <string name="resource_viewed">閲覧済み</string>
     <string name="resource_file_count">%1$dファイル</string>
+    <string name="resource_link_checking">確認中…</string>
+    <string name="resource_link_valid">有効</string>
+    <string name="resource_link_invalid">無効</string>
+    <string name="resource_link_locked">パスワード必要</string>
+    <string name="resource_link_uncertain">未確認</string>
+    <string name="resource_link_unsupported">未対応</string>
+    <string name="resource_link_unknown">不明</string>
     <string name="resource_copyright_title">リソース著作権に関するお知らせ</string>
     <string name="resource_copyright_body_1">本アプリのリソース検索結果は第三者提供の検索ソースから取得され、リンクの検索と遷移のみを提供します。動画ファイルの作成、アップロード、保存、キャッシュ、配布は行わず、リソースが許諾済みであることも保証しません。</string>
     <string name="resource_copyright_body_2">合法な視聴手段を利用し、リソースの著作権状況をご自身で確認してください。配布、販売、商用利用はしないでください。</string>

@@ -109,6 +109,8 @@
     <string name="notification_new_season_title">新季提醒：%1$s</string>
     <string name="search_loading">搜索中…</string>
     <string name="search_no_results">未找到相关资源，换个关键词试试</string>
+    <string name="search_filter_no_results_desc">当前筛选条件下没有结果</string>
+    <string name="search_clear_filters">清除筛选</string>
     <string name="search_empty_hint">输入关键词开始搜索</string>
     <string name="search_clear_input">清空</string>
     <string name="search_history_title">搜索历史</string>
@@ -211,6 +213,13 @@
     <!-- Resource Item Card -->
     <string name="resource_viewed">已查看</string>
     <string name="resource_file_count">%1$d文件</string>
+    <string name="resource_link_checking">检测中…</string>
+    <string name="resource_link_valid">有效</string>
+    <string name="resource_link_invalid">已失效</string>
+    <string name="resource_link_locked">需提取码</string>
+    <string name="resource_link_uncertain">待确认</string>
+    <string name="resource_link_unsupported">暂不支持</string>
+    <string name="resource_link_unknown">未知</string>
     <string name="resource_copyright_title">资源版权提示</string>
     <string name="resource_copyright_body_1">本应用的资源结果来自第三方搜索源，仅提供链接检索与跳转，不制作、上传、存储、缓存或分发影视文件，也不代表资源已获授权。</string>
     <string name="resource_copyright_body_2">请通过合法渠道观看并自行核实资源版权状态；请勿传播、售卖或用于商业用途。</string>

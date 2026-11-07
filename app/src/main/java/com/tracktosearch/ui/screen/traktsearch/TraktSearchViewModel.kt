@@ -794,4 +794,15 @@ class TraktSearchViewModel @Inject constructor(
             diskState = _uiState.value.diskState.copy(enabledDiskTypes = newTypes)
         )
     }
+
+    /** 清空筛选：恢复显示全部可用搜索源与全部网盘类型。 */
+    fun resetDiskFilters() {
+        val current = _uiState.value.diskState
+        _uiState.value = _uiState.value.copy(
+            diskState = current.copy(
+                enabledSources = current.availableSources.toSet(),
+                enabledDiskTypes = ResourceRepository.ALL_DISK_TYPES
+            )
+        )
+    }
 }

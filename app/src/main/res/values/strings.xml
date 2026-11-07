@@ -109,6 +109,8 @@
     <string name="notification_new_season_title">New season: %1$s</string>
     <string name="search_loading">Searching…</string>
     <string name="search_no_results">No resources found, try another keyword</string>
+    <string name="search_filter_no_results_desc">No results under the current filters</string>
+    <string name="search_clear_filters">Clear filters</string>
     <string name="search_empty_hint">Enter a keyword to start searching</string>
     <string name="search_clear_input">Clear</string>
     <string name="search_history_title">Search History</string>
@@ -211,6 +213,13 @@
     <!-- Resource Item Card -->
     <string name="resource_viewed">Viewed</string>
     <string name="resource_file_count">%1$d files</string>
+    <string name="resource_link_checking">Checking…</string>
+    <string name="resource_link_valid">Valid</string>
+    <string name="resource_link_invalid">Invalid</string>
+    <string name="resource_link_locked">Password needed</string>
+    <string name="resource_link_uncertain">Unverified</string>
+    <string name="resource_link_unsupported">Not supported</string>
+    <string name="resource_link_unknown">Unknown</string>
     <string name="resource_copyright_title">Resource copyright notice</string>
     <string name="resource_copyright_body_1">Resource results in this app come from third-party search sources. The app only searches for and redirects to links; it does not create, upload, store, cache, or distribute video files, and does not represent that any resource is licensed.</string>
     <string name="resource_copyright_body_2">Please watch through lawful channels and verify the copyright status of resources yourself; do not distribute, sell, or use them commercially.</string>

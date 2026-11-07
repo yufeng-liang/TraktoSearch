@@ -263,8 +263,9 @@ object NetworkModule {
             })
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .callTimeout(20, TimeUnit.SECONDS)
+            // 公共 PanSou 实例在高峰期响应很慢（实测 5s 正常、偶尔 25s 仍不回），放宽读超时
+            .readTimeout(25, TimeUnit.SECONDS)
+            .callTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
