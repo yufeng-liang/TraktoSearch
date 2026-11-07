@@ -53,6 +53,7 @@ replay_pid*.log
 
 # Local directories (not tracked in git)
 docs/
+!docs/img/
 .superpowers/
 /tracktosearch-website/
 auth-worker/node_modules/

@@ -1,10 +1,23 @@
+<div align="center">
+
+<img src="docs/img/app-icon.png" alt="TraktoSearch" width="128">
+
 # TraktoSearch
 
 从观影清单到网盘资源，一步之遥。
 
 一款 Android 影视搜索与管理工具：基于 Trakt 观影清单，也可独立使用豆瓣账号，快速查找网盘资源、管理想看/已看清单。
 
-`Android 8.0+ · Kotlin · Jetpack Compose · Material 3 · v4.1.4 · 中/英/日/韩`
+![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-4285F4)
+![Material 3](https://img.shields.io/badge/Material%203-6750A4)
+![Release](https://img.shields.io/github/v/release/yufeng-liang/TraktoSearch?color=blue)
+![语言](https://img.shields.io/badge/中%2F英%2F日%2F韩-FF6F00)
+![License](https://img.shields.io/badge/license-GPL--3.0-yellow)
+![GitHub stars](https://img.shields.io/github/stars/yufeng-liang/TraktoSearch?style=flat&color=16A34A)
+
+</div>
 
 ## ✨ 特色功能
 
