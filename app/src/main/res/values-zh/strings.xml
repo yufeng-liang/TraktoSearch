@@ -109,7 +109,8 @@
     <string name="notification_new_season_title">新季提醒：%1$s</string>
     <string name="search_loading">搜索中…</string>
     <string name="search_no_results">未找到相关资源，换个关键词试试</string>
-    <string name="search_filter_no_results_desc">当前筛选条件下没有结果</string>
+    <string name="search_filter_no_results_title">当前筛选条件下没有结果</string>
+    <string name="search_filter_no_results_desc">试试调整筛选条件，或清除筛选查看全部结果</string>
     <string name="search_filter_sources">搜索源</string>
     <string name="search_filter_disk">网盘</string>
     <string name="search_filter_disk_types">网盘类型</string>

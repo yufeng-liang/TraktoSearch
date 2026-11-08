@@ -110,7 +110,8 @@
     <string name="notification_new_season_title">新シーズン：%1$s</string>
     <string name="search_loading">検索中…</string>
     <string name="search_no_results">リソースが見つかりません</string>
-    <string name="search_filter_no_results_desc">現在のフィルター条件では結果がありません</string>
+    <string name="search_filter_no_results_title">現在のフィルター条件に一致する結果がありません</string>
+    <string name="search_filter_no_results_desc">フィルターを調整するか、クリアしてすべての結果を表示してください</string>
     <string name="search_filter_sources">検索ソース</string>
     <string name="search_filter_disk">ディスク</string>
     <string name="search_filter_disk_types">ディスクタイプ</string>

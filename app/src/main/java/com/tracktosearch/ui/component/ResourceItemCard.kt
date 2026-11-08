@@ -1,9 +1,11 @@
 package com.tracktosearch.ui.component
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -24,7 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -50,7 +54,9 @@ import java.time.format.DateTimeFormatter
 data class DiskStyle(
     @StringRes val shortNameResId: Int,
     val backgroundColor: Color,
-    @StringRes val sealTextResId: Int
+    @StringRes val sealTextResId: Int,
+    // 官方网盘 logo；没有 logo 的兜底类型（磁力/其他）继续用文字色章。
+    @DrawableRes val logoResId: Int? = null
 )
 
 internal data class SourceTagColors(
@@ -141,26 +147,43 @@ internal fun sourceTagLabel(source: String, customName: String?): String {
 }
 
 fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
-    DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue, R.string.resource_card_seal_quark)
-    DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue, R.string.resource_card_seal_baidu)
-    DiskType.ALI -> DiskStyle(R.string.disk_ali, AliIndigo, R.string.resource_card_seal_ali)
-    DiskType.XUNLEI -> DiskStyle(R.string.disk_xunlei, XunleiBlue, R.string.resource_card_seal_xunlei)
-    DiskType.UC -> DiskStyle(R.string.disk_uc, UcOrange, R.string.resource_card_seal_uc)
-    DiskType.ONEONEFIVE -> DiskStyle(R.string.disk_115, Blue115, R.string.resource_card_seal_115)
+    DiskType.QUARK -> DiskStyle(
+        R.string.disk_quark, QuarkBlue, R.string.resource_card_seal_quark, R.drawable.ic_disk_quark
+    )
+    DiskType.BAIDU -> DiskStyle(
+        R.string.disk_baidu, BaiduBlue, R.string.resource_card_seal_baidu, R.drawable.ic_disk_baidu
+    )
+    DiskType.ALI -> DiskStyle(
+        R.string.disk_ali, AliIndigo, R.string.resource_card_seal_ali, R.drawable.ic_disk_ali
+    )
+    DiskType.XUNLEI -> DiskStyle(
+        R.string.disk_xunlei, XunleiBlue, R.string.resource_card_seal_xunlei, R.drawable.ic_disk_xunlei
+    )
+    DiskType.UC -> DiskStyle(
+        R.string.disk_uc, UcOrange, R.string.resource_card_seal_uc, R.drawable.ic_disk_uc
+    )
+    DiskType.ONEONEFIVE -> DiskStyle(
+        R.string.disk_115, Blue115, R.string.resource_card_seal_115, R.drawable.ic_disk_115
+    )
     DiskType.MAGNET -> DiskStyle(R.string.disk_magnet, Color(0xFFD44000), R.string.resource_card_seal_magnet)
     DiskType.OTHER -> DiskStyle(R.string.disk_other, Color(0xFF8E8E93), R.string.resource_card_seal_other)
 }
 
-private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM-dd")
+private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
 private fun formatFileDate(raw: String): String {
-    if (raw.isBlank()) return ""
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    // 覆盖 yunso 的纯日期（2026-11-08）、ISO 带时区、空格分隔日期时间三种格式，
+    // 统一显示年月日，不再因为“没有时间部分”解析失败而把整串日期塞进窄位截断。
+    if (trimmed.length >= 10 && trimmed[4] == '-' && trimmed[7] == '-') {
+        return trimmed.take(10)
+    }
     return try {
-        // 兼容 ISO（2026-06-13T15:15:09+08:00）与空格分隔（2026-08-04 20:45:33）两种格式
-        val normalized = raw.take(19).replace(' ', 'T')
+        val normalized = trimmed.take(19).replace(' ', 'T')
         LocalDateTime.parse(normalized).format(DATE_FORMATTER)
     } catch (_: Exception) {
-        raw
+        trimmed
     }
 }
 
@@ -277,29 +300,42 @@ private fun LinkStatusBadge(state: ResourceLinkChecker.State) {
 
 // ====== 卡片基础组件 ======
 
-/** 品牌色章：网盘品牌色方块 + 品牌首字，替代旧版左侧强调条与网盘徽章。 */
+/** 网盘标识：优先用官方 logo，缺省时退回品牌色 + 首字色章。 */
 @Composable
 private fun DiskSeal(style: DiskStyle) {
     val diskName = stringResource(style.shortNameResId)
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(34.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(style.backgroundColor)
+            .background(
+                if (style.logoResId != null) Color.White else style.backgroundColor
+            )
             .clearAndSetSemantics { contentDescription = diskName },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = stringResource(style.sealTextResId),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Medium,
-                fontSize = 15.sp,
-                // 品牌色深浅不一，白字对比度不足时自动换成可读的深色
-                color = readableOn(Color.White, style.backgroundColor)
-            ),
-            maxLines = 1,
-            softWrap = false
-        )
+        if (style.logoResId != null) {
+            Image(
+                painter = painterResource(style.logoResId),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(4.dp),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Text(
+                text = stringResource(style.sealTextResId),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 15.sp,
+                    // 品牌色深浅不一，白字对比度不足时自动换成可读的深色
+                    color = readableOn(Color.White, style.backgroundColor)
+                ),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
@@ -416,7 +452,7 @@ fun ResourceItemCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .padding(horizontal = 12.dp, vertical = 3.dp)
             .scale(scale)
             .hapticCombinedClickable(
                 interactionSource = interactionSource,
@@ -444,35 +480,50 @@ fun ResourceItemCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
                 .alpha(contentAlpha),
             verticalAlignment = Alignment.CenterVertically
         ) {
             DiskSeal(style = style)
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                AdaptiveTwoLineTitle(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    maxFontSize = 15.sp,
-                    minFontSize = 13.sp
-                )
+                // 第一行：资源名 + 右上角日期，充分利用横向空间
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    AdaptiveTwoLineTitle(
+                        text = item.name,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        maxFontSize = 15.sp,
+                        minFontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                    if (item.fileDate.isNotEmpty()) {
+                        val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        MetaText(
+                            text = formattedDate,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
 
+                Spacer(modifier = Modifier.height(5.dp))
+
+                // 第二行：来源/文件数/已查看/状态徽章在左，序号收尾在右
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    MetaText(text = "${index + 1}.")
-
                     SourceBadge(
                         colors = sourceColors,
                         text = sourceTagLabel(item.source, sourceName)
@@ -482,30 +533,17 @@ fun ResourceItemCard(
                         MetaText(text = stringResource(R.string.resource_file_count, item.fileCount))
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    if (item.fileDate.isNotEmpty()) {
-                        val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
-                        MetaText(
-                            text = formattedDate,
-                            modifier = Modifier.widthIn(max = 60.dp)
-                        )
+                    if (isViewed) {
+                        ViewedBadge()
                     }
 
                     if (statusBadgeState != null) {
                         LinkStatusBadge(state = statusBadgeState)
                     }
-                }
 
-                if (isViewed) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        ViewedBadge()
-                    }
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    MetaText(text = "#${index + 1}")
                 }
             }
         }

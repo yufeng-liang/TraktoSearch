@@ -110,7 +110,8 @@
     <string name="notification_new_season_title">새 시즌: %1$s</string>
     <string name="search_loading">검색 중…</string>
     <string name="search_no_results">리소스를 찾을 수 없습니다</string>
-    <string name="search_filter_no_results_desc">현재 필터 조건에 결과가 없습니다</string>
+    <string name="search_filter_no_results_title">현재 필터 조건과 일치하는 결과가 없습니다</string>
+    <string name="search_filter_no_results_desc">필터를 조정하거나 지우면 전체 결과를 볼 수 있습니다</string>
     <string name="search_filter_sources">검색 소스</string>
     <string name="search_filter_disk">디스크</string>
     <string name="search_filter_disk_types">디스크 유형</string>

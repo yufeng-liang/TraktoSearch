@@ -530,6 +530,7 @@ fun TraktSearchScreen(
                 isDiskTab -> {
                     DiskSearchContent(
                         diskState = uiState.diskState,
+                        query = uiState.query,
                         onToggleSource = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             viewModel.toggleDiskSource(it)
@@ -990,6 +991,9 @@ fun TraktSearchScreen(
                         },
                         sourceCounts = diskSourceCounts,
                         diskTypeCounts = diskTypeCounts,
+                        searching = uiState.diskState.isLoading && uiState.diskState.resources.isNotEmpty(),
+                        completedSources = uiState.diskState.completedSources,
+                        totalSources = uiState.diskState.totalSources,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1103,6 +1107,7 @@ fun TraktSearchScreen(
 @Composable
 private fun DiskSearchContent(
     diskState: com.tracktosearch.ui.screen.traktsearch.DiskSearchState,
+    query: String,
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit,
     onItemClick: (ResourceItem) -> Unit,
@@ -1123,6 +1128,13 @@ private fun DiskSearchContent(
     }
     // 还没搜索过
     if (!diskState.hasSearched) return
+
+    // 新一次搜索开始时回到列表顶部：多源结果按到达顺序追加，若沿用上次滚动位置会停在中间
+    LaunchedEffect(query, diskState.isLoading) {
+        if (diskState.isLoading) {
+            listState.scrollToItem(0)
+        }
+    }
 
     when {
         // 搜索中且无结果：显示全屏加载动画
@@ -1201,30 +1213,7 @@ private fun DiskSearchContent(
                         // GLASS 模式将搜索结果注册为 Backdrop 采样源，回顶按钮等玻璃控件可采到内容
                         .backdropContentSource()
                 ) {
-                    // 搜索中时顶部显示紧凑进度条
-                    if (diskState.isLoading && diskState.resources.isNotEmpty()) {
-                        item(key = "searching_progress") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.search_loading_disk_progress, diskState.completedSources, diskState.totalSources),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
+                    // 搜索进度已移到筛选胶囊右侧（FilterDropdownBar），这里不再插入列表项，避免进度消失时内容跳动
                     // 筛选后为空：保留吸顶筛选条，用户可以直接取消筛选，而不是掉进没有出口的空白页
                     if (!diskState.isLoading && filteredResources.isEmpty()) {
                         item(key = "filtered_empty") {
@@ -1232,7 +1221,7 @@ private fun DiskSearchContent(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
                                 isDark = isAppDarkTheme(),
                                 icon = Icons.Rounded.Search,
-                                title = stringResource(R.string.search_no_results),
+                                title = stringResource(R.string.search_filter_no_results_title),
                                 description = stringResource(R.string.search_filter_no_results_desc),
                                 hazeState = hazeState
                             ) {
@@ -1242,7 +1231,9 @@ private fun DiskSearchContent(
                             }
                         }
                     }
-                    itemsIndexed(filteredResources, key = { _, it -> it.url }, contentType = { _, _ -> "resource" }) { index, item ->
+                    // 不用 url 作 key：多源搜索按相关度重排会把新结果插到顶部，key 锚定会让
+                    // LazyColumn 停在上一次的首个可见卡片，屏幕上出现从第 118 条开始的现象。
+                    itemsIndexed(filteredResources, contentType = { _, _ -> "resource" }) { index, item ->
                         ResourceItemCard(
                             item = item,
                             sourceName = diskState.customSourceNames[item.source],

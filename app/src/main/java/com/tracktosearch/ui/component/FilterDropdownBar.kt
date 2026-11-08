@@ -13,13 +13,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,6 +78,9 @@ fun FilterDropdownBar(
     onToggleShowHighRelevanceOnly: () -> Unit = {},
     sourceCounts: Map<String, Int> = emptyMap(),
     diskTypeCounts: Map<DiskType, Int> = emptyMap(),
+    searching: Boolean = false,
+    completedSources: Int = 0,
+    totalSources: Int = 0,
 ) {
     val haptics = rememberAppHaptics()
 
@@ -165,6 +171,30 @@ fun FilterDropdownBar(
                 }
             )
         }
+        if (searching) {
+            // 搜索进度紧跟在筛选胶囊右侧，不再作为列表首项插入，消失时列表不会跳动
+            Row(
+                modifier = Modifier.padding(start = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.search_loading_disk_progress,
+                        completedSources,
+                        totalSources,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
     }
 
     when (activeSheet) {
@@ -175,7 +205,8 @@ fun FilterDropdownBar(
                     activeSheet = null
                 },
                 title = stringResource(R.string.search_filter_sources),
-                skipPartiallyExpanded = false,
+                // 全展开，避免半屏高度把面板内容截断
+                skipPartiallyExpanded = true,
             ) {
                 FilterMultiSelectContent(
                     selectedCount = draftSources.size,
@@ -194,12 +225,13 @@ fun FilterDropdownBar(
                         activeSheet = null
                     },
                 ) {
-                    LazyColumn(
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 380.dp),
+                            .heightIn(max = 300.dp),
                     ) {
-                        items(allSourceOptions, key = { it }) { source ->
+                        gridItems(allSourceOptions, key = { it }) { source ->
                             val available = source in availableSourceSet
                             FilterCheckboxRow(
                                 label = sourceLabel(source, customSourceNames),
@@ -228,7 +260,7 @@ fun FilterDropdownBar(
                     activeSheet = null
                 },
                 title = stringResource(R.string.search_filter_disk_types),
-                skipPartiallyExpanded = false,
+                skipPartiallyExpanded = true,
             ) {
                 FilterMultiSelectContent(
                     selectedCount = draftDiskTypes.size,
@@ -247,12 +279,13 @@ fun FilterDropdownBar(
                         activeSheet = null
                     },
                 ) {
-                    LazyColumn(
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 380.dp),
+                            .heightIn(max = 300.dp),
                     ) {
-                        items(allDiskTypeOptions, key = { it.name }) { type ->
+                        gridItems(allDiskTypeOptions, key = { it.name }) { type ->
                             FilterCheckboxRow(
                                 label = diskTypeLabel(type),
                                 count = if (diskTypeCounts.isEmpty()) null else diskTypeCounts[type] ?: 0,
@@ -413,13 +446,15 @@ private fun FilterCheckboxRow(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            // fill=false：文字只占自身宽度，计数紧跟其后，不贴到下一列去
+            modifier = Modifier.weight(1f, fill = false),
         )
         if (count != null) {
             Text(
                 text = "($count)",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }
