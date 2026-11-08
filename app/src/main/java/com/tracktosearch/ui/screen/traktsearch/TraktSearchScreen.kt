@@ -12,7 +12,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,7 +36,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -62,8 +60,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -123,6 +119,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.ui.component.AppErrorState
 import com.tracktosearch.ui.component.EmptyStateCard
+import com.tracktosearch.ui.component.FilterDropdownBar
 import com.tracktosearch.ui.component.GlassScene
 import com.tracktosearch.ui.component.GlassSurfaceRole
 import com.tracktosearch.ui.component.LoadMoreFooter
@@ -489,6 +486,13 @@ fun TraktSearchScreen(
         // 当前 tab 的状态
         val currentTabState = uiState.currentTabState
         val isDiskTab = uiState.selectedTab == MediaType.DISK
+        val diskSourceCounts = remember(uiState.diskState.resources) {
+            uiState.diskState.resources.groupingBy { it.source }.eachCount()
+        }
+        val diskTypeCounts = remember(uiState.diskState.resources) {
+            uiState.diskState.resources.groupingBy { it.diskType }.eachCount()
+        }
+        val showDiskFilterBar = isDiskTab && uiState.diskState.hasSearched
 
         // 网格滚动预取：非网盘 tab 下预热即将滚入视口的海报（posterUrl 已是完整 URL）
         if (!isDiskTab && currentTabState.results.isNotEmpty()) {
@@ -967,6 +971,28 @@ fun TraktSearchScreen(
                         }
                     )
                 }
+
+                // 网盘筛选条放在顶栏层内部：LazyColumn 的 stickyHeader 会吸到全屏列表 y=0，
+                // 被后绘制的半透明顶栏盖住；放在这里才是真正「吸顶且可见」。
+                if (showDiskFilterBar) {
+                    FilterDropdownBar(
+                        availableSources = uiState.diskState.availableSources,
+                        enabledSources = uiState.diskState.enabledSources,
+                        customSourceNames = uiState.diskState.customSourceNames,
+                        enabledDiskTypes = uiState.diskState.enabledDiskTypes,
+                        onToggleSource = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            viewModel.toggleDiskSource(it)
+                        },
+                        onToggleDiskType = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            viewModel.toggleDiskType(it)
+                        },
+                        sourceCounts = diskSourceCounts,
+                        diskTypeCounts = diskTypeCounts,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             // 快速回顶按钮
@@ -1088,7 +1114,6 @@ private fun DiskSearchContent(
     statusBarHeight: Dp = 0.dp,
     scene: GlassScene = GlassScene()
 ) {
-    val haptics = rememberAppHaptics()
     val context = LocalContext.current
 
     val filteredResources = remember(diskState.resources, diskState.enabledSources, diskState.enabledDiskTypes) {
@@ -1096,7 +1121,6 @@ private fun DiskSearchContent(
             .filter { it.source in diskState.enabledSources }
             .filter { it.diskType in diskState.enabledDiskTypes }
     }
-
     // 还没搜索过
     if (!diskState.hasSearched) return
 
@@ -1169,7 +1193,8 @@ private fun DiskSearchContent(
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(start = 8.dp, top = 124.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
+                    // 顶栏 + Tab + 筛选胶囊共 124+44dp，列表从它们下方开始
+                    contentPadding = PaddingValues(start = 8.dp, top = 124.dp + 44.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .hazeSource(state = hazeState)
@@ -1197,111 +1222,6 @@ private fun DiskSearchContent(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-                        }
-                    }
-                    // 筛选条（吸顶）
-                    stickyHeader {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Transparent)
-                        ) {
-                            // 搜索源筛选
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 14.dp, end = 14.dp, top = 0.dp, bottom = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.detail_filter_sources),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.width(64.dp)
-                                )
-                                LazyRow(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(
-                                        items = diskState.availableSources,
-                                        key = { it }
-                                    ) { source ->
-                                        val label = when (source) {
-                                            "pansou" -> "PanSou"
-                                            "panhub" -> "PanHub"
-                                            "zreso" -> "Zreso"
-                                            "useai" -> "盘搜"
-                                            "yunso" -> "云搜"
-                                            "ataw" -> "阿涛搜"
-                                            "melost" -> "影盘"
-                                            "panxiaozi" -> "盘小子"
-                                            "baoys" -> "宝藏郎"
-                                            else -> diskState.customSourceNames[source] ?: source
-                                        }
-                                        FilterChip(
-                                            selected = source in diskState.enabledSources,
-                                            border = if (source in diskState.enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            onClick = { haptics.toggle(source !in diskState.enabledSources); onToggleSource(source) },
-                                            label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                            modifier = Modifier.height(28.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            // 网盘类型筛选
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 14.dp, end = 14.dp, bottom = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.detail_filter_disk_types),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.width(64.dp)
-                                )
-                                LazyRow(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(
-                                        items = ResourceRepository.ALL_DISK_TYPES.toList(),
-                                        key = { it.name }
-                                    ) { type ->
-                                        val label = when (type) {
-                                            DiskType.QUARK -> stringResource(R.string.detail_disk_type_quark)
-                                            DiskType.BAIDU -> stringResource(R.string.detail_disk_type_baidu)
-                                            DiskType.ALI -> stringResource(R.string.detail_disk_type_ali)
-                                            DiskType.XUNLEI -> stringResource(R.string.detail_disk_type_xunlei)
-                                            DiskType.UC -> stringResource(R.string.detail_disk_type_uc)
-                                            DiskType.ONEONEFIVE -> stringResource(R.string.detail_disk_type_115)
-                                            DiskType.MAGNET -> stringResource(R.string.detail_disk_type_magnet)
-                                            DiskType.OTHER -> stringResource(R.string.detail_disk_type_other)
-                                        }
-                                        FilterChip(
-                                            selected = type in diskState.enabledDiskTypes,
-                                            border = if (type in diskState.enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            onClick = { haptics.toggle(type !in diskState.enabledDiskTypes); onToggleDiskType(type) },
-                                            label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                            modifier = Modifier.height(28.dp)
-                                        )
-                                    }
-                                }
                             }
                         }
                     }

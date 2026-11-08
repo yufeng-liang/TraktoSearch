@@ -110,6 +110,15 @@
     <string name="search_loading">Searching…</string>
     <string name="search_no_results">No resources found, try another keyword</string>
     <string name="search_filter_no_results_desc">No results under the current filters</string>
+    <string name="search_filter_sources">Sources</string>
+    <string name="search_filter_disk">Disk</string>
+    <string name="search_filter_disk_types">Disk types</string>
+    <string name="search_filter_all">All</string>
+    <string name="search_filter_high_relevance">High relevance ✦</string>
+    <string name="search_filter_select_all">Select all</string>
+    <string name="search_filter_clear">Clear</string>
+    <string name="search_filter_selected_count">Selected %1$d / %2$d</string>
+    <string name="search_filter_done">Done</string>
     <string name="search_clear_filters">Clear filters</string>
     <string name="search_empty_hint">Enter a keyword to start searching</string>
     <string name="search_clear_input">Clear</string>
@@ -220,6 +229,15 @@
     <string name="resource_link_uncertain">Unverified</string>
     <string name="resource_link_unsupported">Not supported</string>
     <string name="resource_link_unknown">Unknown</string>
+    <!-- Resource Card Seal Glyphs（品牌首字为视觉符号，各语言保持一致） -->
+    <string name="resource_card_seal_quark">夸</string>
+    <string name="resource_card_seal_baidu">百</string>
+    <string name="resource_card_seal_ali">阿</string>
+    <string name="resource_card_seal_xunlei">迅</string>
+    <string name="resource_card_seal_uc">U</string>
+    <string name="resource_card_seal_115">1</string>
+    <string name="resource_card_seal_magnet">磁</string>
+    <string name="resource_card_seal_other">O</string>
     <string name="resource_copyright_title">Resource copyright notice</string>
     <string name="resource_copyright_body_1">Resource results in this app come from third-party search sources. The app only searches for and redirects to links; it does not create, upload, store, cache, or distribute video files, and does not represent that any resource is licensed.</string>
     <string name="resource_copyright_body_2">Please watch through lawful channels and verify the copyright status of resources yourself; do not distribute, sell, or use them commercially.</string>

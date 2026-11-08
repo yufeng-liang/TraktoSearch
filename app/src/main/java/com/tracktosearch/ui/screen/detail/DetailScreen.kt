@@ -707,6 +707,13 @@ fun DetailScreen(
                 val commentsToShow = uiState.comments.filter { it.id != uiState.traktCommentId }
                 commentsToShow to commentsToShow.filter { it.source != DOUBAN_COMMENT_SOURCE }
             }
+            // 筛选面板每行的结果计数；按当前资源列表统计
+            val filterSourceCounts = remember(uiState.resources) {
+                uiState.resources.groupingBy { it.source }.eachCount()
+            }
+            val filterDiskTypeCounts = remember(uiState.resources) {
+                uiState.resources.groupingBy { it.diskType }.eachCount()
+            }
             // 单 LazyColumn：头部(item) + 顶栏/TabRow(stickyHeader) + 内容(根据Tab切换)
             // 吸顶栏不再染沉浸色，内部搜索源/网盘类型/找到xx个资源等文字统一走主题色
             androidx.compose.runtime.CompositionLocalProvider(
@@ -829,14 +836,7 @@ fun DetailScreen(
                                 )
                             }
                         }
-                    }
-                }
-
-                // ===== 资源 Tab 内容 =====
-                if (selectedTab == 0) {
-                    // 筛选器
-                    item(key = "filter_section") {
-                        Box(modifier = Modifier.alpha(contentAlpha)) {
+                        if (selectedTab == 0) {
                             FilterSection(
                                 availableSources = uiState.availableSources,
                                 enabledSources = uiState.enabledSources,
@@ -846,11 +846,16 @@ fun DetailScreen(
                                 onToggleDiskType = { viewModel.toggleDiskType(it) },
                                 relevanceEnabled = uiState.title.isNotBlank(),
                                 showHighRelevanceOnly = uiState.showHighRelevanceOnly,
-                                onToggleShowHighRelevanceOnly = { viewModel.toggleShowHighRelevanceOnly() }
+                                onToggleShowHighRelevanceOnly = { viewModel.toggleShowHighRelevanceOnly() },
+                                sourceCounts = filterSourceCounts,
+                                diskTypeCounts = filterDiskTypeCounts
                             )
                         }
                     }
+                }
 
+                // ===== 资源 Tab 内容 =====
+                if (selectedTab == 0) {
                     // 低相关隐藏提示（开启"仅显示高相关"且有被隐藏项时）
                     if (uiState.showHighRelevanceOnly && uiState.lowRelevanceHiddenCount > 0) {
                         item(key = "low_relevance_hint") {

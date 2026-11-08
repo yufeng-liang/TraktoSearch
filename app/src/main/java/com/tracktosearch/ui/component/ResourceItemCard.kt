@@ -1,10 +1,9 @@
 package com.tracktosearch.ui.component
 
-import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -23,15 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.data.remote.dto.DiskType
@@ -50,9 +48,9 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 data class DiskStyle(
-    val shortNameResId: Int,
+    @StringRes val shortNameResId: Int,
     val backgroundColor: Color,
-    @DrawableRes val iconRes: Int = 0
+    @StringRes val sealTextResId: Int
 )
 
 internal data class SourceTagColors(
@@ -142,35 +140,25 @@ internal fun sourceTagLabel(source: String, customName: String?): String {
     }
 }
 
-internal fun resourceCardGradientColors(
-    diskColor: Color,
-    sourceColors: SourceTagColors,
-    isDark: Boolean
-): List<Color> {
-    return listOf(
-        diskColor.copy(alpha = if (isDark) 0.20f else 0.12f),
-        diskColor.copy(alpha = if (isDark) 0.06f else 0.04f),
-        sourceColors.background.copy(alpha = if (isDark) 0.24f else 0.16f)
-    )
-}
-
 fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
-    DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue, R.drawable.ic_disk_quark)
-    DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue, R.drawable.ic_disk_baidu)
-    DiskType.ALI -> DiskStyle(R.string.disk_ali, AliIndigo, R.drawable.ic_disk_ali)
-    DiskType.XUNLEI -> DiskStyle(R.string.disk_xunlei, XunleiBlue, R.drawable.ic_disk_xunlei)
-    DiskType.UC -> DiskStyle(R.string.disk_uc, UcOrange, R.drawable.ic_disk_uc)
-    DiskType.ONEONEFIVE -> DiskStyle(R.string.disk_115, Blue115, R.drawable.ic_disk_115)
-    DiskType.MAGNET -> DiskStyle(R.string.disk_magnet, Color(0xFFD44000))
-    DiskType.OTHER -> DiskStyle(R.string.disk_other, Color(0xFF8E8E93))
+    DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue, R.string.resource_card_seal_quark)
+    DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue, R.string.resource_card_seal_baidu)
+    DiskType.ALI -> DiskStyle(R.string.disk_ali, AliIndigo, R.string.resource_card_seal_ali)
+    DiskType.XUNLEI -> DiskStyle(R.string.disk_xunlei, XunleiBlue, R.string.resource_card_seal_xunlei)
+    DiskType.UC -> DiskStyle(R.string.disk_uc, UcOrange, R.string.resource_card_seal_uc)
+    DiskType.ONEONEFIVE -> DiskStyle(R.string.disk_115, Blue115, R.string.resource_card_seal_115)
+    DiskType.MAGNET -> DiskStyle(R.string.disk_magnet, Color(0xFFD44000), R.string.resource_card_seal_magnet)
+    DiskType.OTHER -> DiskStyle(R.string.disk_other, Color(0xFF8E8E93), R.string.resource_card_seal_other)
 }
 
-private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-M-d HH:mm")
+private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM-dd")
 
 private fun formatFileDate(raw: String): String {
+    if (raw.isBlank()) return ""
     return try {
-        // 尝试解析 ISO 格式 (如 2026-06-13T15:15:09+08:00)
-        LocalDateTime.parse(raw.take(19)).format(DATE_FORMATTER)
+        // 兼容 ISO（2026-06-13T15:15:09+08:00）与空格分隔（2026-08-04 20:45:33）两种格式
+        val normalized = raw.take(19).replace(' ', 'T')
+        LocalDateTime.parse(normalized).format(DATE_FORMATTER)
     } catch (_: Exception) {
         raw
     }
@@ -289,74 +277,73 @@ private fun LinkStatusBadge(state: ResourceLinkChecker.State) {
 
 // ====== 卡片基础组件 ======
 
+/** 品牌色章：网盘品牌色方块 + 品牌首字，替代旧版左侧强调条与网盘徽章。 */
 @Composable
-private fun IndexBadge(index: Int) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+private fun DiskSeal(style: DiskStyle) {
+    val diskName = stringResource(style.shortNameResId)
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(style.backgroundColor)
+            .clearAndSetSemantics { contentDescription = diskName },
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .height(24.dp)
-                .widthIn(min = 24.dp)
-                .padding(horizontal = 5.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "${index + 1}",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 10.5.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                ),
-                maxLines = 1,
-                softWrap = false
-            )
-        }
+        Text(
+            text = stringResource(style.sealTextResId),
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                // 品牌色深浅不一，白字对比度不足时自动换成可读的深色
+                color = readableOn(Color.White, style.backgroundColor)
+            ),
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 
 @Composable
-private fun MetaBadge(
-    background: Color,
-    contentColor: Color,
-    text: String,
-    @DrawableRes iconRes: Int = 0,
-    maxTextWidth: Dp = 72.dp
-) {
+private fun SourceBadge(colors: SourceTagColors, text: String) {
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = background,
+        color = colors.background,
         modifier = Modifier.height(24.dp)
     ) {
         Row(
             modifier = Modifier
                 .padding(horizontal = 7.dp)
                 .fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (iconRes != 0) {
-                Image(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
             AdaptiveSingleLineText(
                 text = text,
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.5.sp,
-                    color = contentColor
+                    color = colors.content
                 ),
                 maxFontSize = 10.5.sp,
                 minFontSize = 8.5.sp,
-                modifier = Modifier.widthIn(max = maxTextWidth)
+                modifier = Modifier.widthIn(max = 72.dp)
             )
         }
     }
+}
+
+@Composable
+private fun MetaText(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+        ),
+        modifier = modifier,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -391,14 +378,12 @@ fun ResourceItemCard(
 ) {
     val style = diskStyleOf(item.diskType)
     val contentAlpha = if (isViewed) 0.5f else 1f
-    val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    val isDark = !isLight
+    val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
     val sourceColors = sourceTagColors(item.source, isDark = isDark)
-    val gradientColors = resourceCardGradientColors(style.backgroundColor, sourceColors, isDark = isDark)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
+        targetValue = if (isPressed) 0.97f else 1f,
         label = "resource_card_scale"
     )
 
@@ -423,6 +408,11 @@ fun ResourceItemCard(
         }
     }
 
+    // 状态徽章静默策略：只有失效（红）与需提取码（琥珀）值得打断用户，其余状态不占位。
+    val statusBadgeState = linkStatus?.state?.takeIf {
+        it == ResourceLinkChecker.State.INVALID || it == ResourceLinkChecker.State.LOCKED
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -441,118 +431,80 @@ fun ResourceItemCard(
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = style.backgroundColor.copy(alpha = if (isDark) 0.28f else 0.14f)
+            color = style.backgroundColor.copy(
+                alpha = when {
+                    isPressed -> 0.28f
+                    isDark -> 0.24f
+                    else -> 0.12f
+                }
+            )
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(colors = gradientColors)
-                )
-                .padding(start = 14.dp, end = 14.dp, top = 11.dp, bottom = 10.dp)
-                .alpha(contentAlpha)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .alpha(contentAlpha),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左侧品牌色强调条
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .width(3.dp)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(style.backgroundColor.copy(alpha = 0.9f))
-            )
+            DiskSeal(style = style)
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 10.dp)
-            ) {
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                AdaptiveTwoLineTitle(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxFontSize = 15.sp,
+                    minFontSize = 13.sp
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    IndexBadge(index = index)
+                    MetaText(text = "${index + 1}.")
 
-                    // 网盘类型徽章：与来源徽章统一 24dp 高、6dp 圆角、7dp 横向内边距
-                    MetaBadge(
-                        background = style.backgroundColor,
-                        contentColor = Color.White,
-                        text = stringResource(style.shortNameResId),
-                        iconRes = style.iconRes,
-                        maxTextWidth = 64.dp
+                    SourceBadge(
+                        colors = sourceColors,
+                        text = sourceTagLabel(item.source, sourceName)
                     )
 
-                    // 来源徽章
-                    MetaBadge(
-                        background = sourceColors.background,
-                        contentColor = sourceColors.content,
-                        text = sourceTagLabel(item.source, sourceName),
-                        maxTextWidth = 72.dp
-                    )
+                    if (item.fileCount > 1) {
+                        MetaText(text = stringResource(R.string.resource_file_count, item.fileCount))
+                    }
 
-                    if (linkStatus != null) {
-                        LinkStatusBadge(state = linkStatus!!.state)
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    if (item.fileDate.isNotEmpty()) {
+                        val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
+                        MetaText(
+                            text = formattedDate,
+                            modifier = Modifier.widthIn(max = 60.dp)
+                        )
+                    }
+
+                    if (statusBadgeState != null) {
+                        LinkStatusBadge(state = statusBadgeState)
                     }
                 }
 
-                // 资源名称
-                AdaptiveTwoLineTitle(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    maxFontSize = 14.sp,
-                    minFontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-
-                val showFileCount = item.fileCount > 1
-                val showDate = item.fileDate.isNotEmpty()
-                if (isViewed || showFileCount || showDate) {
+                if (isViewed) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            .padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        if (isViewed) {
-                            ViewedBadge()
-                        }
-                        if (showFileCount) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = style.backgroundColor.copy(alpha = 0.12f)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.resource_file_count, item.fileCount),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 10.sp
-                                    ),
-                                    color = style.backgroundColor.copy(alpha = 0.9f),
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        if (showDate) {
-                            val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
-                            Text(
-                                text = formattedDate,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
+                        ViewedBadge()
                     }
                 }
             }
