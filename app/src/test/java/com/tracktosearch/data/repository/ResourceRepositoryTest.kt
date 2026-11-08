@@ -10,15 +10,23 @@ import com.tracktosearch.data.remote.ataw.dto.AtawFilePreview
 import com.tracktosearch.data.remote.ataw.dto.AtawItem
 import com.tracktosearch.data.remote.ataw.dto.AtawLink
 import com.tracktosearch.data.remote.ataw.dto.AtawSearchResponse
+import com.tracktosearch.data.remote.baoys.BaoysApiService
+import com.tracktosearch.data.remote.baoys.dto.BaoysItem
+import com.tracktosearch.data.remote.baoys.dto.BaoysResponse
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.melost.MelostApiService
+import com.tracktosearch.data.remote.melost.dto.MelostData
+import com.tracktosearch.data.remote.melost.dto.MelostItem
+import com.tracktosearch.data.remote.melost.dto.MelostSearchResponse
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.pansou.dto.PanSouData
 import com.tracktosearch.data.remote.pansou.dto.PanSouMergedLink
 import com.tracktosearch.data.remote.pansou.dto.PanSouResponse
+import com.tracktosearch.data.remote.panxiaozi.PanxiaoziApiService
 import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.yunso.dto.YunsoItem
 import com.tracktosearch.data.remote.yunso.dto.YunsoResponse
@@ -81,6 +89,9 @@ class ResourceRepositoryTest {
     private val useAiApiService = mockk<PanSouApiService>(relaxed = true)
     private val yunsoApiService = mockk<YunsoApiService>(relaxed = true)
     private val atawApiService = mockk<AtawApiService>(relaxed = true)
+    private val melostApiService = mockk<MelostApiService>(relaxed = true)
+    private val panxiaoziApiService = mockk<PanxiaoziApiService>(relaxed = true)
+    private val baoysApiService = mockk<BaoysApiService>(relaxed = true)
     private val searchSourceStorage = mockk<SearchSourceStorage>(relaxed = true)
     private val customSearchSourceStorage = mockk<CustomSearchSourceStorage>(relaxed = true)
     private val customSearchService = mockk<CustomSearchService>(relaxed = true)
@@ -96,6 +107,9 @@ class ResourceRepositoryTest {
         every { searchSourceStorage.useaiEnabled } returns MutableStateFlow(false)
         every { searchSourceStorage.yunsoEnabled } returns MutableStateFlow(false)
         every { searchSourceStorage.atawEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.melostEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.panxiaoziEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.baoysEnabled } returns MutableStateFlow(false)
         // 默认无自定义源
         every { customSearchSourceStorage.sources } returns MutableStateFlow(emptyList())
         // 默认 PanHub config（空插件空频道，避免发起请求）
@@ -113,6 +127,9 @@ class ResourceRepositoryTest {
             useAiApiService,
             yunsoApiService,
             atawApiService,
+            melostApiService,
+            panxiaoziApiService,
+            baoysApiService,
             searchSourceStorage,
             customSearchSourceStorage,
             customSearchService
@@ -1015,6 +1032,103 @@ class ResourceRepositoryTest {
         assertThat(result.map { it.diskType }).containsExactly(DiskType.XUNLEI, DiskType.UC)
         assertThat(result.map { it.source }).containsExactly("yunso", "yunso")
         assertThat(result.map { it.fileDate.length }).containsExactly(10, 10)
+        assertThat(result.map { it.fileCount }).containsExactly(1, 1)
+    }
+
+    // ==================== 新增内置源：影盘 / 盘小子 / 宝藏郎 ====================
+
+    @Test
+    fun searchResources_影盘_清洗em标签并按files数文件() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.melostEnabled } returns MutableStateFlow(true)
+
+        coEvery { melostApiService.search(any()) } returns MelostSearchResponse(
+            code = 200,
+            data = MelostData(
+                total = 2,
+                list = listOf(
+                    MelostItem(
+                        diskId = "aaa", diskName = "《<em>繁花</em>之崛起》7355",
+                        diskPass = "", diskType = "QUARK",
+                        files = "file:a.mp4\nfile:b.mp4\nfile:c.mp4",
+                        link = "https://pan.quark.cn/s/aaa",
+                        sharedTime = "2026-08-04 20:45:33"
+                    ),
+                    MelostItem(
+                        diskId = "bbb", diskName = "繁花 UC 版",
+                        diskPass = "", diskType = "UC",
+                        files = "", link = "https://drive.uc.cn/s/bbb",
+                        sharedTime = "2026-05-01 10:00:00"
+                    )
+                )
+            )
+        )
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        assertThat(result).hasSize(2)
+        assertThat(result.map { it.diskType }).containsExactly(DiskType.QUARK, DiskType.UC)
+        assertThat(result.map { it.source }).containsExactly("melost", "melost")
+        // disk_name 的 <em> 高亮标签已清洗
+        assertThat(result[0].name).isEqualTo("《繁花之崛起》7355")
+        // files 有 3 行 file: 开头 → fileCount=3；空 files 兜底 1（否则被判失效）
+        assertThat(result.map { it.fileCount }).containsExactly(3, 1)
+        assertThat(result.map { it.fileDate }).containsExactly("2026-08-04", "2026-05-01")
+    }
+
+    @Test
+    fun searchResources_盘小子_解析RSC并按中文名映射类型() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.panxiaoziEnabled } returns MutableStateFlow(true)
+
+        // raw string 里 $ 会触发模板插值，RSC 引用 $@n 要用 ${'$'} 写字面量
+        val fakeHtml = """
+            self.__next_f.push([1,"3f:{\"items\":[\"${'$'}@1\",\"${'$'}@2\"]}]")
+            self.__next_f.push([1,"4:T1d,pinyin:\"311810\",title:\"繁花（2023） 4K\",desc:null,cover:null,diskType:\"夸克\",url:\"https://pan.quark.cn/s/aaa\",hotNum:0,isShowHome:1,updatedAt:new Date(\"2026-09-16T07:06:25.000Z\")"])
+            self.__next_f.push([1,"5:T2a,pinyin:\"311811\",title:\"繁花 合集\\n50集\",desc:null,cover:null,diskType:\"百度网盘\",url:\"https://pan.baidu.com/s/bbb\",hotNum:5,isShowHome:0,updatedAt:null"])
+        """.trimIndent()
+        val body = fakeHtml.toResponseBody(null)
+        coEvery { panxiaoziApiService.search(any(), any()) } returns body
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        assertThat(result).hasSize(2)
+        assertThat(result.map { it.diskType }).containsExactly(DiskType.QUARK, DiskType.BAIDU)
+        assertThat(result.map { it.source }).containsExactly("panxiaozi", "panxiaozi")
+        assertThat(result[0].name).isEqualTo("繁花（2023） 4K")
+        // updatedAt 为 null 时 fileDate 留空；有值时取前 10 位日期
+        assertThat(result.map { it.fileDate }).containsExactly("2026-09-16", "")
+        // RSC 里 \\n 语义为字面反斜杠+n（单反斜杠 \n 才是换行）
+        assertThat(result[1].name).isEqualTo("繁花 合集\\n50集")
+    }
+
+    @Test
+    fun searchResources_宝藏郎_按cloud_name映射且无日期留空() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.baoysEnabled } returns MutableStateFlow(true)
+
+        coEvery { baoysApiService.search(any()) } returns BaoysResponse(
+            results = listOf(
+                BaoysItem(
+                    cloudName = "夸克网盘", name = "12302-繁花之我被老板娘包围了",
+                    shareLink = "https://pan.quark.cn/s/80537e78789f", source = "other"
+                ),
+                BaoysItem(
+                    cloudName = "阿里云盘", name = "繁花 4K",
+                    shareLink = "https://www.alipan.com/s/xyz", source = "database"
+                )
+            )
+        )
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        assertThat(result).hasSize(2)
+        assertThat(result.map { it.diskType }).containsExactly(DiskType.QUARK, DiskType.ALI)
+        assertThat(result.map { it.source }).containsExactly("baoys", "baoys")
+        assertThat(result.map { it.fileDate }).containsExactly("", "")
         assertThat(result.map { it.fileCount }).containsExactly(1, 1)
     }
 

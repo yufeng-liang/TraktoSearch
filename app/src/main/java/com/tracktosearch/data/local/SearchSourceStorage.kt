@@ -47,6 +47,18 @@ class SearchSourceStorage @Inject constructor(
     private val _atawEnabled = MutableStateFlow(true)
     val atawEnabled: StateFlow<Boolean> = _atawEnabled.asStateFlow()
 
+    // 影盘（melost.cn）：POST JSON 接口，结果多、带文件清单，默认开
+    private val _melostEnabled = MutableStateFlow(true)
+    val melostEnabled: StateFlow<Boolean> = _melostEnabled.asStateFlow()
+
+    // 盘小子（pan.xiaozi.cc）：SSR RSC payload 解析接入，以夸克为主，默认开
+    private val _panxiaoziEnabled = MutableStateFlow(true)
+    val panxiaoziEnabled: StateFlow<Boolean> = _panxiaoziEnabled.asStateFlow()
+
+    // 宝藏郎（baozang.asia）：免鉴权但响应慢（10-25s），默认开
+    private val _baoysEnabled = MutableStateFlow(true)
+    val baoysEnabled: StateFlow<Boolean> = _baoysEnabled.asStateFlow()
+
     init {
         // 预加载:从 DataStore 读取首值填入 StateFlow,消除 stateIn 默认值跳变
         scope.launch {
@@ -57,6 +69,9 @@ class SearchSourceStorage @Inject constructor(
             _useaiEnabled.value = prefs[KEY_USEAI] ?: true
             _yunsoEnabled.value = prefs[KEY_YUNSO] ?: true
             _atawEnabled.value = prefs[KEY_ATAW] ?: true
+            _melostEnabled.value = prefs[KEY_MELOST] ?: true
+            _panxiaoziEnabled.value = prefs[KEY_PANXIAOZI] ?: true
+            _baoysEnabled.value = prefs[KEY_BAOYS] ?: true
         }
     }
 
@@ -102,6 +117,27 @@ class SearchSourceStorage @Inject constructor(
         _atawEnabled.value = enabled
     }
 
+    suspend fun setMelostEnabled(enabled: Boolean) {
+        context.searchSourceDataStore.edit { prefs ->
+            prefs[KEY_MELOST] = enabled
+        }
+        _melostEnabled.value = enabled
+    }
+
+    suspend fun setPanxiaoziEnabled(enabled: Boolean) {
+        context.searchSourceDataStore.edit { prefs ->
+            prefs[KEY_PANXIAOZI] = enabled
+        }
+        _panxiaoziEnabled.value = enabled
+    }
+
+    suspend fun setBaoysEnabled(enabled: Boolean) {
+        context.searchSourceDataStore.edit { prefs ->
+            prefs[KEY_BAOYS] = enabled
+        }
+        _baoysEnabled.value = enabled
+    }
+
     companion object {
         private val KEY_PANSOU = booleanPreferencesKey("pansou_enabled")
         private val KEY_PANHUB = booleanPreferencesKey("panhub_enabled")
@@ -109,5 +145,8 @@ class SearchSourceStorage @Inject constructor(
         private val KEY_USEAI = booleanPreferencesKey("useai_enabled")
         private val KEY_YUNSO = booleanPreferencesKey("yunso_enabled")
         private val KEY_ATAW = booleanPreferencesKey("ataw_enabled")
+        private val KEY_MELOST = booleanPreferencesKey("melost_enabled")
+        private val KEY_PANXIAOZI = booleanPreferencesKey("panxiaozi_enabled")
+        private val KEY_BAOYS = booleanPreferencesKey("baoys_enabled")
     }
 }

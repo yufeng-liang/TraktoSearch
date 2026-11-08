@@ -6,10 +6,15 @@ import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.ataw.AtawApiService
+import com.tracktosearch.data.remote.baoys.BaoysApiService
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.melost.MelostApiService
+import com.tracktosearch.data.remote.melost.dto.MelostSearchRequest
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
+import com.tracktosearch.data.remote.panxiaozi.PanxiaoziApiService
+import com.tracktosearch.data.remote.panxiaozi.PanxiaoziParser
 import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import com.tracktosearch.data.remote.zreso.ZresoWebViewVerifier
@@ -46,6 +51,9 @@ class ResourceRepository @Inject constructor(
     @Named("useai") private val useAiApiService: PanSouApiService,
     private val yunsoApiService: YunsoApiService,
     private val atawApiService: AtawApiService,
+    private val melostApiService: MelostApiService,
+    private val panxiaoziApiService: PanxiaoziApiService,
+    private val baoysApiService: BaoysApiService,
     private val searchSourceStorage: SearchSourceStorage,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService
@@ -62,7 +70,10 @@ class ResourceRepository @Inject constructor(
             searchSourceStorage.zresoEnabled,
             searchSourceStorage.useaiEnabled,
             searchSourceStorage.yunsoEnabled,
-            searchSourceStorage.atawEnabled
+            searchSourceStorage.atawEnabled,
+            searchSourceStorage.melostEnabled,
+            searchSourceStorage.panxiaoziEnabled,
+            searchSourceStorage.baoysEnabled
         )
     ) { flags ->
         buildSet {
@@ -72,6 +83,9 @@ class ResourceRepository @Inject constructor(
             if (flags[3]) add(SOURCE_USEAI)
             if (flags[4]) add(SOURCE_YUNSO)
             if (flags[5]) add(SOURCE_ATAW)
+            if (flags[6]) add(SOURCE_MELOST)
+            if (flags[7]) add(SOURCE_PANXIAOZI)
+            if (flags[8]) add(SOURCE_BAOYS)
         }
     }
 
@@ -102,9 +116,13 @@ class ResourceRepository @Inject constructor(
         const val SOURCE_USEAI = "useai"
         const val SOURCE_YUNSO = "yunso"
         const val SOURCE_ATAW = "ataw"
+        const val SOURCE_MELOST = "melost"
+        const val SOURCE_PANXIAOZI = "panxiaozi"
+        const val SOURCE_BAOYS = "baoys"
         val ALL_SOURCES = setOf(
             SOURCE_PANSOU, SOURCE_PANHUB, SOURCE_ZRESO,
-            SOURCE_USEAI, SOURCE_YUNSO, SOURCE_ATAW
+            SOURCE_USEAI, SOURCE_YUNSO, SOURCE_ATAW,
+            SOURCE_MELOST, SOURCE_PANXIAOZI, SOURCE_BAOYS
         )
         val ALL_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
@@ -115,6 +133,16 @@ class ResourceRepository @Inject constructor(
         private const val USEAI_TIMEOUT_MS = 25_000L
         /** 云搜单页上限 ~30 条，并行翻页数 */
         private const val YUNSO_PAGES = 2
+        /** 影盘社单页 size 上限实测 50 以内按请求给，翻页数 */
+        private const val MELOST_PAGES = 2
+        private const val MELOST_TIMEOUT_MS = 15_000L
+        /** 盘小子每页固定 10 条，并行翻页数 */
+        private const val PANXIAOZI_PAGES = 2
+        private const val PANXIAOZI_TIMEOUT_MS = 15_000L
+        /** 宝藏郎实测 10-25 秒才返回，不传 limit 反而更快 */
+        private const val BAOYS_TIMEOUT_MS = 22_000L
+        /** 影盘社标题里的搜索词高亮标签 */
+        private val MELOST_EM_TAG_REGEX = Regex("</?em>")
         private val MULTI_SEASON_FULL = Regex("""全\s*季|合集|1[-~]\d+\s*季|第\s*\d+\s*[-~]\s*\d+\s*季""")
         private val MULTI_SEASON_SINGLE = Regex("""第\s*\d+\s*季""")
         /** 阿涛搜条目里混排的直链（link/description 字段都可能是大段文案） */
@@ -275,6 +303,21 @@ class ResourceRepository @Inject constructor(
                 runCatching { searchAtaw(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
+        if (SOURCE_MELOST in effectiveSources) {
+            sourceList.add(SOURCE_MELOST to async {
+                runCatching { searchMelost(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
+        if (SOURCE_PANXIAOZI in effectiveSources) {
+            sourceList.add(SOURCE_PANXIAOZI to async {
+                runCatching { searchPanxiaozi(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
+        if (SOURCE_BAOYS in effectiveSources) {
+            sourceList.add(SOURCE_BAOYS to async {
+                runCatching { searchBaoys(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
         // 自定义源
         val customSources = customSearchSourceStorage.sources.first().filter { it.enabled }
         for (source in customSources) {
@@ -388,6 +431,21 @@ class ResourceRepository @Inject constructor(
             if (SOURCE_ATAW in enabledSources) {
                 deferreds.add(async {
                     runCatching { searchAtaw(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_MELOST in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchMelost(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_PANXIAOZI in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchPanxiaozi(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_BAOYS in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchBaoys(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
                 })
             }
             // 自定义源
@@ -825,9 +883,122 @@ class ResourceRepository @Inject constructor(
         }
     }
 
+    /**
+     * 影盘社（melost.cn）：POST JSON 免鉴权，disk_name 带搜索词 <em> 高亮需清洗。
+     * files 字段多行文本，每行 `file:` 开头一条，可数文件数；shared_time 取前 10 位日期。
+     */
+    private suspend fun searchMelost(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        return try {
+            val responses = withTimeoutOrNull(MELOST_TIMEOUT_MS) {
+                coroutineScope {
+                    (1..MELOST_PAGES).map { page ->
+                        async {
+                            runCatching {
+                                melostApiService.search(MelostSearchRequest(q = keyword, page = page))
+                            }.getOrNull()
+                        }
+                    }.awaitAll()
+                }
+            } ?: return emptyList()
+            responses.filterNotNull()
+                .filter { it.code == 200 }
+                .flatMap { it.data?.list ?: emptyList() }
+                .filter { it.enabled && it.status == 0 && it.link.isNotBlank() }
+                .distinctBy { it.link }
+                .mapNotNull { item ->
+                    val url = item.link.trim()
+                    if (!url.startsWith("http")) return@mapNotNull null
+                    val diskType = mapAtawType(item.diskType, url)
+                    if (diskType !in enabledDiskTypes) return@mapNotNull null
+                    ResourceItem(
+                        name = MELOST_EM_TAG_REGEX.replace(item.diskName, "").ifBlank { keyword },
+                        diskType = diskType,
+                        fileSize = "",
+                        fileDate = item.sharedTime.take(10),
+                        fileCount = item.files.lines().count { it.startsWith("file:") }.coerceAtLeast(1),
+                        url = url,
+                        source = SOURCE_MELOST
+                    )
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 盘小子（pan.xiaozi.cc）：无公开 JSON API（全挂 admin-token），取列表页 SSR 的
+     * RSC payload 用 PanxiaoziParser 正则提取；diskType 是中文（"夸克"），按云搜映射。
+     */
+    private suspend fun searchPanxiaozi(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        return try {
+            val pages = withTimeoutOrNull(PANXIAOZI_TIMEOUT_MS) {
+                coroutineScope {
+                    (1..PANXIAOZI_PAGES).map { page ->
+                        async {
+                            runCatching {
+                                panxiaoziApiService.search(keyword = keyword, page = page).use { it.string() }
+                            }.getOrNull()
+                        }
+                    }.awaitAll()
+                }
+            } ?: return emptyList()
+            pages.filterNotNull()
+                .flatMap { PanxiaoziParser.parse(it) }
+                .mapNotNull { record ->
+                    val diskType = mapYunsoType(record.diskType, record.url)
+                    if (diskType !in enabledDiskTypes) return@mapNotNull null
+                    ResourceItem(
+                        name = record.title.ifBlank { keyword },
+                        diskType = diskType,
+                        fileSize = "",
+                        fileDate = record.updatedAt.take(10),
+                        fileCount = 1,
+                        url = record.url,
+                        source = SOURCE_PANXIAOZI
+                    )
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 宝藏郎（baoys.baozang.asia）：GET /api?keyword= 免鉴权；实测 10-25 秒返回，
+     * 不传 limit 反而更快；无日期字段；cloud_name 是中文（"夸克网盘"），按云搜映射。
+     */
+    private suspend fun searchBaoys(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        return try {
+            val response = withTimeoutOrNull(BAOYS_TIMEOUT_MS) {
+                baoysApiService.search(keyword = keyword)
+            } ?: return emptyList()
+            response.results.mapNotNull { item ->
+                val url = item.shareLink.trim()
+                if (!url.startsWith("http")) return@mapNotNull null
+                val diskType = mapYunsoType(item.cloudName, url)
+                if (diskType !in enabledDiskTypes) return@mapNotNull null
+                ResourceItem(
+                    name = item.name.ifBlank { keyword },
+                    diskType = diskType,
+                    fileSize = "",
+                    fileDate = "",
+                    fileCount = 1,
+                    url = url,
+                    source = SOURCE_BAOYS
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     /** 从任意文本里抠出 http(s) 链接（阿涛搜的 link/description 常混排文案） */
-    private fun extractUrls(text: String): List<String> {
-        if (text.isBlank()) return emptyList()
+    private fun extractUrls(text: String): List<String> {        if (text.isBlank()) return emptyList()
         return ATAW_URL_REGEX.findAll(text).map { it.value.trimEnd('.', ',', ';', '，', '。', '、') }.toList()
     }
 

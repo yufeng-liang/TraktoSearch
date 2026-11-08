@@ -108,6 +108,18 @@ internal fun sourceTagColors(source: String, isDark: Boolean): SourceTagColors {
             background = if (isDark) Color(0xFF4C3B5C) else Color(0xFFD9CBE4),
             content = if (isDark) Color(0xFFE5D8F2) else Color(0xFF463256)
         )
+        "melost" -> SourceTagColors(
+            background = if (isDark) Color(0xFF33565C) else Color(0xFFC5DEE2),
+            content = if (isDark) Color(0xFFD2ECEF) else Color(0xFF2E474C)
+        )
+        "panxiaozi" -> SourceTagColors(
+            background = if (isDark) Color(0xFF5C4A33) else Color(0xFFE8D8B8),
+            content = if (isDark) Color(0xFFEFE1C2) else Color(0xFF4F3F1E)
+        )
+        "baoys" -> SourceTagColors(
+            background = if (isDark) Color(0xFF5C3344) else Color(0xFFEBC9D6),
+            content = if (isDark) Color(0xFFF2D8E2) else Color(0xFF4E2635)
+        )
         else -> {
             val paletteIndex = Math.floorMod(source.hashCode(), lightCustomSourceTagColors.size)
             if (isDark) darkCustomSourceTagColors[paletteIndex] else lightCustomSourceTagColors[paletteIndex]
@@ -123,6 +135,9 @@ internal fun sourceTagLabel(source: String, customName: String?): String {
         "useai" -> "盘搜"
         "yunso" -> "云搜"
         "ataw" -> "阿涛搜"
+        "melost" -> "影盘"
+        "panxiaozi" -> "盘小子"
+        "baoys" -> "宝藏郎"
         else -> customName ?: source
     }
 }

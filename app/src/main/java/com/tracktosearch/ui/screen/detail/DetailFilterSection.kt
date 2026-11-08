@@ -84,6 +84,9 @@ internal fun FilterSection(
                         "useai" -> "盘搜"
                         "yunso" -> "云搜"
                         "ataw" -> "阿涛搜"
+                        "melost" -> "影盘"
+                        "panxiaozi" -> "盘小子"
+                        "baoys" -> "宝藏郎"
                         else -> customSourceNames[source] ?: source
                     }
                     FilterChip(

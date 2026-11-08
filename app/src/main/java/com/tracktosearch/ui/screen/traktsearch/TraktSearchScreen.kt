@@ -1235,6 +1235,9 @@ private fun DiskSearchContent(
                                             "useai" -> "盘搜"
                                             "yunso" -> "云搜"
                                             "ataw" -> "阿涛搜"
+                                            "melost" -> "影盘"
+                                            "panxiaozi" -> "盘小子"
+                                            "baoys" -> "宝藏郎"
                                             else -> diskState.customSourceNames[source] ?: source
                                         }
                                         FilterChip(

@@ -123,6 +123,9 @@ fun SearchSourcesScreen(
     val useaiEnabled by viewModel.useaiEnabled.collectAsStateWithLifecycle()
     val yunsoEnabled by viewModel.yunsoEnabled.collectAsStateWithLifecycle()
     val atawEnabled by viewModel.atawEnabled.collectAsStateWithLifecycle()
+    val melostEnabled by viewModel.melostEnabled.collectAsStateWithLifecycle()
+    val panxiaoziEnabled by viewModel.panxiaoziEnabled.collectAsStateWithLifecycle()
+    val baoysEnabled by viewModel.baoysEnabled.collectAsStateWithLifecycle()
     val customSources by viewModel.customSources.collectAsStateWithLifecycle()
     val testResults by viewModel.testResults.collectAsStateWithLifecycle()
     // 源测试结果、导入撞冲突时的 reject 都从这一行出
@@ -178,12 +181,18 @@ fun SearchSourcesScreen(
                             useaiEnabled = useaiEnabled,
                             yunsoEnabled = yunsoEnabled,
                             atawEnabled = atawEnabled,
+                            melostEnabled = melostEnabled,
+                            panxiaoziEnabled = panxiaoziEnabled,
+                            baoysEnabled = baoysEnabled,
                             onPansouChange = viewModel::setPansouEnabled,
                             onPanhubChange = viewModel::setPanhubEnabled,
                             onZresoChange = viewModel::setZresoEnabled,
                             onUseaiChange = viewModel::setUseaiEnabled,
                             onYunsoChange = viewModel::setYunsoEnabled,
                             onAtawChange = viewModel::setAtawEnabled,
+                            onMelostChange = viewModel::setMelostEnabled,
+                            onPanxiaoziChange = viewModel::setPanxiaoziEnabled,
+                            onBaoysChange = viewModel::setBaoysEnabled,
                             onOpenPanHubConfig = { showPanHubConfig = true },
                             onOpenZresoVerify = {
                                 context.startActivity(
@@ -393,7 +402,7 @@ private fun HeaderBar(
     }
 }
 
-/** 内置搜索源分组：PanSou / 盘搜 / 云搜 / 阿涛搜 / PanHub / ZReso */
+/** 内置搜索源分组：PanSou / 盘搜 / 云搜 / 阿涛搜 / 影盘 / 盘小子 / 宝藏郎 / PanHub / ZReso */
 @Composable
 private fun BuiltinSourcesSection(
     pansouEnabled: Boolean,
@@ -402,12 +411,18 @@ private fun BuiltinSourcesSection(
     useaiEnabled: Boolean,
     yunsoEnabled: Boolean,
     atawEnabled: Boolean,
+    melostEnabled: Boolean,
+    panxiaoziEnabled: Boolean,
+    baoysEnabled: Boolean,
     onPansouChange: (Boolean) -> Unit,
     onPanhubChange: (Boolean) -> Unit,
     onZresoChange: (Boolean) -> Unit,
     onUseaiChange: (Boolean) -> Unit,
     onYunsoChange: (Boolean) -> Unit,
     onAtawChange: (Boolean) -> Unit,
+    onMelostChange: (Boolean) -> Unit,
+    onPanxiaoziChange: (Boolean) -> Unit,
+    onBaoysChange: (Boolean) -> Unit,
     onOpenPanHubConfig: () -> Unit,
     onOpenZresoVerify: () -> Unit
 ) {
@@ -442,6 +457,24 @@ private fun BuiltinSourcesSection(
             subtitle = stringResource(R.string.search_sources_ataw_desc),
             checked = atawEnabled,
             onCheckedChange = onAtawChange
+        )
+        SourceCardRow(
+            title = stringResource(R.string.search_sources_melost),
+            subtitle = stringResource(R.string.search_sources_melost_desc),
+            checked = melostEnabled,
+            onCheckedChange = onMelostChange
+        )
+        SourceCardRow(
+            title = stringResource(R.string.search_sources_panxiaozi),
+            subtitle = stringResource(R.string.search_sources_panxiaozi_desc),
+            checked = panxiaoziEnabled,
+            onCheckedChange = onPanxiaoziChange
+        )
+        SourceCardRow(
+            title = stringResource(R.string.search_sources_baoys),
+            subtitle = stringResource(R.string.search_sources_baoys_desc),
+            checked = baoysEnabled,
+            onCheckedChange = onBaoysChange
         )
         SourceCardRow(
             title = stringResource(R.string.search_sources_panhub),

@@ -22,6 +22,9 @@ import com.tracktosearch.data.remote.weather.XiaomiWeatherApi
 import com.tracktosearch.data.remote.ataw.AtawApiService
 import com.tracktosearch.data.remote.yunso.YunsoApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import com.tracktosearch.data.remote.baoys.BaoysApiService
+import com.tracktosearch.data.remote.melost.MelostApiService
+import com.tracktosearch.data.remote.panxiaozi.PanxiaoziApiService
 import com.tracktosearch.data.util.ConnectivityObserver
 import com.tracktosearch.data.util.DnsCache
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -521,6 +524,115 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(AtawApiService::class.java)
+    }
+
+    // ---------------------------------------------------------------------
+    // 再加三源：影盘（melost.cn，POST JSON）、盘小子（pan.xiaozi.cc，SSR 解析）、宝藏郎（baozang.asia）
+    // 同样不走 OkHttp 缓存（仓储层已有 5 分钟关键词缓存）
+    // ---------------------------------------------------------------------
+
+    @Provides
+    @Singleton
+    @Named("melost")
+    fun provideMelostOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .addHeader("Referer", "https://www.melost.cn/")
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMelostApiService(
+        @Named("melost") okHttpClient: OkHttpClient
+    ): MelostApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://www.melost.cn/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(MelostApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("panxiaozi")
+    fun providePanxiaoziOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            // SSR HTML 单页 ~50KB，读超时给足
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun providePanxiaoziApiService(
+        @Named("panxiaozi") okHttpClient: OkHttpClient
+    ): PanxiaoziApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://pan.xiaozi.cc/")
+            .client(okHttpClient)
+            .build()
+            .create(PanxiaoziApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("baoys")
+    fun provideBaoysOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            // 实测响应 10-25 秒，是内置源里最慢的，超时放宽
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .callTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBaoysApiService(
+        @Named("baoys") okHttpClient: OkHttpClient
+    ): BaoysApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://baoys.baozang.asia/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(BaoysApiService::class.java)
     }
 
     @Provides

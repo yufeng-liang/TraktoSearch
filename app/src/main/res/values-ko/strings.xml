@@ -1235,6 +1235,12 @@
     <string name="search_sources_yunso_desc">yunso.net 드라이브 통합 검색, 키 없이 직접 연결</string>
     <string name="search_sources_ataw">아타오서치</string>
     <string name="search_sources_ataw_desc">so.ataw.top 사이트 내 검색, 여러 드라이브 지원</string>
+    <string name="search_sources_melost">멜로스트</string>
+    <string name="search_sources_melost_desc">melost.cn 영화 드라이브 라이브러리, 파일 목록 상세</string>
+    <string name="search_sources_panxiaozi">판샤오즈</string>
+    <string name="search_sources_panxiaozi_desc">pan.xiaozi.cc 엄선 공유, Quark 중심</string>
+    <string name="search_sources_baoys">바오장랑</string>
+    <string name="search_sources_baoys_desc">baoys.baozang.asia 통합 검색, 느리지만 인증 불필요</string>
 <string name="search_sources_manage_entry_subtitle">내장 · 사용자 소스</string>
     <!-- 템플릿 라이브러리 -->
     <string name="template_library_title">템플릿에서 추가</string>
@@ -1479,7 +1485,7 @@
     <string name="help_dc_douban_desc">Douban에 로그인하여 관심/시청 마크를 Watchlist로 가져오고, Trakt 연결 시 동기화</string>
     <string name="help_dc_cooldown">쿨다운: 더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 전체 크롤링 후 7일 쿨다운을 설정해 요청 빈도를 낮춥니다. 쿨다운 중 증분 동기화는 클라우드 데이터를 재사용하며 재크롤링하지 않습니다. 본인 책임하에 강제 동기화 가능.</string>
     <string name="help_custom_source">사용자 정의 검색 소스</string>
-    <string name="help_custom_source_b1">설정 → 검색 소스에서 PanSou/판서치/윤소/아타오서치/Panhub/Zreso, 사용자 정의 소스, 템플릿을 관리합니다. Panhub는 별도 설정할 수 있습니다.</string>
+    <string name="help_custom_source_b1">설정 → 검색 소스에서 PanSou/판서치/윤소/아타오서치/멜로스트/판샤오즈/바오장랑/Panhub/Zreso, 사용자 정의 소스, 템플릿을 관리합니다. Panhub는 별도 설정할 수 있습니다.</string>
     <string name="help_custom_source_b2">요청 형식은 {baseUrl}/{apiPath}?{keywordParam}=검색어&amp;기타 매개변수입니다.</string>
     <string name="help_custom_source_b3">템플릿을 바로 추가하거나 기본 정보 → 자동 파싱 → 확인의 3단계 마법사를 사용합니다.</string>
     <string name="help_custom_source_b4">자동 파싱은 JSONPath의 목록·이름·링크·디스크 유형 필드를 찾고 수동 수정도 허용합니다. 실패 시 주소 연결 불가, 비 JSON 응답, 필드 인식 실패를 구분합니다.</string>
@@ -2241,7 +2247,7 @@
     <string name="privacy_section_legal">이용과 권리</string>
     <string name="privacy_legal_intro">TraktoSearch는 독립 개발된 Android 도구이며 영화 플랫폼, 클라우드 드라이브, 콘텐츠 배포 서비스가 아닙니다. 제3자 계정과 링크는 해당 약관 및 거주 지역의 법률에 따라 사용하세요. 이 페이지는 프로젝트의 경계를 설명하며 법률 자문이 아닙니다.</string>
     <string name="privacy_legal_b1_title">독립 프로젝트, 제3자 비제휴</string>
-    <string name="privacy_legal_b1">TraktoSearch는 Douban, Trakt, TMDB, OMDb, PanSou, 판서치, 윤소, 아타오서치, PanHub, ZReso, 각종 클라우드 드라이브, GitHub, Chiikawa 권리자와 제휴·운영·공식 승인을 맺지 않았습니다. 서비스명과 상표는 호환 대상을 설명하기 위한 것이며 제3자 데이터의 완전성, 정확성 또는 지속적 이용 가능성을 보장하지 않습니다.</string>
+    <string name="privacy_legal_b1">TraktoSearch는 Douban, Trakt, TMDB, OMDb, PanSou, 판서치, 윤소, 아타오서치, 멜로스트, 판샤오즈, 바오장랑, PanHub, ZReso, 각종 클라우드 드라이브, GitHub, Chiikawa 권리자와 제휴·운영·공식 승인을 맺지 않았습니다. 서비스명과 상표는 호환 대상을 설명하기 위한 것이며 제3자 데이터의 완전성, 정확성 또는 지속적 이용 가능성을 보장하지 않습니다.</string>
     <string name="privacy_legal_b2_title">Douban 로그인, 수집, 쓰기</string>
     <string name="privacy_legal_b2">사용자가 시작한 경우에만 실행되며 Douban 권한, 접근 규칙, 인증, API 변경의 영향을 받습니다. 본인 계정만 사용하세요. 접근 제어 우회, 대량 수집, 서비스 과부하, 타인 데이터 수집에 사용해서는 안 됩니다.</string>
     <string name="privacy_legal_b3_title">리소스 링크와 제3자 콘텐츠</string>

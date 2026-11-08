@@ -1235,6 +1235,12 @@
     <string name="search_sources_yunso_desc">yunso.net のディスク検索、キー不要で直結</string>
     <string name="search_sources_ataw">阿涛捜</string>
     <string name="search_sources_ataw_desc">so.ataw.top のサイト内検索、複数のディスクに対応</string>
+    <string name="search_sources_melost">影盤</string>
+    <string name="search_sources_melost_desc">melost.cn 映画ドライブライブラリ、ファイル一覧が詳細</string>
+    <string name="search_sources_panxiaozi">盤小子</string>
+    <string name="search_sources_panxiaozi_desc">pan.xiaozi.cc 厳選シェア、Quark 中心</string>
+    <string name="search_sources_baoys">宝蔵郎</string>
+    <string name="search_sources_baoys_desc">baoys.baozang.asia 集約検索、遅いが認証不要</string>
 <string name="search_sources_manage_entry_subtitle">内蔵・カスタムソース</string>
     <!-- テンプレートライブラリ -->
     <string name="template_library_title">テンプレートから追加</string>
@@ -1479,7 +1485,7 @@
     <string name="help_dc_douban_desc">Doubanにログインしてウィッシュ/視聴済みマークをWatchlistに取り込み、Trakt接続時は同期</string>
     <string name="help_dc_cooldown">クールダウン：豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。完全クロール後に7日間のクールダウンを設けリクエスト頻度を下げます。クールダウン中の増分同期はクラウドデータを再利用し再クロールしません。自己責任で強制同期可能。</string>
     <string name="help_custom_source">カスタム検索ソース</string>
-    <string name="help_custom_source_b1">設定 → 検索ソースで PanSou/盤捜/雲捜/阿涛捜/Panhub/Zreso、カスタムソース、テンプレートを管理します。Panhub は個別設定できます。</string>
+    <string name="help_custom_source_b1">設定 → 検索ソースで PanSou/盤捜/雲捜/阿涛捜/影盤/盤小子/宝蔵郎/Panhub/Zreso、カスタムソース、テンプレートを管理します。Panhub は個別設定できます。</string>
     <string name="help_custom_source_b2">リクエスト形式は {baseUrl}/{apiPath}?{keywordParam}=検索語&amp;その他のパラメータ です。</string>
     <string name="help_custom_source_b3">テンプレートを直接追加するか、基本情報 → 自動解析 → 確認の 3 ステップを使います。</string>
     <string name="help_custom_source_b4">自動解析は JSONPath のリスト・名前・リンク・ディスク種別を認識し、手動修正もできます。失敗時は接続不可、非 JSON 応答、フィールド未認識を区別します。</string>
@@ -2241,7 +2247,7 @@
     <string name="privacy_section_legal">利用と権利</string>
     <string name="privacy_legal_intro">TraktoSearch は独立開発の Android ツールであり、映画プラットフォーム、クラウドドライブ、コンテンツ配信サービスではありません。第三者アカウントやリンクは各規約と地域の法律に従って利用してください。ここはプロジェクトの境界説明であり、法律相談ではありません。</string>
     <string name="privacy_legal_b1_title">独立プロジェクト、第三者と非提携</string>
-    <string name="privacy_legal_b1">Douban、Trakt、TMDB、OMDb、PanSou、盤捜、雲捜、阿涛捜、PanHub、ZReso、各種クラウドドライブ、GitHub、Chiikawa の権利者とは提携・運営・公式承認の関係にありません。サービス名と商標は互換対象の説明にのみ使用し、第三者データの完全性、正確性、継続利用を保証しません。</string>
+    <string name="privacy_legal_b1">Douban、Trakt、TMDB、OMDb、PanSou、盤捜、雲捜、阿涛捜、影盤、盤小子、宝蔵郎、PanHub、ZReso、各種クラウドドライブ、GitHub、Chiikawa の権利者とは提携・運営・公式承認の関係にありません。サービス名と商標は互換対象の説明にのみ使用し、第三者データの完全性、正確性、継続利用を保証しません。</string>
     <string name="privacy_legal_b2_title">豆瓣ログイン・取得・書き戻し</string>
     <string name="privacy_legal_b2">ユーザーが開始した場合だけ実行され、Douban の権限、アクセス規則、認証、API 変更の影響を受けます。自分のアカウントだけを使い、アクセス制御の回避、大量取得、サービスへの過負荷、他人のデータ収集は禁止します。</string>
     <string name="privacy_legal_b3_title">リソースリンクと第三者コンテンツ</string>
