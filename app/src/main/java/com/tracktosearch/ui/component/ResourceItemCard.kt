@@ -2,6 +2,7 @@ package com.tracktosearch.ui.component
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -424,6 +425,7 @@ fun ResourceItemCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     index: Int = 0,
+    animateEntry: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val style = diskStyleOf(item.diskType)
@@ -435,6 +437,22 @@ fun ResourceItemCard(
         targetValue = if (isPressed) 0.97f else 1f,
         label = "resource_card_scale"
     )
+
+    // 多源结果陆续到达时，新卡片淡入 + 轻微上移；不改变列表整体布局，避免滚动锚定跳动
+    var entered by remember(item.url) { mutableStateOf(!animateEntry) }
+    val entryAlpha by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "resource_card_entry_alpha"
+    )
+    val entryOffset by animateDpAsState(
+        targetValue = if (entered) 0.dp else 8.dp,
+        animationSpec = tween(durationMillis = 180),
+        label = "resource_card_entry_offset"
+    )
+    LaunchedEffect(item.url, animateEntry) {
+        if (animateEntry && !entered) entered = true
+    }
 
     val linkChecker = rememberResourceLinkChecker()
     val initialStatus = remember(item.url, item.status) {
@@ -489,7 +507,8 @@ fun ResourceItemCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .alpha(cardAlpha)
+            .alpha(cardAlpha * entryAlpha)
+            .offset(y = entryOffset)
             .padding(horizontal = 12.dp, vertical = 3.dp)
             .scale(scale)
             .hapticCombinedClickable(

@@ -3,16 +3,15 @@
 package com.tracktosearch.ui.screen.traktsearch
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,6 +77,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -141,7 +141,10 @@ import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberCachedPosterAmbientColor
+import com.tracktosearch.ui.component.ShimmerState
 import com.tracktosearch.ui.component.rememberPosterPrefetch
+import com.tracktosearch.ui.component.rememberShimmer
+import com.tracktosearch.ui.component.shimmer
 import com.tracktosearch.ui.haptic.HapticOutcomeEffect
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticClickable
@@ -179,6 +182,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** 计算网盘tab筛选后的结果数（用于Tab标签显示）；失效 URL 已在线检测隐藏，不计入。 */
@@ -1157,39 +1161,54 @@ private fun DiskSearchContent(
         }
     }
 
-    when {
-        // 搜索中且无结果：显示全屏加载动画
-        diskState.isLoading && diskState.resources.isEmpty() -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState)
-                    .backdropSource(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    SearchLoadingAnimation()
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = if (diskState.totalSources > 0) {
-                            stringResource(R.string.search_loading_disk_progress, diskState.completedSources, diskState.totalSources)
-                        } else {
-                            stringResource(R.string.search_loading_disk)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+    // 骨架至少展示 300ms：结果来得太快时也不会闪一下真实卡片
+    var minSkeletonElapsed by remember(query) { mutableStateOf(true) }
+    LaunchedEffect(query, diskState.isLoading) {
+        if (diskState.isLoading) {
+            minSkeletonElapsed = false
+            delay(300)
+            minSkeletonElapsed = true
         }
-        // 出错且无结果
-        diskState.error != null && diskState.resources.isEmpty() -> {
+    }
+    val showSkeleton = (diskState.isLoading && diskState.resources.isEmpty()) ||
+        (diskState.hasSearched && !minSkeletonElapsed)
+    val phase = when {
+        showSkeleton -> DiskContentPhase.Loading
+        diskState.error != null && diskState.resources.isEmpty() -> DiskContentPhase.Error
+        !diskState.isLoading && diskState.resources.isEmpty() -> DiskContentPhase.Empty
+        else -> DiskContentPhase.Content
+    }
+
+    // 新到达的卡片淡入 + 轻微上移；列表顺序变化交给 Compose，不使用 key 锚定（会触发 #118 跳动）
+    var displayedUrls by remember(query) { mutableStateOf<Set<String>>(emptySet()) }
+    val currentUrls = remember(filteredResources) {
+        filteredResources.mapTo(LinkedHashSet()) { it.url }
+    }
+    val newUrls = remember(currentUrls, displayedUrls) { currentUrls - displayedUrls }
+    SideEffect { displayedUrls = currentUrls }
+
+    // 筛选切换时给列表一个很短的透明度回落再恢复，避免整块内容硬切
+    val listFade = remember { Animatable(1f) }
+    var filtersReady by remember { mutableStateOf(false) }
+    LaunchedEffect(diskState.enabledSources, diskState.enabledDiskTypes) {
+        if (!filtersReady) {
+            filtersReady = true
+        } else {
+            listFade.snapTo(0.62f)
+            listFade.animateTo(1f, tween(180))
+        }
+    }
+
+    Crossfade(
+        targetState = phase,
+        animationSpec = tween(200),
+        label = "disk_content_phase"
+    ) { targetPhase ->
+    when (targetPhase) {
+        DiskContentPhase.Loading -> {
+            ResourceListSkeleton(statusBarHeight = statusBarHeight, hazeState = hazeState)
+        }
+        DiskContentPhase.Error -> {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1197,15 +1216,13 @@ private fun DiskSearchContent(
                     .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
-                // 以前这里只有一行错误文字，网盘搜索失败后用户没有任何出路
                 AppErrorState(
-                    message = diskState.error,
+                    message = diskState.error.orEmpty(),
                     onRetry = onRetry
                 )
             }
         }
-        // 搜索完成但一个结果都没有（真正的空结果；筛选导致的空态在列表内展示，保留筛选条可操作）
-        !diskState.isLoading && diskState.resources.isEmpty() && diskState.hasSearched -> {
+        DiskContentPhase.Empty -> {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1213,29 +1230,25 @@ private fun DiskSearchContent(
                     .backdropSource(),
                 contentAlignment = Alignment.Center
             ) {
-                    EmptyStateCard(
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        isDark = isAppDarkTheme(),
-                        icon = Icons.Rounded.Search,
-                        title = stringResource(R.string.search_no_results)
-                    )
+                EmptyStateCard(
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    isDark = isAppDarkTheme(),
+                    icon = Icons.Rounded.Search,
+                    title = stringResource(R.string.search_no_results)
+                )
             }
         }
-        // 有结果（搜索中或搜索完成）：先到先显示
-        else -> {
+        DiskContentPhase.Content -> {
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
-                    // 顶栏 + Tab + 筛选胶囊共 124+44dp，列表从它们下方开始
                     contentPadding = PaddingValues(start = 8.dp, top = 124.dp + 44.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .hazeSource(state = hazeState)
-                        // GLASS 模式将搜索结果注册为 Backdrop 采样源，回顶按钮等玻璃控件可采到内容
                         .backdropContentSource()
+                        .graphicsLayer { alpha = listFade.value }
                 ) {
-                    // 搜索进度已移到筛选胶囊右侧（FilterDropdownBar），这里不再插入列表项，避免进度消失时内容跳动
-                    // 筛选后为空：保留吸顶筛选条，用户可以直接取消筛选，而不是掉进没有出口的空白页
                     if (!diskState.isLoading && filteredResources.isEmpty()) {
                         item(key = "filtered_empty") {
                             if (sourceDiskFiltered.isEmpty()) {
@@ -1263,14 +1276,13 @@ private fun DiskSearchContent(
                             }
                         }
                     }
-                    // 不用 url 作 key：多源搜索按相关度重排会把新结果插到顶部，key 锚定会让
-                    // LazyColumn 停在上一次的首个可见卡片，屏幕上出现从第 118 条开始的现象。
                     itemsIndexed(filteredResources, contentType = { _, _ -> "resource" }) { index, item ->
                         ResourceItemCard(
                             item = item,
                             sourceName = diskState.customSourceNames[item.source],
                             isViewed = false,
                             index = index,
+                            animateEntry = item.url in newUrls && displayedUrls.isNotEmpty(),
                             onClick = { onItemClick(item) },
                             onLongClick = { onItemLongClick(item) }
                         )
@@ -1285,6 +1297,95 @@ private fun DiskSearchContent(
                     hazeState = hazeState,
                     scene = scene
                 )
+            }
+        }
+    }
+    }
+}
+
+private enum class DiskContentPhase { Loading, Error, Empty, Content }
+
+@Composable
+private fun ResourceListSkeleton(
+    statusBarHeight: Dp,
+    hazeState: HazeState
+) {
+    val shimmer = rememberShimmer()
+    val cardShape = RoundedCornerShape(18.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .hazeSource(state = hazeState)
+            .backdropSource()
+            .padding(
+                start = 8.dp,
+                end = 8.dp,
+                top = 124.dp + 44.dp + statusBarHeight
+            )
+    ) {
+        repeat(4) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp),
+                shape = cardShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                tonalElevation = 1.dp
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .width(18.dp)
+                                .height(10.dp)
+                                .shimmer(shimmer, RoundedCornerShape(3.dp))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .height(14.dp)
+                                .shimmer(shimmer, RoundedCornerShape(4.dp))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(44.dp)
+                                .height(10.dp)
+                                .shimmer(shimmer, RoundedCornerShape(3.dp))
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .shimmer(shimmer, RoundedCornerShape(8.dp))
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(10.dp)
+                                .shimmer(shimmer, RoundedCornerShape(3.dp))
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(44.dp)
+                                .height(10.dp)
+                                .shimmer(shimmer, RoundedCornerShape(3.dp))
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .width(64.dp)
+                                .height(10.dp)
+                                .shimmer(shimmer, RoundedCornerShape(3.dp))
+                        )
+                    }
+                }
             }
         }
     }
@@ -1441,40 +1542,4 @@ private fun PersonCardSkeleton() {
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         ) {}
     }
-}
-
-@Composable
-private fun SearchLoadingAnimation() {
-    val infiniteTransition = rememberInfiniteTransition(label = "search_loading")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-
-    Icon(
-        imageVector = Icons.Rounded.Search,
-        contentDescription = null,
-        modifier = Modifier
-            .size(48.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            },
-        tint = MaterialTheme.colorScheme.primary
-    )
 }
