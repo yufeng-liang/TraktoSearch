@@ -3,6 +3,7 @@ package com.tracktosearch.ui.component
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -34,8 +35,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.ResourceLinkChecker
@@ -206,6 +209,16 @@ private fun rememberResourceLinkChecker(): ResourceLinkChecker {
     }
 }
 
+/**
+ * 列表层用：订阅已确认失效的链接集合，过滤掉对应卡片。
+ * 卡片自己完成「淡出 → 标记失效」后，这里的状态变化会把卡片从列表移除。
+ */
+@Composable
+fun rememberInvalidResourceUrls(): Set<String> {
+    val checker = rememberResourceLinkChecker()
+    return checker.invalidUrls.collectAsStateWithLifecycle().value
+}
+
 /** zreso/ataw 等源在搜索结果里自带的失效标记，直接转成统一的展示状态。 */
 private fun statusFromItem(item: ResourceItem): ResourceLinkChecker.LinkStatus? {
     return when (item.status.lowercase()) {
@@ -302,12 +315,13 @@ private fun LinkStatusBadge(state: ResourceLinkChecker.State) {
 
 /** 网盘标识：优先用官方 logo，缺省时退回品牌色 + 首字色章。 */
 @Composable
-private fun DiskSeal(style: DiskStyle) {
+private fun DiskSeal(style: DiskStyle, size: Dp = 34.dp) {
     val diskName = stringResource(style.shortNameResId)
+    val compact = size <= 20.dp
     Box(
         modifier = Modifier
-            .size(34.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .size(size)
+            .clip(RoundedCornerShape(if (compact) 5.dp else 10.dp))
             .background(
                 if (style.logoResId != null) Color.White else style.backgroundColor
             )
@@ -320,7 +334,7 @@ private fun DiskSeal(style: DiskStyle) {
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(4.dp),
+                    .padding(if (compact) 2.dp else 4.dp),
                 contentScale = ContentScale.Fit
             )
         } else {
@@ -328,7 +342,7 @@ private fun DiskSeal(style: DiskStyle) {
                 text = stringResource(style.sealTextResId),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
+                    fontSize = if (compact) 9.sp else 15.sp,
                     // 品牌色深浅不一，白字对比度不足时自动换成可读的深色
                     color = readableOn(Color.White, style.backgroundColor)
                 ),
@@ -413,9 +427,8 @@ fun ResourceItemCard(
     modifier: Modifier = Modifier
 ) {
     val style = diskStyleOf(item.diskType)
-    val contentAlpha = if (isViewed) 0.5f else 1f
     val isDark = MaterialTheme.colorScheme.background.luminance() <= 0.5f
-    val sourceColors = sourceTagColors(item.source, isDark = isDark)
+    val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -424,42 +437,67 @@ fun ResourceItemCard(
     )
 
     val linkChecker = rememberResourceLinkChecker()
-    val initialStatus = remember(item.url, item.status) { statusFromItem(item) }
-    // 只有 PanSou 系（pansou/useai）能在线检测；其余源没有公开检测接口，保持无徽章。
-    // 复用已检测结果：列表滚动回来时直接显示缓存徽章，不再闪一次空态。
-    var linkStatus by remember(item.url) {
-        mutableStateOf(initialStatus ?: linkChecker.cachedStatus(item.url))
+    val initialStatus = remember(item.url, item.status) {
+        statusFromItem(item) ?: linkChecker.cachedStatus(item.url)
     }
+    // 只有 PanSou 系（pansou/useai）能在线检测；其余源没有公开检测接口。
+    var linkStatus by remember(item.url) { mutableStateOf(initialStatus) }
+    // 检出失效后先淡出再通知列表移除，避免卡片瞬间消失、列表硬跳。
+    var dismissing by remember(item.url) { mutableStateOf(false) }
+    val targetAlpha = when {
+        dismissing -> 0f
+        isViewed -> 0.55f
+        else -> 1f
+    }
+    val cardAlpha by animateFloatAsState(
+        targetValue = targetAlpha,
+        animationSpec = tween(durationMillis = 200),
+        label = "resource_card_alpha"
+    )
+
     LaunchedEffect(item.url, item.source, item.status) {
-        if (linkStatus == null && linkChecker.supports(item)) {
+        val current = linkStatus
+        if (current?.state == ResourceLinkChecker.State.INVALID) {
+            dismissing = true
+            delay(220)
+            linkChecker.markInvalid(item.url)
+            return@LaunchedEffect
+        }
+        if (current == null && linkChecker.supports(item)) {
             // 稍等一拍再检测：快速划过的卡片不产生无谓请求
             delay(450)
-            linkStatus = ResourceLinkChecker.LinkStatus(ResourceLinkChecker.State.CHECKING)
             val result = linkChecker.check(item)
-            // 检测失败（网络/站点不支持）不展示徽章，避免给所有卡片挂个「未知」
-            linkStatus = result.takeIf {
-                it.state != ResourceLinkChecker.State.UNKNOWN &&
-                    it.state != ResourceLinkChecker.State.UNSUPPORTED
+            if (result.state == ResourceLinkChecker.State.INVALID) {
+                dismissing = true
+                delay(220)
+                linkChecker.markInvalid(item.url)
+            } else {
+                // 检测失败（网络/站点不支持）不展示徽章，避免给所有卡片挂个「未知」
+                linkStatus = result.takeIf {
+                    it.state != ResourceLinkChecker.State.UNKNOWN &&
+                        it.state != ResourceLinkChecker.State.UNSUPPORTED
+                }
             }
         }
     }
 
-    // 状态徽章静默策略：只有失效（红）与需提取码（琥珀）值得打断用户，其余状态不占位。
+    // 失效卡片直接过滤掉，只有「需提取码」值得在卡片上打断用户。
     val statusBadgeState = linkStatus?.state?.takeIf {
-        it == ResourceLinkChecker.State.INVALID || it == ResourceLinkChecker.State.LOCKED
+        it == ResourceLinkChecker.State.LOCKED
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .alpha(cardAlpha)
             .padding(horizontal = 12.dp, vertical = 3.dp)
             .scale(scale)
             .hapticCombinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 semantic = HapticSemantic.LIGHT_TAP,
-                onClick = onClick,
-                onLongClick = onLongClick
+                onClick = { if (!dismissing) onClick() },
+                onLongClick = { if (!dismissing) onLongClick?.invoke() }
             ),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
@@ -477,73 +515,96 @@ fun ResourceItemCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 10.dp)
-                .alpha(contentAlpha),
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            DiskSeal(style = style)
+            // 第一行：#序号 + 资源名 + 文件数/需提取码
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = "#${index + 1}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    ),
+                    modifier = Modifier
+                        .widthIn(min = 22.dp)
+                        .padding(top = 3.dp, end = 4.dp),
+                    maxLines = 1,
+                    softWrap = false
+                )
 
-            Spacer(modifier = Modifier.width(10.dp))
+                AdaptiveTwoLineTitle(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxFontSize = 15.sp,
+                    minFontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
 
-            Column(modifier = Modifier.weight(1f)) {
-                // 第一行：资源名 + 右上角日期，充分利用横向空间
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    AdaptiveTwoLineTitle(
-                        text = item.name,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        maxFontSize = 15.sp,
-                        minFontSize = 13.sp,
-                        modifier = Modifier.weight(1f)
+                if (item.fileCount > 1) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    MetaText(
+                        text = stringResource(R.string.resource_file_count, item.fileCount),
+                        modifier = Modifier.padding(top = 3.dp)
                     )
-
-                    if (item.fileDate.isNotEmpty()) {
-                        val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        MetaText(
-                            text = formattedDate,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
                 }
 
-                Spacer(modifier = Modifier.height(5.dp))
+                if (statusBadgeState != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    LinkStatusBadge(state = statusBadgeState)
+                }
+            }
 
-                // 第二行：来源/文件数/已查看/状态徽章在左，序号收尾在右
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    SourceBadge(
-                        colors = sourceColors,
-                        text = sourceTagLabel(item.source, sourceName)
-                    )
+            Spacer(modifier = Modifier.height(6.dp))
 
-                    if (item.fileCount > 1) {
-                        MetaText(text = stringResource(R.string.resource_file_count, item.fileCount))
-                    }
-
-                    if (isViewed) {
-                        ViewedBadge()
-                    }
-
-                    if (statusBadgeState != null) {
-                        LinkStatusBadge(state = statusBadgeState)
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    MetaText(text = "#${index + 1}")
+            // 第二行：网盘 logo + 网盘名称 · 来源名，日期贴右下角
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DiskSeal(style = style, size = 16.dp)
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = stringResource(style.shortNameResId),
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = " · ",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                    ),
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = sourceTagLabel(item.source, sourceName),
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                    ),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (formattedDate.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    MetaText(text = formattedDate)
                 }
             }
         }

@@ -130,6 +130,7 @@ import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.rememberInvalidResourceUrls
 import com.tracktosearch.ui.component.ResourceCopyrightAction
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.appVisualEffect
@@ -180,9 +181,10 @@ import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/** 计算网盘tab筛选后的结果数（用于Tab标签显示） */
-private fun getFilteredDiskCount(diskState: DiskSearchState): Int {
+/** 计算网盘tab筛选后的结果数（用于Tab标签显示）；失效 URL 已在线检测隐藏，不计入。 */
+private fun getFilteredDiskCount(diskState: DiskSearchState, invalidUrls: Set<String> = emptySet()): Int {
     return diskState.resources
+        .filter { it.url !in invalidUrls }
         .filter { it.source in diskState.enabledSources }
         .filter { it.diskType in diskState.enabledDiskTypes }
         .size
@@ -372,8 +374,11 @@ fun TraktSearchScreen(
             }
         }
     }
-    // 磁盘计数是 O(n) 双重 filter，仅结果集变化时重算，不随每次重组重跑
-    val diskFilteredCount = remember(uiState.diskState) { getFilteredDiskCount(uiState.diskState) }
+    // 磁盘计数是 O(n) 三重 filter，仅结果集或失效集合变化时重算，不随每次重组重跑
+    val invalidResourceUrls = rememberInvalidResourceUrls()
+    val diskFilteredCount = remember(uiState.diskState, invalidResourceUrls) {
+        getFilteredDiskCount(uiState.diskState, invalidResourceUrls)
+    }
     val searchContentCount = when (uiState.selectedTab) {
         MediaType.MOVIE -> uiState.movieState.results.size
         MediaType.SHOW -> uiState.showState.results.size
@@ -486,11 +491,17 @@ fun TraktSearchScreen(
         // 当前 tab 的状态
         val currentTabState = uiState.currentTabState
         val isDiskTab = uiState.selectedTab == MediaType.DISK
-        val diskSourceCounts = remember(uiState.diskState.resources) {
-            uiState.diskState.resources.groupingBy { it.source }.eachCount()
+        val diskSourceCounts = remember(uiState.diskState.resources, invalidResourceUrls) {
+            uiState.diskState.resources
+                .filter { it.url !in invalidResourceUrls }
+                .groupingBy { it.source }
+                .eachCount()
         }
-        val diskTypeCounts = remember(uiState.diskState.resources) {
-            uiState.diskState.resources.groupingBy { it.diskType }.eachCount()
+        val diskTypeCounts = remember(uiState.diskState.resources, invalidResourceUrls) {
+            uiState.diskState.resources
+                .filter { it.url !in invalidResourceUrls }
+                .groupingBy { it.diskType }
+                .eachCount()
         }
         val showDiskFilterBar = isDiskTab && uiState.diskState.hasSearched
 
@@ -964,7 +975,9 @@ fun TraktSearchScreen(
                         text = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(stringResource(R.string.trakt_search_tab_disk), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-                                val filteredCount = remember(uiState.diskState) { getFilteredDiskCount(uiState.diskState) }
+                                val filteredCount = remember(uiState.diskState, invalidResourceUrls) {
+                                    getFilteredDiskCount(uiState.diskState, invalidResourceUrls)
+                                }
                                 if (filteredCount > 0 && uiState.diskState.hasSearched) {
                                     Text("($filteredCount)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -1121,15 +1134,23 @@ private fun DiskSearchContent(
 ) {
     val context = LocalContext.current
 
-    val filteredResources = remember(diskState.resources, diskState.enabledSources, diskState.enabledDiskTypes) {
+    val invalidUrls = rememberInvalidResourceUrls()
+    val sourceDiskFiltered = remember(diskState.resources, diskState.enabledSources, diskState.enabledDiskTypes) {
         diskState.resources
             .filter { it.source in diskState.enabledSources }
             .filter { it.diskType in diskState.enabledDiskTypes }
     }
+    val filteredResources = remember(sourceDiskFiltered, invalidUrls) {
+        sourceDiskFiltered.filter { it.url !in invalidUrls }
+    }
     // 还没搜索过
     if (!diskState.hasSearched) return
 
-    // 新一次搜索开始时回到列表顶部：多源结果按到达顺序追加，若沿用上次滚动位置会停在中间
+    // 搜索完成/新查询时回到列表顶部：结果按到达顺序追加；进程被系统回收后
+    // rememberSaveable 也会恢复旧滚动位置，此时需要主动拉回，否则首卡可能是 #50 这种中间项。
+    LaunchedEffect(query, diskState.hasSearched) {
+        if (diskState.hasSearched) listState.scrollToItem(0)
+    }
     LaunchedEffect(query, diskState.isLoading) {
         if (diskState.isLoading) {
             listState.scrollToItem(0)
@@ -1217,17 +1238,28 @@ private fun DiskSearchContent(
                     // 筛选后为空：保留吸顶筛选条，用户可以直接取消筛选，而不是掉进没有出口的空白页
                     if (!diskState.isLoading && filteredResources.isEmpty()) {
                         item(key = "filtered_empty") {
-                            EmptyStateCard(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
-                                isDark = isAppDarkTheme(),
-                                icon = Icons.Rounded.Search,
-                                title = stringResource(R.string.search_filter_no_results_title),
-                                description = stringResource(R.string.search_filter_no_results_desc),
-                                hazeState = hazeState
-                            ) {
-                                TextButton(onClick = onResetFilters) {
-                                    Text(stringResource(R.string.search_clear_filters))
+                            if (sourceDiskFiltered.isEmpty()) {
+                                EmptyStateCard(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                                    isDark = isAppDarkTheme(),
+                                    icon = Icons.Rounded.Search,
+                                    title = stringResource(R.string.search_filter_no_results_title),
+                                    description = stringResource(R.string.search_filter_no_results_desc),
+                                    hazeState = hazeState
+                                ) {
+                                    TextButton(onClick = onResetFilters) {
+                                        Text(stringResource(R.string.search_clear_filters))
+                                    }
                                 }
+                            } else {
+                                EmptyStateCard(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                                    isDark = isAppDarkTheme(),
+                                    icon = Icons.Rounded.Search,
+                                    title = stringResource(R.string.search_all_invalid_title),
+                                    description = stringResource(R.string.search_all_invalid_desc),
+                                    hazeState = hazeState
+                                )
                             }
                         }
                     }

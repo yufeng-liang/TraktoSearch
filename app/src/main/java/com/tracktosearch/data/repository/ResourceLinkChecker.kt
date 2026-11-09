@@ -5,6 +5,10 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.pansou.dto.PanSouCheckItem
 import com.tracktosearch.data.remote.pansou.dto.PanSouCheckRequest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
@@ -51,8 +55,19 @@ class ResourceLinkChecker @Inject constructor(
 
     private val cache = ConcurrentHashMap<String, CacheEntry>()
 
+    // 已确认失效的 URL：列表层订阅后把卡片从结果里移除，避免用户点到死链。
+    private val _invalidUrls = MutableStateFlow<Set<String>>(emptySet())
+    val invalidUrls: StateFlow<Set<String>> = _invalidUrls.asStateFlow()
+
     // 同时最多两个检测请求，避免滚动时瞬间打爆上游
     private val semaphore = Semaphore(2)
+
+    /** 标记一条已确认失效的资源链接，供列表层做过滤。 */
+    fun markInvalid(url: String) {
+        if (url.isNotBlank()) {
+            _invalidUrls.update { it + url }
+        }
+    }
 
     fun supports(item: ResourceItem): Boolean =
         item.source in SUPPORTED_SOURCES && diskTypeKey(item.diskType) != null

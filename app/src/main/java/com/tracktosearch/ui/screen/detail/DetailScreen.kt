@@ -119,6 +119,7 @@ import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.OpenImageViewerItem
 import com.tracktosearch.ui.component.openImageViewer
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.rememberInvalidResourceUrls
 import com.tracktosearch.ui.component.ResourceCopyrightAction
 import com.tracktosearch.ui.component.rememberResourceCopyrightRequester
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -478,6 +479,12 @@ fun DetailScreen(
         animationSpec = tween(durationMillis = 220),
         label = "detailContentAlpha"
     )
+
+    // 在线检测确认失效的资源直接从列表里拿掉；放在 LazyColumn 构建器外，LazyListScope 不是 @Composable 作用域。
+    val invalidUrls = rememberInvalidResourceUrls()
+    val visibleResources = remember(uiState.resources, invalidUrls) {
+        uiState.resources.filter { it.url !in invalidUrls }
+    }
 
     // Coil 内存缓存兜底：PosterColorCache miss 时从 Coil 内存缓存取 bitmap 提取主色
     // 列表页 MovieCard 已用 size(264) 加载海报，详情页进入时 Coil 内存缓存大概率命中 → 秒提取
@@ -887,7 +894,7 @@ fun DetailScreen(
                     // 已移至 DetailHeaderContent 中
 
                     // 资源列表
-                    val items = uiState.resources
+                    val items = visibleResources
                     when {
                         uiState.isSearching -> {
                             item(key = "searching") {

@@ -162,6 +162,7 @@ import com.tracktosearch.ui.component.LocalBackdrop
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.NeumorphicIconButtonStyle
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.rememberInvalidResourceUrls
 import com.tracktosearch.ui.component.ResourceCopyrightAction
 import com.tracktosearch.ui.component.rememberResourceCopyrightRequester
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -1259,6 +1260,12 @@ fun DoubanItemDetailScreen(
         label = "doubanContentAlpha"
     )
 
+    // 在线检测确认失效的资源从列表里移除；LazyListScope 内不能调 @Composable，提到这里。
+    val invalidUrls = rememberInvalidResourceUrls()
+    val visibleSearchResults = remember(uiState.searchResults, invalidUrls) {
+        uiState.searchResults.filter { it.url !in invalidUrls }
+    }
+
     // 拦截系统返回手势
     BackHandler(enabled = true) {
         handleBack()
@@ -1536,14 +1543,14 @@ fun DoubanItemDetailScreen(
                                 }
                                 // 搜索失败(网络异常等):显错误态+重试,与「真空结果」区分,
                                 // 否则失败被空态卡片吞掉,用户误以为没有资源
-                                uiState.searchError != null && uiState.searchResults.isEmpty() -> {
+                                uiState.searchError != null && visibleSearchResults.isEmpty() -> {
                                     item(key = "search_error") {
                                         Box(modifier = Modifier.alpha(contentAlpha)) {
                                             DoubanSearchErrorState(onRetry = { viewModel.searchResources() })
                                         }
                                     }
                                 }
-                                uiState.searchResults.isEmpty() && uiState.searchAttempted -> {
+                                visibleSearchResults.isEmpty() && uiState.searchAttempted -> {
                                     item(key = "empty") {
                                         Box(modifier = Modifier.alpha(contentAlpha)) { DoubanEmptyState(onRetry = { viewModel.searchResources() }) }
                                     }
@@ -1574,7 +1581,7 @@ fun DoubanItemDetailScreen(
                                         }
                                     }
                                     itemsIndexed(
-                                        items = uiState.searchResults,
+                                        items = visibleSearchResults,
                                         key = { _, item -> item.url },
                                         contentType = { _, _ -> "resource" }
                                     ) { index, item ->

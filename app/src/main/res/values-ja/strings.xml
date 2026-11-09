@@ -112,6 +112,8 @@
     <string name="search_no_results">リソースが見つかりません</string>
     <string name="search_filter_no_results_title">現在のフィルター条件に一致する結果がありません</string>
     <string name="search_filter_no_results_desc">フィルターを調整するか、クリアしてすべての結果を表示してください</string>
+    <string name="search_all_invalid_title">利用可能なリソースがありません</string>
+    <string name="search_all_invalid_desc">無効なリンクは自動的に非表示になりました。別のキーワードをお試しください。</string>
     <string name="search_filter_sources">検索ソース</string>
     <string name="search_filter_disk">ディスク</string>
     <string name="search_filter_disk_types">ディスクタイプ</string>

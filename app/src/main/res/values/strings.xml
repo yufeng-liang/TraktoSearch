@@ -111,6 +111,8 @@
     <string name="search_no_results">No resources found, try another keyword</string>
     <string name="search_filter_no_results_title">No results match the current filters</string>
     <string name="search_filter_no_results_desc">Adjust the filters or clear them to see all results</string>
+    <string name="search_all_invalid_title">No resources available</string>
+    <string name="search_all_invalid_desc">Dead links are hidden automatically. Try another keyword.</string>
     <string name="search_filter_sources">Sources</string>
     <string name="search_filter_disk">Disk</string>
     <string name="search_filter_disk_types">Disk types</string>
