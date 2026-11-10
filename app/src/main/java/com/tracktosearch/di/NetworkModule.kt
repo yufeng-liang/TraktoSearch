@@ -298,7 +298,7 @@ object NetworkModule {
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("User-Agent", USER_AGENT)
-                    .addHeader("Referer", "https://panhub.shenzjd.com/")
+                    .addHeader("Referer", "https://panhub.shenzjd.com/") // 兼容后端沿用 PanHub 老接口，Referer 保留原站来源
                     .build()
                 chain.proceed(request)
             })
@@ -309,6 +309,10 @@ object NetworkModule {
             .build()
     }
 
+    /**
+     * PanHub 官方站 2026-09 已静态化并锁死官方 API（旧 /api/search 404），
+     * 这里改用 BoxPlayer 使用的公共 PanHub 兼容 Worker，仍走老 /api/search 协议。
+     */
     @Provides
     @Singleton
     @Named("panhub")
@@ -316,7 +320,7 @@ object NetworkModule {
         @Named("panhub") okHttpClient: OkHttpClient
     ): PanSouApiService {
         return Retrofit.Builder()
-            .baseUrl("https://panhub.shenzjd.com/")
+            .baseUrl("https://api.xbyvideohub.com/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -328,8 +332,9 @@ object NetworkModule {
     fun providePanHubGranularApiService(
         @Named("panhub") okHttpClient: OkHttpClient
     ): PanHubApiService {
+        // 与上面 PanSou 兼容服务共用同一个第三方 PanHub Worker
         return Retrofit.Builder()
-            .baseUrl("https://panhub.shenzjd.com/")
+            .baseUrl("https://api.xbyvideohub.com/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

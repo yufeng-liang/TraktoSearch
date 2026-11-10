@@ -129,6 +129,8 @@ class ResourceRepository @Inject constructor(
             DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
         )
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
+        /** PanHub 兼容后端单次聚合实测 3-12 秒，超时放宽到 15s */
+        private const val PANHUB_TIMEOUT_MS = 15_000L
         /** useai 实例聚合 68 个插件，慢关键词实测 11-12 秒，单源超时放宽到 25s */
         private const val USEAI_TIMEOUT_MS = 25_000L
         /** 云搜单页上限 ~30 条，并行翻页数 */
@@ -467,6 +469,12 @@ class ResourceRepository @Inject constructor(
         }
     }
 
+    /**
+     * PanHub 兼容后端单次聚合搜索。
+     *
+     * 旧实现按插件/频道拆成几十个请求：公共实例会被打成大量小请求，延迟叠加且容易
+     * 触发限流。新后端支持在一次请求里同时传 plugins/channels，这里合并为单次调用。
+     */
     private suspend fun searchPanHubGranular(
         keyword: String,
         enabledDiskTypes: Set<DiskType>
@@ -475,62 +483,38 @@ class ResourceRepository @Inject constructor(
         if (config.enabledPlugins.isEmpty() && config.enabledChannels.isEmpty()) return emptyList()
         val ext = """{"__plugin_timeout_ms":${config.timeoutMs}}"""
 
-        val specs = mutableListOf<suspend () -> com.tracktosearch.data.remote.pansou.dto.PanSouResponse?>()
-
-        config.enabledPlugins.forEach { pluginId ->
-            specs.add {
+        val response = try {
+            withTimeoutOrNull(PANHUB_TIMEOUT_MS) {
                 panHubGranularApiService.search(
                     keyword = keyword,
                     res = "merged_by_type",
-                    src = "plugin",
+                    src = "all",
                     concurrency = config.concurrency,
                     ext = ext,
-                    plugins = pluginId
+                    plugins = config.enabledPlugins.joinToString(","),
+                    channels = config.enabledChannels.joinToString(",")
                 )
             }
-        }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return emptyList()
 
-        config.enabledChannels.chunked(4).forEach { chunk ->
-            specs.add {
-                panHubGranularApiService.search(
-                    keyword = keyword,
-                    res = "merged_by_type",
-                    src = "tg",
-                    concurrency = config.concurrency,
-                    ext = ext,
-                    channels = chunk.joinToString(",")
+        return response.data?.merged_by_type?.flatMap { (type, links) ->
+            val diskType = mapPanSouType(type) ?: return@flatMap emptyList()
+            links.map { link ->
+                ResourceItem(
+                    name = link.note.ifBlank { keyword },
+                    diskType = diskType,
+                    fileSize = "",
+                    fileDate = link.datetime,
+                    fileCount = 1,
+                    url = link.url,
+                    source = SOURCE_PANHUB
                 )
             }
-        }
-
-        return coroutineScope {
-            specs.chunked(config.concurrency).flatMap { batch ->
-                batch.map { spec ->
-                    async {
-                        runCatching {
-                            withTimeoutOrNull(config.timeoutMs.toLong()) {
-                                spec()
-                            }
-                        }.getOrNull()
-                    }
-                }.awaitAll()
-            }.flatMap { response ->
-                response?.data?.merged_by_type?.flatMap { (type, links) ->
-                    links.mapNotNull { link ->
-                        val diskType = mapPanSouType(type) ?: return@mapNotNull null
-                        ResourceItem(
-                            name = link.note.ifBlank { keyword },
-                            diskType = diskType,
-                            fileSize = "",
-                            fileDate = link.datetime,
-                            fileCount = 1,
-                            url = link.url,
-                            source = SOURCE_PANHUB
-                        )
-                    }
-                } ?: emptyList()
-            }.distinctBy { it.url }
-        }
+        }.orEmpty().distinctBy { it.url }
     }
 
     /**
