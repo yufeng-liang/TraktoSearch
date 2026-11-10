@@ -37,6 +37,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
+import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -153,6 +154,16 @@ class ResourceRepository @Inject constructor(
             DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
         )
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
+        /** 链接里已有提取码参数时不再重复追加 */
+        private val EXTRACT_CODE_PARAM_REGEX = Regex(
+            "[?&](pwd|password|passcode)=",
+            RegexOption.IGNORE_CASE
+        )
+        /** 这些网盘支持把提取码拼进分享链接 */
+        private val EXTRACT_CODE_DISK_TYPES = setOf(
+            DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
+            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE
+        )
         /** PanHub 兼容后端单次聚合实测 3-12 秒，超时放宽到 15s */
         private const val PANHUB_TIMEOUT_MS = 15_000L
         /** useai 实例聚合 68 个插件，慢关键词实测 11-12 秒，单源超时放宽到 25s */
@@ -709,7 +720,7 @@ class ResourceRepository @Inject constructor(
                     fileSize = "",
                     fileDate = link.datetime,
                     fileCount = 1,
-                    url = link.url,
+                    url = appendExtractCode(link.url, link.password, diskType),
                     source = sourceName
                 )
             }
@@ -871,7 +882,7 @@ class ResourceRepository @Inject constructor(
                     fileSize = "",
                     fileDate = formatEpochMillisDate(item.addTimeMillis),
                     fileCount = 1,
-                    url = url,
+                    url = appendExtractCode(url, item.password, diskType),
                     source = SOURCE_YUNSO
                 )
             }
@@ -960,7 +971,7 @@ class ResourceRepository @Inject constructor(
                         fileSize = "",
                         fileDate = item.sharedTime.take(10),
                         fileCount = item.files.lines().count { it.startsWith("file:") }.coerceAtLeast(1),
-                        url = url,
+                        url = appendExtractCode(url, item.diskPass, diskType),
                         source = SOURCE_MELOST
                     )
                 }
@@ -1044,6 +1055,26 @@ class ResourceRepository @Inject constructor(
     /** 从任意文本里抠出 http(s) 链接（阿涛搜的 link/description 常混排文案） */
     private fun extractUrls(text: String): List<String> {        if (text.isBlank()) return emptyList()
         return ATAW_URL_REGEX.findAll(text).map { it.value.trimEnd('.', ',', ';', '，', '。', '、') }.toList()
+    }
+
+    /**
+     * 部分上游把提取码放在独立字段（pansou password、云搜 Scrpass、影盘 disk_pass），
+     * URL 本身不带；不补进去用户点开只会看到「需提取码」却拿不到码。
+     * 已带 pwd/password/passcode 参数的链接不动；磁力链接不处理。
+     */
+    private fun appendExtractCode(url: String, password: String, diskType: DiskType): String {
+        val code = password.trim()
+        if (code.isEmpty() || url.startsWith("magnet:", ignoreCase = true)) return url
+        if (EXTRACT_CODE_PARAM_REGEX.containsMatchIn(url)) return url
+        if (diskType !in EXTRACT_CODE_DISK_TYPES) return url
+        val param = if (diskType == DiskType.ONEONEFIVE) "password" else "pwd"
+        val separator = when {
+            url.endsWith("?") || url.endsWith("&") -> ""
+            url.contains("?") -> "&"
+            else -> "?"
+        }
+        val encoded = URLEncoder.encode(code, Charsets.UTF_8.name())
+        return "$url$separator$param=$encoded"
     }
 
     /** 云搜网盘中文名 → DiskType，认不出就看 URL 主机 */

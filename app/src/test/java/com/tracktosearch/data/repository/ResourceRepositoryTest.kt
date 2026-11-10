@@ -1035,6 +1035,31 @@ class ResourceRepositoryTest {
         assertThat(result.map { it.fileCount }).containsExactly(1, 1)
     }
 
+    @Test
+    fun searchResources_云搜_独立提取码拼进链接() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.yunsoEnabled } returns MutableStateFlow(true)
+
+        coEvery { yunsoApiService.search(any(), any(), any()) } returns YunsoResponse(
+            items = listOf(
+                YunsoItem(
+                    name = "繁花",
+                    url = "https://pan.quark.cn/s/e9fcb82461ca?",
+                    password = "xuRx",
+                    addTimeMillis = "1792038112000",
+                    cloudName = "夸克"
+                )
+            ),
+            total = 1
+        )
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        // URL 自带问号但没有 pwd 参数：拼成 ?pwd=，避免出现 ?&pwd
+        assertThat(result.single().url).isEqualTo("https://pan.quark.cn/s/e9fcb82461ca?pwd=xuRx")
+    }
+
     // ==================== 新增内置源：影盘 / 盘小子 / 宝藏郎 ====================
 
     @Test
