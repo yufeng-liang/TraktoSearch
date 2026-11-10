@@ -253,7 +253,7 @@ fun FilterDropdownBar(
                                     draftSources - source
                                 }
                             },
-                            onEnable = if (!available && !searching) {
+                            onEnable = if (!available) {
                                 {
                                     haptics.lightTap()
                                     onEnableSource(source)

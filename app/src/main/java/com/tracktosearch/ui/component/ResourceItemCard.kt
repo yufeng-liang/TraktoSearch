@@ -464,7 +464,7 @@ fun ResourceItemCard(
         statusFromItem(item) ?: linkChecker.cachedStatus(item.url)
     }
     // 只有 PanSou 系（pansou/useai）能在线检测；其余源没有公开检测接口。
-    var linkStatus by remember(item.url) { mutableStateOf(initialStatus) }
+    var linkStatus by remember(item.url, item.status) { mutableStateOf(initialStatus) }
     // 检出失效后先淡出再通知列表移除，避免卡片瞬间消失、列表硬跳。
     var dismissing by remember(item.url) { mutableStateOf(false) }
     val targetAlpha = when {

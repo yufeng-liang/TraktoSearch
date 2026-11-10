@@ -73,6 +73,7 @@ fun ZresoVerifyScreen(
     var loadKey by remember { mutableIntStateOf(0) }
     var finished by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
+    var pageLoading by remember { mutableStateOf(true) }
     var showCloseConfirm by remember { mutableStateOf(false) }
 
     fun requestClose() {
@@ -142,6 +143,7 @@ fun ZresoVerifyScreen(
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                 super.onPageStarted(view, url, favicon)
+                                pageLoading = true
                                 if (url != null && ZresoWebViewVerifier.isVerificationSuccessUrl(url)) {
                                     markSuccess()
                                 }
@@ -149,6 +151,7 @@ fun ZresoVerifyScreen(
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
+                                pageLoading = false
                                 if (url != null && ZresoWebViewVerifier.isVerificationSuccessUrl(url)) {
                                     markSuccess()
                                 }
@@ -163,6 +166,7 @@ fun ZresoVerifyScreen(
                                 // 只处理主框架错误，子资源失败不影响验证页面
                                 if (request?.isForMainFrame == true) {
                                     hasError = true
+                                    pageLoading = false
                                 }
                             }
 
@@ -174,6 +178,7 @@ fun ZresoVerifyScreen(
                                 super.onReceivedHttpError(view, request, errorResponse)
                                 if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 400) {
                                     hasError = true
+                                    pageLoading = false
                                 }
                             }
                         }
@@ -235,7 +240,7 @@ fun ZresoVerifyScreen(
                         Text(stringResource(R.string.common_close))
                     }
                 }
-            } else if (webViewRef == null) {
+            } else if (webViewRef == null || pageLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier
                         .align(Alignment.Center)
