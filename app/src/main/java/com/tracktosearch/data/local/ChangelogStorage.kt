@@ -24,6 +24,9 @@ class ChangelogStorage @Inject constructor(
     // 旧 key 无 TTL、命中即返回且 clear() 无人调用，不换 key 老用户永远读旧日志。
     private val key = stringPreferencesKey("full_changelog_v3")
     private val fullChangelogCompleteKey = booleanPreferencesKey("full_changelog_complete_v3")
+    // 缓存生成时的 App 版本：App 升级后旧版本全量日志可能缺少新版本段，
+    // 必须按版本失配失效，否则升级前生成的缓存会一直遮蔽中间版本。
+    private val fullChangelogAppVersionKey = stringPreferencesKey("full_changelog_app_version_v3")
     private val lastCheckTsKey = longPreferencesKey("last_update_check_ts")
     private val cachedVersionKey = stringPreferencesKey("cached_latest_version")
     private val cachedChangelogKey = stringPreferencesKey("cached_update_changelog")
@@ -45,26 +48,31 @@ class ChangelogStorage @Inject constructor(
     }
 
     /** 写正文并标记为完整。只允许由一次成功的全量拉取调用。 */
-    suspend fun saveCompleteChangelog(text: String) {
+    suspend fun saveCompleteChangelog(text: String, appVersion: String) {
         context.changelogDataStore.edit {
             it[key] = text
             it[fullChangelogCompleteKey] = true
+            it[fullChangelogAppVersionKey] = appVersion
         }
     }
 
     /**
-     * 磁盘上的全量日志是否来自一次完整拉取。
+     * 磁盘上的全量日志是否来自当前 App 版本的一次完整拉取。
      * 缺省 false 是有意的：修复前被预热追加污染过的缓存没有这个标记，
      * 读作「不完整」→ 重拉一次并覆写，老安装自愈。
      */
-    suspend fun isFullChangelogComplete(): Boolean {
-        return context.changelogDataStore.data.map { it[fullChangelogCompleteKey] ?: false }.first()
+    suspend fun isFullChangelogCompleteFor(appVersion: String): Boolean {
+        return context.changelogDataStore.data.map {
+            (it[fullChangelogCompleteKey] ?: false) &&
+                it[fullChangelogAppVersionKey] == appVersion
+        }.first()
     }
 
     suspend fun clear() {
         context.changelogDataStore.edit {
             it.remove(key)
             it.remove(fullChangelogCompleteKey)
+            it.remove(fullChangelogAppVersionKey)
             it.remove(lastCheckTsKey)
             it.remove(cachedVersionKey)
             it.remove(cachedChangelogKey)

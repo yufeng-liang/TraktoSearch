@@ -446,7 +446,7 @@ class UpdateRepositoryTest {
     fun fetchAllChangelogs_磁盘缓存完整_不发网络() = runTest {
         val disk = "## v1.0.0 更新内容\n- 功能1"
         coEvery { changelogStorage.getChangelog() } returns disk
-        coEvery { changelogStorage.isFullChangelogComplete() } returns true
+        coEvery { changelogStorage.isFullChangelogCompleteFor(any()) } returns true
 
         assertThat(repository.fetchAllChangelogs()).isEqualTo(disk)
         coVerify(exactly = 0) { gitHubApi.getAllReleases(any(), any()) }
@@ -517,7 +517,7 @@ class UpdateRepositoryTest {
     fun fetchAllChangelogs_磁盘缓存被单条预热占位_重拉完整清单并标记完成() = runTest {
         // 旧版本留下的污染状态：追加预热写过一条，正文非空但并不是完整历史
         coEvery { changelogStorage.getChangelog() } returns "## v99.0.0 更新内容\n- 只有这一条"
-        coEvery { changelogStorage.isFullChangelogComplete() } returns false
+        coEvery { changelogStorage.isFullChangelogCompleteFor(any()) } returns false
         coEvery { manifestApi.getHistory() } returns UpdateHistory(
             schema = 1,
             releases = listOf(
@@ -532,7 +532,7 @@ class UpdateRepositoryTest {
         assertThat(result).contains("## v3.5.0 更新内容")
         assertThat(result).doesNotContain("只有这一条")
         coVerify(exactly = 1) { manifestApi.getHistory() }
-        coVerify(exactly = 1) { changelogStorage.saveCompleteChangelog(any()) }
+        coVerify(exactly = 1) { changelogStorage.saveCompleteChangelog(any(), any()) }
         coVerify(exactly = 0) { changelogStorage.saveChangelog(any()) }
     }
 
@@ -548,12 +548,13 @@ class UpdateRepositoryTest {
         // 预热追加只该往已有完整缓存里插条目；从空缓存建一份会让设置页误以为「已完整」，
         // 从此永远只显示这一个版本
         coVerify(exactly = 0) { changelogStorage.saveChangelog(any()) }
-        coVerify(exactly = 0) { changelogStorage.saveCompleteChangelog(any()) }
+        coVerify(exactly = 0) { changelogStorage.saveCompleteChangelog(any(), any()) }
     }
 
     @Test
     fun checkForUpdate_已有完整缓存_预热把新版本追加到开头() = runTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
+        coEvery { changelogStorage.isFullChangelogCompleteFor(any()) } returns true
         coEvery { changelogStorage.getChangelog() } returns "## v3.5.0 更新内容\n- 旧条目"
         coEvery { manifestApi.getLatest() } returns buildManifest()
 
@@ -565,6 +566,6 @@ class UpdateRepositoryTest {
         assertThat(saved.captured).contains("## v3.5.0 更新内容")
         assertThat(saved.captured.indexOf("v99.0.0")).isLessThan(saved.captured.indexOf("v3.5.0"))
         // 追加不升级完整性标记，也不该走完整拉取的写入口
-        coVerify(exactly = 0) { changelogStorage.saveCompleteChangelog(any()) }
+        coVerify(exactly = 0) { changelogStorage.saveCompleteChangelog(any(), any()) }
     }
 }

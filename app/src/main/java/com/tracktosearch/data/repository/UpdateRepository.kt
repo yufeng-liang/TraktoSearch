@@ -44,6 +44,10 @@ class UpdateRepository @Inject constructor(
     @Volatile
     private var cachedFullChangelog: String? = null
 
+    /** 内存里全量日志对应的 App 版本，升级后必须重拉，避免旧缓存遮蔽中间版本。 */
+    @Volatile
+    private var cachedFullChangelogAppVersion: String? = null
+
     @Volatile
     private var cachedLatestVersion: String? = null
 
@@ -62,15 +66,20 @@ class UpdateRepository @Inject constructor(
 
     /** 获取所有版本的更新日志（带缓存），按版本从新到旧排列。优先内存缓存 → 磁盘缓存 → 网络 */
     suspend fun fetchAllChangelogs(): String {
-        cachedFullChangelog?.let { return it }
+        val currentVersion = BuildConfig.VERSION_NAME
+        // 内存缓存也必须校验版本：App 升级后旧缓存可能缺少中间版本段。
+        cachedFullChangelog?.let {
+            if (cachedFullChangelogAppVersion == currentVersion) return it
+        }
 
         // 磁盘缓存：app 重启后仍可用，避免每次打开设置页都走网络。
-        // 必须确认它来自一次完整拉取——检查更新后的预热追加也会往这个键里写，
+        // 必须确认它来自当前版本的一次完整拉取——检查更新后的预热追加也会往这个键里写，
         // 那份只有一条，认了它设置页就永远只显示一个版本。
         // 修复前被预热占过的老缓存没有完整性标记，会走重拉分支并覆写，自愈。
         val diskCached = changelogStorage.getChangelog()
-        if (!diskCached.isNullOrBlank() && changelogStorage.isFullChangelogComplete()) {
+        if (!diskCached.isNullOrBlank() && changelogStorage.isFullChangelogCompleteFor(currentVersion)) {
             cachedFullChangelog = diskCached
+            cachedFullChangelogAppVersion = currentVersion
             return diskCached
         }
 
@@ -79,7 +88,8 @@ class UpdateRepository @Inject constructor(
         val result = tryFetchAllFromManifest() ?: tryFetchAllFromGitHub()
         if (result != null) {
             cachedFullChangelog = result
-            changelogStorage.saveCompleteChangelog(result)
+            cachedFullChangelogAppVersion = currentVersion
+            changelogStorage.saveCompleteChangelog(result, currentVersion)
             return result
         }
         return ""
@@ -227,6 +237,10 @@ class UpdateRepository @Inject constructor(
      */
     private suspend fun appendToFullChangelog(version: String, changelog: String) {
         if (changelog.isBlank()) return
+        val currentVersion = BuildConfig.VERSION_NAME
+        // 只在当前版本已有一份完整缓存时追加；App 刚升级到新版本时旧缓存缺少中间版本，
+        // 必须等 fetchAllChangelogs 重新拉全量，不能拿旧缓存拼接。
+        if (!changelogStorage.isFullChangelogCompleteFor(currentVersion)) return
         val entry = changelog
         val existing = cachedFullChangelog ?: changelogStorage.getChangelog() ?: ""
         // 缓存还不存在时不建：只有一条的缓存会被 fetchAllChangelogs 当成完整历史，
@@ -237,6 +251,7 @@ class UpdateRepository @Inject constructor(
         if (existing.contains(versionHeaderPrefix)) return
         val updated = "$entry\n\n---\n\n$existing"
         cachedFullChangelog = updated
+        cachedFullChangelogAppVersion = currentVersion
         changelogStorage.saveChangelog(updated)
     }
 

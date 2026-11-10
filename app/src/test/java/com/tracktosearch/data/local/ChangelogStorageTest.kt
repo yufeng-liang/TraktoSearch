@@ -40,9 +40,10 @@ class ChangelogStorageTest {
     @Test
     fun 全量日志写入与读取走同一键() = runTest {
         storage.clear()
-        storage.saveCompleteChangelog("## v1.0.0 更新内容（2026-01-01）\n- 内容")
+        storage.saveCompleteChangelog("## v1.0.0 更新内容（2026-01-01）\n- 内容", "1.0.0")
         assertThat(storage.getChangelog()).contains("v1.0.0")
-        assertThat(storage.isFullChangelogComplete()).isTrue()
+        assertThat(storage.isFullChangelogCompleteFor("1.0.0")).isTrue()
+        assertThat(storage.isFullChangelogCompleteFor("1.0.1")).isFalse()
     }
 
     @Test
@@ -59,8 +60,8 @@ class ChangelogStorageTest {
 
     @Test
     fun clear后完整性标记回到false() = runTest {
-        storage.saveCompleteChangelog("## v1.0.0 更新内容（2026-01-01）\n- 内容")
+        storage.saveCompleteChangelog("## v1.0.0 更新内容（2026-01-01）\n- 内容", "1.0.0")
         storage.clear()
-        assertThat(storage.isFullChangelogComplete()).isFalse()
+        assertThat(storage.isFullChangelogCompleteFor("1.0.0")).isFalse()
     }
 }

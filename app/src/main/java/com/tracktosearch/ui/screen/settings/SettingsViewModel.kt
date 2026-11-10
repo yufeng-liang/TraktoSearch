@@ -915,11 +915,11 @@ class SettingsViewModel @Inject constructor(
                 if (info != null && info.hasUpdate) {
                     _latestVersion.value = info.latestVersion
                     _updateInfo.value = info
-                    _changelog.value = info.changelog
+                    // 不用单版本更新日志覆盖设置页的全量日志状态；全量日志由
+                    // loadChangelog() 单独维护，避免再次出现「只显示最新版」的回归。
                     _showUpdateDialog.value = true
                 } else if (info != null) {
                     _latestVersion.value = info.latestVersion
-                    _changelog.value = info.changelog
                     _exportImportState.value = _exportImportState.value.copy(
                         message = ExportMessage.Plain(R.string.snackbar_already_latest, outcome = HapticOutcome.SUCCESS)
                     )
