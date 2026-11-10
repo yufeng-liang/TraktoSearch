@@ -3,6 +3,7 @@ package com.tracktosearch.data.remote.zreso
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -156,13 +157,16 @@ class ZresoWebViewVerifier @Inject constructor(
 
         webView = WebView(context).apply {
             // WebView 不挂到窗口时默认尺寸为 0，Cap 组件的 getBoundingClientRect 会全为 0，
-            // 导致合成点击的坐标落在 (0,0)。这里主动 measure/layout 出一个可见视口。
+            // 导致合成点击的坐标落在 (0,0)。这里主动 measure/layout 出一个可见视口；
+            // 但不可见 WebView 也按视口分配位图，限制最大尺寸避免无谓的内存峰值。
             val metrics = context.resources.displayMetrics
+            val viewportWidth = metrics.widthPixels.coerceAtMost(1080).coerceAtLeast(1)
+            val viewportHeight = metrics.heightPixels.coerceAtMost(1920).coerceAtLeast(1)
             measure(
-                View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY)
+                View.MeasureSpec.makeMeasureSpec(viewportWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(viewportHeight, View.MeasureSpec.EXACTLY)
             )
-            layout(0, 0, metrics.widthPixels, metrics.heightPixels)
+            layout(0, 0, viewportWidth, viewportHeight)
 
             settings.apply {
                 javaScriptEnabled = true
@@ -175,7 +179,7 @@ class ZresoWebViewVerifier @Inject constructor(
                     super.onPageStarted(view, url, favicon)
                     val target = url ?: return
                     // 挑战页的 onSuccess 会 location.replace 到 redirect（/search?q=...）
-                    if (target.contains("zreso.cn") && !target.contains("turnstile/challenge")) {
+                    if (isVerificationSuccessUrl(target)) {
                         finish(true)
                     }
                 }
@@ -226,6 +230,19 @@ class ZresoWebViewVerifier @Inject constructor(
         /** 手动验证页直接复用的挑战页地址。 */
         const val CHALLENGE_URL =
             "https://www.zreso.cn/turnstile/challenge?redirect=%2Fsearch"
+
+        /**
+         * 判断 URL 是否已通过挑战并到达 zreso 搜索页。
+         * 不能只看「包含 zreso.cn」：404、首页、错误页同样满足，会把验证失败误判为成功。
+         */
+        fun isVerificationSuccessUrl(url: String): Boolean {
+            if (url.contains("turnstile/challenge", ignoreCase = true)) return false
+            val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+            val host = uri.host?.lowercase() ?: return false
+            if (host != "zreso.cn" && !host.endsWith(".zreso.cn")) return false
+            val path = uri.path ?: return false
+            return path == "/search" || path.startsWith("/search/")
+        }
 
         private const val TAG = "ZresoWebViewVerifier"
         private const val VERIFY_TIMEOUT_MS = 45_000L

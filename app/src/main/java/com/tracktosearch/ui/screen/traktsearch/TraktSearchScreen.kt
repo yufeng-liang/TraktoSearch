@@ -1182,16 +1182,15 @@ private fun DiskSearchContent(
     }
 
     // 骨架至少展示 300ms：结果来得太快时也不会闪一下真实卡片
+    // 注意只以 query 为 key：isLoading 可能先于 300ms 变 false，若把 isLoading 放进 key 会取消协程，
+    // 让 minSkeletonElapsed 永远停在 false 导致骨架卡死
     var minSkeletonElapsed by remember(query) { mutableStateOf(true) }
-    LaunchedEffect(query, diskState.isLoading) {
-        if (diskState.isLoading) {
-            minSkeletonElapsed = false
-            delay(300)
-            minSkeletonElapsed = true
-        }
+    LaunchedEffect(query) {
+        minSkeletonElapsed = false
+        delay(300)
+        minSkeletonElapsed = true
     }
-    val showSkeleton = (diskState.isLoading && diskState.resources.isEmpty()) ||
-        (diskState.hasSearched && !minSkeletonElapsed)
+    val showSkeleton = diskState.isLoading && (diskState.resources.isEmpty() || !minSkeletonElapsed)
     val phase = when {
         showSkeleton -> DiskContentPhase.Loading
         diskState.error != null && diskState.resources.isEmpty() -> DiskContentPhase.Error
@@ -1199,7 +1198,7 @@ private fun DiskSearchContent(
         else -> DiskContentPhase.Content
     }
 
-    // 新到达的卡片淡入 + 轻微上移；列表顺序变化交给 Compose，不使用 key 锚定（会触发 #118 跳动）
+    // 新到达的卡片淡入 + 轻微上移；列表项用 url 作稳定 key，避免增量更新时状态按位置错位
     var displayedUrls by remember(query) { mutableStateOf<Set<String>>(emptySet()) }
     val currentUrls = remember(filteredResources) {
         filteredResources.mapTo(LinkedHashSet()) { it.url }
@@ -1297,7 +1296,12 @@ private fun DiskSearchContent(
                             }
                         }
                     }
-                    itemsIndexed(filteredResources, contentType = { _, _ -> "resource" }) { index, item ->
+                    // rank 已按 url 去重，url 可作稳定 key；否则筛选/增量更新时卡片状态会按位置复用错位
+                    itemsIndexed(
+                        filteredResources,
+                        key = { _, item -> item.url },
+                        contentType = { _, _ -> "resource" }
+                    ) { index, item ->
                         ResourceItemCard(
                             item = item,
                             sourceName = diskState.customSourceNames[item.source],

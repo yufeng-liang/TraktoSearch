@@ -118,6 +118,8 @@ class ResourceRepository @Inject constructor(
             SOURCE_BAOYS -> searchSourceStorage.setBaoysEnabled(true)
             else -> return false
         }
+        // 启用新源后清掉旧搜索结果缓存：否则同关键词的 5 分钟缓存会继续挡住新源结果
+        cache.clear()
         return true
     }
 
@@ -180,7 +182,11 @@ class ResourceRepository @Inject constructor(
 
     private data class KeywordCache(
         val items: List<ResourceItem>,
-        val timestamp: Long
+        val timestamp: Long,
+        /** 该缓存结果覆盖的搜索源；启用新源后旧缓存不应再命中 */
+        val sources: Set<String> = ALL_SOURCES,
+        /** 该缓存结果覆盖的网盘类型；勾选新类型后旧缓存不应再命中 */
+        val diskTypes: Set<DiskType> = ALL_DISK_TYPES
     )
 
     /** zreso 搜索结果里的一条待展开链接 */
@@ -202,6 +208,23 @@ class ResourceRepository @Inject constructor(
         }
     )
 
+    /**
+     * 读取有效缓存：未过期，且覆盖当前生效的搜索源与网盘类型。
+     * 用户在搜索页/设置页新启用源或网盘类型后，旧缓存不能继续挡住新源结果。
+     */
+    private fun getValidCache(
+        keyword: String,
+        sources: Set<String>,
+        diskTypes: Set<DiskType>,
+        now: Long
+    ): KeywordCache? {
+        val cached = cache[keyword] ?: return null
+        if (now - cached.timestamp >= CACHE_TTL_MS) return null
+        if (!cached.sources.containsAll(sources)) return null
+        if (!cached.diskTypes.containsAll(diskTypes)) return null
+        return cached
+    }
+
     /** zreso 熔断截止时间：429/5xx/超时后短路一段时间，避免每次搜索都白等 8 秒 */
     @Volatile
     private var zresoCooldownUntil = 0L
@@ -210,8 +233,8 @@ class ResourceRepository @Inject constructor(
 
     /**
      * 搜索接口：
-     * 1) 第一次调用（按 keyword）：用全 sources + 全 disk_types 调 API，结果缓存
-     * 2) 后续调用（同 keyword，不同 filter）：从缓存里本地过滤，不调 API
+     * 1) 第一次调用（按 keyword + 当前生效源/网盘类型）：调 API，结果缓存
+     * 2) 后续调用（同 keyword，且缓存覆盖当前源/网盘类型）：从缓存里本地过滤，不调 API
      */
     suspend fun searchResources(
         keyword: String,
@@ -226,8 +249,8 @@ class ResourceRepository @Inject constructor(
         val effectiveSources = enabledSources.intersect(storageEnabledSourcesFlow().first())
 
         val now = System.currentTimeMillis()
-        val cached = cache[keyword]
-        val allItems = if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
+        val cached = getValidCache(keyword, effectiveSources, enabledDiskTypes, now)
+        val allItems = if (cached != null) {
             // 命中缓存：query 非空时按当前 query 重算相关度（同关键词不同影视用各自元数据）
             rank(cached.items, isShow, query).items
         } else {
@@ -235,7 +258,7 @@ class ResourceRepository @Inject constructor(
             val fetched = fetchEnabledSources(keyword, effectiveSources, enabledDiskTypes, isShow, query)
             // 只缓存非空结果，避免"空结果被缓存导致后续一直空"的问题
             if (fetched.isNotEmpty()) {
-                cache.put(keyword, KeywordCache(fetched, now))
+                cache.put(keyword, KeywordCache(fetched, now, effectiveSources, enabledDiskTypes))
             }
             fetched
         }
@@ -279,8 +302,8 @@ class ResourceRepository @Inject constructor(
         val effectiveSources = enabledSources.intersect(storageEnabledSourcesFlow().first())
 
         val now = System.currentTimeMillis()
-        val cached = cache[keyword]
-        if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
+        val cached = getValidCache(keyword, effectiveSources, enabledDiskTypes, now)
+        if (cached != null) {
             // 命中缓存：query 非空时按当前 query 重算相关度
             send(filterItems(rank(cached.items, isShow, query).items, effectiveSources, enabledDiskTypes))
             // 缓存命中：所有源视为已完成
@@ -358,7 +381,9 @@ class ResourceRepository @Inject constructor(
         if (sourceList.size == 1) {
             val (source, deferred) = sourceList.first()
             val items = deferred.await()
-            if (items.isNotEmpty()) cache.put(keyword, KeywordCache(items, now))
+            if (items.isNotEmpty()) {
+                cache.put(keyword, KeywordCache(items, now, effectiveSources, enabledDiskTypes))
+            }
             onSourceComplete?.invoke(source)
             send(items)
             return@channelFlow
@@ -385,7 +410,9 @@ class ResourceRepository @Inject constructor(
         if (accumulated.isNotEmpty()) {
             cache.put(keyword, KeywordCache(
                 accumulated.distinctBy { it.url },
-                System.currentTimeMillis()))
+                System.currentTimeMillis(),
+                effectiveSources,
+                enabledDiskTypes))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -767,13 +794,16 @@ class ResourceRepository @Inject constructor(
         // zreso 搜索结果只给 /api/wash?t=... 中转地址，需再换一次真实网盘直链。
         // 并发解析但限流（zreso 对高频 /api/wash 会 429，反噬熔断窗口）；
         // 单条失败保留原地址，不因个别链接失效拖垮整次搜索。
-        val resolvedUrls = coroutineScope {
-            candidates.map { candidate ->
-                async {
-                    washSemaphore.withPermit { resolveZresoLink(candidate.link.url) }
-                }
-            }.awaitAll()
-        }
+        // 总超时兜底：候选多时 4 并发逐条 wash 可能拖很久，超时统一回退到绝对地址。
+        val resolvedUrls = withTimeoutOrNull(8_000) {
+            coroutineScope {
+                candidates.map { candidate ->
+                    async {
+                        washSemaphore.withPermit { resolveZresoLink(candidate.link.url) }
+                    }
+                }.awaitAll()
+            }
+        } ?: candidates.map { absoluteZresoUrl(it.link.url) }
         return candidates.mapIndexed { index, candidate ->
             ResourceItem(
                 name = candidate.result.title,
@@ -788,12 +818,18 @@ class ResourceRepository @Inject constructor(
         }
     }
 
+    /** zreso 相对地址补全为绝对地址，并修正上游偶发的旧夸克域名。 */
+    private fun absoluteZresoUrl(rawUrl: String): String {
+        val absoluteUrl = if (rawUrl.startsWith("http")) rawUrl else "$ZRESO_BASE_URL$rawUrl"
+        return absoluteUrl.replace("pan.quarks.cn", "pan.quark.cn")
+    }
+
     /**
      * zreso 链接归一化：相对路径补域名；`/api/wash?t=` 中转地址换取真实网盘直链。
      * wash 接口免 Turnstile，但 token 一次性、有效期短，失败时退回原地址。
      */
     private suspend fun resolveZresoLink(rawUrl: String): String {
-        val absoluteUrl = if (rawUrl.startsWith("http")) rawUrl else "$ZRESO_BASE_URL$rawUrl"
+        val absoluteUrl = absoluteZresoUrl(rawUrl)
         if (!rawUrl.contains("/api/wash")) return absoluteUrl
         val token = ZRESO_WASH_TOKEN_REGEX.find(rawUrl)?.groupValues?.getOrNull(1) ?: return absoluteUrl
         val wash = runCatching {

@@ -19,8 +19,9 @@ interface AtawApiService {
 
     companion object {
         /**
-         * 每个 App 安装固定一个会话标识（不随请求轮换）：
+         * 进程内固定一个会话标识（不随请求轮换）：
          * 服务端只验格式，但固定值更像一个稳定客户端，频繁随机值反而易被风控盯上。
+         * 注意：该值在进程重启后会重新生成，并非跨安装持久化。
          */
         val SESSION: String = UUID.randomUUID().toString()
     }

@@ -29,9 +29,9 @@ object PanxiaoziParser {
     /** 从整页 HTML 里提取全部资源记录（按出现顺序，已按 url 去重） */
     fun parse(html: String): List<Record> {
         if (html.isBlank()) return emptyList()
-        // RSC 的字符串字段里引号写成 \"，先把结构引号还原成裸引号再匹配
-        // （实测裸引号正则直接匹配 \" 形态会因转义歧义失配，两步法 3/3 全过）
-        val normalized = html.replace("\\\"", "\"")
+        // RSC 的字符串字段里引号写成 \"。不能全局替换：正文里的转义引号会被误当成
+        // 字段结束引号导致标题截断；这里只把紧邻字段分隔符的结构引号还原成裸引号。
+        val normalized = normalizeRscQuotes(html)
         return ITEM_REGEX.findAll(normalized).map { m ->
             Record(
                 title = unescape(m.groupValues[2]),
@@ -42,13 +42,62 @@ object PanxiaoziParser {
         }.distinctBy { it.url }.toList()
     }
 
-    /** RSC 字符串反转义：双反斜杠先占位避免被 \n 的处理误吞，再处理 \n 与 \" 单转义 */
+    /**
+     * 只还原 RSC 结构引号（形如 `title:\"`、`\"` 后跟逗号/括号的字段边界），
+     * 保留字符串值内部的 `\"` 交给 [unescape] 处理。
+     */
+    private fun normalizeRscQuotes(html: String): String {
+        val sb = StringBuilder(html.length)
+        var i = 0
+        while (i < html.length) {
+            val c = html[i]
+            if (c == '\\' && i + 1 < html.length && html[i + 1] == '"') {
+                val prev = if (i > 0) html[i - 1] else '\u0000'
+                val next = if (i + 2 < html.length) html[i + 2] else '\u0000'
+                val structural = prev == ':' || prev == ',' || prev == '[' || prev == '(' ||
+                    next == ',' || next == ']' || next == '}' || next == ')'
+                if (structural) {
+                    sb.append('"')
+                    i += 2
+                    continue
+                }
+            }
+            sb.append(c)
+            i++
+        }
+        return sb.toString()
+    }
+
+    /** RSC 字符串反转义：支持 \\、\n、\" 三种转义。 */
     private fun unescape(raw: String): String {
-        val pairPlaceholder = "\u0000"
-        return raw
-            .replace("\\\\", pairPlaceholder)   // \\ -> 占位
-            .replace("\\n", "\n")               // \n -> 换行
-            .replace("\\\"", "\"")              // \" -> 引号
-            .replace(pairPlaceholder, "\\")     // 占位还原为 \
+        val sb = StringBuilder(raw.length)
+        var i = 0
+        while (i < raw.length) {
+            val c = raw[i]
+            if (c == '\\' && i + 1 < raw.length) {
+                when (raw[i + 1]) {
+                    '\\' -> {
+                        sb.append('\\')
+                        i += 2
+                    }
+                    'n' -> {
+                        sb.append('\n')
+                        i += 2
+                    }
+                    '"' -> {
+                        sb.append('"')
+                        i += 2
+                    }
+                    else -> {
+                        sb.append(c)
+                        i++
+                    }
+                }
+            } else {
+                sb.append(c)
+                i++
+            }
+        }
+        return sb.toString()
     }
 }

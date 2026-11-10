@@ -11,10 +11,12 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -94,7 +96,11 @@ fun ZresoVerifyScreen(
     LaunchedEffect(loadKey, finished) {
         if (!finished) {
             delay(120_000)
-            if (!finished) hasError = true
+            if (!finished) {
+                hasError = true
+                // 超时后停止加载，避免后台 WebView 继续跑脚本/占内存
+                webViewRef?.stopLoading()
+            }
         }
     }
 
@@ -136,14 +142,14 @@ fun ZresoVerifyScreen(
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                 super.onPageStarted(view, url, favicon)
-                                if (url != null && isZresoSuccessUrl(url)) {
+                                if (url != null && ZresoWebViewVerifier.isVerificationSuccessUrl(url)) {
                                     markSuccess()
                                 }
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
-                                if (url != null && isZresoSuccessUrl(url)) {
+                                if (url != null && ZresoWebViewVerifier.isVerificationSuccessUrl(url)) {
                                     markSuccess()
                                 }
                             }
@@ -183,12 +189,21 @@ fun ZresoVerifyScreen(
             )
 
             if (hasError) {
+                // 全屏不透明遮罩：覆盖 WebView，挡住错误页内容并拦截触摸；
+                // 窄屏下按钮改为纵向排列，避免三个 TextButton 横向溢出。
                 Column(
                     modifier = Modifier
-                        .align(Alignment.Center)
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface)
+                        // 兜底消费点击，避免触摸穿透到底层 WebView
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {}
+                        )
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.Center
                 ) {
                     Text(
                         text = stringResource(R.string.zreso_verify_error),
@@ -196,28 +211,28 @@ fun ZresoVerifyScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = stringResource(R.string.zreso_verify_timeout),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = {
-                            haptics.tap()
-                            hasError = false
-                            loadKey++
-                            webViewRef?.reload()
-                        }) { Text(stringResource(R.string.error_retry)) }
-                        TextButton(onClick = {
-                            haptics.tap()
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(ZresoWebViewVerifier.CHALLENGE_URL))
-                            )
-                        }) { Text(stringResource(R.string.zreso_verify_open_external)) }
-                        TextButton(onClick = { requestClose() }) {
-                            Text(stringResource(R.string.common_close))
-                        }
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = {
+                        haptics.tap()
+                        hasError = false
+                        loadKey++
+                        webViewRef?.reload()
+                    }) { Text(stringResource(R.string.error_retry)) }
+                    TextButton(onClick = {
+                        haptics.tap()
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(ZresoWebViewVerifier.CHALLENGE_URL))
+                        )
+                    }) { Text(stringResource(R.string.zreso_verify_open_external)) }
+                    TextButton(onClick = { requestClose() }) {
+                        Text(stringResource(R.string.common_close))
                     }
                 }
             } else if (webViewRef == null) {
@@ -248,9 +263,4 @@ fun ZresoVerifyScreen(
             )
         )
     }
-}
-
-/** 挑战页成功后会跳回 zreso 搜索页；只要离开 challenge 页即视为完成。 */
-private fun isZresoSuccessUrl(url: String): Boolean {
-    return url.contains("zreso.cn") && !url.contains("turnstile/challenge")
 }
