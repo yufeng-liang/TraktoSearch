@@ -32,11 +32,12 @@ class SearchSourceStorage @Inject constructor(
     private val _panhubEnabled = MutableStateFlow(false)
     val panhubEnabled: StateFlow<Boolean> = _panhubEnabled.asStateFlow()
 
-    private val _zresoEnabled = MutableStateFlow(true)
+    // zreso（zreso.cn）：需要人工/自动人机验证，且有 IP 日限，默认关
+    private val _zresoEnabled = MutableStateFlow(false)
     val zresoEnabled: StateFlow<Boolean> = _zresoEnabled.asStateFlow()
 
-    // 盘搜（pan.useai.sbs）：pansou 同构实例，插件多、结果量大，默认开
-    private val _useaiEnabled = MutableStateFlow(true)
+    // 盘搜（pan.useai.sbs）：pansou 同构实例，结果与 PanSou 重复且偶尔很慢，默认关
+    private val _useaiEnabled = MutableStateFlow(false)
     val useaiEnabled: StateFlow<Boolean> = _useaiEnabled.asStateFlow()
 
     // 云搜（yunso.net）：自有 JSON 结构，免鉴权直连，默认开
@@ -51,12 +52,12 @@ class SearchSourceStorage @Inject constructor(
     private val _melostEnabled = MutableStateFlow(true)
     val melostEnabled: StateFlow<Boolean> = _melostEnabled.asStateFlow()
 
-    // 盘小子（pan.xiaozi.cc）：SSR RSC payload 解析接入，以夸克为主，默认开
-    private val _panxiaoziEnabled = MutableStateFlow(true)
+    // 盘小子（pan.xiaozi.cc）：SSR RSC payload 解析接入，以夸克为主但量少，默认关
+    private val _panxiaoziEnabled = MutableStateFlow(false)
     val panxiaoziEnabled: StateFlow<Boolean> = _panxiaoziEnabled.asStateFlow()
 
-    // 宝藏郎（baozang.asia）：免鉴权但响应慢（10-25s），默认开
-    private val _baoysEnabled = MutableStateFlow(true)
+    // 宝藏郎（baozang.asia）：免鉴权但响应慢（10-25s），默认关
+    private val _baoysEnabled = MutableStateFlow(false)
     val baoysEnabled: StateFlow<Boolean> = _baoysEnabled.asStateFlow()
 
     init {
@@ -65,13 +66,13 @@ class SearchSourceStorage @Inject constructor(
             val prefs = context.searchSourceDataStore.data.first()
             _pansouEnabled.value = prefs[KEY_PANSOU] ?: true
             _panhubEnabled.value = prefs[KEY_PANHUB] ?: false
-            _zresoEnabled.value = prefs[KEY_ZRESO] ?: true
-            _useaiEnabled.value = prefs[KEY_USEAI] ?: true
+            _zresoEnabled.value = prefs[KEY_ZRESO] ?: false
+            _useaiEnabled.value = prefs[KEY_USEAI] ?: false
             _yunsoEnabled.value = prefs[KEY_YUNSO] ?: true
             _atawEnabled.value = prefs[KEY_ATAW] ?: true
             _melostEnabled.value = prefs[KEY_MELOST] ?: true
-            _panxiaoziEnabled.value = prefs[KEY_PANXIAOZI] ?: true
-            _baoysEnabled.value = prefs[KEY_BAOYS] ?: true
+            _panxiaoziEnabled.value = prefs[KEY_PANXIAOZI] ?: false
+            _baoysEnabled.value = prefs[KEY_BAOYS] ?: false
         }
     }
 
