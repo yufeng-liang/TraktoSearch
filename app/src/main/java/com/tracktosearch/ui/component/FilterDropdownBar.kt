@@ -3,6 +3,7 @@ package com.tracktosearch.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -133,46 +134,54 @@ fun FilterDropdownBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterPill(
-            text = stringResource(R.string.search_filter_sources) + " · " + selectedSourceCount,
-            selected = selectedSourceCount < availableSourceSet.size,
-            onClick = {
-                haptics.popupShow()
-                openSourcesSheet()
-            }
-        )
-        FilterPill(
-            text = stringResource(R.string.search_filter_disk) + " · " +
-                if (allDiskTypesSelected) {
-                    stringResource(R.string.search_filter_all)
-                } else {
-                    enabledDiskTypes.size.toString()
-                },
-            selected = !allDiskTypesSelected,
-            onClick = {
-                haptics.popupShow()
-                openDiskTypesSheet()
-            }
-        )
-        if (relevanceEnabled) {
+        // 胶囊单独横滚：窄屏/大字体/日韩长文案下可滑动查看，不会把最后一个胶囊裁掉。
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             FilterPill(
-                text = stringResource(R.string.search_filter_high_relevance),
-                selected = showHighRelevanceOnly,
-                accentColor = StatusReleased,
+                text = stringResource(R.string.search_filter_sources) + " · " + selectedSourceCount,
+                selected = selectedSourceCount < availableSourceSet.size,
                 onClick = {
-                    haptics.toggle(!showHighRelevanceOnly)
-                    onToggleShowHighRelevanceOnly()
+                    haptics.popupShow()
+                    openSourcesSheet()
                 }
             )
+            FilterPill(
+                text = stringResource(R.string.search_filter_disk) + " · " +
+                    if (allDiskTypesSelected) {
+                        stringResource(R.string.search_filter_all)
+                    } else {
+                        enabledDiskTypes.size.toString()
+                    },
+                selected = !allDiskTypesSelected,
+                onClick = {
+                    haptics.popupShow()
+                    openDiskTypesSheet()
+                }
+            )
+            if (relevanceEnabled) {
+                FilterPill(
+                    text = stringResource(R.string.search_filter_high_relevance),
+                    selected = showHighRelevanceOnly,
+                    accentColor = StatusReleased,
+                    onClick = {
+                        haptics.toggle(!showHighRelevanceOnly)
+                        onToggleShowHighRelevanceOnly()
+                    }
+                )
+            }
         }
         if (searching) {
             // 进度放在胶囊右侧剩余区域的水平中心，而不是紧贴最后一个胶囊
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(0.45f)
                     .padding(start = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {

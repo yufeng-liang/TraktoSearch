@@ -75,6 +75,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +90,7 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.DialogTone
+import com.tracktosearch.ui.theme.readableOn
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.EmptyStateCard
 import com.tracktosearch.ui.component.hazeTopBar
@@ -234,7 +237,9 @@ fun SearchSourcesScreen(
                     contentPadding = PaddingValues(
                         start = 0.dp,
                         end = 0.dp,
-                        top = 65.dp + statusBarHeight,
+                        // HeaderBar 实际高度约 51dp（48dp IconButton + 3dp 内边距），
+                        // 原 65dp 会在滚动时留下 14dp 的内容穿透缝。
+                        top = 51.dp + statusBarHeight,
                         bottom = 80.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -423,12 +428,24 @@ fun SearchSourcesScreen(
         ZresoVerifyStage.Success -> AppAlertDialog(
             onDismissRequest = {},
             title = null,
-            content = { ZresoVerifySuccessContent() }
+            content = { ZresoVerifySuccessContent() },
+            confirm = DialogAction(
+                label = stringResource(R.string.common_close),
+                onClick = { zresoVerifyStage = ZresoVerifyStage.Hidden }
+            )
         )
         ZresoVerifyStage.Failed -> AppAlertDialog(
             onDismissRequest = {},
             title = null,
-            content = { ZresoVerifyFailedContent() }
+            content = { ZresoVerifyFailedContent() },
+            confirm = DialogAction(
+                label = stringResource(R.string.common_close),
+                onClick = {
+                    // 失败自动进入内置验证页；用户主动关闭时取消这次自动跳转。
+                    zresoAutoJob?.cancel()
+                    zresoVerifyStage = ZresoVerifyStage.Hidden
+                }
+            )
         )
     }
 }
@@ -863,6 +880,7 @@ private fun SourceCardRow(
                 haptics.toggle(it)
                 onCheckedChange(it)
             },
+            modifier = Modifier.semantics { contentDescription = title },
             colors = appSwitchColors()
         )
     }
@@ -1093,7 +1111,8 @@ private fun SourceBadge(parseMode: String) {
     Text(
         text = labelRes,
         style = MaterialTheme.typography.labelSmall,
-        color = color,
+        // 语义色直接压在卡片底色上时对比度不足，按实际底色向黑白两端校正。
+        color = readableOn(color, MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier
             .clip(MaterialTheme.shapes.small)
             .padding(horizontal = 6.dp, vertical = 2.dp)

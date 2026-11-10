@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -135,17 +134,18 @@ internal fun sourceTagColors(source: String, isDark: Boolean): SourceTagColors {
     }
 }
 
+@Composable
 internal fun sourceTagLabel(source: String, customName: String?): String {
     return when (source) {
-        "pansou" -> "PanSou"
-        "panhub" -> "PanHub"
-        "zreso" -> "Zreso"
-        "useai" -> "盘搜"
-        "yunso" -> "云搜"
-        "ataw" -> "阿涛搜"
-        "melost" -> "影盘"
-        "panxiaozi" -> "盘小子"
-        "baoys" -> "宝藏郎"
+        "pansou" -> stringResource(R.string.search_sources_pansou)
+        "panhub" -> stringResource(R.string.search_sources_panhub)
+        "zreso" -> stringResource(R.string.search_sources_zreso)
+        "useai" -> stringResource(R.string.search_sources_useai)
+        "yunso" -> stringResource(R.string.search_sources_yunso)
+        "ataw" -> stringResource(R.string.search_sources_ataw)
+        "melost" -> stringResource(R.string.search_sources_melost)
+        "panxiaozi" -> stringResource(R.string.search_sources_panxiaozi)
+        "baoys" -> stringResource(R.string.search_sources_baoys)
         else -> customName ?: source
     }
 }
@@ -157,9 +157,8 @@ fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
     DiskType.BAIDU -> DiskStyle(
         R.string.disk_baidu, BaiduBlue, R.string.resource_card_seal_baidu, R.drawable.ic_disk_baidu
     )
-    DiskType.ALI -> DiskStyle(
-        R.string.disk_ali, AliIndigo, R.string.resource_card_seal_ali, R.drawable.ic_disk_ali
-    )
+    // Ali 官方图只有 16x16，16dp 尺寸在高密度屏会发虚，改用品牌色首字色章。
+    DiskType.ALI -> DiskStyle(R.string.disk_ali, AliIndigo, R.string.resource_card_seal_ali)
     DiskType.XUNLEI -> DiskStyle(
         R.string.disk_xunlei, XunleiBlue, R.string.resource_card_seal_xunlei, R.drawable.ic_disk_xunlei
     )
@@ -317,7 +316,6 @@ private fun LinkStatusBadge(state: ResourceLinkChecker.State) {
 /** 网盘标识：优先用官方 logo，缺省时退回品牌色 + 首字色章。 */
 @Composable
 private fun DiskSeal(style: DiskStyle, size: Dp = 34.dp) {
-    val diskName = stringResource(style.shortNameResId)
     val compact = size <= 20.dp
     val hasLogo = style.logoResId != null
     val shape = RoundedCornerShape(if (compact) 5.dp else 10.dp)
@@ -334,7 +332,8 @@ private fun DiskSeal(style: DiskStyle, size: Dp = 34.dp) {
                         .background(style.backgroundColor)
                 }
             )
-            .clearAndSetSemantics { contentDescription = diskName },
+            // 图标仅作视觉装饰：完整网盘名已在第二行文本中朗读，避免重复语义。
+            .clearAndSetSemantics { },
         contentAlignment = Alignment.Center
     ) {
         if (hasLogo) {
@@ -407,13 +406,13 @@ private fun MetaText(text: String, modifier: Modifier = Modifier, color: Color? 
 private fun ViewedBadge() {
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Text(
             text = stringResource(R.string.resource_viewed),
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.outline
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             ),
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
             maxLines = 1,
@@ -470,7 +469,8 @@ fun ResourceItemCard(
     var dismissing by remember(item.url) { mutableStateOf(false) }
     val targetAlpha = when {
         dismissing -> 0f
-        isViewed -> 0.55f
+        // 已查看只做轻量降权，保留品牌章/状态徽章的可读性；「已查看」标签单独放在标题行。
+        isViewed -> 0.78f
         else -> 1f
     }
     val cardAlpha by animateFloatAsState(
@@ -555,7 +555,7 @@ fun ResourceItemCard(
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                     ),
                     modifier = Modifier
                         .widthIn(min = 22.dp)
@@ -575,6 +575,11 @@ fun ResourceItemCard(
                     minFontSize = 13.sp,
                     modifier = Modifier.weight(1f)
                 )
+
+                if (isViewed) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    ViewedBadge()
+                }
 
                 if (item.fileCount > 1) {
                     Spacer(modifier = Modifier.width(6.dp))
@@ -603,7 +608,8 @@ fun ResourceItemCard(
                     text = stringResource(style.shortNameResId),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+                        // 次要文字仍用完整 onSurfaceVariant，靠字号/字重区分层级，避免小字对比度低于 4.5:1。
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     maxLines = 1,
                     softWrap = false
@@ -612,7 +618,7 @@ fun ResourceItemCard(
                     text = " · ",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                     ),
                     maxLines = 1,
                     softWrap = false
@@ -621,7 +627,8 @@ fun ResourceItemCard(
                     text = sourceTagLabel(item.source, sourceName),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+                        // 保留轻微层级差，但最低档仍高于 4.5:1。
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f)
                     ),
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -631,7 +638,7 @@ fun ResourceItemCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     MetaText(
                         text = formattedDate,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
                     )
                 }
             }
