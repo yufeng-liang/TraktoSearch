@@ -516,6 +516,12 @@
     <string name="resource_card_seal_xunlei">迅</string>
     <string name="resource_card_seal_uc">U</string>
     <string name="resource_card_seal_115">1</string>
+    <string name="resource_card_seal_guangya">G</string>
+    <string name="resource_card_seal_mobile">M</string>
+    <string name="resource_card_seal_123">1</string>
+    <string name="disk_guangya">光鴨クラウド</string>
+    <string name="disk_mobile">モバイルクラウド</string>
+    <string name="disk_123">123クラウド</string>
     <string name="resource_card_seal_magnet">磁</string>
     <string name="resource_card_seal_other">O</string>
     <string name="resource_copyright_title">リソース著作権に関するお知らせ</string>

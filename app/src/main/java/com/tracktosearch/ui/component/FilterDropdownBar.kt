@@ -550,6 +550,9 @@ private fun diskTypeLabel(type: DiskType): String {
         DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
         DiskType.UC -> stringResource(R.string.disk_uc)
         DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
+        DiskType.DRIVE123 -> stringResource(R.string.disk_123)
+        DiskType.MOBILE -> stringResource(R.string.disk_mobile)
+        DiskType.GUANGYA -> stringResource(R.string.disk_guangya)
         DiskType.MAGNET -> stringResource(R.string.disk_magnet)
         DiskType.OTHER -> stringResource(R.string.disk_other)
     }

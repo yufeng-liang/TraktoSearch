@@ -46,6 +46,9 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.haptic.HapticSemantic
 import com.tracktosearch.ui.haptic.hapticCombinedClickable
 import com.tracktosearch.ui.theme.*
+import com.tracktosearch.ui.theme.Drive123Blue
+import com.tracktosearch.ui.theme.GuangyaOrange
+import com.tracktosearch.ui.theme.MobileCloudBlue
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -167,6 +170,15 @@ fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
     )
     DiskType.ONEONEFIVE -> DiskStyle(
         R.string.disk_115, Blue115, R.string.resource_card_seal_115, R.drawable.ic_disk_115
+    )
+    DiskType.DRIVE123 -> DiskStyle(
+        R.string.disk_123, Drive123Blue, R.string.resource_card_seal_123, R.drawable.ic_disk_123
+    )
+    DiskType.MOBILE -> DiskStyle(
+        R.string.disk_mobile, MobileCloudBlue, R.string.resource_card_seal_mobile, R.drawable.ic_disk_mobile
+    )
+    DiskType.GUANGYA -> DiskStyle(
+        R.string.disk_guangya, GuangyaOrange, R.string.resource_card_seal_guangya, R.drawable.ic_disk_guangya
     )
     DiskType.MAGNET -> DiskStyle(R.string.disk_magnet, Color(0xFFD44000), R.string.resource_card_seal_magnet)
     DiskType.OTHER -> DiskStyle(R.string.disk_other, Color(0xFF8E8E93), R.string.resource_card_seal_other)

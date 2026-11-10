@@ -146,7 +146,9 @@ class ResourceLinkChecker @Inject constructor(
         DiskType.XUNLEI -> "xunlei"
         DiskType.UC -> "uc"
         DiskType.ONEONEFIVE -> "115"
-        DiskType.MAGNET, DiskType.OTHER -> null
+        // 123/移动云盘官方未接入 pansou 检测协议，先不做在线检测
+        DiskType.DRIVE123, DiskType.MOBILE -> null
+        DiskType.MAGNET, DiskType.GUANGYA, DiskType.OTHER -> null
     }
 
     private companion object {

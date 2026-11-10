@@ -240,6 +240,12 @@
     <string name="resource_card_seal_xunlei">迅</string>
     <string name="resource_card_seal_uc">U</string>
     <string name="resource_card_seal_115">1</string>
+    <string name="resource_card_seal_guangya">鸭</string>
+    <string name="resource_card_seal_mobile">移</string>
+    <string name="resource_card_seal_123">1</string>
+    <string name="disk_guangya">光鸭云盘</string>
+    <string name="disk_mobile">移动云盘</string>
+    <string name="disk_123">123云盘</string>
     <string name="resource_card_seal_magnet">磁</string>
     <string name="resource_card_seal_other">O</string>
     <string name="resource_copyright_title">资源版权提示</string>

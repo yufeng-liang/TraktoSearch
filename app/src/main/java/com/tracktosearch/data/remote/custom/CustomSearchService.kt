@@ -251,6 +251,9 @@ class CustomSearchService @Inject constructor(
         "xunlei" -> DiskType.XUNLEI
         "uc" -> DiskType.UC
         "115" -> DiskType.ONEONEFIVE
+        "123" -> DiskType.DRIVE123
+        "mobile" -> DiskType.MOBILE
+        "guangya" -> DiskType.GUANGYA
         "magnet" -> DiskType.MAGNET
         else -> null
     }

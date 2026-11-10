@@ -89,5 +89,8 @@ private fun getDiskAppPackages(diskType: DiskType): List<String> = when (diskTyp
     DiskType.XUNLEI -> listOf("com.xunlei.downloadprovider", "com.xunlei.browser")
     DiskType.UC -> listOf("com.UCMobile")
     DiskType.ONEONEFIVE -> listOf("com.crland.app")
+    DiskType.DRIVE123 -> listOf("com.yunjian.pan", "com.nnq.downmanager")
+    DiskType.MOBILE -> listOf("com.chinamobile.mcloud")
+    DiskType.GUANGYA -> emptyList()
     DiskType.MAGNET, DiskType.OTHER -> emptyList()
 }

@@ -571,6 +571,9 @@ class ResourceRepositoryTest {
             "xunlei" to DiskType.XUNLEI,
             "uc" to DiskType.UC,
             "115" to DiskType.ONEONEFIVE,
+            "123" to DiskType.DRIVE123,
+            "mobile" to DiskType.MOBILE,
+            "guangya" to DiskType.GUANGYA,
             "magnet" to DiskType.MAGNET
         )
         coEvery { zresoApiService.search(any(), any(), any()) } returns zresoEmpty()
@@ -616,7 +619,7 @@ class ResourceRepositoryTest {
 
         repository.searchResources("disk-all")
         coVerify {
-            panSouApiService.search(any(), any(), eq("quark,baidu,aliyun,xunlei,uc,115,magnet"), any())
+            panSouApiService.search(any(), any(), eq("quark,baidu,aliyun,xunlei,uc,115,123,mobile,guangya,magnet"), any())
         }
 
         coEvery { panSouApiService.search(any(), any(), any(), any()) } returns panSouResponse(

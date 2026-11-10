@@ -151,12 +151,14 @@ class ResourceRepository @Inject constructor(
         )
         val ALL_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
-            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
+            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE,
+            DiskType.DRIVE123, DiskType.MOBILE, DiskType.GUANGYA,
+            DiskType.MAGNET
         )
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
-        /** 链接里已有提取码参数时不再重复追加 */
+        /** 链接里已有提取码参数时不再重复追加；123 云盘常见 `?提取码:xxxx` 也视为已带码 */
         private val EXTRACT_CODE_PARAM_REGEX = Regex(
-            "[?&](pwd|password|passcode)=",
+            """[?&](pwd|password|passcode)=|[?&](?:提取码|提取碼|%E6%8F%90%E5%8F%96%E7%A0%81)[:=：]""",
             RegexOption.IGNORE_CASE
         )
         private val EXTRACT_CODE_TEXT_REGEX = Regex(
@@ -166,7 +168,7 @@ class ResourceRepository @Inject constructor(
         /** 这些网盘支持把提取码拼进分享链接 */
         private val EXTRACT_CODE_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
-            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE
+            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.DRIVE123
         )
         /** PanHub 兼容后端单次聚合实测 3-12 秒，超时放宽到 15s */
         private const val PANHUB_TIMEOUT_MS = 15_000L
@@ -668,7 +670,7 @@ class ResourceRepository @Inject constructor(
 
     private fun cloudTypesForPanSou(types: Set<DiskType>): String {
         if (types == ALL_DISK_TYPES) {
-            return "quark,baidu,aliyun,xunlei,uc,115,magnet"
+            return "quark,baidu,aliyun,xunlei,uc,115,123,mobile,guangya,magnet"
         }
         return types.joinToString(",") { diskTypeToPanSou(it) }
     }
@@ -680,6 +682,9 @@ class ResourceRepository @Inject constructor(
         DiskType.XUNLEI -> "xunlei"
         DiskType.UC -> "uc"
         DiskType.ONEONEFIVE -> "115"
+        DiskType.DRIVE123 -> "123"
+        DiskType.MOBILE -> "mobile"
+        DiskType.GUANGYA -> "guangya"
         DiskType.MAGNET -> "magnet"
         DiskType.OTHER -> "others"
     }
@@ -691,8 +696,9 @@ class ResourceRepository @Inject constructor(
         DiskType.XUNLEI -> "xunlei"
         DiskType.UC -> "uc"
         DiskType.ONEONEFIVE -> "115"
-        DiskType.MAGNET -> "magnet"
+        DiskType.DRIVE123, DiskType.MOBILE, DiskType.GUANGYA,
         DiskType.OTHER -> ""
+        DiskType.MAGNET -> "magnet"
     }
 
     /**
@@ -740,6 +746,9 @@ class ResourceRepository @Inject constructor(
         "xunlei" -> DiskType.XUNLEI
         "uc" -> DiskType.UC
         "115" -> DiskType.ONEONEFIVE
+        "123" -> DiskType.DRIVE123
+        "mobile" -> DiskType.MOBILE
+        "guangya" -> DiskType.GUANGYA
         "magnet" -> DiskType.MAGNET
         else -> null
     }
@@ -796,6 +805,8 @@ class ResourceRepository @Inject constructor(
             zresoApiService.search(keyword = keyword, cloud = "")
         } ?: throw ZresoTimeoutException()
         val allowedTypes = enabledDiskTypes.map { diskTypeToZreso(it) }.filter { it.isNotEmpty() }.toSet()
+        // 只选了 Zreso 不支持的网盘类型时直接返回，避免 allowedTypes 为空导致全类型放行
+        if (allowedTypes.isEmpty()) return emptyList()
         val candidates = response.data.results.flatMap { result ->
             result.links.mapNotNull { link ->
                 val diskType = mapZresoType(link.type)
@@ -1098,6 +1109,10 @@ class ResourceRepository @Inject constructor(
         cloudName.contains("迅雷") || url.contains("xunlei.com") -> DiskType.XUNLEI
         cloudName.contains("UC") || url.contains("uc.cn") -> DiskType.UC
         cloudName.contains("115") || url.contains("115.com") -> DiskType.ONEONEFIVE
+        cloudName.contains("123") || url.contains("123pan.com") ||
+            url.contains("123865.com") || url.contains("123684.com") -> DiskType.DRIVE123
+        cloudName.contains("移动") || url.contains("139.com") -> DiskType.MOBILE
+        cloudName.contains("光鸭") || url.contains("guangyapan.com") -> DiskType.GUANGYA
         cloudName.contains("磁") || url.startsWith("magnet:") -> DiskType.MAGNET
         else -> DiskType.OTHER
     }
@@ -1110,6 +1125,9 @@ class ResourceRepository @Inject constructor(
         "xunlei" -> DiskType.XUNLEI
         "uc" -> DiskType.UC
         "115" -> DiskType.ONEONEFIVE
+        "123" -> DiskType.DRIVE123
+        "mobile" -> DiskType.MOBILE
+        "guangya" -> DiskType.GUANGYA
         "magnet" -> DiskType.MAGNET
         else -> mapYunsoType("", url)
     }

@@ -240,6 +240,12 @@
     <string name="resource_card_seal_xunlei">迅</string>
     <string name="resource_card_seal_uc">U</string>
     <string name="resource_card_seal_115">1</string>
+    <string name="resource_card_seal_guangya">G</string>
+    <string name="resource_card_seal_mobile">M</string>
+    <string name="resource_card_seal_123">1</string>
+    <string name="disk_guangya">GuangYa Drive</string>
+    <string name="disk_mobile">Mobile Cloud</string>
+    <string name="disk_123">123 Drive</string>
     <string name="resource_card_seal_magnet">磁</string>
     <string name="resource_card_seal_other">O</string>
     <string name="resource_copyright_title">Resource copyright notice</string>

@@ -5,7 +5,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class DiskType {
-    QUARK, BAIDU, ALI, XUNLEI, UC, ONEONEFIVE, MAGNET, OTHER
+    QUARK, BAIDU, ALI, XUNLEI, UC, ONEONEFIVE,
+    /** 123 云盘（123pan/123865 分享域） */
+    DRIVE123,
+    /** 中国移动云盘（yun.139.com / caiyun.139.com） */
+    MOBILE,
+    /** 光鸭云盘（guangyapan.com） */
+    GUANGYA,
+    MAGNET, OTHER
 }
 
 @Immutable

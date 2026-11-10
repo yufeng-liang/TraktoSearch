@@ -19,6 +19,9 @@ val AliIndigo = Color(0xFF6366F1)        // 阿里云盘 - 靛蓝色
 val XunleiBlue = Color(0xFF2386EA)       // 迅雷 - 标准蓝
 val UcOrange = Color(0xFFFF6B00)         // UC网盘 - 橙色
 val Blue115 = Color(0xFF2563EB)          // 115网盘 - 蓝色
+val Drive123Blue = Color(0xFF2A82E4)    // 123云盘 - 官方主题蓝
+val MobileCloudBlue = Color(0xFF0090F8) // 中国移动云盘 - 亮蓝色
+val GuangyaOrange = Color(0xFFF86800)   // 光鸭云盘 - 橙色
 
 /**
  * 莫奈/印象派主题色，按 Lab 色相升序排列 —— 设置页的色块网格直接按 entries 顺序铺，
