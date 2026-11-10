@@ -79,7 +79,7 @@ gh run watch            # 11–19 分钟
 - **versionCode 单调断言在任何写入之前**：挡住 dry-run 产物顶掉线上、以及同 versionCode 出两个不同包
 - 每次 `wrangler r2 object put` 都断言日志出现 `Resource location: remote`：不加 `--remote` 时 wrangler 会静默读写本机
   `.wrangler/state` 并照样打印 `Upload complete.`，退出码看不出来
-- `check-site.mjs` 钉住了官网下载直链、GitHub 兜底按钮与版本信息数据源，改这些字面量必须同步改断言
+- 官网仓库（`F:\website-trakt`）的 `scripts/check-site.mjs` 钉住了官网下载直链、GitHub Releases 兜底按钮与版本信息数据源（`/manifest/latest.json`），改这些字面量必须同步改断言——脚本不在本仓库，属官网侧护栏
 
 ## 回滚与补救
 
