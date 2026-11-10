@@ -1206,13 +1206,15 @@ private fun DiskSearchContent(
     val newUrls = remember(currentUrls, displayedUrls) { currentUrls - displayedUrls }
     SideEffect { displayedUrls = currentUrls }
 
-    // 筛选切换时给列表一个很短的透明度回落再恢复，避免整块内容硬切
+    // 筛选切换时给列表一个很短的透明度回落再恢复，避免整块内容硬切；同时回到顶部，
+    // 保证筛选后的第一张卡片一定可见（否则可能出现顶部超出视图、首卡是 #N 的中间项）
     val listFade = remember { Animatable(1f) }
     var filtersReady by remember { mutableStateOf(false) }
     LaunchedEffect(diskState.enabledSources, diskState.enabledDiskTypes) {
         if (!filtersReady) {
             filtersReady = true
         } else {
+            listState.scrollToItem(0)
             listFade.snapTo(0.62f)
             listFade.animateTo(1f, tween(180))
         }
