@@ -159,6 +159,10 @@ class ResourceRepository @Inject constructor(
             "[?&](pwd|password|passcode)=",
             RegexOption.IGNORE_CASE
         )
+        private val EXTRACT_CODE_TEXT_REGEX = Regex(
+            """(?:提取码|提取碼|密码|密碼|pwd|password|passcode)\s*[:：=]?\s*([A-Za-z0-9]{3,12})""",
+            RegexOption.IGNORE_CASE
+        )
         /** 这些网盘支持把提取码拼进分享链接 */
         private val EXTRACT_CODE_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
@@ -913,6 +917,8 @@ class ResourceRepository @Inject constructor(
                 // fileCount 为 0 会被 isInvalid 判成失效，至少给 1
                 val fileCount = (item.filePreview?.fileCount ?: 0).coerceAtLeast(1)
                 val fileDate = item.submitTime.take(10)
+                // 少数条目链接在正文、提取码单列（如「链接：… 提取码：8888」，但 URL 未带 pwd）
+                val fallbackPassword = extractPassword(item.description.ifBlank { item.link })
                 candidates.distinctBy { it.second }.mapNotNull { (platform, url) ->
                     val cleanUrl = url.trim()
                     if (!cleanUrl.startsWith("http") && !cleanUrl.startsWith("magnet:")) return@mapNotNull null
@@ -926,7 +932,7 @@ class ResourceRepository @Inject constructor(
                         fileCount = fileCount,
                         // 站点侧删除标记 → 卡片「已失效」徽章；空串表示未标记
                         status = if (item.isDeleted) "deleted" else "",
-                        url = cleanUrl,
+                        url = appendExtractCode(cleanUrl, fallbackPassword, diskType),
                         source = SOURCE_ATAW
                     )
                 }
@@ -1075,6 +1081,12 @@ class ResourceRepository @Inject constructor(
         }
         val encoded = URLEncoder.encode(code, Charsets.UTF_8.name())
         return "$url$separator$param=$encoded"
+    }
+
+    /** 从正文里提取「提取码：xxxx / pwd=xxxx」形式的独立提取码，供没有结构字段的源兜底。 */
+    private fun extractPassword(text: String): String {
+        if (text.isBlank()) return ""
+        return EXTRACT_CODE_TEXT_REGEX.find(text)?.groupValues?.getOrNull(1).orEmpty()
     }
 
     /** 云搜网盘中文名 → DiskType，认不出就看 URL 主机 */

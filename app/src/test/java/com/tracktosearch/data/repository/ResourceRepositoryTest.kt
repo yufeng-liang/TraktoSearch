@@ -1001,6 +1001,30 @@ class ResourceRepositoryTest {
     }
 
     @Test
+    fun searchResources_阿涛搜_正文提取码拼进链接() = runTest {
+        every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
+        every { searchSourceStorage.atawEnabled } returns MutableStateFlow(true)
+
+        coEvery { atawApiService.search(any(), any(), any(), any(), any(), any(), any()) } returns
+            AtawSearchResponse(
+                items = listOf(
+                    AtawItem(
+                        id = 4, title = "繁花 提取码版",
+                        description = "描述… 链接：https://pan.quark.cn/s/ddd 提取码：a1b2",
+                        link = "", botBiz = "quark", mainPlatform = null, platforms = listOf("quark"),
+                        links = emptyList(), filePreview = null,
+                        submitTime = "2026-04-04T09:09:38.000Z"
+                    )
+                )
+            )
+
+        val result = repository.searchResources("繁花").getOrThrow()
+
+        assertThat(result.single().url).isEqualTo("https://pan.quark.cn/s/ddd?pwd=a1b2")
+    }
+
+    @Test
     fun searchResources_云搜_按Scrurlname映射网盘类型且日期格式化() = runTest {
         every { searchSourceStorage.pansouEnabled } returns MutableStateFlow(false)
         every { searchSourceStorage.zresoEnabled } returns MutableStateFlow(false)
