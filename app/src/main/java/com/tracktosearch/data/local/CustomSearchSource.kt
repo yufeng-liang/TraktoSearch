@@ -21,5 +21,7 @@ data class CustomSearchSource(
     val namePath: String? = null,     // e.g., "$.title"
     val urlPath: String? = null,      // e.g., "$.url"
     val diskTypePath: String? = null, // e.g., "$.type"
-    val datePath: String? = null      // e.g., "$.datetime"
+    val datePath: String? = null,     // e.g., "$.datetime"
+    /** 列表里的一句话简介；空值回退显示接口地址 */
+    val description: String? = null
 )

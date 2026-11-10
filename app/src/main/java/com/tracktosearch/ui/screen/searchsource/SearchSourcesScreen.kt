@@ -706,7 +706,8 @@ private fun CustomSourceRow(
                     SourceBadge(parseMode = source.parseMode)
                 }
                 Text(
-                    text = "${source.baseUrl.ifBlank { "-" }}${source.apiPath}",
+                    text = source.description?.takeIf { it.isNotBlank() }
+                        ?: "${source.baseUrl.ifBlank { "-" }}${source.apiPath}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

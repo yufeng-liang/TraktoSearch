@@ -1348,11 +1348,11 @@ Config:
     <string name="search_sources_empty_hint">Custom sources join the built-in ones in every disk search. One API address is enough — the templates already cover the common sites.</string>
     <string name="search_sources_manage_entry_title">Search sources</string>
         <string name="search_sources_pansou">PanSou</string>
-    <string name="search_sources_pansou_desc">Public pan-search API, template parsing</string>
+    <string name="search_sources_pansou_desc">Public PanSou API: many results, sometimes unstable</string>
     <string name="search_sources_panhub">Panhub</string>
-    <string name="search_sources_panhub_desc">Panhub API, configurable concurrency &amp; plugins</string>
+    <string name="search_sources_panhub_desc">Third-party PanHub-compatible backend; plugin and channel aggregation, variable stability</string>
     <string name="search_sources_zreso">Zreso</string>
-    <string name="search_sources_zreso_desc">zreso.cn resource library, template parsing</string>
+    <string name="search_sources_zreso_desc">zreso.cn resource library; browser verification and rate limits required</string>
     <string name="search_sources_zreso_verify">Open zreso human verification in browser</string>
     <string name="search_sources_useai">PanSearch</string>
     <string name="search_sources_useai_desc">pan.useai.sbs PanSou instance, 60+ plugins aggregated</string>
@@ -1399,6 +1399,9 @@ Config:
     <string name="editor_paste_empty">No address found on the clipboard</string>
     <string name="editor_base_url_hint">Site root only, without the API path</string>
     <string name="editor_name_hint">Shown in the source list — anything you can recognise</string>
+    <string name="editor_label_description">Description</string>
+    <string name="editor_description_hint">One-line intro, max 30 characters; leave blank to show the API address</string>
+    <string name="editor_description_placeholder">e.g. Movie resources, fast updates</string>
     <string name="editor_group_basic">Basic info</string>
     <string name="editor_group_request">Request params</string>
     <string name="editor_group_parse">Parse rules</string>

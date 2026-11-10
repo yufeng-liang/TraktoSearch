@@ -36,6 +36,8 @@ class SearchSourceEditorViewModel @Inject constructor(
     // 表单状态
     private val _name = MutableStateFlow("")
     val name: StateFlow<String> = _name.asStateFlow()
+    private val _description = MutableStateFlow("")
+    val description: StateFlow<String> = _description.asStateFlow()
     private val _baseUrl = MutableStateFlow("")
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
     private val _apiPath = MutableStateFlow("api/search")
@@ -179,6 +181,7 @@ class SearchSourceEditorViewModel @Inject constructor(
 
     private fun applySource(source: CustomSearchSource) {
         _name.value = source.name
+        _description.value = source.description.orEmpty()
         _baseUrl.value = source.baseUrl
         _apiPath.value = source.apiPath
         _keywordParam.value = source.keywordParam
@@ -289,6 +292,7 @@ class SearchSourceEditorViewModel @Inject constructor(
         val source = CustomSearchSource(
             id = editingId ?: java.util.UUID.randomUUID().toString(),
             name = finalName,
+            description = _description.value.trim().ifBlank { null },
             baseUrl = finalBaseUrl,
             apiPath = _apiPath.value.trim(),
             keywordParam = _keywordParam.value.trim(),
@@ -315,7 +319,9 @@ class SearchSourceEditorViewModel @Inject constructor(
         val n = _name.value.trim(); val b = _baseUrl.value.trim()
         if (n.isBlank() || b.isBlank()) return null
         return CustomSearchSource(
-            id = editingId ?: "temp", name = n, baseUrl = b,
+            id = editingId ?: "temp", name = n,
+            description = _description.value.trim().ifBlank { null },
+            baseUrl = b,
             apiPath = _apiPath.value.trim(), keywordParam = _keywordParam.value.trim(),
             cloudTypesParam = _cloudTypesParam.value.trim().ifBlank { null },
             cloudTypesValue = _cloudTypesValue.value.trim().ifBlank { null },
@@ -385,6 +391,7 @@ class SearchSourceEditorViewModel @Inject constructor(
 
     // ---- 表单 setter ----
     fun setName(v: String) { _name.value = v }
+    fun setDescription(v: String) { _description.value = v.take(30) }
     fun setBaseUrl(v: String) { _baseUrl.value = v }
     fun setApiPath(v: String) { _apiPath.value = v }
     fun setKeywordParam(v: String) { _keywordParam.value = v }

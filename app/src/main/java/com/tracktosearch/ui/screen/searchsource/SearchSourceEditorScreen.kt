@@ -86,6 +86,7 @@ fun SearchSourceEditorScreen(
 ) {
     val hazeState = remember { HazeState() }
     val name by viewModel.name.collectAsStateWithLifecycle()
+    val description by viewModel.description.collectAsStateWithLifecycle()
     val baseUrl by viewModel.baseUrl.collectAsStateWithLifecycle()
     val apiPath by viewModel.apiPath.collectAsStateWithLifecycle()
     val keywordParam by viewModel.keywordParam.collectAsStateWithLifecycle()
@@ -210,6 +211,7 @@ fun SearchSourceEditorScreen(
                     when (step) {
                         1 -> StepBasic(
                             name = name, onNameChange = viewModel::setName,
+                            description = description, onDescriptionChange = viewModel::setDescription,
                             baseUrl = baseUrl, onBaseUrlChange = viewModel::setBaseUrl,
                             onPickTemplate = { showTemplateSheet = true },
                             onPasteBaseUrl = onPasteBaseUrl
@@ -469,6 +471,8 @@ private fun StepIndicator(
 private fun StepBasic(
     name: String,
     onNameChange: (String) -> Unit,
+    description: String,
+    onDescriptionChange: (String) -> Unit,
     baseUrl: String,
     onBaseUrlChange: (String) -> Unit,
     onPickTemplate: () -> Unit,
@@ -553,6 +557,13 @@ private fun StepBasic(
             onValueChange = onNameChange,
             required = true,
             supporting = stringResource(R.string.editor_name_hint)
+        )
+        SourceTextField(
+            label = stringResource(R.string.editor_label_description),
+            value = description,
+            onValueChange = onDescriptionChange,
+            placeholder = stringResource(R.string.editor_description_placeholder),
+            supporting = stringResource(R.string.editor_description_hint)
         )
         SourceTextField(
             label = stringResource(R.string.editor_label_base_url),

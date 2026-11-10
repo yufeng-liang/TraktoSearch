@@ -24,7 +24,8 @@ class ShareCodecTest {
         namePath = "$.title",
         urlPath = "$.url",
         diskTypePath = "$.type",
-        datePath = "$.datetime"
+        datePath = "$.datetime",
+        description = "影视资源为主，更新快"
     )
 
     @Test
@@ -46,6 +47,16 @@ class ShareCodecTest {
             datePath = null
         )
         assertEquals(source, ShareCodec.decode(ShareCodec.encode(source)))
+    }
+
+    @Test
+    fun `旧分享码没有简介字段仍可解码`() {
+        val oldJson = """{"id":"old-1","name":"旧源","baseUrl":"https://example.com/","apiPath":"api/search","keywordParam":"kw"}"""
+        val payload = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(oldJson.toByteArray(Charsets.UTF_8))
+        val decoded = ShareCodec.decode("TRS-SOURCE:1:$payload")
+        assertNotNull(decoded)
+        assertNull(decoded!!.description)
     }
 
     @Test

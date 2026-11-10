@@ -1244,11 +1244,11 @@
     <string name="search_sources_empty_hint">사용자 소스는 내장 소스와 함께 매번 검색에 참여합니다. API 주소 하나만 넣으면 되고, 주요 사이트는 템플릿에 준비되어 있습니다.</string>
     <string name="search_sources_manage_entry_title">검색 소스</string>
         <string name="search_sources_pansou">PanSou</string>
-    <string name="search_sources_pansou_desc">공공 판검색 API, 템플릿 파싱</string>
+    <string name="search_sources_pansou_desc">공용 PanSou API. 결과는 많지만 가끔 불안정</string>
     <string name="search_sources_panhub">Panhub</string>
-    <string name="search_sources_panhub_desc">Panhub API, 동시성 및 플러그인 설정 가능</string>
+    <string name="search_sources_panhub_desc">서드파티 PanHub 호환 백엔드. 플러그인/채널 집계, 안정성 보통</string>
     <string name="search_sources_zreso">Zreso</string>
-    <string name="search_sources_zreso_desc">zreso.cn 자원 라이브러리, 템플릿 파싱</string>
+    <string name="search_sources_zreso_desc">zreso.cn 리소스 라이브러리. 브라우저 인증과 빈도 제한 필요</string>
     <string name="search_sources_zreso_verify">브라우저에서 zreso 인증 열기</string>
     <string name="search_sources_useai">판서치</string>
     <string name="search_sources_useai_desc">pan.useai.sbs PanSou 인스턴스, 플러그인 60개 이상 집계</string>
@@ -1295,6 +1295,9 @@
     <string name="editor_paste_empty">클립보드에 주소가 없습니다</string>
     <string name="editor_base_url_hint">사이트 루트 주소만 입력하고 API 경로는 제외하세요</string>
     <string name="editor_name_hint">검색 소스 목록에 표시됩니다. 알아볼 수 있는 이름이면 됩니다</string>
+    <string name="editor_label_description">소개</string>
+    <string name="editor_description_hint">한 줄 소개(최대 30자). 비워 두면 API 주소를 표시합니다</string>
+    <string name="editor_description_placeholder">예: 영화 자료 위주, 업데이트 빠름</string>
     <string name="editor_group_basic">기본 정보</string>
     <string name="editor_group_request">요청 파라미터</string>
     <string name="editor_group_parse">파싱 규칙</string>

@@ -1341,11 +1341,11 @@
     <string name="search_sources_empty_hint">自定义源会和内置源一起参与每次网盘搜索。填一个 API 地址就能用，常见站点模板里已经备好了。</string>
     <string name="search_sources_manage_entry_title">搜索源</string>
         <string name="search_sources_pansou">PanSou</string>
-    <string name="search_sources_pansou_desc">公共盘搜 API，模板解析</string>
+    <string name="search_sources_pansou_desc">公共 PanSou 接口，资源多，偶尔不稳定</string>
     <string name="search_sources_panhub">Panhub</string>
-    <string name="search_sources_panhub_desc">Panhub API，可配置并发与插件</string>
+    <string name="search_sources_panhub_desc">第三方兼容后端，插件与频道聚合，稳定性一般</string>
     <string name="search_sources_zreso">Zreso</string>
-    <string name="search_sources_zreso_desc">zreso.cn 资源库，模板解析</string>
+    <string name="search_sources_zreso_desc">zreso.cn 资源库，需浏览器验证，有频率限制</string>
     <string name="search_sources_zreso_verify">在浏览器中完成 zreso 人机验证</string>
     <string name="search_sources_useai">盘搜</string>
     <string name="search_sources_useai_desc">pan.useai.sbs 盘搜实例，聚合 60+ 插件</string>
@@ -1392,6 +1392,9 @@
     <string name="editor_paste_empty">剪贴板里没有找到地址</string>
     <string name="editor_base_url_hint">只填站点根地址，不含接口路径</string>
     <string name="editor_name_hint">显示在搜索源列表里，能认出来就行</string>
+    <string name="editor_label_description">简介</string>
+    <string name="editor_description_hint">一句话介绍这个源，最多 30 字；留空时显示接口地址</string>
+    <string name="editor_description_placeholder">例如：影视资源为主，更新快</string>
     <string name="editor_group_basic">基本信息</string>
     <string name="editor_group_request">请求参数</string>
     <string name="editor_group_parse">解析规则</string>

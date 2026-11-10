@@ -1244,11 +1244,11 @@
     <string name="search_sources_empty_hint">カスタムソースは組み込みソースと一緒に毎回の検索に参加します。API アドレスを 1 つ入れるだけで使え、主要サイトはテンプレートに用意済みです。</string>
     <string name="search_sources_manage_entry_title">検索ソース</string>
         <string name="search_sources_pansou">PanSou</string>
-    <string name="search_sources_pansou_desc">公共パン検索API、テンプレート解析</string>
+    <string name="search_sources_pansou_desc">公共 PanSou API。件数は多いが時々不安定</string>
     <string name="search_sources_panhub">Panhub</string>
-    <string name="search_sources_panhub_desc">Panhub API、並列数とプラグインを設定可能</string>
+    <string name="search_sources_panhub_desc">サードパーティ製 PanHub 互換バックエンド。プラグイン/チャンネル集約、安定性は普通</string>
     <string name="search_sources_zreso">Zreso</string>
-    <string name="search_sources_zreso_desc">zreso.cn 資源ライブラリ、テンプレート解析</string>
+    <string name="search_sources_zreso_desc">zreso.cn の資源ライブラリ。ブラウザ認証と回数制限あり</string>
     <string name="search_sources_zreso_verify">ブラウザで zreso の本人確認を開く</string>
     <string name="search_sources_useai">盤捜</string>
     <string name="search_sources_useai_desc">pan.useai.sbs の PanSou インスタンス、60 以上のプラグインを集約</string>
@@ -1295,6 +1295,9 @@
     <string name="editor_paste_empty">クリップボードにアドレスが見つかりません</string>
     <string name="editor_base_url_hint">サイトのルートアドレスのみ。API パスは含めません</string>
     <string name="editor_name_hint">検索ソース一覧に表示されます。自分が分かる名前で十分です</string>
+    <string name="editor_label_description">説明</string>
+    <string name="editor_description_hint">一言で紹介（30 文字以内）。空欄なら API アドレスを表示します</string>
+    <string name="editor_description_placeholder">例：映画中心、更新が速い</string>
     <string name="editor_group_basic">基本情報</string>
     <string name="editor_group_request">リクエストパラメータ</string>
     <string name="editor_group_parse">解析ルール</string>
