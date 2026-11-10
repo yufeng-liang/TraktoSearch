@@ -59,6 +59,15 @@ class AiProviderSettingsRepository(
                 message = "Provider for ${slot.name} is not fully configured"
             )
         }
+        // 存量兼容：早期版本允许存「裸域名」，这里拦下并引导用户回配置页重存，
+        // 而不是等到真正发请求时抛一条晦涩的 OkHttp 报错。
+        if (!AiProviderUrl.hasValidScheme(provider.baseUrl)) {
+            throw AiProviderException(
+                code = AiProviderErrorCode.PROVIDER_INVALID,
+                message = "Provider base URL must start with http:// or https:// — " +
+                    "open the AI provider settings and re-save the address"
+            )
+        }
         return AiResolvedConfig(
             protocol = provider.protocol,
             baseUrl = AiProviderUrl.normalizeBaseUrl(provider.baseUrl),
@@ -200,6 +209,13 @@ class AiProviderSettingsRepository(
         apiKey: String?
     ) {
         val normalizedId = AiProviderConfig.normalizeId(id)
+        // scheme 校验前置：坏地址在保存当场就报错，而不是落盘后 resolve 才炸。
+        if (!AiProviderUrl.hasValidScheme(baseUrl)) {
+            throw AiProviderException(
+                code = AiProviderErrorCode.PROVIDER_INVALID,
+                message = "API base URL must start with http:// or https://"
+            )
+        }
         // 语音/图片服务商只支持 OpenAI 兼容协议，其余协议自动收敛
         val effectiveProtocol =
             if (normalizedId == AiProviderConfig.GLOBAL_ID) protocol
@@ -305,6 +321,12 @@ class AiProviderSettingsRepository(
                 message = "API base URL is missing"
             )
         }
+        if (!AiProviderUrl.hasValidScheme(baseUrl)) {
+            throw AiProviderException(
+                code = AiProviderErrorCode.PROVIDER_INVALID,
+                message = "API base URL must start with http:// or https://"
+            )
+        }
         return AiResolvedConfig(
             protocol = effectiveProtocol,
             baseUrl = AiProviderUrl.normalizeBaseUrl(baseUrl),
@@ -316,7 +338,14 @@ class AiProviderSettingsRepository(
     private companion object {
         /** 单模型探测超时：卡死的模型不该让整页转圈。 */
         const val PROBE_TIMEOUT_MS = 60_000L
-        const val CHAT_PROBE_MAX_TOKENS = 8
+
+        /**
+         * 聊天探测的 max_tokens 上限。取 256 而不是更小的值：
+         * reasoning 模型（o 系 / 思考型 Gemini / Claude extended thinking）会把
+         * 生成预算整段花在思考上，给 8 个 token 时 content 必然为空，
+         * 会把「完全可用的模型」误报成探测失败。
+         */
+        const val CHAT_PROBE_MAX_TOKENS = 256
         const val TTS_PROBE_TEXT = "到！"
         const val TTS_PROBE_VOICE = "alloy"
         const val IMAGE_PROBE_PROMPT = "a single small red circle on white background"

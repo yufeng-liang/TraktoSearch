@@ -2384,6 +2384,7 @@ Config:
     <string name="ai_provider_protocol_openai_only">Only OpenAI-compatible endpoints are supported for voice and image generation.</string>
     <string name="ai_provider_base_url">API base URL</string>
     <string name="ai_provider_base_url_hint">e.g. https://api.example.com/v1</string>
+    <string name="ai_provider_http_warning">HTTP is not encrypted. Use it only for local or trusted networks.</string>
     <string name="ai_provider_api_key">API key</string>
     <string name="ai_provider_api_key_hint">Paste your API key</string>
     <string name="ai_provider_key_saved">A key is already saved; leave blank to keep it</string>

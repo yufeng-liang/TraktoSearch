@@ -1227,7 +1227,12 @@ class AiRepository @Inject constructor(
             // 响应结构对不上 DTO：归为响应异常而非裸抛，给用户"内容异常"而非兜底文案
             Result.failure(AiErrorMapper.exception("INVALID_RESPONSE", e.message ?: "INVALID_RESPONSE", 200))
         } catch (e: Exception) {
-            Result.failure(e)
+            // 兜底：未知异常（SecurityException / IllegalStateException / Keystore 坏掉等）
+            // 不把原始异常对象透传给 UI——可能携带内部实现细节。统一映射成
+            // UNKNOWN + 异常摘要，走通用错误展示；message 保留 e.message 便于排查。
+            Result.failure(
+                AiErrorMapper.exception("UNKNOWN", e.message ?: "Unexpected error", 0)
+            )
         }
     }
 

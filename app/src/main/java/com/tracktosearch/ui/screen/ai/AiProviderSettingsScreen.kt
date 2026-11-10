@@ -77,6 +77,7 @@ import com.tracktosearch.data.ai.provider.AiModelProbe
 import com.tracktosearch.data.ai.provider.AiProviderConfig
 import com.tracktosearch.data.ai.provider.AiProviderProtocol
 import com.tracktosearch.data.ai.provider.AiProviderSettings
+import com.tracktosearch.data.ai.provider.AiProviderUrl
 import com.tracktosearch.ui.component.AppAlertDialog
 import com.tracktosearch.ui.component.DialogAction
 import com.tracktosearch.ui.component.SubPageTopBar
@@ -370,6 +371,14 @@ private fun ProviderCard(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            // 明文 http 提示：BYOK 允许本地/内网 http 地址，但要让用户知道流量不加密
+            if (AiProviderUrl.isCleartextHttp(baseUrl)) {
+                Text(
+                    text = stringResource(R.string.ai_provider_http_warning),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it },

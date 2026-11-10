@@ -2388,6 +2388,7 @@
     <string name="ai_provider_protocol_openai_only">음성과 이미지 생성은 OpenAI 호환 API만 지원합니다.</string>
     <string name="ai_provider_base_url">API 기본 URL</string>
     <string name="ai_provider_base_url_hint">예 https://api.example.com/v1</string>
+    <string name="ai_provider_http_warning">HTTP는 암호화되지 않습니다. 로컬 또는 신뢰할 수 있는 네트워크에서만 사용하세요.</string>
     <string name="ai_provider_api_key">API 키</string>
     <string name="ai_provider_api_key_hint">API 키를 붙여넣기</string>
     <string name="ai_provider_key_saved">키가 이미 저장되어 있습니다. 비워 두면 유지됩니다</string>

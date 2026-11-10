@@ -2388,6 +2388,7 @@
     <string name="ai_provider_protocol_openai_only">音声と画像生成は OpenAI 互換 API のみ対応です。</string>
     <string name="ai_provider_base_url">API ベース URL</string>
     <string name="ai_provider_base_url_hint">例 https://api.example.com/v1</string>
+    <string name="ai_provider_http_warning">HTTP は暗号化されません。ローカルまたは信頼できるネットワークでのみ使用してください。</string>
     <string name="ai_provider_api_key">API キー</string>
     <string name="ai_provider_api_key_hint">API キーを貼り付け</string>
     <string name="ai_provider_key_saved">キーは保存済み。空欄のままだと変更しません</string>

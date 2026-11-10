@@ -60,13 +60,35 @@ object AiProviderErrorMapper {
         )
     }
 
-    /** 网络层失败（IOException 等）的统一包装：不区分协议，一律 NETWORK。 */
-    fun fromNetworkError(cause: Throwable): AiProviderException =
-        AiProviderException(
+    /**
+     * 网络层失败（IOException 等）的统一包装：不区分协议，一律 NETWORK。
+     *
+     * 特例：明文 http 被平台策略拦下（`java.net.UnknownServiceException: CLEARTEXT
+     * communication ...`）。放开 network_security_config 后正常地址不会再触发，
+     * 一旦出现说明该设备策略层仍拒绝明文（ROM 定制/MDM 等），给一条可读说明，
+     * 不让用户对着「CLEARTEXT communication to xx not permitted」猜。
+     */
+    fun fromNetworkError(cause: Throwable): AiProviderException {
+        if (cause.isCleartextBlocked()) {
+            return AiProviderException(
+                code = AiProviderErrorCode.NETWORK,
+                message = "Cleartext HTTP request was blocked by the device network security policy",
+                cause = cause
+            )
+        }
+        return AiProviderException(
             code = AiProviderErrorCode.NETWORK,
             message = cause.message ?: cause.javaClass.simpleName,
             cause = cause
         )
+    }
+
+    /** cause 链（最多 5 层，防自引用死循环）里是否混着平台抛出的 CLEARTEXT 拦截。 */
+    private fun Throwable.isCleartextBlocked(): Boolean =
+        generateSequence(this) { it.cause?.takeIf { c -> c !== it } }
+            .take(5)
+            .any { it is java.net.UnknownServiceException &&
+                it.message?.contains("CLEARTEXT", ignoreCase = true) == true }
 
     /**
      * 判断错误体是否指向「该模型不接受 temperature 参数」。

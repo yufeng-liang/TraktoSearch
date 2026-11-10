@@ -46,8 +46,9 @@
             android:roundIcon="@mipmap/ic_launcher_round"
             android:supportsRtl="true"
             android:theme="@style/Theme.TraktoSearch"
-            android:usesCleartextTraffic="false"
             android:networkSecurityConfig="@xml/network_security_config">
+            <!-- usesCleartextTraffic 已移除：API 24+ networkSecurityConfig 优先，
+                 明文流量策略统一在 network_security_config.xml（BYOK 允许 http 服务地址） -->
 
         <provider
             android:name="androidx.core.content.FileProvider"

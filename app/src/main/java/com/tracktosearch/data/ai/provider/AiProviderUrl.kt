@@ -28,6 +28,24 @@ internal object AiProviderUrl {
     /** Gemini 的端点长这样：`/v1beta/models/gemini-2.0-flash:generateContent`。 */
     private val GENERATE_CONTENT_SUFFIX = Regex(":\\w+$")
 
+    /**
+     * scheme 校验：地址必须显式带 `http://` 或 `https://`。
+     *
+     * BYOK 允许用户自填 http 地址（本地 Ollama、内网中转等），所以不强制 https，
+     * 但「裸域名」必须拦下——OkHttp 拿到无 scheme 的地址会抛
+     * `Expected URL scheme 'http' or 'https'`，报错时机晚且信息晦涩，
+     * 在保存/拉目录/resolve 时就给出可读的校验错误。
+     */
+    fun hasValidScheme(raw: String): Boolean {
+        val trimmed = raw.trim()
+        return trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true)
+    }
+
+    /** 明文 http 判定（配置页安全提示用）：scheme 是 `http://` 即视为明文传输。 */
+    fun isCleartextHttp(raw: String): Boolean =
+        raw.trim().startsWith("http://", ignoreCase = true)
+
     fun normalizeBaseUrl(raw: String): String {
         var url = raw.trim()
         if (url.isEmpty()) return ""

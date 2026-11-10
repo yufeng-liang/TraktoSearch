@@ -2377,6 +2377,7 @@
     <string name="ai_provider_protocol_openai_only">语音与图片生成仅支持 OpenAI 兼容接口。</string>
     <string name="ai_provider_base_url">API 地址（Base URL）</string>
     <string name="ai_provider_base_url_hint">例如 https://api.example.com/v1</string>
+    <string name="ai_provider_http_warning">HTTP 不加密，仅建议用于本地或可信网络。</string>
     <string name="ai_provider_api_key">API Key</string>
     <string name="ai_provider_api_key_hint">粘贴你的 API Key</string>
     <string name="ai_provider_key_saved">已保存过 Key，留空则保持不变</string>
