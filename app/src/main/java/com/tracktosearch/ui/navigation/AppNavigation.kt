@@ -103,6 +103,7 @@ import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorScreen
 import com.tracktosearch.ui.screen.searchsource.SearchSourceEditorViewModel
 import com.tracktosearch.ui.screen.searchsource.SearchSourcesScreen
 import com.tracktosearch.ui.screen.searchsource.SearchSourcesViewModel
+import com.tracktosearch.ui.screen.zreso.ZresoVerifyScreen
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.help.HelpSections
@@ -193,6 +194,7 @@ object Routes {
     const val MESSAGES = "messages"
     const val SEARCH_SOURCES = "searchSources"
     const val SEARCH_SOURCE_EDITOR = "searchSourceEditor/{mode}/{payload}"
+    const val ZRESO_VERIFY = "zresoVerify"
     const val PRIVACY = "privacy"
 
     /** BYOK：AI 服务商配置（全局/语音配图 Provider、按功能覆盖模型、偏好开关） */
@@ -1562,7 +1564,16 @@ fun AppNavigation(
                             },
                             onEditSource = { sourceId ->
                                 navController.navigate(Routes.searchSourceEditorRoute("edit", sourceId))
-                            }
+                            },
+                            onOpenZresoVerify = { navController.navigate(Routes.ZRESO_VERIFY) }
+                        )
+                    }
+                }
+
+                composable(Routes.ZRESO_VERIFY) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        ZresoVerifyScreen(
+                            onClose = { navController.popBackStack() }
                         )
                     }
                 }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -58,6 +59,10 @@ class ResourceRepository @Inject constructor(
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService
 ) {
+
+    /** 搜索时后台自动验证失败事件：搜索页收集后做一次性提示。 */
+    val zresoBackgroundFailureEvents: SharedFlow<Unit> =
+        zresoWebViewVerifier.backgroundFailureEvents
 
     /**
      * 根据设置页开关计算实际启用的搜索源（与调用方传入的 enabledSources 取交集）。
@@ -690,7 +695,9 @@ class ResourceRepository @Inject constructor(
             val dailyLimit = isZresoDailyLimit(error)
             // 429（非每日上限）说明 Cap 验证的配额窗口用尽：用隐藏 WebView 自动过一次人机
             // 验证，再重试一次 /api/search。验证放行按出口 IP 生效，同设备普通 HTTP 请求随即可用。
-            if (error.code() == 429 && !dailyLimit && zresoWebViewVerifier.ensureVerified()) {
+            if (error.code() == 429 && !dailyLimit &&
+                zresoWebViewVerifier.ensureVerified(notifyBackgroundFailure = true)
+            ) {
                 val retried = runCatching { requestZreso(keyword, enabledDiskTypes) }
                 retried.getOrNull()?.let { return it }
                 val retryError = retried.exceptionOrNull()

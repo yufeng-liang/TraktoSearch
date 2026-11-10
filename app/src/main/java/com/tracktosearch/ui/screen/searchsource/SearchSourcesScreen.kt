@@ -1,7 +1,13 @@
 package com.tracktosearch.ui.screen.searchsource
 
-import android.content.Intent
-import android.net.Uri
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,12 +28,14 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
@@ -51,6 +59,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,10 +71,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +101,8 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -101,12 +114,13 @@ fun SearchSourcesScreen(
     onBack: () -> Unit,
     onEditSource: (String) -> Unit,
     onAddFromTemplate: (String) -> Unit,
+    /** 打开应用内 Zreso 验证页（手动兜底）。 */
+    onOpenZresoVerify: () -> Unit = {},
     /** 跳到帮助页「自定义搜索源」那一段：配置字段的说明都在那里 */
     onHelpClick: () -> Unit = {},
     viewModel: SearchSourcesViewModel = hiltViewModel()
 ) {
     val hazeState = remember { HazeState() }
-    val context = LocalContext.current
     val listState = rememberLazyListState()
     val hasContentUnderTopBar by remember {
         derivedStateOf {
@@ -141,6 +155,55 @@ fun SearchSourcesScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val importSuccessMessage = stringResource(R.string.import_success)
+    val zresoSuccessMessage = stringResource(R.string.zreso_verify_success_snackbar)
+    val zresoRecentlyMessage = stringResource(R.string.zreso_verify_recent)
+    var zresoVerifyStage by remember { mutableStateOf(ZresoVerifyStage.Hidden) }
+    var zresoAutoJob by remember { mutableStateOf<Job?>(null) }
+    val zresoVerifiedUntil by viewModel.zresoVerifiedUntil.collectAsStateWithLifecycle()
+    val zresoVerifying by viewModel.zresoVerifying.collectAsStateWithLifecycle()
+    val zresoVerifyFailed by viewModel.zresoVerifyFailed.collectAsStateWithLifecycle()
+    var zresoShieldValid by remember { mutableStateOf(false) }
+
+    // 每秒刷新一次盾牌状态，验证有效期结束后自动恢复主题色；无需用户操作。
+    LaunchedEffect(zresoVerifiedUntil) {
+        while (true) {
+            val valid = System.currentTimeMillis() < zresoVerifiedUntil
+            zresoShieldValid = valid
+            if (!valid) break
+            delay(1_000)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.zresoManualSuccessEvents.collect {
+            snackbarHostState.showSnackbar(zresoSuccessMessage)
+        }
+    }
+
+    fun openZresoVerifyFlow() {
+        if (!zresoEnabled) return
+        if (viewModel.wasZresoRecentlyVerified()) {
+            scope.launch { snackbarHostState.showSnackbar(zresoRecentlyMessage) }
+            return
+        }
+        zresoVerifyStage = ZresoVerifyStage.Confirm
+    }
+
+    fun startZresoAutomation() {
+        zresoVerifyStage = ZresoVerifyStage.Running
+        zresoAutoJob = scope.launch {
+            val verified = viewModel.verifyZresoAutomatically()
+            if (verified) {
+                zresoVerifyStage = ZresoVerifyStage.Success
+                delay(900)
+                zresoVerifyStage = ZresoVerifyStage.Hidden
+                snackbarHostState.showSnackbar(zresoSuccessMessage)
+            } else {
+                zresoVerifyStage = ZresoVerifyStage.Hidden
+                onOpenZresoVerify()
+            }
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -194,14 +257,10 @@ fun SearchSourcesScreen(
                             onPanxiaoziChange = viewModel::setPanxiaoziEnabled,
                             onBaoysChange = viewModel::setBaoysEnabled,
                             onOpenPanHubConfig = { showPanHubConfig = true },
-                            onOpenZresoVerify = {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://www.zreso.cn/turnstile/challenge?redirect=%2Fsearch")
-                                    )
-                                )
-                            }
+                            onOpenZresoVerify = { openZresoVerifyFlow() },
+                            zresoVerified = zresoShieldValid,
+                            zresoVerifying = zresoVerifying,
+                            zresoVerifyFailed = zresoVerifyFailed
                         )
                     }
 
@@ -324,7 +383,182 @@ fun SearchSourcesScreen(
             )
         )
     }
+
+    // ---- Zreso 手动兜底：说明 -> 15 秒无感验证 -> 失败进内置验证页 ----
+    when (zresoVerifyStage) {
+        ZresoVerifyStage.Hidden -> Unit
+        ZresoVerifyStage.Confirm -> AppAlertDialog(
+            onDismissRequest = { zresoVerifyStage = ZresoVerifyStage.Hidden },
+            title = stringResource(R.string.zreso_verify_dialog_title),
+            message = stringResource(R.string.zreso_verify_dialog_message),
+            supportMessage = stringResource(R.string.zreso_verify_dialog_note),
+            icon = { ZresoShieldBadge() },
+            confirm = DialogAction(
+                label = stringResource(R.string.zreso_verify_start),
+                onClick = { startZresoAutomation() }
+            ),
+            dismiss = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = { zresoVerifyStage = ZresoVerifyStage.Hidden }
+            )
+        )
+        ZresoVerifyStage.Running -> AppAlertDialog(
+            onDismissRequest = {
+                zresoAutoJob?.cancel()
+                zresoVerifyStage = ZresoVerifyStage.Hidden
+            },
+            title = stringResource(R.string.zreso_verify_dialog_title),
+            content = { ZresoVerifyRunningContent() },
+            confirm = DialogAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = {
+                    zresoAutoJob?.cancel()
+                    zresoVerifyStage = ZresoVerifyStage.Hidden
+                }
+            )
+        )
+        ZresoVerifyStage.Success -> AppAlertDialog(
+            onDismissRequest = {},
+            title = null,
+            content = { ZresoVerifySuccessContent() }
+        )
+    }
 }
+
+/** 确认弹窗顶部的盾牌标记。 */
+@Composable
+private fun ZresoShieldBadge() {
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.VerifiedUser,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp)
+        )
+    }
+}
+
+/** 正在验证：呼吸圆环 + 盾牌，避免只有一行 spinner 的干巴感。 */
+@Composable
+private fun ZresoVerifyRunningContent() {
+    val transition = rememberInfiniteTransition(label = "zreso_verify_running")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing)),
+        label = "zreso_verify_pulse"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier.size(72.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val maxRadius = size.minDimension / 2f
+                drawCircle(
+                    color = primary.copy(alpha = 0.22f * (1f - progress)),
+                    radius = maxRadius * (0.55f + 0.45f * progress)
+                )
+                drawCircle(
+                    color = primary.copy(alpha = 0.28f),
+                    radius = maxRadius - 1.dp.toPx(),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.VerifiedUser,
+                contentDescription = null,
+                tint = primary,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = stringResource(R.string.zreso_verify_running),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.zreso_verify_running_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** 验证成功：对勾从小放大并淡入。 */
+@Composable
+private fun ZresoVerifySuccessContent() {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val scale by animateFloatAsState(
+        targetValue = if (shown) 1f else 0.72f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f),
+        label = "zreso_verify_success_scale"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(180),
+        label = "zreso_verify_success_alpha"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(primary.copy(alpha = 0.12f))
+            )
+            Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = primary,
+                modifier = Modifier.size(42.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = stringResource(R.string.zreso_verify_success),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.zreso_verify_success_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** Zreso 手动兜底弹窗的本地阶段。 */
+private enum class ZresoVerifyStage { Hidden, Confirm, Running, Success }
 
 /** 毛玻璃吸顶标题栏：返回 + 标题 + 帮助 + 导入入口（间距与按钮样式对齐标记记录页） */
 @Composable
@@ -424,7 +658,10 @@ private fun BuiltinSourcesSection(
     onPanxiaoziChange: (Boolean) -> Unit,
     onBaoysChange: (Boolean) -> Unit,
     onOpenPanHubConfig: () -> Unit,
-    onOpenZresoVerify: () -> Unit
+    onOpenZresoVerify: () -> Unit,
+    zresoVerified: Boolean,
+    zresoVerifying: Boolean,
+    zresoVerifyFailed: Boolean
 ) {
     val haptics = rememberAppHaptics()
     Column(
@@ -504,19 +741,43 @@ private fun BuiltinSourcesSection(
             subtitle = stringResource(R.string.search_sources_zreso_desc),
             checked = zresoEnabled,
             onCheckedChange = onZresoChange,
-            onClick = onOpenZresoVerify,
+            onClick = if (zresoEnabled) onOpenZresoVerify else null,
             leadingAction = {
+                val isDark = isAppDarkTheme()
+                val verifiedTint = if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
+                val failedTint = if (isDark) Color(0xFFEF9A9A) else Color(0xFFD32F2F)
                 IconButton(
+                    enabled = zresoEnabled,
                     onClick = {
-                        haptics.lightTap()
-                        onOpenZresoVerify()
+                        if (zresoEnabled) {
+                            haptics.lightTap()
+                            onOpenZresoVerify()
+                        }
                     }
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.VerifiedUser,
-                        contentDescription = stringResource(R.string.search_sources_zreso_verify),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Box(
+                        modifier = Modifier.size(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (zresoVerifying) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.fillMaxSize(),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.VerifiedUser,
+                            contentDescription = stringResource(R.string.search_sources_zreso_verify),
+                            tint = when {
+                                !zresoEnabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                zresoVerifyFailed -> failedTint
+                                zresoVerified -> verifiedTint
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(if (zresoVerifying) 20.dp else 24.dp)
+                        )
+                    }
                 }
             }
         )

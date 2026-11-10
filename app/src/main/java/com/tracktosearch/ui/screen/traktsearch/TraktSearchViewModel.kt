@@ -139,6 +139,9 @@ class TraktSearchViewModel @Inject constructor(
     private val hapticOutcomeEmitter = HapticOutcomeEmitter()
     val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
 
+    /** Zreso 后台自动验证失败：界面收集后每进程最多提示一次。 */
+    val zresoBackgroundFailureEvents: SharedFlow<Unit> = resourceRepository.zresoBackgroundFailureEvents
+
     // 全局想看/已看缓存
     private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
     val watchlistWatchedIds: StateFlow<TraktRepository.WatchlistWatchedIds?> = _watchlistWatchedIds.asStateFlow()

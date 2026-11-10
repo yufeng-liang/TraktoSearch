@@ -470,13 +470,13 @@ class ResourceRepositoryTest {
                 )
             )
         )
-        coEvery { zresoWebViewVerifier.ensureVerified() } returns true
+        coEvery { zresoWebViewVerifier.ensureVerified(any(), true) } returns true
 
         val items = repository.searchResources("zreso-429-自动验证").getOrNull()!!
 
         assertThat(items.map { it.source }).containsExactly(ResourceRepository.SOURCE_ZRESO)
         coVerify(exactly = 2) { zresoApiService.search(any(), any(), any()) }
-        coVerify(exactly = 1) { zresoWebViewVerifier.ensureVerified() }
+        coVerify(exactly = 1) { zresoWebViewVerifier.ensureVerified(any(), true) }
     }
 
     // ==================== searchResources 类型映射 ====================

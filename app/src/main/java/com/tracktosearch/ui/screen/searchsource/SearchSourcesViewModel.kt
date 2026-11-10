@@ -12,6 +12,7 @@ import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.panhub.PanHubConfig
+import com.tracktosearch.data.remote.zreso.ZresoWebViewVerifier
 import com.tracktosearch.ui.haptic.HapticOutcome
 import com.tracktosearch.ui.haptic.HapticOutcomeEmitter
 import com.tracktosearch.ui.util.toUserMessage
@@ -35,6 +36,7 @@ class SearchSourcesViewModel @Inject constructor(
     private val panHubConfigStorage: PanHubConfigStorage,
     private val customSearchService: CustomSearchService,
     private val clipboardImportStorage: ClipboardImportStorage,
+    private val zresoWebViewVerifier: ZresoWebViewVerifier,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -53,6 +55,24 @@ class SearchSourcesViewModel @Inject constructor(
     /** 结果类触感的出口，界面侧一行 `HapticOutcomeEffect(viewModel.hapticOutcomes)` 收集。 */
     private val hapticOutcomeEmitter = HapticOutcomeEmitter()
     val hapticOutcomes: SharedFlow<HapticOutcome> = hapticOutcomeEmitter.outcomes
+
+    /** 内置验证页手动验证成功后的事件，用于返回列表页时提示。 */
+    val zresoManualSuccessEvents: SharedFlow<Unit> = zresoWebViewVerifier.manualSuccessEvents
+
+    /** 验证有效期截止时间：列表页盾牌在有效期内显示绿色。 */
+    val zresoVerifiedUntil = zresoWebViewVerifier.verifiedUntil
+
+    /** 是否正在自动验证：列表页盾牌外围显示转圈动画。 */
+    val zresoVerifying = zresoWebViewVerifier.verifying
+
+    /** 最近一次验证是否失败：列表页盾牌显示为红色。 */
+    val zresoVerifyFailed = zresoWebViewVerifier.lastAttemptFailed
+
+    fun wasZresoRecentlyVerified(): Boolean = zresoWebViewVerifier.wasRecentlyVerified()
+
+    /** 手动兜底流程里的 15 秒无感验证。 */
+    suspend fun verifyZresoAutomatically(): Boolean =
+        zresoWebViewVerifier.ensureVerified(AUTO_VERIFY_TIMEOUT_MS)
 
     fun setPansouEnabled(enabled: Boolean) {
         viewModelScope.launch { searchSourceStorage.setPansouEnabled(enabled) }
@@ -191,5 +211,10 @@ class SearchSourcesViewModel @Inject constructor(
                 if (state.success == true) HapticOutcome.SUCCESS else HapticOutcome.FAILURE
             )
         }
+    }
+
+    private companion object {
+        /** 手动兜底流程里无感验证的最长等待时间。 */
+        const val AUTO_VERIFY_TIMEOUT_MS = 15_000L
     }
 }

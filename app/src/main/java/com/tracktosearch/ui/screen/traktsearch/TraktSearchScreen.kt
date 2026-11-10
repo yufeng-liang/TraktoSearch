@@ -63,6 +63,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -224,6 +226,13 @@ fun TraktSearchScreen(
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
+    val zresoSnackbarHostState = remember { SnackbarHostState() }
+    val zresoBackgroundFailureText = stringResource(R.string.zreso_verify_background_failed)
+    LaunchedEffect(Unit) {
+        viewModel.zresoBackgroundFailureEvents.collect {
+            zresoSnackbarHostState.showSnackbar(zresoBackgroundFailureText)
+        }
+    }
     val hazeStyle = HazeMaterials.thin()
     val hazeSurface = MaterialTheme.colorScheme.surface
     val isDark = isAppDarkTheme()
@@ -1117,6 +1126,13 @@ fun TraktSearchScreen(
             )
 
             resourceCopyrightRequester.Host()
+
+            SnackbarHost(
+                hostState = zresoSnackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 92.dp)
+            )
         }
     }
 
