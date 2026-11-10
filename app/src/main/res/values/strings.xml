@@ -1362,6 +1362,8 @@ Config:
     <string name="zreso_verify_running_hint">This usually takes a few seconds.</string>
     <string name="zreso_verify_success">Verification successful</string>
     <string name="zreso_verify_success_hint">Verification complete. You can return to search.</string>
+    <string name="zreso_verify_failed">Verification failed</string>
+    <string name="zreso_verify_failed_hint">Opening manual verification…</string>
     <string name="zreso_verify_success_snackbar">Verified. You can return to search.</string>
     <string name="zreso_verify_recent">Verified recently. No need to repeat.</string>
     <string name="zreso_verify_background_failed">Zreso verification failed. You can verify manually in Settings.</string>

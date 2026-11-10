@@ -1258,6 +1258,8 @@
     <string name="zreso_verify_running_hint">通常は数秒で完了します</string>
     <string name="zreso_verify_success">確認成功</string>
     <string name="zreso_verify_success_hint">確認が完了しました。検索に戻れます。</string>
+    <string name="zreso_verify_failed">確認に失敗しました</string>
+    <string name="zreso_verify_failed_hint">手動確認を開いています…</string>
     <string name="zreso_verify_success_snackbar">確認に成功しました。検索に戻れます。</string>
     <string name="zreso_verify_recent">最近確認済みです。繰り返す必要はありません。</string>
     <string name="zreso_verify_background_failed">Zreso の確認に失敗しました。設定から手動で確認できます。</string>

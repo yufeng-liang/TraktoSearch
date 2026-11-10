@@ -78,6 +78,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -199,6 +200,8 @@ fun SearchSourcesScreen(
                 zresoVerifyStage = ZresoVerifyStage.Hidden
                 snackbarHostState.showSnackbar(zresoSuccessMessage)
             } else {
+                zresoVerifyStage = ZresoVerifyStage.Failed
+                delay(800)
                 zresoVerifyStage = ZresoVerifyStage.Hidden
                 onOpenZresoVerify()
             }
@@ -392,7 +395,7 @@ fun SearchSourcesScreen(
             title = stringResource(R.string.zreso_verify_dialog_title),
             message = stringResource(R.string.zreso_verify_dialog_message),
             supportMessage = stringResource(R.string.zreso_verify_dialog_note),
-            icon = { ZresoShieldBadge() },
+            icon = { ZresoDialogShield(tint = MaterialTheme.colorScheme.primary, size = 52.dp) },
             confirm = DialogAction(
                 label = stringResource(R.string.zreso_verify_start),
                 onClick = { startZresoAutomation() }
@@ -422,66 +425,59 @@ fun SearchSourcesScreen(
             title = null,
             content = { ZresoVerifySuccessContent() }
         )
-    }
-}
-
-/** 确认弹窗顶部的盾牌标记。 */
-@Composable
-private fun ZresoShieldBadge() {
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.VerifiedUser,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(28.dp)
+        ZresoVerifyStage.Failed -> AppAlertDialog(
+            onDismissRequest = {},
+            title = null,
+            content = { ZresoVerifyFailedContent() }
         )
     }
 }
 
-/** 正在验证：呼吸圆环 + 盾牌，避免只有一行 spinner 的干巴感。 */
+/** 弹窗里的盾牌：验证中显示转圈，成功绿色，失败红色。 */
+@Composable
+private fun ZresoDialogShield(
+    tint: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 72.dp,
+    showProgress: Boolean = false
+) {
+    Box(
+        modifier = modifier.size(size),
+        contentAlignment = Alignment.Center
+    ) {
+        if (showProgress) {
+            CircularProgressIndicator(
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 2.dp,
+                color = tint,
+                trackColor = tint.copy(alpha = 0.15f)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(size * 0.86f)
+                    .clip(CircleShape)
+                    .background(tint.copy(alpha = 0.12f))
+            )
+        }
+        Icon(
+            imageVector = Icons.Rounded.VerifiedUser,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(size * 0.42f)
+        )
+    }
+}
+
+/** 正在验证：盾牌外围一圈转圈动画。 */
 @Composable
 private fun ZresoVerifyRunningContent() {
-    val transition = rememberInfiniteTransition(label = "zreso_verify_running")
-    val progress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing)),
-        label = "zreso_verify_pulse"
-    )
     val primary = MaterialTheme.colorScheme.primary
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier.size(72.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val maxRadius = size.minDimension / 2f
-                drawCircle(
-                    color = primary.copy(alpha = 0.22f * (1f - progress)),
-                    radius = maxRadius * (0.55f + 0.45f * progress)
-                )
-                drawCircle(
-                    color = primary.copy(alpha = 0.28f),
-                    radius = maxRadius - 1.dp.toPx(),
-                    style = Stroke(width = 2.dp.toPx())
-                )
-            }
-            Icon(
-                imageVector = Icons.Rounded.VerifiedUser,
-                contentDescription = null,
-                tint = primary,
-                modifier = Modifier.size(30.dp)
-            )
-        }
+        ZresoDialogShield(tint = primary, showProgress = true)
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = stringResource(R.string.zreso_verify_running),
@@ -498,7 +494,7 @@ private fun ZresoVerifyRunningContent() {
     }
 }
 
-/** 验证成功：对勾从小放大并淡入。 */
+/** 验证成功：盾牌变绿色并从缩小状态弹入。 */
 @Composable
 private fun ZresoVerifySuccessContent() {
     var shown by remember { mutableStateOf(false) }
@@ -513,34 +509,19 @@ private fun ZresoVerifySuccessContent() {
         animationSpec = tween(180),
         label = "zreso_verify_success_alpha"
     )
-    val primary = MaterialTheme.colorScheme.primary
+    val successTint = if (isAppDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    this.alpha = alpha
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(primary.copy(alpha = 0.12f))
-            )
-            Icon(
-                imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = null,
-                tint = primary,
-                modifier = Modifier.size(42.dp)
-            )
-        }
+        ZresoDialogShield(
+            tint = successTint,
+            modifier = Modifier.graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+            }
+        )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = stringResource(R.string.zreso_verify_success),
@@ -557,8 +538,34 @@ private fun ZresoVerifySuccessContent() {
     }
 }
 
+/** 验证失败：盾牌变红色，随后自动进入手动验证页。 */
+@Composable
+private fun ZresoVerifyFailedContent() {
+    val failedTint = if (isAppDarkTheme()) Color(0xFFEF9A9A) else Color(0xFFD32F2F)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ZresoDialogShield(tint = failedTint)
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = stringResource(R.string.zreso_verify_failed),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = failedTint
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.zreso_verify_failed_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 /** Zreso 手动兜底弹窗的本地阶段。 */
-private enum class ZresoVerifyStage { Hidden, Confirm, Running, Success }
+private enum class ZresoVerifyStage { Hidden, Confirm, Running, Success, Failed }
 
 /** 毛玻璃吸顶标题栏：返回 + 标题 + 帮助 + 导入入口（间距与按钮样式对齐标记记录页） */
 @Composable
