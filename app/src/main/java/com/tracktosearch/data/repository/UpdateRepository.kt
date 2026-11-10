@@ -313,8 +313,10 @@ class UpdateRepository @Inject constructor(
     }
 
     private fun isNewerVersion(latest: String, current: String): Boolean {
-        val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
+        // 兼容 4.2.0(1) 这类补丁号：括号里的数字也当作版本段参与比较，
+        // 否则 4.2.0(1) 会被截成 4.2 而无法提示更新。
+        val latestParts = Regex("""\d+""").findAll(latest).map { it.value.toInt() }.toList()
+        val currentParts = Regex("""\d+""").findAll(current).map { it.value.toInt() }.toList()
         val maxLen = maxOf(latestParts.size, currentParts.size)
         for (i in 0 until maxLen) {
             val l = latestParts.getOrElse(i) { 0 }
