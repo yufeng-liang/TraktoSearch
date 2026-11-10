@@ -319,23 +319,29 @@ private fun LinkStatusBadge(state: ResourceLinkChecker.State) {
 private fun DiskSeal(style: DiskStyle, size: Dp = 34.dp) {
     val diskName = stringResource(style.shortNameResId)
     val compact = size <= 20.dp
+    val hasLogo = style.logoResId != null
+    val shape = RoundedCornerShape(if (compact) 5.dp else 10.dp)
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(if (compact) 5.dp else 10.dp))
-            .background(
-                if (style.logoResId != null) Color.White else style.backgroundColor
+            .then(
+                if (hasLogo) {
+                    // 官方 logo 原样展示，不铺白底、不加内边距，避免出现一圈白边
+                    Modifier
+                } else {
+                    Modifier
+                        .clip(shape)
+                        .background(style.backgroundColor)
+                }
             )
             .clearAndSetSemantics { contentDescription = diskName },
         contentAlignment = Alignment.Center
     ) {
-        if (style.logoResId != null) {
+        if (hasLogo) {
             Image(
-                painter = painterResource(style.logoResId),
+                painter = painterResource(style.logoResId!!),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(if (compact) 2.dp else 4.dp),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
         } else {
@@ -383,12 +389,12 @@ private fun SourceBadge(colors: SourceTagColors, text: String) {
 }
 
 @Composable
-private fun MetaText(text: String, modifier: Modifier = Modifier) {
+private fun MetaText(text: String, modifier: Modifier = Modifier, color: Color? = null) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium.copy(
             fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            color = color ?: MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
         ),
         modifier = modifier,
         maxLines = 1,
@@ -597,7 +603,7 @@ fun ResourceItemCard(
                     text = stringResource(style.shortNameResId),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
                     ),
                     maxLines = 1,
                     softWrap = false
@@ -606,7 +612,7 @@ fun ResourceItemCard(
                     text = " · ",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                     ),
                     maxLines = 1,
                     softWrap = false
@@ -615,7 +621,7 @@ fun ResourceItemCard(
                     text = sourceTagLabel(item.source, sourceName),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
                     ),
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -623,7 +629,10 @@ fun ResourceItemCard(
                 )
                 if (formattedDate.isNotEmpty()) {
                     Spacer(modifier = Modifier.width(8.dp))
-                    MetaText(text = formattedDate)
+                    MetaText(
+                        text = formattedDate,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                    )
                 }
             }
         }

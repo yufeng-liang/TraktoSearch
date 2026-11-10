@@ -104,6 +104,23 @@ class ResourceRepository @Inject constructor(
         return builtIn + customEnabled
     }
 
+    /** 启用一个内置搜索源；返回该源是否为可识别的内置源。 */
+    suspend fun enableBuiltInSource(source: String): Boolean {
+        when (source) {
+            SOURCE_PANSOU -> searchSourceStorage.setPansouEnabled(true)
+            SOURCE_PANHUB -> searchSourceStorage.setPanhubEnabled(true)
+            SOURCE_ZRESO -> searchSourceStorage.setZresoEnabled(true)
+            SOURCE_USEAI -> searchSourceStorage.setUseaiEnabled(true)
+            SOURCE_YUNSO -> searchSourceStorage.setYunsoEnabled(true)
+            SOURCE_ATAW -> searchSourceStorage.setAtawEnabled(true)
+            SOURCE_MELOST -> searchSourceStorage.setMelostEnabled(true)
+            SOURCE_PANXIAOZI -> searchSourceStorage.setPanxiaoziEnabled(true)
+            SOURCE_BAOYS -> searchSourceStorage.setBaoysEnabled(true)
+            else -> return false
+        }
+        return true
+    }
+
     /** 获取所有自定义源（已启用的） */
     suspend fun getEnabledCustomSources(): List<CustomSearchSource> {
         return customSearchSourceStorage.sources.first().filter { it.enabled }

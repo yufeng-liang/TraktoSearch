@@ -1011,6 +1011,10 @@ fun TraktSearchScreen(
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             viewModel.toggleDiskSource(it)
                         },
+                        onEnableSource = {
+                            interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
+                            viewModel.enableDiskSource(it)
+                        },
                         onToggleDiskType = {
                             interruptAiSprite(AiSpriteInterruptReason.USER_INPUT)
                             viewModel.toggleDiskType(it)
@@ -1258,7 +1262,8 @@ private fun DiskSearchContent(
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(start = 8.dp, top = 124.dp + 44.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
+                    // ResourceItemCard 自身有 12dp 外边距，列表再留 2dp，卡片左缘正好对齐筛选胶囊的 14dp
+                    contentPadding = PaddingValues(start = 2.dp, top = 124.dp + 44.dp + statusBarHeight, end = 2.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier
                         .hazeSource(state = hazeState)
@@ -1334,8 +1339,9 @@ private fun ResourceListSkeleton(
             .hazeSource(state = hazeState)
             .backdropSource()
             .padding(
-                start = 8.dp,
-                end = 8.dp,
+                // 骨架卡没有 ResourceItemCard 的 12dp 外边距，直接 14dp 对齐筛选胶囊
+                start = 14.dp,
+                end = 14.dp,
                 top = 124.dp + 44.dp + statusBarHeight
             )
     ) {

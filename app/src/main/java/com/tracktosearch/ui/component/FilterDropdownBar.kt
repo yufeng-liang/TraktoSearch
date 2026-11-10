@@ -3,7 +3,6 @@ package com.tracktosearch.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,10 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -72,6 +69,7 @@ fun FilterDropdownBar(
     enabledDiskTypes: Set<DiskType>,
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit,
+    onEnableSource: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     relevanceEnabled: Boolean = false,
     showHighRelevanceOnly: Boolean = false,
@@ -134,7 +132,6 @@ fun FilterDropdownBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -172,27 +169,34 @@ fun FilterDropdownBar(
             )
         }
         if (searching) {
-            // 搜索进度紧跟在筛选胶囊右侧，不再作为列表首项插入，消失时列表不会跳动
-            Row(
-                modifier = Modifier.padding(start = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            // 进度放在胶囊右侧剩余区域的水平中心，而不是紧贴最后一个胶囊
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(
-                        R.string.search_loading_disk_progress,
-                        completedSources,
-                        totalSources,
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.search_loading_disk_progress,
+                            completedSources,
+                            totalSources,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -225,29 +229,31 @@ fun FilterDropdownBar(
                         activeSheet = null
                     },
                 ) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 300.dp),
-                    ) {
-                        gridItems(allSourceOptions, key = { it }) { source ->
-                            val available = source in availableSourceSet
-                            FilterCheckboxRow(
-                                label = sourceLabel(source, customSourceNames),
-                                count = if (sourceCounts.isEmpty()) null else sourceCounts[source] ?: 0,
-                                checked = source in draftSources,
-                                enabled = available,
-                                onCheckedChange = { checked ->
-                                    haptics.toggle(checked)
-                                    draftSources = if (checked) {
-                                        draftSources + source
-                                    } else {
-                                        draftSources - source
-                                    }
-                                },
-                            )
-                        }
+                    FilterCheckboxGrid(items = allSourceOptions) { source ->
+                        val available = source in availableSourceSet
+                        FilterCheckboxRow(
+                            label = sourceLabel(source, customSourceNames),
+                            count = if (!available || sourceCounts.isEmpty()) null else sourceCounts[source] ?: 0,
+                            checked = source in draftSources,
+                            enabled = available,
+                            onCheckedChange = { checked ->
+                                haptics.toggle(checked)
+                                draftSources = if (checked) {
+                                    draftSources + source
+                                } else {
+                                    draftSources - source
+                                }
+                            },
+                            onEnable = if (!available && !searching) {
+                                {
+                                    haptics.lightTap()
+                                    onEnableSource(source)
+                                    activeSheet = null
+                                }
+                            } else {
+                                null
+                            },
+                        )
                     }
                 }
             }
@@ -279,28 +285,21 @@ fun FilterDropdownBar(
                         activeSheet = null
                     },
                 ) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 300.dp),
-                    ) {
-                        gridItems(allDiskTypeOptions, key = { it.name }) { type ->
-                            FilterCheckboxRow(
-                                label = diskTypeLabel(type),
-                                count = if (diskTypeCounts.isEmpty()) null else diskTypeCounts[type] ?: 0,
-                                checked = type in draftDiskTypes,
-                                enabled = true,
-                                onCheckedChange = { checked ->
-                                    haptics.toggle(checked)
-                                    draftDiskTypes = if (checked) {
-                                        draftDiskTypes + type
-                                    } else {
-                                        draftDiskTypes - type
-                                    }
-                                },
-                            )
-                        }
+                    FilterCheckboxGrid(items = allDiskTypeOptions) { type ->
+                        FilterCheckboxRow(
+                            label = diskTypeLabel(type),
+                            count = if (diskTypeCounts.isEmpty()) null else diskTypeCounts[type] ?: 0,
+                            checked = type in draftDiskTypes,
+                            enabled = true,
+                            onCheckedChange = { checked ->
+                                haptics.toggle(checked)
+                                draftDiskTypes = if (checked) {
+                                    draftDiskTypes + type
+                                } else {
+                                    draftDiskTypes - type
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -396,11 +395,11 @@ private fun FilterMultiSelectContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onSelectAll) {
-                Text(stringResource(R.string.search_filter_select_all))
-            }
             TextButton(onClick = onClear) {
                 Text(stringResource(R.string.search_filter_clear))
+            }
+            TextButton(onClick = onSelectAll) {
+                Text(stringResource(R.string.search_filter_select_all))
             }
         }
         content()
@@ -416,6 +415,34 @@ private fun FilterMultiSelectContent(
     }
 }
 
+/** 两列等宽复选网格：每格 weight(1f)，保证左右两列复选框起点一致。 */
+@Composable
+private fun <T> FilterCheckboxGrid(
+    items: List<T>,
+    itemContent: @Composable (T) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 300.dp)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        items.chunked(2).forEach { rowItems ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                rowItems.forEach { item ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        itemContent(item)
+                    }
+                }
+                // 奇数项补一个空单元格，避免最后一行被拉伸成整行
+                if (rowItems.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
 /** 复选框行：左侧标签，右侧结果计数；不可用的源灰显且不可点击。 */
 @Composable
 private fun FilterCheckboxRow(
@@ -424,21 +451,30 @@ private fun FilterCheckboxRow(
     checked: Boolean,
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    onEnable: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .alpha(if (enabled) 1f else 0.38f)
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = if (enabled) onCheckedChange else null,
-            enabled = enabled,
-        )
+        // 固定 48dp 前导区：禁用态 Checkbox 不带最小触控尺寸，不包裹会导致灰显行的复选框整体左移
+        Box(
+            modifier = Modifier.size(48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = if (enabled) onCheckedChange else null,
+                enabled = enabled,
+                modifier = Modifier
+                    .size(20.dp)
+                    .alpha(if (enabled) 1f else 0.38f),
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = label,
@@ -446,16 +482,36 @@ private fun FilterCheckboxRow(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            // fill=false：文字只占自身宽度，计数紧跟其后，不贴到下一列去
-            modifier = Modifier.weight(1f, fill = false),
+            // 普通行 fill=false，让计数紧跟文字；带「启用」按钮的禁用行 fill=true，把按钮推到最右侧
+            modifier = Modifier
+                .weight(1f, fill = onEnable == null)
+                .alpha(if (enabled) 1f else 0.38f),
         )
         if (count != null) {
             Text(
                 text = "($count)",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp),
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .alpha(if (enabled) 1f else 0.38f),
             )
+        }
+        if (!enabled && onEnable != null) {
+            // 固定宽度 + End 对齐，保证「启用」文字右缘与同列其他行的计数右缘一致
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(48.dp)
+                    .clickable(onClick = onEnable),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Text(
+                    text = stringResource(R.string.search_filter_enable),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }

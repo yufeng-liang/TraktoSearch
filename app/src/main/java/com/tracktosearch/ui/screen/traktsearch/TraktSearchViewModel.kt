@@ -721,7 +721,11 @@ class TraktSearchViewModel @Inject constructor(
     }
 
     // 网盘搜索
-    fun searchDiskInternal(query: String) {
+    fun searchDiskInternal(
+        query: String,
+        preserveFilters: Boolean = false,
+        extraEnabledSource: String? = null,
+    ) {
         if (query.isBlank()) return
         _uiState.value = _uiState.value.copy(query = query)
 
@@ -733,12 +737,21 @@ class TraktSearchViewModel @Inject constructor(
             val customSources = resourceRepository.getEnabledCustomSources()
             val customNames = customSources.associate { it.id to it.name }
             val totalSources = storageEnabledSources.size
+            // 从筛选面板启用某个源后重搜：保留用户已勾选的源，同时把刚启用的源加进来
+            val effectiveEnabledSources = if (preserveFilters) {
+                (diskState.enabledSources + listOfNotNull(extraEnabledSource))
+                    .filter { it in storageEnabledSources }
+                    .toSet()
+                    .ifEmpty { storageEnabledSources }
+            } else {
+                storageEnabledSources
+            }
             _uiState.value = _uiState.value.copy(
                 diskState = diskState.copy(
                     isLoading = true, hasSearched = true, error = null,
                     totalSources = totalSources, completedSources = 0,
                     availableSources = storageEnabledSources.toList(),
-                    enabledSources = storageEnabledSources,
+                    enabledSources = effectiveEnabledSources,
                     customSourceNames = customNames
                 )
             )
@@ -778,6 +791,36 @@ class TraktSearchViewModel @Inject constructor(
                         diskState = _uiState.value.diskState.copy(isLoading = false)
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * 从搜索页筛选面板启用一个被禁用的内置源。
+     * 启用后立即按当前关键词重搜，并保留用户已勾选的其他源。
+     */
+    fun enableDiskSource(source: String) {
+        val current = _uiState.value
+        if (current.diskState.isLoading) return
+        viewModelScope.launch {
+            if (!resourceRepository.enableBuiltInSource(source)) return@launch
+            if (current.query.isNotBlank()) {
+                searchDiskInternal(
+                    query = current.query,
+                    preserveFilters = true,
+                    extraEnabledSource = source,
+                )
+            } else {
+                val enabled = resourceRepository.getEnabledSources()
+                _uiState.value = _uiState.value.copy(
+                    diskState = current.diskState.copy(
+                        availableSources = enabled.toList(),
+                        enabledSources = (current.diskState.enabledSources + source)
+                            .filter { it in enabled }
+                            .toSet()
+                            .ifEmpty { enabled },
+                    )
+                )
             }
         }
     }

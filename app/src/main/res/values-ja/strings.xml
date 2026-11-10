@@ -123,6 +123,7 @@
     <string name="search_filter_clear">クリア</string>
     <string name="search_filter_selected_count">%1$d / %2$d 件選択中</string>
     <string name="search_filter_done">完了</string>
+    <string name="search_filter_enable">有効にする</string>
     <string name="search_clear_filters">フィルターをクリア</string>
     <string name="search_empty_hint">キーワードを入力して検索を開始</string>
     <string name="search_clear_input">クリア</string>

@@ -122,6 +122,7 @@
     <string name="search_filter_clear">Clear</string>
     <string name="search_filter_selected_count">Selected %1$d / %2$d</string>
     <string name="search_filter_done">Done</string>
+    <string name="search_filter_enable">Enable</string>
     <string name="search_clear_filters">Clear filters</string>
     <string name="search_empty_hint">Enter a keyword to start searching</string>
     <string name="search_clear_input">Clear</string>
