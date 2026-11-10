@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.OpenInBrowser
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Settings
@@ -513,7 +513,7 @@ private fun BuiltinSourcesSection(
                     }
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.OpenInBrowser,
+                        imageVector = Icons.Rounded.VerifiedUser,
                         contentDescription = stringResource(R.string.search_sources_zreso_verify),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
