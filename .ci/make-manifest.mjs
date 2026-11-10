@@ -152,7 +152,8 @@ function runCli() {
     // 存不带日期括号的原始正文：App 侧 injectDateIntoChangelog 会按 releaseDate 补标题日期，
     // 多塞一层会让弹窗出现「v3.6.1 更新内容（2026-09-22）（2026-09-22）」。
     if (!changelog.trim()) fail('changelog 正文为空，宁可不发也别发一个空日志的更新提示');
-    if (!/^\d+(\.\d+)+$/.test(versionName)) fail(`versionName 格式异常：${versionName}`);
+    // 允许 4.2.0(1) 这类补丁号：主版本仍是语义化的三段数字，括号内为补丁序号。
+    if (!/^\d+(\.\d+)+(\(\d+\))?$/.test(versionName)) fail(`versionName 格式异常：${versionName}`);
     if (!Number.isInteger(versionCode) || versionCode <= 0) fail(`versionCode 异常：${process.env.VERSION_CODE}`);
     if (!/^[a-f0-9]{64}$/.test(sha256)) fail(`sha256 不是 64 位小写 hex：${sha256}`);
     if (!Number.isInteger(size) || size <= 0) fail(`size 异常：${process.env.SIZE}`);

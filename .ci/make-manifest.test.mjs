@@ -189,6 +189,19 @@ test('latest 从 CHANGELOG.md 顶部段取日期与正文', () => {
   assert.equal(j.latest.versionCode, 42);
 });
 
+test('latest 接受带补丁括号的版本名', () => {
+  const cl = path.join(tmp, 'CHANGELOG-c1.md');
+  fs.writeFileSync(cl, '## v4.2.0(1) 更新内容（2026-11-10）\n\n- 修复内容\n');
+  const out = path.join(tmp, 'latest-c1.json');
+  execFileSync('node', ['.ci/make-manifest.mjs', 'latest', '--changelog', cl, '--out', out], {
+    stdio: 'pipe',
+    env: { ...process.env, ...BASE_ENV, VERSION_NAME: '4.2.0(1)' }
+  });
+  const j = JSON.parse(fs.readFileSync(out, 'utf8'));
+  assert.equal(j.latest.versionName, '4.2.0(1)');
+  assert.equal(j.latest.changelog['zh-CN'], '- 修复内容');
+});
+
 test('latest 在版本号与顶部段不符时报错', () => {
   const cl = path.join(tmp, 'CHANGELOG-d.md');
   fs.writeFileSync(cl, SAMPLE);
