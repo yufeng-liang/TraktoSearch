@@ -257,7 +257,6 @@ fun FilterDropdownBar(
                                 {
                                     haptics.lightTap()
                                     onEnableSource(source)
-                                    activeSheet = null
                                 }
                             } else {
                                 null
@@ -493,7 +492,7 @@ private fun FilterCheckboxRow(
             overflow = TextOverflow.Ellipsis,
             // 普通行 fill=false，让计数紧跟文字；带「启用」按钮的禁用行 fill=true，把按钮推到最右侧
             modifier = Modifier
-                .weight(1f, fill = onEnable == null)
+                .weight(1f, fill = onEnable != null)
                 .alpha(if (enabled) 1f else 0.38f),
         )
         if (count != null) {
