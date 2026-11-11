@@ -724,7 +724,6 @@ class TraktSearchViewModel @Inject constructor(
     fun searchDiskInternal(
         query: String,
         preserveFilters: Boolean = false,
-        extraEnabledSource: String? = null,
     ) {
         if (query.isBlank()) return
         _uiState.value = _uiState.value.copy(query = query)
@@ -737,9 +736,9 @@ class TraktSearchViewModel @Inject constructor(
             val customSources = resourceRepository.getEnabledCustomSources()
             val customNames = customSources.associate { it.id to it.name }
             val totalSources = storageEnabledSources.size
-            // 从筛选面板启用某个源后重搜：保留用户已勾选的源，同时把刚启用的源加进来
+            // 从筛选面板/设置页同步后重搜：保留用户已勾选的源
             val effectiveEnabledSources = if (preserveFilters) {
-                (diskState.enabledSources + listOfNotNull(extraEnabledSource))
+                diskState.enabledSources
                     .filter { it in storageEnabledSources }
                     .toSet()
                     .ifEmpty { storageEnabledSources }
@@ -797,21 +796,16 @@ class TraktSearchViewModel @Inject constructor(
 
     /**
      * 从搜索页筛选面板启用一个被禁用的内置源。
-     * 启用后立即按当前关键词重搜，并保留用户已勾选的其他源。
+     * 有关键词时只增量搜索新启用的源并把结果合并进现有列表（不重跑其它源）；
+     * 无关键词时仅更新可用/已选集合。
      */
     fun enableDiskSource(source: String) {
         val current = _uiState.value
         if (current.diskState.isLoading) return
         viewModelScope.launch {
             if (!resourceRepository.enableBuiltInSource(source)) return@launch
-            if (current.query.isNotBlank()) {
-                searchDiskInternal(
-                    query = current.query,
-                    preserveFilters = true,
-                    extraEnabledSource = source,
-                )
-            } else {
-                val enabled = resourceRepository.getEnabledSources()
+            val enabled = resourceRepository.getEnabledSources()
+            if (current.query.isBlank()) {
                 _uiState.value = _uiState.value.copy(
                     diskState = current.diskState.copy(
                         availableSources = enabled.toList(),
@@ -821,6 +815,46 @@ class TraktSearchViewModel @Inject constructor(
                             .ifEmpty { enabled },
                     )
                 )
+                return@launch
+            }
+            // 先把新源并入已选集合（列表本地过滤立即生效），再只搜这一个源做增量合并
+            val disk = _uiState.value.diskState
+            _uiState.value = _uiState.value.copy(
+                diskState = disk.copy(
+                    isLoading = true,
+                    availableSources = enabled.toList(),
+                    enabledSources = (disk.enabledSources + source).filter { it in enabled }.toSet(),
+                    // 进度文案按「在已完成的 N 个源上补搜 1 个」显示
+                    completedSources = disk.completedSources,
+                    totalSources = disk.completedSources + 1,
+                )
+            )
+            try {
+                val newItems = resourceRepository.searchSingleSource(
+                    keyword = current.query,
+                    source = source,
+                    enabledDiskTypes = disk.enabledDiskTypes,
+                )
+                val ranked = resourceRepository.mergeIncrementalResults(
+                    keyword = current.query,
+                    existing = _uiState.value.diskState.resources,
+                    newItems = newItems,
+                    enabledSources = _uiState.value.diskState.enabledSources,
+                    enabledDiskTypes = disk.enabledDiskTypes,
+                )
+                _uiState.value = _uiState.value.copy(
+                    diskState = _uiState.value.diskState.copy(resources = ranked)
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 单源失败不影响已有结果，静默保持现状
+            } finally {
+                if (_uiState.value.diskState.isLoading) {
+                    _uiState.value = _uiState.value.copy(
+                        diskState = _uiState.value.diskState.copy(isLoading = false)
+                    )
+                }
             }
         }
     }

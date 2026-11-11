@@ -643,6 +643,63 @@ class ResourceRepository @Inject constructor(
         return ranked
     }
 
+    /**
+     * 只搜索单个内置源（筛选面板临时启用某源后的增量补充，不重跑其它源）。
+     * 失败或源未知返回空列表，不影响已有结果。
+     */
+    suspend fun searchSingleSource(
+        keyword: String,
+        source: String,
+        enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
+    ): List<ResourceItem> {
+        if (keyword.isBlank()) return emptyList()
+        return coroutineScope {
+            async(Dispatchers.IO) {
+                runCatching {
+                    when (source) {
+                        SOURCE_PANSOU -> searchPanSource(panSouApiService, keyword, enabledDiskTypes, SOURCE_PANSOU)
+                        SOURCE_PANHUB -> searchPanHubGranular(keyword, enabledDiskTypes)
+                        SOURCE_ZRESO -> searchZreso(keyword, enabledDiskTypes)
+                        SOURCE_USEAI -> searchPanSource(
+                            apiService = useAiApiService,
+                            keyword = keyword,
+                            enabledDiskTypes = enabledDiskTypes,
+                            sourceName = SOURCE_USEAI,
+                            timeoutMs = USEAI_TIMEOUT_MS
+                        )
+                        SOURCE_YUNSO -> searchYunso(keyword, enabledDiskTypes)
+                        SOURCE_ATAW -> searchAtaw(keyword, enabledDiskTypes)
+                        SOURCE_MELOST -> searchMelost(keyword, enabledDiskTypes)
+                        SOURCE_PANXIAOZI -> searchPanxiaozi(keyword, enabledDiskTypes)
+                        SOURCE_BAOYS -> searchBaoys(keyword, enabledDiskTypes)
+                        else -> emptyList()
+                    }
+                }.getOrDefault(emptyList())
+            }.await()
+        }
+    }
+
+    /**
+     * 增量合并：现有结果 + 新启用源的结果，去重排序后返回，
+     * 并把合并后的全量按当前筛选写回缓存（后续同条件搜索直接命中缓存）。
+     */
+    fun mergeIncrementalResults(
+        keyword: String,
+        existing: List<ResourceItem>,
+        newItems: List<ResourceItem>,
+        enabledSources: Set<String>,
+        enabledDiskTypes: Set<DiskType>,
+        isShow: Boolean = false,
+        query: ResourceQuery? = null,
+    ): List<ResourceItem> {
+        val merged = (existing + newItems).distinctBy { it.url }
+        val ranked = rank(merged, isShow, query).items
+        if (merged.isNotEmpty()) {
+            cache.put(keyword, KeywordCache(merged, System.currentTimeMillis(), enabledSources, enabledDiskTypes))
+        }
+        return ranked
+    }
+
     /** 判断资源名是否包含多季信息，返回优先级分数 */
     private fun multiSeasonScore(name: String): Int {
         val n = name.lowercase()
