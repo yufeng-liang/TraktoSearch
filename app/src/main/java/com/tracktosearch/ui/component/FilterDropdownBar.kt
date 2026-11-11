@@ -76,6 +76,8 @@ fun FilterDropdownBar(
     showHighRelevanceOnly: Boolean = false,
     onToggleShowHighRelevanceOnly: () -> Unit = {},
     sourceCounts: Map<String, Int> = emptyMap(),
+    /** 后台预取进行中的源集合：这些行计数显示为加载态 */
+    prefetchingSources: Set<String> = emptySet(),
     diskTypeCounts: Map<DiskType, Int> = emptyMap(),
     searching: Boolean = false,
     completedSources: Int = 0,
@@ -240,9 +242,11 @@ fun FilterDropdownBar(
                 ) {
                     FilterCheckboxGrid(items = allSourceOptions) { source ->
                         val available = source in availableSourceSet
+                        val prefetching = source in prefetchingSources
                         FilterCheckboxRow(
                             label = sourceLabel(source, customSourceNames),
-                            count = if (!available || sourceCounts.isEmpty()) null else sourceCounts[source] ?: 0,
+                            count = if (sourceCounts.isEmpty()) null else sourceCounts[source] ?: 0,
+                            countLoading = prefetching,
                             checked = source in draftSources,
                             enabled = available,
                             onCheckedChange = { checked ->
@@ -460,6 +464,7 @@ private fun FilterCheckboxRow(
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onEnable: (() -> Unit)? = null,
+    countLoading: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -496,14 +501,24 @@ private fun FilterCheckboxRow(
                 .alpha(if (enabled) 1f else 0.38f),
         )
         if (count != null) {
-            Text(
-                text = "($count)",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(start = 4.dp)
-                    .alpha(if (enabled) 1f else 0.38f),
-            )
+            if (countLoading) {
+                // 预取中：小号 spinner 占位，让用户知道这个源正在搜
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .size(12.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text(
+                    text = "($count)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .alpha(if (enabled) 1f else 0.38f),
+                )
+            }
         }
         if (!enabled && onEnable != null) {
             // 固定宽度 + End 对齐，保证「启用」文字右缘与同列其他行的计数右缘一致

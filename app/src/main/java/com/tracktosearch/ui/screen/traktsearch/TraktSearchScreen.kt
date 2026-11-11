@@ -504,14 +504,23 @@ fun TraktSearchScreen(
         // 当前 tab 的状态
         val currentTabState = uiState.currentTabState
         val isDiskTab = uiState.selectedTab == MediaType.DISK
-        val diskSourceCounts = remember(uiState.diskState.resources, invalidResourceUrls) {
-            uiState.diskState.resources
+        // 面板计数 = 列表内 + 预取完成但未勾选源的结果，让「启用后数字立即更新」
+        val diskSourceCounts = remember(
+            uiState.diskState.resources,
+            uiState.diskState.prefetchedResults,
+            invalidResourceUrls,
+        ) {
+            (uiState.diskState.resources + uiState.diskState.prefetchedResults.values.flatten())
                 .filter { it.url !in invalidResourceUrls }
                 .groupingBy { it.source }
                 .eachCount()
         }
-        val diskTypeCounts = remember(uiState.diskState.resources, invalidResourceUrls) {
-            uiState.diskState.resources
+        val diskTypeCounts = remember(
+            uiState.diskState.resources,
+            uiState.diskState.prefetchedResults,
+            invalidResourceUrls,
+        ) {
+            (uiState.diskState.resources + uiState.diskState.prefetchedResults.values.flatten())
                 .filter { it.url !in invalidResourceUrls }
                 .groupingBy { it.diskType }
                 .eachCount()
@@ -1020,6 +1029,7 @@ fun TraktSearchScreen(
                             viewModel.toggleDiskType(it)
                         },
                         sourceCounts = diskSourceCounts,
+                        prefetchingSources = uiState.diskState.prefetchingSources,
                         diskTypeCounts = diskTypeCounts,
                         searching = uiState.diskState.isLoading && uiState.diskState.resources.isNotEmpty(),
                         completedSources = uiState.diskState.completedSources,

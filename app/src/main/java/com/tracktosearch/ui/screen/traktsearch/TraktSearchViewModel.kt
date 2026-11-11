@@ -82,7 +82,12 @@ data class DiskSearchState(
     val availableSources: List<String> = emptyList(),
     val customSourceNames: Map<String, String> = emptyMap(),
     val completedSources: Int = 0,
-    val totalSources: Int = 0
+    val totalSources: Int = 0,
+    // 已启用但未勾选的源的后台预取结果：源 id → 该源本次关键词下的条目。
+    // 启用 ≠ 勾选：预取结果不直接进 resources，用户勾选后立即合入。
+    val prefetchedResults: Map<String, List<ResourceItem>> = emptyMap(),
+    /** 后台预取进行中的源集合：面板行据此显示加载态，可多个并行 */
+    val prefetchingSources: Set<String> = emptySet()
 )
 
 @Immutable
@@ -751,7 +756,10 @@ class TraktSearchViewModel @Inject constructor(
                     totalSources = totalSources, completedSources = 0,
                     availableSources = storageEnabledSources.toList(),
                     enabledSources = effectiveEnabledSources,
-                    customSourceNames = customNames
+                    customSourceNames = customNames,
+                    // 新关键词开始全新搜索：丢弃上一关键词的预取缓存
+                    prefetchedResults = emptyMap(),
+                    prefetchingSources = emptySet()
                 )
             )
 
@@ -796,65 +804,51 @@ class TraktSearchViewModel @Inject constructor(
 
     /**
      * 从搜索页筛选面板启用一个被禁用的内置源。
-     * 有关键词时只增量搜索新启用的源并把结果合并进现有列表（不重跑其它源）；
-     * 无关键词时仅更新可用/已选集合。
+     * 启用 ≠ 勾选：启用只是让该源可搜，后台预取它的结果存进 prefetchedResults，
+     * 不并入 enabledSources、不直接改列表；用户勾选（toggleDiskSource）时才合入展现。
      */
     fun enableDiskSource(source: String) {
         val current = _uiState.value
-        if (current.diskState.isLoading) return
+        // 已在预取或已有结果（已启用）时不再重复触发
+        if (source in current.diskState.prefetchingSources || source in current.diskState.prefetchedResults) return
         viewModelScope.launch {
             if (!resourceRepository.enableBuiltInSource(source)) return@launch
             val enabled = resourceRepository.getEnabledSources()
-            if (current.query.isBlank()) {
-                _uiState.value = _uiState.value.copy(
-                    diskState = current.diskState.copy(
-                        availableSources = enabled.toList(),
-                        enabledSources = (current.diskState.enabledSources + source)
-                            .filter { it in enabled }
-                            .toSet()
-                            .ifEmpty { enabled },
-                    )
-                )
-                return@launch
-            }
-            // 先把新源并入已选集合（列表本地过滤立即生效），再只搜这一个源做增量合并
             val disk = _uiState.value.diskState
+            // 启用成功立即把源加入可用集合：行解除灰显，勾选与否由用户决定
             _uiState.value = _uiState.value.copy(
                 diskState = disk.copy(
-                    isLoading = true,
-                    availableSources = enabled.toList(),
-                    enabledSources = (disk.enabledSources + source).filter { it in enabled }.toSet(),
-                    // 进度文案按「在已完成的 N 个源上补搜 1 个」显示
-                    completedSources = disk.completedSources,
-                    totalSources = disk.completedSources + 1,
+                    availableSources = (disk.availableSources + source).distinct(),
+                    prefetchingSources = if (current.query.isBlank()) {
+                        disk.prefetchingSources
+                    } else {
+                        disk.prefetchingSources + source
+                    }
                 )
             )
+            if (current.query.isBlank()) return@launch
+            // 有关键词：后台预取该源结果，暂存不展示，勾选时才合入
             try {
-                val newItems = resourceRepository.searchSingleSource(
+                val items = resourceRepository.searchSingleSource(
                     keyword = current.query,
                     source = source,
                     enabledDiskTypes = disk.enabledDiskTypes,
                 )
-                val ranked = resourceRepository.mergeIncrementalResults(
-                    keyword = current.query,
-                    existing = _uiState.value.diskState.resources,
-                    newItems = newItems,
-                    enabledSources = _uiState.value.diskState.enabledSources,
-                    enabledDiskTypes = disk.enabledDiskTypes,
-                )
                 _uiState.value = _uiState.value.copy(
-                    diskState = _uiState.value.diskState.copy(resources = ranked)
+                    diskState = _uiState.value.diskState.copy(
+                        prefetchedResults = _uiState.value.diskState.prefetchedResults + (source to items)
+                    )
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // 单源失败不影响已有结果，静默保持现状
+                // 预取失败静默：勾选时再现场搜索
             } finally {
-                if (_uiState.value.diskState.isLoading) {
-                    _uiState.value = _uiState.value.copy(
-                        diskState = _uiState.value.diskState.copy(isLoading = false)
+                _uiState.value = _uiState.value.copy(
+                    diskState = _uiState.value.diskState.copy(
+                        prefetchingSources = _uiState.value.diskState.prefetchingSources - source
                     )
-                }
+                )
             }
         }
     }
@@ -865,6 +859,42 @@ class TraktSearchViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             diskState = _uiState.value.diskState.copy(enabledSources = newSources)
         )
+        // 取消勾选：仅本地过滤，结果保留在 resources 里
+        if (source in current) return
+        // 勾选：若该源已有预取结果，立即合入（rank 去重排序写缓存）；没有则现场补搜
+        val prefetched = _uiState.value.diskState.prefetchedResults[source]
+        val query = _uiState.value.query
+        if (query.isBlank()) return
+        viewModelScope.launch {
+            val items = prefetched ?: run {
+                try {
+                    resourceRepository.searchSingleSource(
+                        keyword = query,
+                        source = source,
+                        enabledDiskTypes = _uiState.value.diskState.enabledDiskTypes,
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+            val disk = _uiState.value.diskState
+            if (query != _uiState.value.query || source !in disk.enabledSources) return@launch
+            val ranked = resourceRepository.mergeIncrementalResults(
+                keyword = query,
+                existing = disk.resources,
+                newItems = items,
+                enabledSources = disk.enabledSources,
+                enabledDiskTypes = disk.enabledDiskTypes,
+            )
+            _uiState.value = _uiState.value.copy(
+                diskState = disk.copy(
+                    resources = ranked,
+                    prefetchedResults = disk.prefetchedResults - source
+                )
+            )
+        }
     }
 
     fun toggleDiskType(type: com.tracktosearch.data.remote.dto.DiskType) {
