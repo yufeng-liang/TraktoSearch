@@ -1170,15 +1170,14 @@ private fun DiskSearchContent(
     // 还没搜索过
     if (!diskState.hasSearched) return
 
-    // 搜索完成/新查询时回到列表顶部：结果按到达顺序追加；进程被系统回收后
-    // rememberSaveable 也会恢复旧滚动位置，此时需要主动拉回，否则首卡可能是 #50 这种中间项。
+    // 搜索期间与搜索完成时都回到列表顶部：多源结果按相关度前插，若只在 isLoading
+    // 翻转时回顶，中途新一批结果会把视口锚在旧 key 上，用户看到的首位可能是 #67。
+    // 以 resources 为 key 每次结果集变化都拉回，搜索结束后不再触发，用户可自由滚动。
+    LaunchedEffect(query, diskState.hasSearched, diskState.resources) {
+        if (diskState.hasSearched && diskState.isLoading) listState.scrollToItem(0)
+    }
     LaunchedEffect(query, diskState.hasSearched) {
         if (diskState.hasSearched) listState.scrollToItem(0)
-    }
-    LaunchedEffect(query, diskState.isLoading) {
-        if (diskState.isLoading) {
-            listState.scrollToItem(0)
-        }
     }
 
     // 骨架至少展示 300ms：结果来得太快时也不会闪一下真实卡片
@@ -1298,10 +1297,10 @@ private fun DiskSearchContent(
                             }
                         }
                     }
-                    // rank 已按 url 去重，url 可作稳定 key；否则筛选/增量更新时卡片状态会按位置复用错位
+                    // 不用 url 作 key：多源结果按相关度前插时 LazyColumn 会按 key 锚定旧
+                    // 位置，视口跟着旧卡片漂移，搜索中首位停在 #67 这类中间项（见 #118）。
                     itemsIndexed(
                         filteredResources,
-                        key = { _, item -> item.url },
                         contentType = { _, _ -> "resource" }
                     ) { index, item ->
                         ResourceItemCard(
