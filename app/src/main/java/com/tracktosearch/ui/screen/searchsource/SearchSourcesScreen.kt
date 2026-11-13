@@ -601,7 +601,7 @@ private fun HeaderBar(
             .then(modifier)
             .hazeTopBar(
                 state = hazeState,
-                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                style = HazeMaterials.thin(),
                 blurRadius = 24.dp,
                 isContentUnderTopBar = isContentUnderTopBar
             )

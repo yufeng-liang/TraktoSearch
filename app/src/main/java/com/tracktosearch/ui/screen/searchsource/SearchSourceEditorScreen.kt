@@ -336,7 +336,7 @@ private fun EditorHeader(
             .fillMaxWidth()
             .hazeTopBar(
                 state = hazeState,
-                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                style = HazeMaterials.thin(),
                 blurRadius = 24.dp,
                 isContentUnderTopBar = true
             )
@@ -946,7 +946,7 @@ private fun EditorBottomBar(
             .fillMaxWidth()
             .hazeTopBar(
                 state = hazeState,
-                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                style = HazeMaterials.thin(),
                 blurRadius = 24.dp,
                 isContentUnderTopBar = true
             )
