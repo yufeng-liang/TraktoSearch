@@ -88,7 +88,7 @@ internal fun openImageViewer(
         .setImageUrlList(items)
         // 内置保存按钮（底部右侧小圆钮 + 进度环），不再手写相册逻辑
         .setShowDownload(bottomEndDownloadParams(activity))
-        // 关闭按钮放左上角，拖动图片时隐藏
+        // 关闭按钮放左上角常驻（不再随拖动隐藏）
         .setShowClose(topStartCloseParams(activity))
         .setOnExitListener { onExit() }
 
@@ -118,7 +118,7 @@ internal fun openImageViewer(
 }
 
 /**
- * 关闭按钮：36dp 白图标放左上（Telegram 风格），触摸图片时隐藏。
+ * 关闭按钮：48dp 玻璃圆钮放左上，触摸图片时不隐藏（热区约 48dp）。
  *
  * OpenImage 查看器是沉浸式（内容延伸到状态栏底下），按钮坐标相对整窗计算；
  * 只留 margin 会把按钮顶进状态栏，视觉压住系统图标且点击被状态栏消费。
@@ -126,35 +126,37 @@ internal fun openImageViewer(
  */
 private fun topStartCloseParams(activity: Activity): CloseParams {
     val density = activity.resources.displayMetrics.density
-    val size = (36 * density).toInt()
-    val margin = (16 * density).toInt()
+    val size = (48 * density).toInt()
+    val margin = (12 * density).toInt()
     val lp = FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.START).apply {
         topMargin = systemBarInsetTop(activity) + margin
         leftMargin = margin
     }
     return CloseParams()
         .setCloseSrc(R.drawable.open_image_btn_close)
-        .setTouchingHide(true)
+        .setTouchingHide(false)
         .setCloseLayoutParams(lp)
 }
 
 /**
- * 下载/保存按钮：36dp 白图标放右下（Telegram 风格），触摸图片时隐藏。
+ * 下载/保存按钮：48dp 玻璃圆钮放右下，触摸图片时不隐藏（热区约 48dp）。
  *
  * 与关闭按钮同理，查看器整窗布局会贴到屏幕底；默认下载按钮不带导航条 inset，
  * 会压住手势条/三键导航。bottomMargin 额外加导航条高度，让按钮浮在安全区之上。
  */
 private fun bottomEndDownloadParams(activity: Activity): DownloadParams {
     val density = activity.resources.displayMetrics.density
-    val size = (36 * density).toInt()
-    val margin = (16 * density).toInt()
+    val size = (48 * density).toInt()
+    val margin = (12 * density).toInt()
     val lp = FrameLayout.LayoutParams(size, size, Gravity.BOTTOM or Gravity.END).apply {
         bottomMargin = systemBarInsetBottom(activity) + margin
         rightMargin = margin
     }
     return DownloadParams()
         .setDownloadSrc(R.drawable.open_image_btn_download)
-        .setTouchingHide(true)
+        .setTouchingHide(false)
+        // 进度环用白色，在深玻璃圆钮上清晰可读
+        .setPercentColor(android.graphics.Color.WHITE)
         .setDownloadLayoutParams(lp)
 }
 

@@ -2462,4 +2462,8 @@
     <string name="ai_error_provider_invalid">AI 공급자가 구성되지 않았거나 불완전합니다. 주소·모델·키를 확인하세요.</string>
     <string name="ai_error_provider_no_tts">이 공급자는 음성 합성을 지원하지 않습니다. AI 공급자 설정에서 낭독을 구성하세요.</string>
     <string name="ai_error_provider_no_image">이 공급자는 이미지 생성을 지원하지 않습니다. AI 공급자 설정에서 이미지 생성 공급자를 구성하세요.</string>
+    <!-- OpenImage 查看器内置下载三态提示（覆盖库默认文案） -->
+    <string name="download_start_toast">저장 중…</string>
+    <string name="download_end_toast">갤러리에 저장되었습니다</string>
+    <string name="download_error_toast">저장 실패</string>
 </resources>

@@ -2451,4 +2451,8 @@
     <string name="ai_error_provider_invalid">AI 服务商未配置或配置不完整，请检查地址、模型和 Key。</string>
     <string name="ai_error_provider_no_tts">你的服务商不支持语音合成，请在 AI 服务商设置里配置朗读。</string>
     <string name="ai_error_provider_no_image">你的服务商不支持图片生成，请在 AI 服务商设置里配置图片生成服务商。</string>
+    <!-- OpenImage 查看器内置下载三态提示（覆盖库默认文案） -->
+    <string name="download_start_toast">正在保存…</string>
+    <string name="download_end_toast">已保存到相册</string>
+    <string name="download_error_toast">保存失败</string>
 </resources>

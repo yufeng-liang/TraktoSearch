@@ -2458,4 +2458,8 @@ Config:
     <string name="ai_error_provider_invalid">AI provider is not configured. Check the base URL, model and API key.</string>
     <string name="ai_error_provider_no_tts">Your provider does not support speech. Configure narration in AI provider settings.</string>
     <string name="ai_error_provider_no_image">Your provider does not support image generation. Configure an image generation provider in AI provider settings.</string>
+    <!-- OpenImage 查看器内置下载三态提示（覆盖库默认文案） -->
+    <string name="download_start_toast">Saving…</string>
+    <string name="download_end_toast">Saved to gallery</string>
+    <string name="download_error_toast">Save failed</string>
 </resources>

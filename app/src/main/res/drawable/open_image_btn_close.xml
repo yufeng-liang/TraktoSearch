@@ -1,15 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 柔和外影 -->
     <item>
         <shape android:shape="oval">
-            <solid android:color="#8C1C1C1E"/>
-            <stroke
-                android:width="0.5dp"
-                android:color="#33FFFFFF"/>
+            <solid android:color="#1F000000" />
         </shape>
     </item>
+    <!-- 玻璃主体：inset 4dp → 可视圆 40dp，与详情页顶部返回钮（GlassIconButton 40dp）一致；触控仍为 48dp -->
     <item
-        android:drawable="@drawable/open_image_ic_close"
+        android:top="4dp"
+        android:bottom="4dp"
+        android:left="4dp"
+        android:right="4dp">
+        <shape android:shape="oval">
+            <gradient
+                android:angle="270"
+                android:startColor="#B33A3A40"
+                android:centerColor="#B3222226"
+                android:endColor="#C70A0A0C"
+                android:type="linear" />
+            <stroke
+                android:width="1.0dp"
+                android:color="#D9FFFFFF" />
+        </shape>
+    </item>
+    <!-- 顶部高光 -->
+    <item
+        android:top="6dp"
+        android:bottom="25dp"
+        android:left="9dp"
+        android:right="9dp">
+        <shape android:shape="oval">
+            <gradient
+                android:angle="270"
+                android:startColor="#4DFFFFFF"
+                android:endColor="#00FFFFFF"
+                android:type="linear" />
+        </shape>
+    </item>
+    <!-- 图标：用 inset 定位（库内 ImageView 会把 layer 撑满，直接给宽高不生效） -->
+    <item
+        android:drawable="@drawable/open_image_ic_close_thin"
         android:gravity="center"
-        android:width="17dp"
-        android:height="17dp"/>
+        android:top="8dp"
+        android:bottom="8dp"
+        android:left="8dp"
+        android:right="8dp" />
 </layer-list>

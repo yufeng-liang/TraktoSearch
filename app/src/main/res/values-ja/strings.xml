@@ -2462,4 +2462,8 @@
     <string name="ai_error_provider_invalid">AI プロバイダーが未設定か不完全です。アドレス・モデル・キーを確認してください。</string>
     <string name="ai_error_provider_no_tts">このプロバイダーは音声合成に対応していません。AI プロバイダー設定で読み上げを設定してください。</string>
     <string name="ai_error_provider_no_image">このプロバイダーは画像生成に対応していません。AI プロバイダー設定で画像生成プロバイダーを設定してください。</string>
+    <!-- OpenImage 查看器内置下载三态提示（覆盖库默认文案） -->
+    <string name="download_start_toast">保存中…</string>
+    <string name="download_end_toast">ギャラリーに保存しました</string>
+    <string name="download_error_toast">保存に失敗しました</string>
 </resources>
