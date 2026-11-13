@@ -149,3 +149,10 @@ verification-artifacts/
 
 # Python 字节码缓存：scripts/ 下的离线生成脚本跑一次就会留一个
 __pycache__/
+
+# 安卓构建日志：本地 assemble/compile 输出重定向到根目录，不入库
+/build*.log
+
+# 本地验证产物与第三方源码副本（.qa 截图/脚本、.tools 解包参考源码）
+/.qa/
+/.tools/
