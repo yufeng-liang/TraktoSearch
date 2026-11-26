@@ -3,7 +3,7 @@ agp = "9.5.3"
   kotlin = "2.4.21"
   ksp = "2.3.13"
 coreKtx = "1.19.1"
-lifecycleRuntime = "2.11.0"
+lifecycleRuntime = "2.11.1"
 activityCompose = "1.13.0"
 composeBom = "2026.11.01"  # 从 "2024.12.01" 升级
 hilt = "2.60.1"
@@ -54,7 +54,7 @@ mirage = "0.1.0"
 # 用 1.5.x 而非 1.4.1 stable：1.4.x 的 baselineprofile 插件对 AGP 版本有上限校验，
 # 本项目是 AGP 9.4.x，需要 1.5.x 才在支持范围内。
 benchmark = "1.5.0"
-uiautomator = "2.4.0"
+uiautomator = "2.4.1"
 
 [libraries]
 # AndroidX Core
