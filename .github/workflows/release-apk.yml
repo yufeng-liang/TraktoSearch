@@ -168,7 +168,7 @@ jobs:
           EOF
 
       - name: Setup JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           # AGP 9.x 的最低 JDK；升 AGP 时按官方兼容表复核
           distribution: temurin
@@ -189,10 +189,10 @@ jobs:
           [ -n "$sdkmanager" ] || { echo "::error::runner 镜像里找不到 sdkmanager"; exit 1; }
           echo "使用 sdkmanager：$sdkmanager"
           yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
-          "$sdkmanager" --install "platforms;android-37.2"
+          "$sdkmanager" --install "platforms;android-37.2" "build-tools;37.0.0"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: assembleRelease
         # -I 的 init script 把官方源前置到国内镜像之前，绕开 CI 空缓存下阿里云缺构件的坑，
@@ -230,7 +230,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "out/TraktoSearch-v${EXPECTED_VERSION_NAME}.apk"
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-apk-${{ github.event.release.tag_name || inputs.tag }}
           path: out/
@@ -238,7 +238,7 @@ jobs:
 
       - name: Upload R8 mapping
         # R8 fullMode 下的线上崩溃栈只有这份 mapping 能解，先随 artifact 留存
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: r8-mapping-${{ github.event.release.tag_name || inputs.tag }}
           path: app/build/outputs/mapping/release/
